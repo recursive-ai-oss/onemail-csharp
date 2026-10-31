@@ -36,6 +36,8 @@ internal static class Program
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
             ["calcard"] = CalcardTarget.Run,
+            ["sanitizer"] = SanitizerTargets.Run,
+            ["sanitizer-reparse"] = SanitizerTargets.Reparse,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);
