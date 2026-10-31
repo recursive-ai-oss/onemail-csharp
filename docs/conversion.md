@@ -19,7 +19,7 @@ the same report.
 
 | Field | Meaning |
 |---|---|
-| `Family` | `mapi` (a property of the source) or `mime` (a header field or part of the source) |
+| `Family` | `mapi` (a property of the source), `mime` (a header field or part of the source) or `ics` (a property, parameter or component of an iCalendar source) |
 | `Name` | the property (`PidTagSubject`; a named property as `{set}/"name"`; `0x1234001F` when it has no canonical name) or the header field name |
 | `Kind` | `Dropped` (nothing carried), `Approximated` (carried in a weaker form), `Overridden` (two sources disagreed, one set aside), `Internal` (store bookkeeping: entry IDs, search keys, access flags; listed so nothing is silent, not a loss of content) |
 | `Code` | a stable identifier of the rule, catalogued below |
@@ -172,6 +172,36 @@ Properties the TNEF format cannot carry are reported by name (`TnefWriterLimit`)
 `text/plain` part (`TnefPlainTextNotRendered`; HTML to text is not done here). The correlation key is the message's own
 `PidTagTnefCorrelationKey` when it has one (so the property is unchanged), else a value derived from the message so that output is
 reproducible (OX22). Properties that travel in the TNEF are not listed as `NoInternetMapping`. The default is a pure MIME message.
+
+## Outlook calendar and iCalendar: `MapiToIcsConverter`, `IcsToMapiConverter` (MS-OXCICAL)
+
+Both live in `RecursiveAI.OneMail.Conversion.OxcIcal` and are described, with the item model they work on, in [`calendar-items.md`](calendar-items.md).
+The `ics` family is the third `Family` value: its `Name` is the iCalendar property (`RRULE`, `ATTENDEE;ROLE`) or component.
+Codes added by these two converters:
+
+| Code | Kind | Direction | Meaning |
+|---|---|---|---|
+| `NoIcalMapping` | Dropped | item to ICS | the MAPI property has no iCalendar form in MS-OXCICAL |
+| `NoMapiMapping` | Dropped | ICS to item | the iCalendar property has no MAPI form in MS-OXCICAL |
+| `DerivedProperty` | Internal | both | a property the other side recomputes (end time from duration, clean global object ID) |
+| `StoreBookkeeping` | Internal | item to ICS | entry IDs, search keys, flags |
+| `MessageClassNotCarried` | Dropped | item to ICS | the class is not an appointment, meeting or task |
+| `ForwardNotificationHasNoMethod` | Approximated | item to ICS | RFC 5546 has no method for a forward notification |
+| `UidSynthesized` | Approximated | item to ICS | no usable global object ID: the UID was made from subject and times |
+| `TaskStatusWeakened` | Approximated | item to ICS | waiting and deferred tasks are written IN-PROCESS |
+| `RecurrenceNotCarried` | Dropped | item to ICS | a task recurrence with no iCalendar form |
+| `RtfBodyNotCarried` | Dropped | item to ICS | the compressed RTF body; the text is the DESCRIPTION |
+| `OrganizerWithoutSmtpAddress` | Dropped | item to ICS | an organizer with no SMTP address cannot be a mailto |
+| `AmbiguousShortMonth`, `AmbiguousFirstInstance` | Approximated | item to ICS | see ambiguities OC1, OC2 |
+| `NoEventOrTask` | Dropped | ICS to item | the calendar holds no VEVENT or VTODO |
+| `UnknownTimeZone`, `FloatingTimeAssumedUtc` | Approximated | ICS to item | no zone, or a zone not defined: UTC |
+| `MethodNotMapped` | Approximated | ICS to item | the METHOD has no message class: an appointment |
+| `MultipleRRules`, `RecurrenceNotMapped` | Dropped | ICS to item | the rule does not fit an Outlook recurrence pattern |
+| `DatesWithoutRecurrence`, `ExdateNotOnPattern`, `RdateWithoutException` | Dropped | ICS to item | EXDATE/RDATE with no series, a day the series does not occupy, or an added instance that is not a moved one |
+| `OverrideWithoutSeries`, `OverrideWithoutTimes`, `OverrideNotOnPattern` | Dropped | ICS to item | a RECURRENCE-ID override that cannot become an exception |
+| `ClassNotMapped`, `OrganizerNotMailto`, `ParameterNotMapped` | Dropped | ICS to item | CLASS value, ORGANIZER URI or ATTENDEE parameter with no MAPI field |
+| `DtstampAsLastModified` | Approximated | ICS to item | DTSTAMP stands in for the last-modified time |
+| `TaskCancelledAsDeferred` | Approximated | ICS to item | a cancelled VTODO is stored as deferred |
 
 ## Loss codes
 

@@ -342,6 +342,9 @@ internal static class Program
 
         Console.WriteLine("dbx: " + (dbxOk ? "ok" : "FAILED"));
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        bool oxocalOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Oxocal();
+        Console.WriteLine("oxocal: " + (oxocalOk ? "ok" : "FAILED"));
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

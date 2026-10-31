@@ -109,7 +109,7 @@ public sealed class MapiToMimeConverter : IItemConversion<MapiMessage, MimeEntit
     }
 
     // Properties that are store bookkeeping: they say where a thing lives in its store or how it is derived, not what it says.
-    private static readonly HashSet<ushort> Bookkeeping =
+    internal static readonly HashSet<ushort> Bookkeeping =
     [
         MapiPid.EntryId, MapiPid.RecordKey, MapiPid.InstanceKey, MapiPid.ObjectType, MapiPid.Access, MapiPid.AccessLevel, MapiPid.StoreRecordKey,
         MapiPid.StoreEntryId, MapiPid.MappingSignature, MapiPid.SearchKey, MapiPid.ChangeKey, MapiPid.ParentEntryId, MapiPid.MessageSize,

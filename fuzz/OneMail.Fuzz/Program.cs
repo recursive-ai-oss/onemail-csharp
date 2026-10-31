@@ -32,6 +32,7 @@ internal static class Program
             ["rtf-deencap"] = RtfTargets.Deencapsulate,
             ["oxcmail"] = OxcMailTarget.Run,
             ["dbx"] = DbxTarget.Run,
+            ["oxocal"] = OxocalTarget.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

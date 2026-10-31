@@ -5,7 +5,9 @@ using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.Ics;
 using RecursiveAI.OneMail.Calendar.Recurrence;
 using RecursiveAI.OneMail.Calendar.VCard;
+using RecursiveAI.OneMail.Calendaring;
 using RecursiveAI.OneMail.Conversion;
+using RecursiveAI.OneMail.Conversion.OxcIcal;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
@@ -47,7 +49,8 @@ internal static class OutlookChecks
 
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
-        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts);
+        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
+        & Guard("oxocal", Oxocal);
 
     public static bool Msg()
     {
@@ -151,6 +154,22 @@ internal static class OutlookChecks
         // No VTIMEZONE: the name has to come from the runtime's own time zone database, which the browser runtime must carry.
         var report = new ExpansionReport();
         return SpringForward(Expand(string.Empty, "America/New_York", runtimeDatabase: true, report), report);
+    }
+
+    // MS-OXOCAL / MS-OXCICAL: a weekly series with a time zone becomes an Outlook item, reads through the typed view, and converts back to an RRULE.
+    public static bool Oxocal()
+    {
+        const string ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//x//EN\r\nBEGIN:VTIMEZONE\r\nTZID:Pacific Standard Time\r\n" +
+            "BEGIN:STANDARD\r\nDTSTART:20071104T020000\r\nTZOFFSETFROM:-0700\r\nTZOFFSETTO:-0800\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\nEND:STANDARD\r\n" +
+            "BEGIN:DAYLIGHT\r\nDTSTART:20070311T020000\r\nTZOFFSETFROM:-0800\r\nTZOFFSETTO:-0700\r\nRRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\n" +
+            "BEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\nDTSTART;TZID=Pacific Standard Time:20260105T100000\r\n" +
+            "DTEND;TZID=Pacific Standard Time:20260105T103000\r\nRRULE:FREQ=WEEKLY;COUNT=6;BYDAY=MO\r\nSUMMARY:Standup\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        IcsComponent cal = IcsDocument.Calendars(ContentDocument.Parse(Encoding.ASCII.GetBytes(ics))).First();
+        MapiMessage item = IcsToMapiConverter.ConvertAll(cal)[0].Value;
+        OutlookAppointment? a = OutlookAppointment.TryCreate(item);
+        string back = Encoding.UTF8.GetString(new MapiToIcsConverter().Convert(item).Value.ToArray());
+        return a is { IsRecurring: true, Subject: "Standup", Recurrence: not null } && new MapiMailItem(item, default).Kind == MailItemKind.Appointment
+            && back.Contains("RRULE:FREQ=WEEKLY", StringComparison.Ordinal) && back.Contains("BYDAY=MO", StringComparison.Ordinal);
     }
 
     public static bool OxcMail()

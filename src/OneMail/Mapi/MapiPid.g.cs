@@ -930,8 +930,8 @@ public static class MapiNames
     /// <summary>PidLidClipEnd: property set Appointment, LID 0x8236.</summary>
     public static readonly MapiNamedProperty ClipEnd = new(MapiPropertySets.Appointment, 0x8236u);
 
-    /// <summary>PidLidAllAttendeesString: property set Appointment, LID 0x823A.</summary>
-    public static readonly MapiNamedProperty AllAttendeesString = new(MapiPropertySets.Appointment, 0x823Au);
+    /// <summary>PidLidAllAttendeesString: property set Appointment, LID 0x8238.</summary>
+    public static readonly MapiNamedProperty AllAttendeesString = new(MapiPropertySets.Appointment, 0x8238u);
 
     /// <summary>PidLidToAttendeesString: property set Appointment, LID 0x823B.</summary>
     public static readonly MapiNamedProperty ToAttendeesString = new(MapiPropertySets.Appointment, 0x823Bu);

@@ -97,6 +97,16 @@ direction. Method and rules: [`conversion.md`](conversion.md). No Outlook has be
 | MIME to MAPI to MIME | ten fields before and after (subject, From, To, Cc, Date, ids, bodies, attachments) on Mime4j 80, Dovecot 1,430, Enron sample 5,032 messages | 65,420 fields: 65,392 equal, 28 differ and each has a loss entry, **0 silent** | Bcc dropped on the way out (reported); display-name spelling of a kept received header |
 | The view | `MapiMailItem` senders and recipients | all 50 EX recipients and 16 of 28 EX senders resolve to SMTP with the X.500 address kept; the other 12 senders (all in the MSG set) have no SMTP form; a further 9 PST senders have no address at all | no directory lookup |
 
+## Outlook calendar and task items (MS-OXOCAL, MS-OXOTASK, MS-OXCICAL)
+
+| Area | Checked against | Result | Known gaps |
+|---|---|---|---|
+| Typed views: appointments, meetings, tasks | extract-msg 0.55.0 on the corpus items (subject, location, attendees, task status and dates) | 14 of 14 comparable fields agree, 4 not exposed by the oracle (start, end), 0 unexplained | the corpus holds 2 distinct appointment and 2 task items and no meeting or recurring item: those are covered by generated items following the MS-OXOCAL examples |
+| Recurrence blob and time zone structures | MS-OXOCAL 4.1.1 weekly and daily examples | byte for byte; TZ offsets for Pacific, Sydney, no DST | no Outlook-written recurring item yet |
+| Item to ICS, expansion | 18 recurrences in 3 zones (54 series) against dateutil 2.9.0.post0, recurring-ical-events 3.8.2, Ical.Net 5.2.3 | dateutil 54/54, recurring-ical-events 54/54, Ical.Net 38/54 (16 explained: window wall clock 5, outvoted by the other two 11), 0 unexplained | |
+| ICS we write | Python icalendar 7.3.0, Ical.Net 5.2.3 parse | 58 of 58 files parse in both; icalendar facts identical 58/58; Ical.Net facts identical 54/58 (the rest are typed properties its public API does not list) | |
+| Item to ICS to item, ICS to item to ICS | `OxcIcalRoundTripTests`, `OxocalTool` | 13 generated items property-exact, corpus items 4 of 4 stable, generated ICS 54 of 54 stable on the second pass, 0 silent | Outlook-written meetings and exceptions unseen |
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio
