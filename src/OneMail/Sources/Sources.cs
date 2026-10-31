@@ -150,9 +150,16 @@ public sealed class FileSource : IRandomAccessSource
     /// <param name="path">The file path.</param>
     /// <returns>The source. Dispose it to close the file.</returns>
     /// <exception cref="IOException">The file cannot be opened.</exception>
-    public static FileSource Open(string path)
+    public static FileSource Open(string path) => Open(path, FileShare.Read);
+
+    /// <summary>Opens a file for reading with the given sharing, for files another program may be writing or deleting.</summary>
+    /// <param name="path">The file path.</param>
+    /// <param name="share">What other openers may do while the source is open.</param>
+    /// <returns>The source. Dispose it to close the file.</returns>
+    /// <exception cref="IOException">The file cannot be opened.</exception>
+    public static FileSource Open(string path, FileShare share)
     {
-        SafeFileHandle handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.Asynchronous | FileOptions.RandomAccess);
+        SafeFileHandle handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, share, FileOptions.Asynchronous | FileOptions.RandomAccess);
         return new FileSource(handle);
     }
 

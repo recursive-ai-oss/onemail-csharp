@@ -199,7 +199,7 @@ the comparison (`NORM-*`) or to a named limitation of that oracle (`LIMIT-*`). A
 
 ## Calendar and contacts (ICS, vCard)
 
-Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9 (**Py-vobj**), over the public corpus and our probes (`tools/calendar/oracles`). Ical.Net 5.2.3 and FolkerKinzel.VCards 8.2.0 expose typed models only, so they settle value questions, not line syntax. The tree always keeps every byte (untouched input writes back identical); the rows below govern the decoded view and the defects. Every row is an agent default, marked provisional where fewer than two oracles agree.
+Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9 (**Py-vobj**), over the public corpus and our probes (`tools/calendar/oracles`). Ical.Net 5.2.3 and FolkerKinzel.VCards 8.2.0 expose typed models only, so they settle value questions, not line syntax. The tree always keeps every byte (untouched input writes back identical); the rows below govern the decoded view and the defects. Every row is our default, marked provisional where fewer than two oracles agree.
 
 | ID | Case | Py-ical | Py-vobj | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|
@@ -214,8 +214,8 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K9 | The same parameter twice (`ROLE=A,B;ROLE=C`) | last wins | merged | Both are kept in order as written; readers that want one value take the first. | none | lossless |
 | K10 | Unknown text escape (`\q`, `\"`, `\:`) | `\q` and `\"` kept, `\:` becomes `:` | `\q` and `\:` kept, `\"` becomes `"` | The backslash and the character stay as written. Only `\\ \; \, \n \N` are resolved (vCard 2.1: `\\ \;`). | none | prov.; `\q` agrees |
 | K11 | Escapes in `X-` properties | raw | unescaped | Unescaped like any TEXT value (RFC 5545 §3.8.8.2 gives `X-` properties the TEXT type). | none | prov. (1 of 2) |
-| K12 | Invalid UTF-8 text | U+FFFD | U+FFFD | The line is read as Windows-1252, the reading clients use for legacy files, unless `CHARSET` names a charset we can decode. The source bytes are untouched. | `AmbiguousNonUtf8Text` | prov. (agent default) |
-| K13 | vCard 2.1 `CHARSET` we cannot decode | n/a | n/a | Read as UTF-8, or Windows-1252 when that is invalid. | `UnknownCharset` | agent default |
+| K12 | Invalid UTF-8 text | U+FFFD | U+FFFD | The line is read as Windows-1252, the reading clients use for legacy files, unless `CHARSET` names a charset we can decode. The source bytes are untouched. | `AmbiguousNonUtf8Text` | prov. (our default) |
+| K13 | vCard 2.1 `CHARSET` we cannot decode | n/a | n/a | Read as UTF-8, or Windows-1252 when that is invalid. | `UnknownCharset` | our default |
 | K14 | vCard 2.1 quoted-printable soft break (`=` at line end) | n/a | joined | Joined whenever the line is marked `QUOTED-PRINTABLE`, in vCard and ICS alike. | `QuotedPrintableSoftBreak` | prov. |
 | K15 | vCard 2.1 base64 data on unindented lines, ended by an empty line | n/a | joined | Joined when the line carries `ENCODING=BASE64`/`B`/bare `BASE64` and the next line holds only base64 characters. The ending empty line belongs to the property. | `Base64ContinuationWithoutFold` | prov. |
 | K16 | vCard 2.1 bare parameters (`TEL;WORK;VOICE`) | n/a | dropped on some inputs | Kept as bare parameters; the typed view lists them as types together with `TYPE=` values. | none | lossless |
@@ -241,11 +241,11 @@ The reader's behaviour is in [`mailboxes.md`](mailboxes.md). MK = MimeKit, Py = 
 | S6 | mboxcl2 (unquoted bodies, `Content-Length` only) | splits inside messages that hold envelope-looking lines | same | Read correctly through `Content-Length`; OneMail writes it only when asked for the variant | none | oracle limit |
 | S7 | Bytes before the first envelope line | skipped | skipped | Kept as the store's preamble, so entries plus preamble tile the file | `PreambleBeforeFirstMessage` | all agree |
 | S8 | An envelope line with no empty line before it | splits | splits | Splits; the previous message keeps its last line | `MissingSeparatorLine` | all agree |
-| S9 | Unquoting a stored body when the variant is not known | n/a | n/a | mboxrd's rule (every `>+From ` loses one `>`); an entry that a `Content-Length` delimited is returned as stored, because mboxcl and mboxcl2 differ | none | agent default |
-| S10 | Maildir info flags not in ASCII order or repeated (`:2,SF`) | read as written | n/a | Read as written, reported; written back sorted | `UnsortedFlags` | agent default |
+| S9 | Unquoting a stored body when the variant is not known | n/a | n/a | mboxrd's rule (every `>+From ` loses one `>`); an entry that a `Content-Length` delimited is returned as stored, because mboxcl and mboxcl2 differ | none | our default |
+| S10 | Maildir info flags not in ASCII order or repeated (`:2,SF`) | read as written | n/a | Read as written, reported; written back sorted | `UnsortedFlags` | our default |
 | S11 | Maildir file in `new` | subdir `new`, no flags | n/a | Flags from the name, plus `Recent` | none | all agree |
-| S12 | Mail's `flags` word and `date-sent`/`date-received` reals in EMLX plists | n/a | n/a | Bits 0, 1, 2, 4, 6, 8 map to seen, deleted, answered, flagged, draft, forwarded; the raw word is always kept. A real is Unix seconds from 1e9, otherwise seconds since 2001-01-01. **No real Mail store has been inspected**, so this is a default to check against one | none | agent default |
-| S13 | Courier `courierimapkeywords/:list` | n/a | n/a | Keyword names, an empty line, then `unique:n n` rows with zero-based positions. Written from Courier's published description of the directory; the line format inside the files is not in that document, so this is unchecked against Courier | `MalformedControlFile` | agent default |
+| S12 | Mail's `flags` word and `date-sent`/`date-received` reals in EMLX plists | n/a | n/a | Bits 0, 1, 2, 4, 6, 8 map to seen, deleted, answered, flagged, draft, forwarded; the raw word is always kept. A real is Unix seconds from 1e9, otherwise seconds since 2001-01-01. **No real Mail store has been inspected**, so this is a default to check against one | none | our default |
+| S13 | Courier `courierimapkeywords/:list` | n/a | n/a | Keyword names, an empty line, then `unique:n n` rows with zero-based positions. Written from Courier's published description of the directory; the line format inside the files is not in that document, so this is unchecked against Courier | `MalformedControlFile` | our default |
 
 ## Reports, authentication results and MHTML
 

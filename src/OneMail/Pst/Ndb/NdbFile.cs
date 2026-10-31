@@ -4,6 +4,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using RecursiveAI.OneMail.Sources;
 
 namespace RecursiveAI.OneMail.Pst.Ndb;
 
@@ -49,16 +50,18 @@ public readonly record struct NdbCheck(bool TypeValid, bool SignatureValid, bool
 /// </remarks>
 public sealed partial class NdbFile : IDisposable
 {
-    private readonly IRandomAccess _source;
+    private readonly IRandomAccessSource _source;
+    private readonly bool _leaveOpen;
     private readonly NdbOptions _options;
     private readonly List<NdbDefect> _defects = [];
     private int _dropped;
     private readonly NodeBTree _nodes;
     private readonly BlockBTree _blocks;
 
-    private NdbFile(IRandomAccess source, NdbHeader header, NdbLayout layout, NdbOptions options)
+    private NdbFile(IRandomAccessSource source, bool leaveOpen, NdbHeader header, NdbLayout layout, NdbOptions options)
     {
         _source = source;
+        _leaveOpen = leaveOpen;
         Header = header;
         Layout = layout;
         _options = options;
@@ -124,7 +127,7 @@ public sealed partial class NdbFile : IDisposable
     /// <returns>True when the header was recognised and the file can be read.</returns>
     /// <exception cref="IOException">The file cannot be opened or read.</exception>
     public static bool TryOpen(string path, out NdbFile? file, out IReadOnlyList<NdbDefect> defects, NdbOptions? options = null) =>
-        TryOpen(new FileRandomAccess(path), out file, out defects, options);
+        TryOpen(FileSource.Open(path, FileShare.ReadWrite | FileShare.Delete), leaveOpen: false, out file, out defects, options);
 
     /// <summary>Opens a seekable stream. Does not throw for malformed content.</summary>
     /// <param name="stream">A readable, seekable stream positioned anywhere; it is seeked freely.</param>
@@ -136,7 +139,7 @@ public sealed partial class NdbFile : IDisposable
     public static bool TryOpen(Stream stream, bool leaveOpen, out NdbFile? file, out IReadOnlyList<NdbDefect> defects, NdbOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        return TryOpen(new StreamAccess(stream, leaveOpen), out file, out defects, options);
+        return TryOpen(new StreamSource(stream, leaveOpen), leaveOpen: false, out file, out defects, options);
     }
 
     /// <summary>Opens a file held in memory. Does not throw for malformed content.</summary>
@@ -146,23 +149,41 @@ public sealed partial class NdbFile : IDisposable
     /// <param name="options">Limits; null for defaults.</param>
     /// <returns>True when the header was recognised and the file can be read.</returns>
     public static bool TryOpen(ReadOnlyMemory<byte> data, out NdbFile? file, out IReadOnlyList<NdbDefect> defects, NdbOptions? options = null) =>
-        TryOpen(new MemoryAccess(data), out file, out defects, options);
+        TryOpen(new MemorySource(data), leaveOpen: false, out file, out defects, options);
 
-    private static bool TryOpen(IRandomAccess source, out NdbFile? file, out IReadOnlyList<NdbDefect> defects, NdbOptions? options)
+    /// <summary>Opens a file over any random-access source: a file, a stream, memory, or ranged reads the caller supplies.</summary>
+    /// <param name="source">The source. It must support synchronous reads (<see cref="IRandomAccessSource.SupportsSyncRead"/>).</param>
+    /// <param name="leaveOpen">True to leave the source undisposed when the file is disposed (or when the header is unusable).</param>
+    /// <param name="file">The open file, or null when the header is unusable.</param>
+    /// <param name="defects">The defects that made the file unusable.</param>
+    /// <param name="options">Limits; null for defaults.</param>
+    /// <returns>True when the header was recognised and the file can be read.</returns>
+    /// <exception cref="ArgumentException">The source is asynchronous only.</exception>
+    public static bool TryOpen(IRandomAccessSource source, bool leaveOpen, out NdbFile? file, out IReadOnlyList<NdbDefect> defects, NdbOptions? options = null)
     {
+        ArgumentNullException.ThrowIfNull(source);
+        if (!source.SupportsSyncRead)
+        {
+            throw new ArgumentException("The node database is read with synchronous positioned reads; this source is asynchronous only.", nameof(source));
+        }
+
         options ??= new NdbOptions();
         var early = new List<NdbDefect>();
         file = null;
         defects = early;
         byte[] buf = new byte[564];
-        int n = source.Read(0, buf);
+        int n = source.ReadFully(0, buf);
         if (!NdbHeader.TryParse(buf.AsSpan(0, n), out NdbHeader? header, early) || header is null)
         {
-            source.Dispose();
+            if (!leaveOpen)
+            {
+                source.Dispose();
+            }
+
             return false;
         }
 
-        var f = new NdbFile(source, header, NdbLayout.For(header.Format), options);
+        var f = new NdbFile(source, leaveOpen, header, NdbLayout.For(header.Format), options);
         foreach (NdbDefect d in early)
         {
             f.Report(d.Kind, d.Offset, d.Detail);
@@ -193,7 +214,7 @@ public sealed partial class NdbFile : IDisposable
             byte[] page = ArrayPool<byte>.Shared.Rent(4096);
             try
             {
-                _source.Read(ib, page.AsSpan(0, 4096));
+                _source.ReadFully(ib, page.AsSpan(0, 4096));
                 bool small = page[496] == 0x81 && page[497] == 0x81;
                 bool big = page[4072] == 0x81 && page[4073] == 0x81;
                 if (big && !small)
@@ -251,7 +272,7 @@ public sealed partial class NdbFile : IDisposable
             return false;
         }
 
-        if (_source.Read(ib, page[..l.PageSize]) != l.PageSize)
+        if (_source.ReadFully(ib, page[..l.PageSize]) != l.PageSize)
         {
             Report(NdbDefectKind.PageTruncated, ib, "short read");
             return false;
@@ -366,7 +387,7 @@ public sealed partial class NdbFile : IDisposable
         byte[] raw = ArrayPool<byte>.Shared.Rent(total);
         try
         {
-            if (_source.Read(ib, raw.AsSpan(0, total)) != total)
+            if (_source.ReadFully(ib, raw.AsSpan(0, total)) != total)
             {
                 Report(NdbDefectKind.BlockTruncated, ib, "short read");
                 return false;
@@ -492,8 +513,10 @@ public sealed partial class NdbFile : IDisposable
             length = total;
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
+            // The input is an in-memory copy of the block, so an IOException here is the inflater's own failure (its "unexpected
+            // error code" for some corrupt streams), not a storage error.
             Report(NdbDefectKind.BlockDecompressionFailed, ib, ex.Message);
             return false;
         }
@@ -541,7 +564,13 @@ public sealed partial class NdbFile : IDisposable
     }
 
     /// <summary>Releases the underlying source.</summary>
-    public void Dispose() => _source.Dispose();
+    public void Dispose()
+    {
+        if (!_leaveOpen)
+        {
+            _source.Dispose();
+        }
+    }
 
-    internal int ReadRaw(long offset, Span<byte> destination) => _source.Read(offset, destination);
+    internal int ReadRaw(long offset, Span<byte> destination) => _source.ReadFully(offset, destination);
 }

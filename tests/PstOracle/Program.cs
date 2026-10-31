@@ -35,7 +35,7 @@ if (!NdbFile.TryOpen(args[1], out NdbFile? f, out IReadOnlyList<NdbDefect> openD
 
 using (f)
 {
-    return args[0] switch { "dump" => Dump(f, args[1]), "nodes" => Nodes(f), "scan" => ScanOnly(f), "walk" => Walk(f), "orphans" => Orphans(f), "pages" => Pages(f), _ => 2 };
+    return args[0] switch { "dump" => Dump(f, args[1]), "nodes" => Nodes(f), "scan" => ScanOnly(f), "walk" => Walk(f), "orphans" => Orphans(f), "pages" => Pages(f), "ltp" => LtpCommands.Stats(f), "tree" => LtpCommands.Tree(f), "ltploop" => LtpCommands.Loop(f, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture)), "ltpalloc" => LtpCommands.Alloc(f), "blockat" => LtpCommands.BlockAt(f, args[2..]), "compare" when args.Length > 2 => LtpCommands.Compare(f, args[2]), _ => 2 };
 }
 
 static int Walk(NdbFile f)
