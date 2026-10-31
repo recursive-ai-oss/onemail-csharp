@@ -105,6 +105,14 @@ public sealed partial class NdbFile : IDisposable
             return;
         }
 
+        // The last slot says that the list was cut, so a caller who only reads Defects still sees it.
+        if (_defects.Count == _options.MaxDefects - 1)
+        {
+            _defects.Add(new NdbDefect(NdbDefectKind.DefectLimitReached, offset, "further defects are counted but not listed"));
+            _dropped++;
+            return;
+        }
+
         _defects.Add(new NdbDefect(kind, offset, detail));
     }
 

@@ -70,13 +70,14 @@ internal sealed class NdbLayout
             IdSize = 8, BTreeFooterOffset = 488, NbtLeafMin = 28, BbtLeafMin = 20, BTreeIndexMin = 24,
             FirstAMap = 0x4400, AMapInterval = 253_952, DensityList = 0x4200, AllocBitsOffset = 0, AllocBitsLength = 496,
         },
-        // 4 KiB pages: the page trailer grows to 24 bytes (an extra 8 reserved bytes), an AMap page holds 4072 bytes of bits,
-        // so it maps 4072 * 8 * 64 bytes. First AMap at 0x22000 and density list at 0x21000, from observed files.
+        // 4 KiB pages: blocks grow in 512-byte steps (seen on a real OST: a 56-byte block occupies 512 bytes with its trailer at the end),
+        // the page trailer grows to 24 bytes (an extra 8 reserved bytes), an AMap page holds 4072 bytes of bits,
+        // so it maps 4072 * 8 * 512 bytes (one bit per 512-byte slot, matching the block alignment). First AMap at 0x22000 and density list at 0x21000, from observed files.
         _ => new NdbLayout
         {
-            Format = format, PageSize = 4096, PageTrailerSize = 24, BlockTrailerSize = 24, BlockAlignment = 64, MaxBlockData = 65536,
+            Format = format, PageSize = 4096, PageTrailerSize = 24, BlockTrailerSize = 24, BlockAlignment = 512, MaxBlockData = 65536 - 24,
             IdSize = 8, BTreeFooterOffset = 4056, NbtLeafMin = 28, BbtLeafMin = 20, BTreeIndexMin = 24,
-            FirstAMap = 0x22000, AMapInterval = 4072L * 8 * 64, DensityList = 0x21000, AllocBitsOffset = 0, AllocBitsLength = 4072,
+            FirstAMap = 0x22000, AMapInterval = 4072L * 8 * 512, DensityList = 0x21000, AllocBitsOffset = 0, AllocBitsLength = 4072,
         },
     };
 

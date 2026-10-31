@@ -61,8 +61,6 @@ public enum NdbDefectKind
     BTreeKeyOrder,
     /// <summary>Walking the tree visited more pages than the file can hold; it was cut off.</summary>
     BTreeTooManyPages,
-    /// <summary>An intermediate entry's key is greater than the first key of the child it points to.</summary>
-    BTreeSeparatorMismatch,
 
     // Blocks
     /// <summary>A block lies beyond the end of the file.</summary>
@@ -107,8 +105,6 @@ public enum NdbDefectKind
     // Allocation
     /// <summary>An AMap, PMap, FMap, FPMap or density list page failed validation.</summary>
     AllocationPageInvalid,
-    /// <summary>A block or page the B-trees reference is not marked allocated in the AMap.</summary>
-    AMapMismatch,
     /// <summary>The free space the AMaps add up to differs from cbAMapFree in the header.</summary>
     AMapFreeSpaceMismatch,
     /// <summary>The density list is malformed.</summary>

@@ -8,7 +8,7 @@ namespace RecursiveAI.OneMail.Pst.Ndb;
 
 /// <summary>One entry of the density list (MS-PST 2.2.2.7.4.1 DLISTPAGEENT).</summary>
 /// <param name="AMapIndex">dwPageNum: the zero-based index of an AMap page.</param>
-/// <param name="FreeSlots">dwFreeSlots: free 64-byte slots in that AMap, not necessarily contiguous.</param>
+/// <param name="FreeSlots">dwFreeSlots: free allocation slots (64 bytes; 512 in 4 KiB files) in that AMap, not necessarily contiguous.</param>
 public readonly record struct DensityEntry(int AMapIndex, int FreeSlots);
 
 /// <summary>The density list page (MS-PST 2.2.2.7.4): AMaps ordered by free space, plus the allocation cursor.</summary>
@@ -21,7 +21,7 @@ public sealed record NdbDensityList(byte Flags, uint CurrentPage, IReadOnlyList<
 /// <summary>The result of reading every AMap page and adding up the free space.</summary>
 /// <param name="AMapCount">How many AMap pages the header's ibAMapLast implies.</param>
 /// <param name="InvalidCount">How many of them failed a check (outside the file, bad type, signature, CRC or BID).</param>
-/// <param name="FreeBytes">Free bytes summed over the AMaps that could be read (clear bits times 64).</param>
+/// <param name="FreeBytes">Free bytes summed over the AMaps that could be read (clear bits times the slot size, 64 bytes or 512 in 4 KiB files).</param>
 /// <param name="HeaderFreeBytes">cbAMapFree from the header, for comparison.</param>
 public readonly record struct NdbAllocationSummary(long AMapCount, long InvalidCount, long FreeBytes, long HeaderFreeBytes);
 
@@ -48,7 +48,7 @@ public sealed partial class NdbFile
 
     /// <summary>Reads and checks one AMap page.</summary>
     /// <param name="index">Zero-based AMap index.</param>
-    /// <param name="bits">Receives the allocation bits (496 bytes, or 4,072 for 4 KiB files): bit n set means 64 bytes starting <c>n * 64</c> past the AMap are allocated. Must be at least <see cref="PageSize"/> bytes.</param>
+    /// <param name="bits">Receives the allocation bits (496 bytes, or 4,072 for 4 KiB files): bit n set means the slot (64 bytes; 512 in 4 KiB files) starting <c>n</c> slots past the AMap is allocated. Must be at least <see cref="PageSize"/> bytes.</param>
     /// <param name="check">The page checks.</param>
     /// <returns>False when the page lies outside the file or is not an AMap page.</returns>
     public bool TryReadAMap(long index, Span<byte> bits, out NdbCheck check)
@@ -98,7 +98,7 @@ public sealed partial class NdbFile
                     Report(NdbDefectKind.AllocationPageInvalid, AMapOffset(i), $"AMap {i} fails a check");
                 }
 
-                free += FreeBits(bits.AsSpan(0, Layout.AllocBitsLength)) * 64L;
+                free += FreeBits(bits.AsSpan(0, Layout.AllocBitsLength)) * (long)Layout.BlockAlignment;
             }
         }
         finally
@@ -127,7 +127,7 @@ public sealed partial class NdbFile
     }
 
     /// <summary>
-    /// Whether the AMaps mark every 64-byte slot of the range as allocated. Ranges before the first AMap (the header area) count as allocated.
+    /// Whether the AMaps mark every allocation slot of the range as allocated. Ranges before the first AMap (the header area) count as allocated.
     /// Reads AMap pages on demand and keeps the last one.
     /// </summary>
     /// <param name="ib">Start of the range.</param>
@@ -142,7 +142,7 @@ public sealed partial class NdbFile
 
         long end = ib + length;
         _amapCache ??= new byte[Layout.AllocBitsLength];
-        for (long p = ib - (ib % 64); p < end; p += 64)
+        for (long p = ib - (ib % Layout.BlockAlignment); p < end; p += Layout.BlockAlignment)
         {
             long index = (p - Layout.FirstAMap) / Layout.AMapInterval;
             if (index != _amapCacheIndex)
@@ -156,7 +156,7 @@ public sealed partial class NdbFile
                 return true;
             }
 
-            long bit = (p - AMapOffset(index)) / 64;
+            long bit = (p - AMapOffset(index)) / Layout.BlockAlignment;
             if ((_amapCache[bit >> 3] & (1 << (int)(bit & 7))) == 0)
             {
                 return false;

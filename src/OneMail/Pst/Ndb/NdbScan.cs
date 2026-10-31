@@ -44,8 +44,8 @@ public sealed partial class NdbFile
     private const int ScanChunk = 1 << 20;
 
     /// <summary>
-    /// Scan mode: finds every page and block in the file by looking for trailers at page and 64-byte granularity, without using
-    /// either B-tree. A page is a 512-byte unit whose last bytes are a valid page trailer; a block is a 64-byte-aligned extent
+    /// Scan mode: finds every page and block in the file by looking for trailers at page and block-alignment granularity (64 bytes; 512 in 4 KiB files), without using
+    /// either B-tree. A page is a 512-byte unit whose last bytes are a valid page trailer; a block is an extent aligned to the block alignment
     /// ending in a valid block trailer. Results come in file order (blocks by their end), one pass, constant memory.
     /// </summary>
     /// <remarks>
@@ -67,7 +67,7 @@ public sealed partial class NdbFile
             start = 0;
         }
 
-        int carry = l.MaxBlockData + l.BlockTrailerSize + 64;
+        int carry = l.MaxBlockData + l.BlockTrailerSize + l.BlockAlignment;
         byte[] buf = ArrayPool<byte>.Shared.Rent(ScanChunk + carry);
         try
         {
@@ -129,7 +129,7 @@ public sealed partial class NdbFile
             return;
         }
 
-        for (int e = unitAt + 64; e <= unitAt + Layout.PageSize; e += 64)
+        for (int e = unitAt + Layout.BlockAlignment; e <= unitAt + Layout.PageSize; e += Layout.BlockAlignment)
         {
             if (TryBlock(bufStart, all, e, regionStart, includeDamaged, out NdbScanItem blockHit))
             {
