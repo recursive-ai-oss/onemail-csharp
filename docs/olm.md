@@ -158,6 +158,11 @@ Explained differences, all in the oracles:
   (118), writes HTML bodies as text, adds no attachments to its EML, and in one message inserts a bullet character (12 classes in
   `tools/olm/compare_npm.py`, each counted in the run's output).
 
+Fuzzing: the `olm` target (zip built around mutated record XML, or a mutated whole zip) ran 600 s in the `Checked` build: 9.18 million
+executions, no findings. An earlier run found two escapes, both fixed and kept as seeds in `testdata/fuzz/olm`: a line break in a
+UID or address reaching the calendar writer, and an XML reader failure on a UCS-4 entry that was not caught. The full `Checked`
+suite (2,130 tests) passes.
+
 ## Not done
 
 Recovery of a damaged zip (it uses OneArchive's recovery mode, which is not in the pinned release), Outlook 2011 layouts (no sample
