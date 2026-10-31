@@ -10,7 +10,7 @@ namespace RecursiveAI.OneMail.Tnef;
 /// </summary>
 internal static class TnefInMime
 {
-    /// <summary>Why a TNEF part is not unpacked (the part stays an attachment, MS-OXCMAIL 2.2.3.8 step 4).</summary>
+    /// <summary>Why a TNEF part is not unpacked (the part stays an attachment, MS-OXCMAIL 2.2.3.8 step 4), or a note on one that is.</summary>
     internal enum Refusal
     {
         /// <summary>The part is unpacked.</summary>
@@ -19,7 +19,10 @@ internal static class TnefInMime
         /// <summary>The part does not hold a TNEF stream, or the stream is damaged beyond MS-OXTNEF (signature, version, truncation, checksum, limits).</summary>
         NotConforming,
 
-        /// <summary>The stream ends with CR LF outside any attribute (MS-OXCMAIL 2.2.3.8 step 3: such a stream is ignored).</summary>
+        /// <summary>
+        /// The stream ends with CR LF outside any attribute. MS-OXCMAIL 2.2.3.8 step 3 says a reader SHOULD ignore such a stream; every reader
+        /// observed unpacks it, so it is used and this value is returned with <c>true</c> to let callers report the ambiguity (OX20).
+        /// </summary>
         TrailingCrLf,
 
         /// <summary>The TNEF correlation key differs from the message's <c>X-MS-TNEF-Correlator</c> field (2.2.3.8 step 4).</summary>
@@ -64,16 +67,17 @@ internal static class TnefInMime
         }
 
         tnef = t;
-        if (t.Document.TrailingLength == 2 && data.Length >= 2 && data[^2] == 0x0D && data[^1] == 0x0A)
-        {
-            refusal = Refusal.TrailingCrLf;
-            return false;
-        }
+        bool crlf = t.Document.TrailingLength == 2 && data.Length >= 2 && data[^2] == 0x0D && data[^1] == 0x0A;
 
         if (CorrelationMismatch(t, message))
         {
             refusal = Refusal.CorrelationMismatch;
             return false;
+        }
+
+        if (crlf)
+        {
+            refusal = Refusal.TrailingCrLf;
         }
 
         return true;
@@ -115,7 +119,7 @@ internal static class TnefInMime
     /// <summary>The loss-report code and wording for a refusal.</summary>
     public static (string Code, string Reason) Describe(Refusal refusal) => refusal switch
     {
-        Refusal.TrailingCrLf => ("TnefNotUsed", "The stream ends with CR LF outside any attribute, so MS-OXCMAIL 2.2.3.8 has it ignored; the part stays an application/octet-stream attachment."),
+        Refusal.TrailingCrLf => ("TnefTrailingCrLfIgnored", "The stream ends with CR LF outside any attribute; MS-OXCMAIL 2.2.3.8 says to ignore such a stream, but every reader checked unpacks it, so it is used (AmbiguousTnefTrailingCrLf)."),
         Refusal.CorrelationMismatch => ("TnefNotUsed", "The TNEF correlation key does not match the X-MS-TNEF-Correlator field, so MS-OXCMAIL 2.2.3.8 has the message read as pure MIME; the part stays an application/octet-stream attachment."),
         _ => ("TnefNotUsed", "The stream does not conform to MS-OXTNEF, so MS-OXCMAIL 2.2.3.8 has the message read as pure MIME; the part stays an application/octet-stream attachment."),
     };

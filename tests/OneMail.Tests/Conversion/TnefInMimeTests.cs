@@ -110,12 +110,16 @@ public class TnefInMimeTests
     }
 
     [Fact]
-    public void AStreamEndingInCrLfAndADamagedOneAreIgnored()
+    public void AStreamEndingInCrLfIsUnpackedAndReportedAndADamagedOneIsKept()
     {
         byte[] crlf = [.. WithCorrelation(null), 0x0D, 0x0A];
-        MapiAttachment a = Assert.Single(new MimeToMapiConverter().Convert(MimeEntity.Parse(Outlook(crlf))).Value.Attachments);
-        Assert.Equal("winmail.dat", a.FileName);
-        Assert.Equal("application/octet-stream", a.MimeType);
+        byte[] eml = Outlook(crlf);
+        ConversionResult<MapiMessage> c = new MimeToMapiConverter().Convert(MimeEntity.Parse(eml));
+        Assert.Equal("a.bin", Assert.Single(c.Value.Attachments).FileName);
+        Assert.Contains(c.Report, e => e.Code == "TnefTrailingCrLfIgnored" && e.Kind == LossKind.Internal);
+        var v = MimeMailItem.Parse(eml);
+        Assert.Equal("a.bin", Assert.Single(v.Attachments).FileName);
+        Assert.Contains(v.Defects, d => d.Code == "AmbiguousTnefTrailingCrLf" && d.IsAmbiguity);
 
         byte[] damaged = WithCorrelation(null);
         damaged[^3] ^= 0x55; // a wrong attribute checksum

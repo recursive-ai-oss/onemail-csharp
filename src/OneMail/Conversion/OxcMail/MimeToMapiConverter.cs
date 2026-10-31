@@ -555,6 +555,12 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
                         if (TnefInMime.TryRead(leaf, _root!, options.TnefReader, out TnefMessage? t, out TnefInMime.Refusal refusal))
                         {
                             _tnef.Add(t!);
+                            if (refusal == TnefInMime.Refusal.TrailingCrLf)
+                            {
+                                (string noteCode, string noteWhy) = TnefInMime.Describe(refusal);
+                                report.Add("mime", leaf.MediaType, LossKind.Internal, noteCode, noteWhy, path);
+                            }
+
                             attachments.AddRange(t!.Attachments);
                             report.Add("mime", leaf.MediaType, LossKind.Internal, "TnefPartUnpacked", "The TNEF part is not an attachment: its properties, recipients and attachments are the message's (MS-OXCMAIL 2.2.3.8).", path);
                             break;

@@ -136,8 +136,7 @@ A leaf part that holds a TNEF stream (found by content, as `MimeEntity.Enumerate
 or any `application/*` part starting with the signature 0x223E9F78) is unpacked into the message. The rules, in the order the converter
 applies them:
 
-1. **The part qualifies** when the stream conforms to MS-OXTNEF (no wrong signature, version, truncation, checksum or limit defect), does not
-   end in CR LF outside any attribute (2.2.3.8 step 3), and its correlation key matches the message's `X-MS-TNEF-Correlator` field
+1. **The part qualifies** when the stream conforms to MS-OXTNEF (no wrong signature, version, truncation, checksum or limit defect), and its correlation key matches the message's `X-MS-TNEF-Correlator` field
    (step 4, OX21). A part that does not qualify is an ordinary attachment whose content type is `application/octet-stream`
    (step 4), reported as `TnefNotUsed` with the reason. The message is then pure MIME, as the spec says.
 2. **Headers first.** The message is built from the header fields exactly as without a TNEF part. Then, for each TNEF property: not set
@@ -157,7 +156,9 @@ applies them:
    their properties as read; their 8-bit text keeps the code page of the TNEF. The 8-bit strings that were merged into the message are read
    with the TNEF's code page too (a second TNEF part with another code page has its single 8-bit strings stored as Unicode,
    `TnefCodePageDiffers`).
-7. The part itself is a `TnefPartUnpacked` entry (`Internal`: the content is carried, the carrier is not).
+7. A stream that ends in CR LF outside any attribute is unpacked although 2.2.3.8 step 3 says to ignore it (OX20); the message gets an `Internal`
+   `TnefTrailingCrLfIgnored` entry and the view an `AmbiguousTnefTrailingCrLf` defect.
+8. The part itself is a `TnefPartUnpacked` entry (`Internal`: the content is carried, the carrier is not).
 
 `OxcMailImportOptions.Tnef = KeepAsAttachment` leaves every TNEF part an attachment as for any binary part.
 
@@ -181,7 +182,7 @@ reproducible (OX22). Properties that travel in the TNEF are not listed as `NoInt
 `NoInternetMapping`, `PartHeaderNotMapped`, `PartsTooDeep`, `RepeatedHeaderNotMapped`, `ReplyToUnresolved`, `RtfCarriedAsTextRtf`,
 `RtfRedundant`, `RtfUndecodable`, `SignatureNotVerifiable`, `StoreBookkeeping`, `SubjectPrefixMarkerRemoved`,
 `SubjectWhitespaceTrimmed`, `TextFromRtf`, `ThreadIndexNotBase64`, `TransportHeaderLineSkipped`, `TransportHeaderOverridden`,
-`TransportHeadersRewritten`, `ValueOutOfRange`; TNEF: `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`,
+`TransportHeadersRewritten`, `ValueOutOfRange`; TNEF: `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefTrailingCrLfIgnored`,
 `TnefPlainTextNotRendered`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefWriterLimit`.
 
 ## Limits

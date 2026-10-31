@@ -171,6 +171,12 @@ public class MimeMailItem : IMailItem
                 yield return new MailDefect("mime", d.Kind.ToString(), d.Offset, d.IsAmbiguity);
             }
 
+            if (Layout.TnefCrLf)
+            {
+                // OX20: a TNEF stream ending in CR LF is used although MS-OXCMAIL 2.2.3.8 says to ignore it.
+                yield return new MailDefect("tnef", "AmbiguousTnefTrailingCrLf", -1, true);
+            }
+
             // Structured headers are parsed on demand, so their defects exist only once they have been read.
             List<MimeDefect> structured = [];
             foreach (string name in StructuredAddressHeaders)
@@ -253,6 +259,7 @@ public class MimeMailItem : IMailItem
         public MimePart? Html;
         public IReadOnlyList<IMailAttachment> Attachments = [];
         public readonly List<(MimePart Part, TnefMessage Message, MapiMailItem Item)> Tnef = [];
+        public bool TnefCrLf;
 
         public static BodyLayout Build(MimeEntity root, MimeMailItem owner)
         {
@@ -319,11 +326,12 @@ public class MimeMailItem : IMailItem
                 case MimePart p:
                     // RFC 2046 §5.1.4: the children of multipart/alternative are renderings of one body; a text rendering that is
                     // not marked as an attachment is an alternative of the body, not a file.
-                    if (p.IsTnef() && TnefInMime.TryRead(p, message, null, out TnefMessage? tnef, out _))
+                    if (p.IsTnef() && TnefInMime.TryRead(p, message, null, out TnefMessage? tnef, out TnefInMime.Refusal note))
                     {
                         // MS-OXCMAIL 2.2.3.8 and ambiguity V9: Outlook shows what the TNEF holds in place of winmail.dat.
                         var item = new MapiMailItem(tnef!, new MailProvenance(MailFormat.Tnef, null, null, 0, tnef!.Document.Source.Length, -1));
                         l.Tnef.Add((p, tnef!, item));
+                        l.TnefCrLf |= note == TnefInMime.Refusal.TrailingCrLf;
                         into.AddRange(item.Attachments);
                         break;
                     }

@@ -39,9 +39,9 @@ unquoted line shift by the removed `>` bytes).
   shown the way Outlook shows it, not as a file (V9): the part is not listed as an attachment; the attachments the TNEF holds (embedded messages
   included, each an item with its own view) take its place in document order; `RtfBody` is the TNEF's compressed RTF decompressed; `TextBody`
   and `HtmlBody` are the TNEF's (an HTML property, or the HTML or text de-encapsulated from its RTF) when the MIME side has none of that kind.
-  The MIME parts always win. A part that does not qualify (damaged stream, trailing CR LF, correlation key mismatch) stays one ordinary
+  The MIME parts always win. A part that does not qualify (damaged stream, correlation key mismatch) stays one ordinary
   attachment. `MimeMailItem.TnefParts` lists the unpacked parts (the raw bytes are `part.GetDecodedContent()`; the tree is untouched) and
-  `TnefMessages` their MAPI messages. Header fields are never taken from a TNEF: the view of a MIME item reads its headers only.
+  `TnefMessages` their MAPI messages. A stream ending in CR LF is unpacked and the item reports the defect `AmbiguousTnefTrailingCrLf` (family `tnef`). Header fields are never taken from a TNEF: the view of a MIME item reads its headers only.
 
 ## MAPI items (MSG, PST, OST)
 

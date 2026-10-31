@@ -30,6 +30,7 @@ internal static class MimeCheck
         public int Attachments;
         public int AttachmentMismatch;
         public int Recipients;
+        public int CrLf;
         public readonly SortedDictionary<string, int> ReportedBy = [];
     }
 
@@ -56,7 +57,7 @@ internal static class MimeCheck
 
         File.WriteAllLines(Path.Combine(outDir, "view.jsonl"), view);
         Console.WriteLine($"messages={c.Messages} merged={c.Merged} refused={c.Refused} properties={c.Properties} carried={c.Carried} reported={c.Reported} derived={c.Derived} " +
-            $"attachments={c.Attachments} attachmentMismatch={c.AttachmentMismatch} recipients={c.Recipients} unexplained={c.Unexplained}");
+            $"attachments={c.Attachments} attachmentMismatch={c.AttachmentMismatch} recipients={c.Recipients} unpackedWithTrailingCrLf={c.CrLf} unexplained={c.Unexplained}");
         foreach ((string key, int n) in c.ReportedBy)
         {
             Console.WriteLine($"  reported {key} x{n}");
@@ -201,8 +202,7 @@ internal static class MimeCheck
     {
         TnefMessage t = TnefMessage.Read(tnef);
         bool fatal = t.TnefDefects.Any(d => d.Kind is TnefDefectKind.NotTnef or TnefDefectKind.UnexpectedVersion or TnefDefectKind.AttributeTruncated or TnefDefectKind.ChecksumMismatch or TnefDefectKind.LimitReached);
-        bool crlf = tnef.Length >= 2 && tnef[^2] == 0x0D && tnef[^1] == 0x0A && t.Document.TrailingLength == 2;
-        return !fatal && !crlf;
+        return !fatal;
     }
 
     private static string Label(MapiProperty p) => p.Name is { } n ? n.ToString() : MapiPropertyNames.GetName(p.Id) ?? p.Tag.ToString();
@@ -271,6 +271,18 @@ internal static class MimeCheck
         }
 
         c.Merged++;
+        bool endsInCrLf = tnef.Length >= 2 && tnef[^2] == 0x0D && tnef[^1] == 0x0A && fresh.Document.TrailingLength == 2;
+        if (endsInCrLf != r.Report.Any(e => e.Code == "TnefTrailingCrLfIgnored") || endsInCrLf != item.Defects.Any(d => d.Code == "AmbiguousTnefTrailingCrLf"))
+        {
+            c.Unexplained++;
+            Console.WriteLine($"UNEXPLAINED {name}: CR LF at the end of the stream is not reported (or reported without it)");
+        }
+
+        if (endsInCrLf)
+        {
+            c.CrLf++;
+        }
+
         if (item.TnefParts.Count != 1 || !r.Report.Any(e => e.Code == "TnefPartUnpacked"))
         {
             c.Unexplained++;
