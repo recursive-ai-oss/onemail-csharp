@@ -124,6 +124,7 @@ date-34-two-digit-year-68	Date: Mon, 4 Jan 68 08:00:00 +0000
 date-35-two-digit-year-69	Date: Sat, 4 Jan 69 08:00:00 +0000
 date-36-two-digit-year-70	Date: Sun, 4 Jan 70 08:00:00 +0000
 date-37-year-00	Date: Tue, 4 Jan 00 08:00:00 +0000
+date-38-year-0002	Date: Fri, 4 Jan 0002 08:00:00 +0000
 enc-01-2047-in-filename	RFC 2047 encoded word inside a quoted filename parameter.
 enc-02-2231-filename	RFC 2231 `filename*=utf-8''...`.
 enc-03-2231-continuations	RFC 2231 continuations `filename*0*`, `filename*1*`, `filename*2`.

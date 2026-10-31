@@ -161,6 +161,7 @@ All forms are read into an instant plus the written zone; the source text is kep
 | D10 | `date-29` `PDT` | −7 | −7 | rejected | Accepted (obsolete zone, RFC 5322 4.3). | none | 2 of 3 |
 | D11 | `date-30` fractional seconds | wrong time (00:00) | rejected | accepted | Fraction dropped. | `FractionalSeconds` | prov. (Go) |
 | D12 | `date-15`, `date-20`, `date-23`, `date-31`, `date-32` garbage, ISO with `T…Z`, 31 April, empty, day 0 | rejected | rejected | rejected | Rejected; the value reads as absent and the header stays as text. | `InvalidDate` | all agree |
+| D13 | `date-38` four-digit year with leading zeros (`0002`), which a client that once wrote a two-digit year can produce | 2002 | 2002 | year 2 | Read as a two-digit year (rule D2). | `TwoDigitYear` | 2 of 3 |
 
 ## Nested messages and structure
 

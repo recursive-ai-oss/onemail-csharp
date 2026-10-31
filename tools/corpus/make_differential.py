@@ -288,6 +288,7 @@ DATES = [
     ("35-two-digit-year-69", "Sat, 4 Jan 69 08:00:00 +0000"),
     ("36-two-digit-year-70", "Sun, 4 Jan 70 08:00:00 +0000"),
     ("37-year-00", "Tue, 4 Jan 00 08:00:00 +0000"),
+    ("38-year-0002", "Fri, 4 Jan 0002 08:00:00 +0000"),
 ]
 for n, v in DATES:
     case("date-" + n, "Date: %s" % (v if v else "(empty)"), date(v))
