@@ -34,7 +34,9 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <!-- No baseline until the first release is published; then set PackageValidationBaselineVersion. -->
+    <!-- The last version on nuget.org. Each published package sets PackageValidationBaselineVersion from it in its project file; a package
+         that has never been published has no baseline. Bump after every release. -->
+    <OneMailPublishedVersion>0.2.0-preview.2</OneMailPublishedVersion>
     <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
