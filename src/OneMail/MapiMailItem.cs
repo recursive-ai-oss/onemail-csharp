@@ -30,6 +30,12 @@ public sealed class MapiMailItem : IMailItem
     /// <summary>The MAPI message behind the view.</summary>
     public MapiMessage Message => _message;
 
+    /// <summary>The typed contact view when <see cref="Kind"/> is <see cref="MailItemKind.Contact"/>, otherwise null.</summary>
+    public Contacts.MapiContact? Contact => Kind == MailItemKind.Contact ? new Contacts.MapiContact(_message) : null;
+
+    /// <summary>The typed distribution list view when <see cref="Kind"/> is <see cref="MailItemKind.DistributionList"/>, otherwise null.</summary>
+    public Contacts.MapiDistributionList? DistributionList => Kind == MailItemKind.DistributionList ? new Contacts.MapiDistributionList(_message) : null;
+
     /// <inheritdoc/>
     public MailProvenance Provenance => _provenance;
 
