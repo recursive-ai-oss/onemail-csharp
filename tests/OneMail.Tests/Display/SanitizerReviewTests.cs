@@ -367,6 +367,21 @@ public class SanitizerReviewTests
         Assert.Contains("p4999", d.ResolvedAttachments);
     }
 
+    // Finding R8 (hardening): "0url(x)" is a dimension and a parenthesis to the spec, but reads as a function name to a tokeniser that differs.
+    // A parenthesis directly after a number, dimension, hash, identifier or string now removes the declaration. (Found by the display fuzz target.)
+    [Fact]
+    public void ParenthesisGluedToAValueTokenIsRemoved()
+    {
+        SanitizedHtml r = HtmlSanitizer.Sanitize("<style>@font-face{font-family:w;src:0url(javascript2ale,AAAA)}p{width:1url(a);height:2px}</style><p style=\"margin:1px(2);padding:3px\">x</p>");
+        Assert.DoesNotContain("0url(", r.Html);
+        Assert.DoesNotContain("1url(", r.Html);
+        Assert.DoesNotContain("1px(", r.Html);
+        Assert.Contains("height:2px", r.Html);
+        Assert.Contains("padding:3px", r.Html);
+        SanitizedHtml ok = HtmlSanitizer.Sanitize("<p style=\"width:calc(2*(3px + 1px));height:calc((1px))\">x</p>");
+        Assert.Contains("width:calc(2*(3px + 1px))", ok.Html);
+    }
+
     // Finding R2 (note): the calendar card hook's HTML is written as given, so it is the hook's job to escape; the sanitiser's guarantees stop at
     // the body. This pins the behaviour so a change to it is deliberate.
     [Fact]

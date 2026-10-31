@@ -173,8 +173,9 @@ internal static class SanitizerTargets
             {
                 // String literals are text, whatever they say; only the rest of the sheet is looked at.
                 string css = System.Text.RegularExpressions.Regex.Replace((n.TextContent ?? string.Empty).ToLowerInvariant(), "\"(\\\\.|[^\"\\\\])*\"", "\"\"");
-                if (css.Contains("@import", StringComparison.Ordinal) || css.Contains("expression", StringComparison.Ordinal)
-                    || css.Contains("javascript", StringComparison.Ordinal) || css.Contains('<'))
+                // "expression(" and "javascript:" are what act; the words alone are legal identifiers (a font may be called javascript).
+                if (css.Contains("@import", StringComparison.Ordinal) || css.Contains("expression(", StringComparison.Ordinal)
+                    || css.Contains("javascript:", StringComparison.Ordinal) || css.Contains('<'))
                 {
                     throw new InvalidOperationException("style content");
                 }
