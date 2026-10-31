@@ -10,7 +10,7 @@ set -euo pipefail
 work="${1:?work dir}"; mkdir -p "$work"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 corpus="${ONEMAIL_CORPUS:?}/calendar"
-venv="${VENV:-$HOME/onemail/u13/venv-rec}"
+venv="${VENV:-$HOME/onemail/oracles/recurrence-venv}"
 roots=()
 for d in libical icaljs biweekly sabrevobject thunderbird govuk; do [ -d "$corpus/$d" ] && roots+=("$corpus/$d"); done
 roots+=("$repo/testdata/calendar/rfc" "$repo/testdata/calendar/recurrence/generated" "$repo/testdata/calendar/generated/hand")
