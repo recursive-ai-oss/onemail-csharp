@@ -724,7 +724,7 @@ internal static class FormCodec
 
     internal static Component FromForm(FComponent fc, Dialect d, string path, DefectSink defects)
     {
-        Component c = new(SafeName(fc.Name));
+        Component c = new(SafeComponentName(fc.Name));
         foreach (FProperty p in fc.Props)
         {
             c.Add(FromForm(p, d, path, defects));
@@ -817,17 +817,7 @@ internal static class FormCodec
                 continue;
             }
 
-            // A parameter value cannot hold a line break in text; a line break there (or in a name) is a defect and is replaced.
-            IEnumerable<string> vals = d.IsVCard() && fp.Name == "label" ? fp.Values.Select(LabelEscape) : fp.Values.Select(v =>
-            {
-                if (v.AsSpan().IndexOfAny('\r', '\n') < 0)
-                {
-                    return v;
-                }
-
-                defects.Add(FormDefectKind.LineBreakEscaped, f.Offset, ppath);
-                return v.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
-            });
+            IEnumerable<string> vals = d.IsVCard() && fp.Name == "label" ? fp.Values.Select(LabelEscape) : fp.Values;
             ps.Add(new ContentParameter(SafeParamName(fp.Name), vals));
         }
 
@@ -863,31 +853,19 @@ internal static class FormCodec
         return prop;
     }
 
-    private static readonly System.Buffers.SearchValues<char> ParamNameBad = System.Buffers.SearchValues.Create(";:=,\"\r\n");
-
+    // A parameter name with a line break would start a new line in the output; any other character is written as given.
     private static string SafeParamName(string name)
     {
         string n = FormText.Upper(name);
-        if (n.Length == 0)
-        {
-            return "X-EMPTY";
-        }
+        return n.Length == 0 ? "X-EMPTY" : n.AsSpan().IndexOfAny('\r', '\n') < 0 ? n : n.Replace('\r', '-').Replace('\n', '-');
+    }
 
-        if (n.AsSpan().IndexOfAny(ParamNameBad) < 0)
-        {
-            return n;
-        }
-
-        char[] chars = n.ToCharArray();
-        for (int i = 0; i < chars.Length; i++)
-        {
-            if (ParamNameBad.Contains(chars[i]))
-            {
-                chars[i] = '-';
-            }
-        }
-
-        return new string(chars);
+    // The component tree refuses only line breaks in a component name (it writes BEGIN:name); a colon is kept so that a mangled
+    // BEGIN line reads back as the name it was given.
+    private static string SafeComponentName(string name)
+    {
+        string n = FormText.Upper(name);
+        return n.AsSpan().IndexOfAny('\r', '\n') < 0 ? n : n.Replace('\r', '-').Replace('\n', '-');
     }
 
     private static string SafeName(string name)

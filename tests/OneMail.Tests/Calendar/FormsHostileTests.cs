@@ -33,11 +33,13 @@ public class FormsHostileTests
     }
 
     [Fact]
-    public void ALineBreakInAParameterValueOrNameIsReplacedAndReported()
+    public void ALineBreakInAParameterNameIsReplacedAndAValueKeepsIt()
     {
+        // RFC 6868: a parameter value may hold a line break (it is written as ^n); a name cannot.
         FormReadResult r = JsonForms.FromJson("[\"vcard\",[[\"tel\",{\"x-a\\nb\":\"one\\ntwo\"},\"text\",\"1\"]]]");
-        Assert.Contains(r.Defects, static d => d.Kind == FormDefectKind.LineBreakEscaped);
-        Assert.Contains("one two", Encoding.UTF8.GetString(r.Document.ToArray()));
+        string text = Encoding.UTF8.GetString(r.Document.ToArray());
+        Assert.Contains("X-A-B", text);
+        Assert.Contains("one^ntwo", text);
     }
 
     [Fact]
