@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>iCalendar (ICS) and vCard components, recurrence expansion and time zones for .NET, with no dependency beyond the BCL.</Description>
+    <PackageTags>$(PackageTags);icalendar;ics;vcard;recurrence</PackageTags>
+  </PropertyGroup>
+
+</Project>

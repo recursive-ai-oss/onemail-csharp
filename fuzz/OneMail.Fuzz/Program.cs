@@ -1,0 +1,52 @@
+using SharpFuzz;
+
+namespace RecursiveAI.OneMail.Fuzz;
+
+// One fuzz executable, one target per input surface. The target is chosen by the ONEMAIL_FUZZ_TARGET environment
+// variable because libFuzzer's .NET host starts the program without command-line arguments.
+//
+// To add a target: write a static method `Run(ReadOnlySpan<byte> data)` that lets only the library's typed results
+// escape, then add one line to `Targets` below and a line for its maximum input length to run.sh.
+//
+// Without a libFuzzer host, `replay <target> <file>...` runs saved inputs once each (reproduces a finding).
+internal static class Program
+{
+    private delegate void Target(ReadOnlySpan<byte> data);
+
+    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal);
+
+    private static int Main(string[] args)
+    {
+        if (args.Length > 2 && args[0] == "replay")
+        {
+            return Replay(args);
+        }
+
+        string? name = Environment.GetEnvironmentVariable("ONEMAIL_FUZZ_TARGET") ?? (args.Length > 0 ? args[0] : null);
+        if (name is null || !Targets.TryGetValue(name, out Target? target))
+        {
+            Console.Error.WriteLine("usage: set ONEMAIL_FUZZ_TARGET to one of: " + string.Join(", ", Targets.Keys));
+            return 2;
+        }
+
+        Fuzzer.LibFuzzer.Run(data => target(data));
+        return 0;
+    }
+
+    private static int Replay(string[] args)
+    {
+        if (!Targets.TryGetValue(args[1], out Target? target))
+        {
+            Console.Error.WriteLine("unknown target " + args[1]);
+            return 2;
+        }
+
+        foreach (string path in args.Skip(2))
+        {
+            target(File.ReadAllBytes(path));
+            Console.WriteLine("ok " + path);
+        }
+
+        return 0;
+    }
+}

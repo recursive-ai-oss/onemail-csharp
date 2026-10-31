@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Signing, verification and encryption of email for .NET: DKIM, ARC, S/MIME and OpenPGP.</Description>
+    <PackageTags>$(PackageTags);dkim;arc;smime;openpgp</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

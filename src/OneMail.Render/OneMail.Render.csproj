@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Renders an email message to PDF or an image in one call, on OneRender.</Description>
+    <PackageTags>$(PackageTags);pdf;png;render</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneMail/OneMail.csproj" />
+    <PackageReference Include="RecursiveAI.OneRender" />
+    <PackageReference Include="RecursiveAI.OneRender.Pdf" />
+    <PackageReference Include="RecursiveAI.OneRender.Image" />
+  </ItemGroup>
+
+</Project>

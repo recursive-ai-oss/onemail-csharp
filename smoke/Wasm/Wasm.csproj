@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <PropertyGroup>
+    <AssemblyName>$(PackagePrefix).OneMail.WasmSmoke</AssemblyName>
+    <RootNamespace>$(PackagePrefix).OneMail.WasmSmoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- The browser host covers the format core only: the core and Calendar packages. -->
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

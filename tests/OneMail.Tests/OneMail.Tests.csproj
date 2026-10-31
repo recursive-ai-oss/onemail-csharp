@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>$(PackagePrefix).OneMail.Tests</AssemblyName>
+    <RootNamespace>$(PackagePrefix).OneMail.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />
+    <ProjectReference Include="../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+    <ProjectReference Include="../../src/OneMail.Render/OneMail.Render.csproj" />
+  </ItemGroup>
+
+</Project>

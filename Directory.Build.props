@@ -1,0 +1,42 @@
+<Project>
+
+  <PropertyGroup Label="Name">
+    <!-- The one place the publisher prefix lives. Package IDs, assembly names and root namespaces are
+         $(PackagePrefix).<project name>, e.g. RecursiveAI.OneMail.Calendar. -->
+    <PackagePrefix>RecursiveAI</PackagePrefix>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Output">
+    <!-- Build output stays out of the source folders. Set ONEMAIL_ARTIFACTS to choose where; the default is artifacts/ at the
+         repository root, which .gitignore covers. Projects write to $(ArtifactsPath)/bin, /obj and /package. -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath Condition="'$(ONEMAIL_ARTIFACTS)' != ''">$(ONEMAIL_ARTIFACTS)</ArtifactsPath>
+    <ArtifactsPath Condition="'$(ONEMAIL_ARTIFACTS)' == ''">$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Language and analysis">
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- Safe C# by default. A project that needs pointers or reinterpret casts (the block, charset and LZ decoders) opts in
+         for itself and says why next to the switch. -->
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Configurations">
+    <!-- Checked asserts the bounds that the unsafe decoders state in comments. Tests and fuzzing run in it. -->
+    <Configurations>Debug;Release;Checked</Configurations>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Checked'">
+    <Optimize>true</Optimize>
+    <DefineConstants>$(DefineConstants);CHECKED</DefineConstants>
+  </PropertyGroup>
+
+</Project>

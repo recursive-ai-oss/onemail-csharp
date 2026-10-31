@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>$(PackagePrefix).OneMail.AotSmoke</AssemblyName>
+    <RootNamespace>$(PackagePrefix).OneMail.AotSmoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />
+    <ProjectReference Include="../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+    <ProjectReference Include="../../src/OneMail.Render/OneMail.Render.csproj" />
+  </ItemGroup>
+
+</Project>

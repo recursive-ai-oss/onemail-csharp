@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <Project Path="src/OneMail/OneMail.csproj" />
+    <Project Path="src/OneMail.Client/OneMail.Client.csproj" />
+    <Project Path="src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+    <Project Path="src/OneMail.Render/OneMail.Render.csproj" />
+    <Project Path="src/OneMail.Cli/OneMail.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OneMail.Tests/OneMail.Tests.csproj" />
+  </Folder>
+  <Folder Name="/bench/">
+    <Project Path="bench/OneMail.Benchmarks/OneMail.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/fuzz/">
+    <Project Path="fuzz/OneMail.Fuzz/OneMail.Fuzz.csproj" />
+  </Folder>
+  <Folder Name="/smoke/">
+    <Project Path="smoke/Aot/Aot.csproj" />
+    <Project Path="smoke/Wasm/Wasm.csproj" />
+  </Folder>
+</Solution>

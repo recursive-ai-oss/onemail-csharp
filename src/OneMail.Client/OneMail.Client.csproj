@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SMTP, IMAP and POP3 clients and SASL for .NET, over a public raw protocol layer.</Description>
+    <PackageTags>$(PackageTags);smtp;imap;pop3;sasl</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>
