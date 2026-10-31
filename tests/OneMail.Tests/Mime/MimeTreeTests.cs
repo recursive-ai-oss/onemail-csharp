@@ -441,7 +441,9 @@ public class TransferEncodingTests
     [InlineData("a=3db=3D", "a=b=", TransferIssues.None)]
     [InlineData("soft=\r\nbreak", "softbreak", TransferIssues.None)]
     [InlineData("soft=\nbreak", "softbreak", TransferIssues.None)]
-    [InlineData("trailing  \r\nnext", "trailing\r\nnext", TransferIssues.None)]
+    [InlineData("trailing  \r\nnext", "trailing  \r\nnext", TransferIssues.None)]
+    [InlineData("a = alone\r\nb", "a = alone\r\nb", TransferIssues.InvalidQuotedPrintableEscape)]
+    [InlineData("a =\t x", "a =\t x", TransferIssues.InvalidQuotedPrintableEscape)]
     [InlineData("inner  space", "inner  space", TransferIssues.None)]
     [InlineData("bad=ZZescape", "bad=ZZescape", TransferIssues.InvalidQuotedPrintableEscape)]
     [InlineData("half=4", "half=4", TransferIssues.TruncatedQuotedPrintableEscape)]
@@ -453,6 +455,25 @@ public class TransferEncodingTests
         {
             Assert.Equal(expected, DecodeQp(encoded, out TransferIssues got, split));
             Assert.Equal(issues, got);
+        }
+    }
+
+    [Theory]
+    [InlineData("begin 644 a.txt\r\n+:&5L;&\\@=V]R;&0*\r\n`\r\nend\r\n", "hello world")]
+    [InlineData("junk\nbegin 644 a\n#86)C\n`\nend\n", "abc")]
+    [InlineData("no begin line\n#86)C\n", "")]
+    [InlineData("begin 644 a\n#86)C\nend\n#86)C\n", "abc")]
+    public void UuDecoderCases(string encoded, string expected)
+    {
+        byte[] input = Encoding.Latin1.GetBytes(encoded);
+        for (int split = 0; split <= input.Length; split++)
+        {
+            var d = new UuDecoder();
+            byte[] outp = new byte[input.Length + 600];
+            int n = d.Decode(input.AsSpan(0, split), outp);
+            n += d.Decode(input.AsSpan(split), outp.AsSpan(n));
+            n += d.Finish(outp.AsSpan(n));
+            Assert.Equal(expected, Encoding.Latin1.GetString(outp.AsSpan(0, n)));
         }
     }
 

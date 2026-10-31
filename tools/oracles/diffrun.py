@@ -37,7 +37,7 @@ def default_commands(bin_dir):
         "python": [sys.executable, pydump, "--root", "{root}"],
         "python-compat32": [sys.executable, pydump, "--policy", "compat32", "--root", "{root}"],
         "go": [os.path.join(bin_dir, "godump"), "-root", "{root}"],
-        "onemail": [sys.executable, os.path.join(HERE, "onemail", "onemail_stub.py"), "--root", "{root}"],
+        "onemail": [os.path.join(bin_dir, "onemail", "OneMailDump"), "--root", "{root}"],
     }
 
 
@@ -209,6 +209,64 @@ def digest(rec):
     return text
 
 
+# ---- the explained map ------------------------------------------------------------------------------------------------
+#
+# OneMail is compared with every oracle in the same run. Each difference between OneMail and an oracle must be explained by a
+# rule in explained.tsv (an entry of docs/ambiguities.md, a documented normalisation, or a named limitation of that oracle).
+# A difference no rule explains is "unexplained" and fails the run.
+
+OURS = "onemail"
+RULES = None
+
+
+def load_rules():
+    global RULES
+    if RULES is None:
+        RULES = []
+        with open(os.path.join(HERE, "explained.tsv"), encoding="utf-8") as f:
+            for n, line in enumerate(f, 1):
+                if not line.strip() or line.startswith("#"):
+                    continue
+                c = line.rstrip("\n").split("\t")
+                if len(c) < 7:
+                    sys.exit("explained.tsv line %d: expected 7 tab-separated fields" % n)
+                ident, oracle, file_re, cls_re, sub_re, detail_re, flags = c[:7]
+                RULES.append({"id": ident, "oracle": oracle, "file": re.compile(file_re), "cls": re.compile(cls_re),
+                              "sub": re.compile(sub_re), "detail": re.compile(detail_re, re.S), "flags": flags})
+    return RULES
+
+
+def diff_key(cls, sub):
+    """The dimension a difference is about, so that the same dimension can be looked up against the other oracles."""
+    return (cls, sub if cls.startswith(("header.", "part.header.", "address.")) else "")
+
+
+def explain_message(fid, per_oracle):
+    """per_oracle: {oracle: [(cls, sub, detail)]} for OneMail against that oracle (OneMail is side a).
+    Returns {oracle: [(cls, sub, rule id or None)]}."""
+    rules = load_rules()
+    keys = {o: {diff_key(c, s) for c, s, _ in d} for o, d in per_oracle.items()}
+    out = {}
+    for o, diffs in per_oracle.items():
+        res = []
+        for cls, sub, detail in diffs:
+            hit = None
+            for r in rules:
+                if r["oracle"] not in ("*", o) or not r["file"].search(fid) or not r["cls"].fullmatch(cls):
+                    continue
+                if not r["sub"].search(sub) or not r["detail"].search(detail):
+                    continue
+                if "m" in r["flags"]:  # needs another oracle that agrees with OneMail on this dimension
+                    k = diff_key(cls, sub)
+                    if not any(k not in keys[x] for x in keys if x != o):
+                        continue
+                hit = r["id"]
+                break
+            res.append((cls, sub, hit))
+        out[o] = res
+    return out
+
+
 # ---- storage -------------------------------------------------------------------------------------------------------
 
 def dump_path(out, corpus, driver, chunk):
@@ -273,7 +331,45 @@ def compare_chunk(out, corpus, drivers, chunk, files):
                     p["examples"].setdefault(cls, {"id": f, "sub": sub, "detail": detail})
                 p["subs"][cls][sub] += 1
         s["pairs"]["%s~%s" % (d1, d2)] = p
+    if OURS in drivers:
+        s["explained"] = explain_chunk(dumps, drivers, files)
     return s
+
+
+def explain_chunk(dumps, drivers, files):
+    others = [d for d in drivers if d != OURS]
+    ex = {o: {"messages": 0, "differ": 0, "unexplainedMessages": 0, "rules": Counter(), "unexplained": Counter(), "examples": {}} for o in others}
+    for f in files:
+        a = dumps[OURS].get(f)
+        if not a or a.get("skipped") or a.get("crash"):
+            continue
+        per = {}
+        for o in others:
+            b = dumps[o].get(f)
+            if b and not b.get("skipped") and not b.get("crash"):
+                per[o] = compare_records(a, b)
+        res = explain_message(f, per)
+        for o, items in res.items():
+            e = ex[o]
+            e["messages"] += 1
+            if not items:
+                continue
+            e["differ"] += 1
+            bad = False
+            seen = set()
+            for cls, sub, rid in items:
+                if rid:
+                    if (cls, rid) not in seen:
+                        seen.add((cls, rid))
+                        e["rules"][rid] += 1
+                else:
+                    bad = True
+                    k = cls + ":" + sub
+                    e["unexplained"][k] += 1
+                    e["examples"].setdefault(k, f)
+            if bad:
+                e["unexplainedMessages"] += 1
+    return ex
 
 
 def jsonable(o):
@@ -370,7 +466,7 @@ def cmd_compare(a):
 
 
 def merge(out, corpus):
-    total = {"messages": 0, "crashes": Counter(), "oracleErrors": Counter(), "versions": {}, "defects": defaultdict(Counter), "pairs": {}}
+    total = {"messages": 0, "crashes": Counter(), "oracleErrors": Counter(), "versions": {}, "defects": defaultdict(Counter), "pairs": {}, "explained": {}}
     cdir = os.path.join(out, corpus, "compare")
     for n in sorted(os.listdir(cdir)):
         if not n.endswith(".json"):
@@ -383,6 +479,14 @@ def merge(out, corpus):
         total["versions"].update(s["versions"])
         for d, c in s["defects"].items():
             total["defects"][d].update(c)
+        for o, x in (s.get("explained") or {}).items():
+            t = total["explained"].setdefault(o, {"messages": 0, "differ": 0, "unexplainedMessages": 0, "rules": Counter(), "unexplained": Counter(), "examples": {}})
+            for f in ("messages", "differ", "unexplainedMessages"):
+                t[f] += x[f]
+            t["rules"].update(x["rules"])
+            t["unexplained"].update(x["unexplained"])
+            for k, f in x["examples"].items():
+                t["examples"].setdefault(k, f)
         for k, p in s["pairs"].items():
             t = total["pairs"].setdefault(k, {"compared": 0, "agree": 0, "differ": 0, "bothFailed": 0, "classes": Counter(),
                                               "subs": defaultdict(Counter), "examples": {}})
@@ -423,6 +527,15 @@ def cmd_report(a):
             detail = "(withheld: private corpus)" if private else ex["detail"].replace("|", "/").replace("\n", " ")[:90]
             lines.append("| %s | %d | %s | %s: %s |" % (cls, n, subs.replace("|", "/"), ex["id"], detail))
         lines.append("")
+    if t["explained"]:
+        lines += ["## OneMail against each oracle, by explanation", ""]
+        for o, x in sorted(t["explained"].items()):
+            lines += ["### onemail ~ %s" % o, "", "compared %d, identical %d, differ %d, **unexplained %d**" % (x["messages"], x["messages"] - x["differ"], x["differ"], x["unexplainedMessages"]), ""]
+            for rid, n in x["rules"].most_common():
+                lines.append("- %s: %d messages" % (rid, n))
+            for k, n in x["unexplained"].most_common():
+                lines.append("- **UNEXPLAINED** %s: %d (e.g. %s)" % (k, n, x["examples"][k]))
+            lines.append("")
     lines += ["## Oracle defect counts", ""]
     for d, c in sorted(t["defects"].items()):
         lines.append("- %s: %s" % (d, ", ".join("%s×%d" % kv for kv in c.most_common(12)) or "none"))
@@ -432,6 +545,24 @@ def cmd_report(a):
     with open(os.path.join(a.out, a.corpus, "report.json"), "w") as f:
         json.dump(jsonable(t), f, indent=1)
     print(text)
+    return 1 if any(x["unexplainedMessages"] for x in t["explained"].values()) else 0
+
+
+def cmd_unexplained(a):
+    """Prints every difference between OneMail and an oracle that no rule explains, with detail (small, non-private corpora)."""
+    drivers = a.drivers.split(",")
+    files = list_files("", a.out, a.corpus)
+    for ci in range(0, len(files), a.chunk):
+        chunk = files[ci:ci + a.chunk]
+        dumps = {d: read_dump(dump_path(a.out, a.corpus, d, ci // a.chunk)) for d in drivers}
+        for f in chunk:
+            per = {o: compare_records(dumps[OURS][f], dumps[o][f]) for o in drivers if o != OURS}
+            diffs = {o: [(c, s_, d) for c, s_, d in per[o]] for o in per}
+            for o, items in explain_message(f, per).items():
+                for (cls, sub, rid), (_, _, detail) in zip(items, diffs[o]):
+                    if rid is None:
+                        esc = lambda x: x.replace("\t", " ").replace("\r", "\\r").replace("\n", "\\n")
+                        print("\t".join(esc(x) for x in (f, o, cls, sub, detail)))
     return 0
 
 
@@ -453,11 +584,11 @@ def cmd_cases(a):
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "compare", "report", "cases"):
+    for name in ("run", "compare", "report", "cases", "unexplained"):
         p = sub.add_parser(name)
         p.add_argument("--corpus", required=True)
         p.add_argument("--out", required=True)
-        p.add_argument("--drivers", default="mimekit,python,go")
+        p.add_argument("--drivers", default="mimekit,python,go,onemail")
         p.add_argument("--chunk", type=int, default=1000)
         if name == "run":
             p.add_argument("--root", required=True)
@@ -471,7 +602,7 @@ def main():
         if name == "report":
             p.add_argument("--private", action="store_true", help="withhold message text from the report (automatic for enron*/edrm*)")
     a = ap.parse_args()
-    sys.exit({"run": cmd_run, "compare": cmd_compare, "report": cmd_report, "cases": cmd_cases}[a.cmd](a))
+    sys.exit({"run": cmd_run, "compare": cmd_compare, "report": cmd_report, "cases": cmd_cases, "unexplained": cmd_unexplained}[a.cmd](a))
 
 
 if __name__ == "__main__":

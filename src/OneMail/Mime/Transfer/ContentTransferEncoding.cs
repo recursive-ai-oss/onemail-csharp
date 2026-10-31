@@ -18,6 +18,9 @@ public enum ContentTransferEncoding
     /// <summary>quoted-printable (RFC 2045 §6.7).</summary>
     QuotedPrintable,
 
+    /// <summary>uuencode (<c>x-uuencode</c>, <c>uuencode</c>, <c>x-uue</c>, <c>uue</c>): a legacy encoding that MimeKit and Python decode. The body is decoded; the header is kept as written.</summary>
+    UUEncode,
+
     /// <summary>A value that is none of the above. Decoders treat the body as identity-encoded.</summary>
     Unknown,
 }

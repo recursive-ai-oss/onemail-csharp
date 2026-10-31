@@ -126,6 +126,11 @@ internal static class StructuredHeader
             return ContentTransferEncoding.QuotedPrintable;
         }
 
+        if (EqualsIgnoreCase(t, "x-uuencode"u8) || EqualsIgnoreCase(t, "uuencode"u8) || EqualsIgnoreCase(t, "x-uue"u8) || EqualsIgnoreCase(t, "uue"u8))
+        {
+            return ContentTransferEncoding.UUEncode;
+        }
+
         return ContentTransferEncoding.Unknown;
     }
 

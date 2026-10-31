@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- OneMail's own driver for the differential runner: prints the normalised dump (tools/oracles/README.md) from the
+       working tree's library. A tool, never packed. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OneMailDump</AssemblyName>
+    <RootNamespace>OneMail.Oracles.OneMailDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>
