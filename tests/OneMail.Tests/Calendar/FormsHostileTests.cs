@@ -41,6 +41,25 @@ public class FormsHostileTests
     }
 
     [Fact]
+    public void AFuzzFoundTypeNameThatIsNotAnXmlNameIsLeftOutOfXmlNotThrown()
+    {
+        // U+050B is a letter but not a character the XML writer accepts in a name.
+        FormReadResult r = JsonForms.FromJson(Repro("jcard-type-name-not-an-xml-name.bin"));
+        FormWriteResult w = XmlForms.ToXCard(r.Document);
+        Assert.Contains(w.Losses, static l => l.Kind == FormLossKind.TypeNameNotCarried);
+    }
+
+    [Fact]
+    public void ABackslashInAVCardUriSurvivesAJsonRoundTrip()
+    {
+        // A reader that unescapes URI values must write a literal backslash doubled, or every pass would halve them.
+        FormReadResult first = XmlForms.FromXml(Repro("xcard-uri-backslashes.bin"));
+        byte[] j1 = JsonForms.ToJson(first.Document).Bytes;
+        byte[] j2 = JsonForms.ToJson(JsonForms.FromJson(j1).Document).Bytes;
+        Assert.Equal(Encoding.UTF8.GetString(j1), Encoding.UTF8.GetString(j2));
+    }
+
+    [Fact]
     public void DeepJsonNestingStopsAtTheDepthLimit()
     {
         string json = new string('[', 100_000) + new string(']', 100_000);

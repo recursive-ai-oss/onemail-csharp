@@ -25,6 +25,19 @@ static int Run(string[] args)
             return Check.Run(args[1..]);
         case "emit":
             return Check.Emit(args[1], args[2]);
+        case "fixed":
+        {
+            // The fuzz invariant on one file: the JSON written from what was read reads back to the same JSON.
+            byte[] data = File.ReadAllBytes(args[2]);
+            FormReadResult r = args[1] == "xml" ? XmlForms.FromXml(data) : JsonForms.FromJson(data);
+            byte[] j1 = JsonForms.ToJson(r.Document, new JsonFormsOptions { Indented = true }).Bytes;
+            byte[] j2 = JsonForms.ToJson(JsonForms.FromJson(j1).Document, new JsonFormsOptions { Indented = true }).Bytes;
+            File.WriteAllBytes(args[3] + ".1", j1);
+            File.WriteAllBytes(args[3] + ".2", j2);
+            Console.WriteLine(j1.AsSpan().SequenceEqual(j2) ? "same" : "DIFFERENT");
+            return 0;
+        }
+
         case "alloc":
             return Check.Alloc(args[1..]);
         case "reread" when args.Length >= 4:

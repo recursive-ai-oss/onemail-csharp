@@ -179,17 +179,18 @@ public static class XmlForms
         w.WriteEndElement();
     }
 
-    // An XML name without a colon: the names of properties, parameters and components that come from content lines.
+    // An XML name without a colon: the names of properties, parameters and components that come from content lines. The
+    // framework's own character tests are used so that every name accepted here is one the XML writer accepts.
     private static bool IsName(string n)
     {
-        if (n.Length == 0 || !(char.IsLetter(n[0]) || n[0] == '_'))
+        if (n.Length == 0 || !XmlConvert.IsStartNCNameChar(n[0]))
         {
             return false;
         }
 
         foreach (char c in n)
         {
-            if (!(char.IsLetterOrDigit(c) || c is '_' or '-' or '.'))
+            if (!XmlConvert.IsNCNameChar(c))
             {
                 return false;
             }

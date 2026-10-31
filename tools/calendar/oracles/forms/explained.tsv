@@ -66,3 +66,4 @@ Z9	ezvcard-.*	param value: label \[adr\]	\\n.*\|\|.*\\r\\n	LABEL text uses LF fo
 V12	ezvcard-.*	param only ours: type \[email\]	" type"	A space before a parameter name (EMAIL; TYPE=INTERNET) is dropped; the oracle keeps it as part of the name.
 Y3	biweekly-.*	value \[rrule\]	T\d\d:\d\d:\d\d,.*\|\|.*T\d\d:\d\d:\d\dZ,	A local UNTIL stays local; the oracle converts it to UTC.
 X8	biweekly-.*	group \[x-test\]		A group prefix on an iCalendar property becomes the group parameter (RFC 7095 section 3.3.1.2 form); the oracle keeps GROUP.NAME as the name.
+X10	.*	param value: .*	\|\|.*\\n	A parameter value written with a line break (RFC 6868 ^n) cannot be a parameter value in a content line; the line break becomes a space and LineBreakEscaped is reported.

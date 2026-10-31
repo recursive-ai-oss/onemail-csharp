@@ -1010,6 +1010,9 @@ internal static class FormCodec
         {
             case "text":
                 return EscapeText(s, d);
+            case "uri" when d.IsVCard() && s.Contains('\\', StringComparison.Ordinal):
+                // A backslash in a vCard URI is read as an escape (see Scalar), so a literal one is written doubled to come back as it is.
+                return s.Replace("\\", "\\\\", StringComparison.Ordinal);
             case "boolean":
                 return s.Equals("true", StringComparison.OrdinalIgnoreCase) ? "TRUE" : s.Equals("false", StringComparison.OrdinalIgnoreCase) ? "FALSE" : s;
             case "integer" or "float":
