@@ -25,11 +25,11 @@ try
     // 3. Iterate an mbox: who each message is from, when it was written, how many files it carries.
     foreach (IMailItem m in inbox.Enumerate()) Console.WriteLine($"{(m.From.Count > 0 ? m.From[0].ToString() : "-")} {m.Sent?.Value:u} {m.Attachments.Count}");
 
-    // 5. Render a message to a PDF (the RecursiveAI.OneMail.Render package); ToPngAsync writes PNG pages the same way.
-    await using (FileStream pdf = File.Create(Path.Combine(dir, "one.pdf"))) await Mail.Parse(File.ReadAllBytes(eml)).ToPdfAsync(pdf);
-
     // 4. Reply to a message: the subject, the threading headers, the recipients and the quoted text are made for you.
     Console.WriteLine(Mail.Parse(File.ReadAllBytes(eml)).CreateReply().Subject);
+
+    // 5. Render a message to a PDF (the RecursiveAI.OneMail.Render package); ToPngAsync writes PNG pages the same way.
+    await using (FileStream pdf = File.Create(Path.Combine(dir, "one.pdf"))) await Mail.Parse(File.ReadAllBytes(eml)).ToPdfAsync(pdf);
 }
 finally
 {
