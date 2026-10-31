@@ -46,10 +46,6 @@ public static class HtmlSanitizer
 
     private static readonly HashSet<string> ColorAttributes = new(StringComparer.Ordinal) { "bgcolor", "color", "bordercolor" };
 
-    private static readonly HashSet<string> WordAttributes = new(StringComparer.Ordinal) { "align", "valign", "type", "clear", "rules", "frame", "scope", "dir", "nowrap", "reversed", "open", "noshade" };
-
-    private static readonly HashSet<string> TextAttributes = new(StringComparer.Ordinal) { "title", "alt", "lang", "abbr", "summary", "headers", "face", "datetime", "char" };
-
     /// <summary>Sanitises an HTML document or fragment.</summary>
     /// <param name="html">The untrusted HTML. Null is treated as empty.</param>
     /// <param name="options">Policy and limits; <see cref="SanitizerOptions.Default"/> when null.</param>
@@ -409,13 +405,15 @@ public static class HtmlSanitizer
                 return;
             }
 
-            if (name == "pre" && n.FirstChild is { IsNull: false } first && first.Kind == NodeKind.Text && first.Data.Length > 0 && first.Data[0] == '\n')
+            // The parser drops one newline right after <pre>, so a newline that begins the written content is doubled to survive a re-parse.
+            // The check is on what was written, not on the first child: an element removed in front of the text can leave a newline first.
+            int contentStart = Body.Length;
+            Children(n, depth + 1);
+            if (name == "pre" && Body.Length > contentStart && Body[contentStart] == '\n')
             {
-                // The parser drops one newline right after <pre>; write one more so a leading newline of the text survives a re-parse.
-                Body.Append('\n');
+                Body.Insert(contentStart, '\n');
             }
 
-            Children(n, depth + 1);
             Body.Append("</").Append(name).Append('>');
         }
 
