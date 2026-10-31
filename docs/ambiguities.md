@@ -434,6 +434,21 @@ Entries without an observed Outlook-side result are provisional. Method: [rtf.md
 | RT16 | Data ends before the end marker | compressed-rtf returns what it decoded | The decoded bytes, with a defect | `MissingEndMarker` | prov. |
 | RT17 | RAWSIZE disagrees with the output; `MELA` contents | spec: MELA CRC not validated, size may be read either way | Output is what the data holds (growing up to the limit), with a defect; MELA is the contents as stored | `RawSizeMismatch` | spec 2.2.3.1 |
 | RT18 | Compressing nothing | spec note: Outlook writes `02 00 0D 00` | `01 0C F0` (end marker only) is written; `02 00 0D 00` is read as one NUL byte | none | spec |
+| RT19 | `\fcharset0`/`\fcharset1` fonts under another `\ansicpg` (native RTF to HTML) | pandoc and unrtf decode every `\'hh` as 1252; LibreOffice 24.2.7 uses 1252 for `\fcharset0`, LibreOffice 26.2.6 follows `\ansicpg` | Follows the document's `\ansicpg` (0 and 1 both mean "the document's ANSI code page"). The de-encapsulator keeps RT9 (0 = 1252) because it reads what Outlook wrote, where the spec example shows `\fcharset0` under `\ansicpg1251`; a document authored by Word names a Central European font with its own `\fcharset238`, so `\fcharset0` there is Latin text typed under that page | none | no client observed; oracles split, the newer one agrees; provisional |
+| RT20 | Header, footer, footnote and endnote destinations | LibreOffice puts them in the body; pandoc/unrtf vary | Omitted from the mail body, text and HTML | none | provisional: a message body has no page furniture |
+| RT21 | Hidden text (`\v`) | unrtf writes it | Omitted | none | spec: hidden text is not displayed |
+| RT22 | A table inside a table cell | oracles flatten or nest differently | Flattened into the outer cell's text | `NestedTableFlattened` | provisional |
+| RT23 | Shapes (`\shp`) | pandoc shows `\shprslt` only | The `\shpinst` text box content is read; `\shprslt` is skipped when a `\shpinst` is present | none | RTF 1.9.1 (the result is the fallback for readers that skip `\shpinst`) |
+| RT24 | Picture whose bytes disagree with the declared `\pngblip`/`\jpegblip` | none | The bytes decide (magic numbers); EMF/WMF are not rendered and become an attachment-style placeholder | `AmbiguousPictureFormat`, `InvalidPictureData` | provisional |
+| RT25 | A `\cell` outside any row | LibreOffice joins the words on each side | A tab between them | `AmbiguousBareCell` | provisional |
+| RT26 | `\object` with a result | LibreOffice drops the result picture | The result is shown; an object with only its placeholder becomes an attachment placeholder | none | provisional |
+| RT27 | Empty paragraphs; content after the root group | none | An empty paragraph is `<p><br></p>`, trailing empty paragraphs are dropped; anything after the root group's closing brace is ignored | none | provisional |
+| RT28 | List level beyond the list table, or an `\ls` with no list table | pandoc drops the list | Level clamped to the deepest defined; an undefined `\ls` renders as a bullet list | `AmbiguousListLevel`, `UndefinedReference` | provisional |
+| RT29 | Headings | pandoc and unrtf make none from `\s` styles | A paragraph style whose stylesheet name is "heading N" becomes `<hN>`; the stylesheet is read for names only and its formatting is not inherited | none | provisional |
+| RT30 | `\objattph` | none | The attachment position is a placeholder, and the single space after it is consumed | none | spec |
+| RT31 | Text in a symbol font (`\fcharset2`, Symbol, Wingdings) | none | Private-use code points are kept, except the bullet | `AmbiguousSymbolFont` | provisional |
+| RT32 | `HYPERLINK \l "x"` | none | `href="#x"` | none | spec (field switches) |
+| RT33 | `\caps`/`\scaps` | pandoc upcases the text | The text is unchanged and a CSS `text-transform` carries the effect | none | provisional |
 
 ## TNEF
 

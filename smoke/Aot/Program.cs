@@ -1,3 +1,4 @@
+using RecursiveAI.OneMail.Display;
 using System.IO;
 using System.Linq;
 using RecursiveAI.OneMail;
@@ -258,6 +259,11 @@ internal static class Program
             && rtfText.Text == "a\tb\r\n" && rtfCp.Text == "\u041f";
         Console.WriteLine("rtf: " + (rtfOk ? "ok" : "FAILED"));
 
+        RtfHtmlResult rtfHtml1 = RtfHtmlConverter.Convert("{\\rtf1\\ansi{\\fonttbl{\\f0\\fswiss Arial;}}\\pard {\\b bold} caf\\'e9 \\u8364? {\\field{\\*\\fldinst HYPERLINK \"http://example.com/\"}{\\fldrslt link}}\\par \\trowd\\cellx1000\\cellx2000\\pard\\intbl a\\cell b\\cell\\row}"u8);
+        bool rtfHtmlOk = rtfHtml1.Html.Contains("<b>bold</b>", StringComparison.Ordinal) && rtfHtml1.Html.Contains("<a href=\"http://example.com/\">link</a>", StringComparison.Ordinal)
+            && rtfHtml1.Html.Contains("<td", StringComparison.Ordinal) && rtfHtml1.Text.StartsWith("bold caf\u00e9 \u20ac link <http://example.com/>\r\na\tb", StringComparison.Ordinal);
+        Console.WriteLine("rtf-html: " + (rtfHtmlOk ? "ok" : "FAILED"));
+
         byte[] tnefBytes = RecursiveAI.OneMail.Tests.Tnef.TnefTestBuilder.Rich();
         RecursiveAI.OneMail.Tnef.TnefMessage tnefMsg = RecursiveAI.OneMail.Tnef.TnefMessage.Read(tnefBytes);
         using var tnefOut = new MemoryStream();
@@ -286,6 +292,17 @@ internal static class Program
             && Mail.Parse(oxcBytes).Subject == "caf\u00e9" && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.Body) == "body"
             && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.SentRepresentingSmtpAddress) == "a@example.com";
         Console.WriteLine("oxcmail: " + (oxcOk ? "ok" : "FAILED"));
+        // Replies and forwards: threading headers, quoting, the subject prefix and a conversation index level.
+        byte[] composeIndex = RecursiveAI.OneMail.Composition.ConversationIndex.CreateHeader(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), Guid.Empty);
+        RecursiveAI.OneMail.Composition.ComposedMessage composeReply = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("From: Ann <a@example.com>\r\nSubject: AW: Plans\r\nMessage-ID: <m1@example.com>\r\nThread-Index: " + Convert.ToBase64String(composeIndex) + "\r\n\r\nhello\r\n"))
+            .CreateReply(new RecursiveAI.OneMail.Composition.CompositionOptions { RandomBytes = b => b.Fill(1) });
+        RecursiveAI.OneMail.Composition.ComposedMessage composeForward = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("From: a@example.com\r\nSubject: x\r\n\r\nhello\r\n"))
+            .CreateForward(new RecursiveAI.OneMail.Composition.CompositionOptions { ForwardStyle = RecursiveAI.OneMail.Composition.ForwardStyle.Attachment });
+        IMailItem composeBack = Mail.Parse(composeReply.Message.ToArray());
+        bool composeOk = composeReply.Subject == "Re: Plans" && composeBack.InReplyTo.SequenceEqual(["m1@example.com"]) && composeBack.References.SequenceEqual(["m1@example.com"])
+            && composeReply.To.Count == 1 && composeReply.To[0].Address == "a@example.com" && composeBack.ConversationIndex.Length == 27
+            && composeBack.TextBody!.ReadText().Contains("> hello", StringComparison.Ordinal) && composeForward.Message.MediaType == "multipart/mixed";
+        Console.WriteLine("compose: " + (composeOk ? "ok" : "FAILED"));
         // jCal, jCard, xCal and xCard: both directions, in memory, and the sniffer.
         ContentDocument formsIcs = ContentDocument.Parse("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a@b\r\nDTSTART:20260328T023000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE\r\nSUMMARY:Caf\u00e9\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"u8.ToArray());
         ContentDocument formsCard = ContentDocument.Parse("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Jane Doe\r\nN:Doe;Jane;;;\r\nTEL;TYPE=work:tel:+1-555-0100\r\nEND:VCARD\r\n"u8.ToArray());
@@ -351,8 +368,47 @@ internal static class Program
         bool htmltextOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.HtmlText();
         Console.WriteLine("htmltext: " + (htmltextOk ? "ok" : "FAILED"));
 
+        // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
+        bool convertOk;
+        {
+            string work = Path.Combine(Path.GetTempPath(), "onemail-aot-convert-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(work);
+            try
+            {
+                string box = Path.Combine(work, "in.mbox");
+                File.WriteAllBytes(box, System.Text.Encoding.ASCII.GetBytes("From a@b.c Mon Jan  1 00:00:00 2024\nFrom: a@b.c\nSubject: one\n\nbody\n\nFrom d@e.f Tue Jan  2 00:00:00 2024\nFrom: d@e.f\nSubject: two\n\nbody\n"));
+                bool all = true;
+                foreach (RecursiveAI.OneMail.Conversion.Stores.ConvertFormat f in new[] { RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Maildir, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.AppleMail, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Eml, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Mbox })
+                {
+                    string dest = Path.Combine(work, "out-" + f);
+                    RecursiveAI.OneMail.Conversion.Stores.StoreConversionReport rep = Mail.ConvertAsync(box, f, dest).GetAwaiter().GetResult();
+                    all &= rep.ItemsRead == 2 && rep.ItemsWritten == 2 && rep.ItemsSkipped == 0;
+                }
 
+                using MailContainer back = Mail.Open(Path.Combine(work, "out-Maildir"));
+                IMailItem one = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: x\r\n\r\nb\r\n"));
+                convertOk = all && back.Enumerate().Count() == 2
+                    && Mail.Convert(one, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Tnef).Value is { Length: > 0 }
+                    && Mail.Convert(one, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.VCard).Value is null
+                    && RecursiveAI.OneMail.Conversion.Stores.FidelityMatrix.Cells.Count > 100;
+            }
+            finally
+            {
+                Directory.Delete(work, recursive: true);
+            }
+        }
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && htmltextOk && olmOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        Console.WriteLine("convert: " + (convertOk ? "ok" : "FAILED"));
+
+        // The display-HTML sanitiser: parser, CSS rewrite, URL policy, cid resolution and the text renderer under NativeAOT.
+        SanitizedHtml san = HtmlSanitizer.Sanitize("<style>body{color:red}a{background:url(http://x.test/b)}</style><p onclick=alert(1) style=\"color:blue;behavior:url(x)\">hi <a href=\"javascript:alert(1)\">x</a><img src=\"http://x.test/i.gif\" width=1 height=1><script>alert(1)</script></p>");
+        IMailItem sanMsg = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: s\r\nContent-Type: text/plain; format=flowed\r\n\r\nsee http://x.test/a \r\nmore\r\n"));
+        bool sanitizerOk = san.Html.Contains(".omx{color:red}", StringComparison.Ordinal) && san.Html.Contains("style=\"color:blue\"", StringComparison.Ordinal)
+            && !san.Html.Contains("script", StringComparison.Ordinal) && !san.Html.Contains("onclick", StringComparison.Ordinal) && !san.Html.Contains("x.test", StringComparison.Ordinal)
+            && san.RemoteReferences.Count == 2 && san.TrackingIndications.Count == 1
+            && sanMsg.ToDisplayHtml().Html.Contains("see <a href=\"http://x.test/a\"", StringComparison.Ordinal);
+        Console.WriteLine("sanitizer: " + (sanitizerOk ? "ok" : "FAILED"));
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && htmltextOk && olmOk && composeOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

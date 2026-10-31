@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool for the display-HTML checks (tools/sanitizer/README.md): sanitises the XSS vectors and real message bodies
+       and writes pages for a headless browser. Nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>SanitizeTool</AssemblyName>
+    <RootNamespace>SanitizeTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OneArchive" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

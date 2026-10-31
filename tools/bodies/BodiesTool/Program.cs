@@ -150,7 +150,7 @@ static int BodyStats(string[] a)
     return 0;
 }
 
-static string Deriv(MailBody? b) => b is null ? "-" : b is DerivedMailBody d ? d.Derivation.ToString() : "stored";
+static string Deriv(MailBody? b) => b is null ? "-" : b.Origin == BodyOrigin.Stored ? "stored" : b.Origin.ToString();
 
 static int Alloc(string[] a)
 {

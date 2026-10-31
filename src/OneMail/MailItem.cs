@@ -77,6 +77,28 @@ public readonly record struct MailDefect(string Family, string Code, long Offset
 /// <param name="Index">The item's position in its container, from 0, or -1 when it is not part of one.</param>
 public readonly record struct MailProvenance(MailFormat Format, string? Location, string? Folder, long Offset, long Length, int Index);
 
+/// <summary>How a <see cref="MailBody"/> came to be.</summary>
+public enum BodyOrigin
+{
+    /// <summary>The body is stored in the item as it is.</summary>
+    Stored = 0,
+
+    /// <summary>The body is the HTML or the plain text that the item's RTF body encapsulates (the original of an HTML or text message).</summary>
+    RtfEncapsulated,
+
+    /// <summary>The item has only an RTF body written as RTF; the body was made from it by the RTF to HTML converter, so it is an approximation of the author's layout.</summary>
+    RtfConverted,
+
+    /// <summary>Plain text made from HTML by <c>Bodies.HtmlToText</c> because the item holds no plain text of its own.</summary>
+    HtmlToText,
+
+    /// <summary>HTML made from plain text by <c>Bodies.TextToHtml</c> because the item holds no HTML of its own.</summary>
+    TextToHtml,
+
+    /// <summary>Plain text with its <c>format=flowed</c> soft breaks joined by <c>Bodies.FormatFlowed</c>.</summary>
+    FlowedDecoded,
+}
+
 /// <summary>
 /// A body of an item in one representation. It is a projection: nothing is read until the caller asks.
 /// </summary>
@@ -85,6 +107,9 @@ public abstract class MailBody
     internal MailBody()
     {
     }
+
+    /// <summary>Where the body comes from: stored as it is, taken out of an encapsulating RTF, or converted from RTF written as RTF. <see cref="BodyOrigin.Stored"/> unless a derived body says otherwise.</summary>
+    public virtual BodyOrigin Origin => BodyOrigin.Stored;
 
     /// <summary>The media type of the body, lower case: <c>text/plain</c>, <c>text/html</c> or <c>application/rtf</c>.</summary>
     public abstract string ContentType { get; }
@@ -108,6 +133,8 @@ public abstract class MailBody
 
     /// <summary>True when the flowed body says <c>delsp=yes</c>. Meaningful only when <see cref="IsFormatFlowed"/> is true.</summary>
     public virtual bool FlowedDelSp => false;
+    /// <summary>A parameter of the body's content type (for example <c>format</c> or <c>delsp</c>), or null.</summary>
+    internal virtual string? ContentTypeParameter(string name) => null;
 }
 
 /// <summary>An attachment of an item. An attachment is an item in its own right: it has a name, a type, content, and, when it is a message, an embedded item with the full view.</summary>
@@ -121,6 +148,12 @@ public interface IMailAttachment
 
     /// <summary>The <c>Content-ID</c> without angle brackets, or null. Inline content is addressed from HTML as <c>cid:</c> + this value.</summary>
     string? ContentId { get; }
+
+    /// <summary>
+    /// The part's <c>Content-Location</c> (RFC 2557) or <c>PidTagAttachContentLocation</c>, which HTML can use to refer to it, or null.
+    /// A default member, so implementations written before it was added keep working.
+    /// </summary>
+    string? ContentLocation => null;
 
     /// <summary>True when the attachment is meant to be shown inside the body: it is not marked <c>attachment</c> and has a content ID.</summary>
     bool IsInline { get; }

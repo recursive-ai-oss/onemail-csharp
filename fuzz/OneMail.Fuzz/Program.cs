@@ -30,11 +30,15 @@ internal static class Program
             ["pst-messaging"] = PstMessagingTarget.Run,
             ["rtf-decompress"] = RtfTargets.Decompress,
             ["rtf-deencap"] = RtfTargets.Deencapsulate,
+            ["rtf-html"] = RtfTargets.Html,
             ["oxcmail"] = OxcMailTarget.Run,
             ["olm"] = OlmTarget.Run,
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
             ["htmltext"] = HtmlTextTarget.Run,
+            ["composition"] = CompositionTarget.Run,
+            ["sanitizer"] = SanitizerTargets.Run,
+            ["sanitizer-reparse"] = SanitizerTargets.Reparse,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

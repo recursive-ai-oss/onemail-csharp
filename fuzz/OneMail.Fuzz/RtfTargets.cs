@@ -55,6 +55,111 @@ internal static class RtfTargets
         Require(again.Text == CrLf(r.Text), "encapsulate/de-encapsulate round trip");
     }
 
+    // RTF to HTML: any bytes, small limits. Only typed results may come out; the HTML must be well formed (every tag closed in order, no
+    // raw markup characters in text), the same input must give the same output, and the numbers it reports must be consistent.
+    internal static void Html(ReadOnlySpan<byte> data)
+    {
+        var options = new RtfHtmlOptions { MaxGroupDepth = 64, MaxNodes = 20_000, MaxOutputChars = 1 << 20, MaxPictureBytes = 1 << 16, MaxTotalPictureBytes = 1 << 18 };
+        RtfHtmlResult r = RtfHtmlConverter.Convert(data, options);
+        Require(r.Html.Length <= (options.MaxOutputChars * 2) + (options.MaxTotalPictureBytes * 2), "HTML beyond the limit");
+        Require(!HasLoneSurrogate(r.Html), "lone surrogate in the HTML");
+        string text = r.Text;
+        Require(!HasLoneSurrogate(text), "lone surrogate in the text");
+        Require(IsWellFormed(r.Html), "HTML is not well formed");
+        foreach (RtfDefect d in r.Defects)
+        {
+            Require(d.Offset >= 0 && d.Offset <= data.Length, "defect offset outside the input");
+        }
+
+        long picture = 0;
+        foreach (RtfImage image in r.Images)
+        {
+            picture += image.Data.Length;
+            Require(image.Data.Length <= options.MaxPictureBytes, "picture over the limit");
+        }
+
+        Require(picture <= options.MaxTotalPictureBytes, "pictures over the total limit");
+        RtfHtmlResult again = RtfHtmlConverter.Convert(data, options);
+        Require(again.Html == r.Html && again.Text == text, "conversion is not deterministic");
+    }
+
+    private static readonly HashSet<string> Void = new(StringComparer.Ordinal) { "br", "hr", "img" };
+
+    // The converter writes only tags with quoted attributes, so a small checker is enough: tags nest, and "<" only starts a tag.
+    private static bool IsWellFormed(string html)
+    {
+        var open = new Stack<string>();
+        int i = 0;
+        while (i < html.Length)
+        {
+            if (html[i] != '<')
+            {
+                if (html[i] == '>')
+                {
+                    return false;
+                }
+
+                i++;
+                continue;
+            }
+
+            int j = i + 1;
+            bool closing = j < html.Length && html[j] == '/';
+            if (closing)
+            {
+                j++;
+            }
+
+            int nameStart = j;
+            while (j < html.Length && char.IsAsciiLetterOrDigit(html[j]))
+            {
+                j++;
+            }
+
+            if (j == nameStart)
+            {
+                return false;
+            }
+
+            string name = html.Substring(nameStart, j - nameStart);
+            bool inQuote = false;
+            while (j < html.Length && (inQuote || html[j] != '>'))
+            {
+                if (html[j] == '"')
+                {
+                    inQuote = !inQuote;
+                }
+                else if (!inQuote && html[j] == '<')
+                {
+                    return false;
+                }
+
+                j++;
+            }
+
+            if (j >= html.Length)
+            {
+                return false;
+            }
+
+            if (closing)
+            {
+                if (open.Count == 0 || open.Pop() != name)
+                {
+                    return false;
+                }
+            }
+            else if (!Void.Contains(name))
+            {
+                open.Push(name);
+            }
+
+            i = j + 1;
+        }
+
+        return open.Count == 0;
+    }
+
     private static string CrLf(string s) => s.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Replace("\n", "\r\n", StringComparison.Ordinal);
 
     private static bool HasLoneSurrogate(string s)

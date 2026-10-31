@@ -41,13 +41,13 @@ public class BodySelectorTests
         IMailItem t = Eml(Head + Plain);
         Assert.Equal(BodyReason.TextOnly, BodySelector.Select(t).Reason);
         DerivedMailBody h = Assert.IsType<DerivedMailBody>(BodySelector.GetHtml(t));
-        Assert.Equal(BodyDerivation.TextToHtml, h.Derivation);
+        Assert.Equal(BodyOrigin.TextToHtml, h.Origin);
         Assert.Contains("<p>plain body</p>", h.ReadText(), StringComparison.Ordinal);
 
         IMailItem x = Eml(Head + Html);
         Assert.Equal(BodyReason.HtmlOnly, BodySelector.Select(x).Reason);
         DerivedMailBody d = Assert.IsType<DerivedMailBody>(BodySelector.GetText(x));
-        Assert.Equal(BodyDerivation.HtmlToText, d.Derivation);
+        Assert.Equal(BodyOrigin.HtmlToText, d.Origin);
         Assert.Equal("html body", d.ReadText());
     }
 
@@ -67,7 +67,7 @@ public class BodySelectorTests
         SelectedBody s = BodySelector.Select(m);
         Assert.Equal(BodyKind.Text, s.Kind);
         Assert.Equal("Hello world\n> quoted text", s.Body!.ReadText());
-        Assert.Equal(BodyDerivation.FlowedDecoded, Assert.IsType<DerivedMailBody>(s.Body).Derivation);
+        Assert.Equal(BodyOrigin.FlowedDecoded, s.Body!.Origin);
         string html = BodySelector.GetHtml(m)!.ReadText();
         Assert.Contains("<blockquote type=\"cite\">\n<p>quoted text</p>", html, StringComparison.Ordinal);
     }
@@ -142,12 +142,16 @@ public class BodySelectorTests
     }
 
     [Fact]
-    public void RtfWrittenAsRtfIsALastResort()
+    public void RtfWrittenAsRtfGivesConvertedHtml()
     {
+        // The item view makes HTML from RTF written as RTF with the native converter, so the selector sees HTML and says where it came from.
         var m = new MapiMessage();
         m.Properties.Add(Bin(MapiPid.RtfCompressed, RtfCompressor.Compress("{\\rtf1\\ansi Plain {\\b bold}}"u8)));
         SelectedBody s = BodySelector.Select(new MapiMailItem(m, default));
-        Assert.Equal(BodyKind.Rtf, s.Kind);
-        Assert.Equal(BodyReason.RtfOnly, s.Reason);
+        Assert.Equal(BodyKind.Html, s.Kind);
+        Assert.Equal(BodyReason.HtmlPreferred, s.Reason);
+        Assert.Equal(BodyOrigin.RtfConverted, s.Body!.Origin);
+        MailBody text = BodySelector.GetText(new MapiMailItem(m, default))!;
+        Assert.Contains("Plain", text.ReadText(), StringComparison.Ordinal);
     }
 }

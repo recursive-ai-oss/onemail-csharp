@@ -18,6 +18,9 @@ mail depends on the view; code that needs every byte and every defect goes to th
 | `TextBody`, `HtmlBody`, `RtfBody` | `MailBody`: `ContentType`, `Charset`, `Open()` (decoded bytes), `ReadText()`. **Raw candidates, not the best body.** MIME has no RTF. |
 | `BestBody` | The body to show, chosen by `Bodies.BodySelector` ([`bodies.md`](bodies.md)): HTML, else plain text (flowed text joined), else RTF; `BodySelector.GetText` / `GetHtml` always give text or HTML, converting when the item has only the other. |
 | `Attachments` | `IMailAttachment`: `FileName`, `ContentType`, `ContentId`, `IsInline`, `Size` (decoded; computed on first use by decoding once), `Open()`, `Embedded` (an `IMailItem` for `message/rfc822`). Built on first use. Resolving `cid:` references plugs in here, against `ContentId`/`IsInline`. |
+
+| `TextBody`, `HtmlBody`, `RtfBody` | `MailBody`: `ContentType`, `Charset`, `Open()` (decoded bytes), `ReadText()`. **Raw candidates, not the best body**: choosing between them and converting one to another is later work. MIME has no RTF. |
+| `Attachments` | `IMailAttachment`: `FileName`, `ContentType`, `ContentId`, `IsInline`, `Size` (decoded; computed on first use by decoding once), `Open()`, `Embedded` (an `IMailItem` for `message/rfc822`). Built on first use. `ContentLocation` (`Content-Location`, or `PidTagAttachContentLocation`) is the other name HTML can use for a part (RFC 2557). `cid:` and location references are resolved against `ContentId`/`ContentLocation` by `ToDisplayHtml` ([`display-html.md`](display-html.md)). |
 | `Defects` | One shape (`MailDefect`: family, code, offset, ambiguity flag) over each family's type: `mime` (the tree's defects, then those of the structured headers read), `mailbox` (the store reader's bits for this message). Evaluated on each enumeration. |
 | `Provenance` | Format of the container, location, folder, byte offset and length of the item in its container file (-1 when not a range), index. |
 

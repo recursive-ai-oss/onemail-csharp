@@ -83,18 +83,20 @@ package has no flowed handling, so there is no oracle; the behaviour above is th
 2. **Outlook, written as plain text** (`PidTagNativeBody` 1 or 4) and both bodies are usable: the plain text (`NativeText`).
 3. **HTML**, when it has visible text or an image (`HtmlPreferred` with a text body, `HtmlOnly` without).
 4. **Plain text** (`TextOnly`; `EmptyHtml` when HTML exists but shows nothing, issue `AmbiguousEmptyHtml`).
-5. **RTF written as RTF** (`RtfOnly`, issue `OnlyRtfAvailable`).
+5. **RTF written as RTF**, only when the native RTF to HTML converter produced nothing (`RtfOnly`, issue `OnlyRtfAvailable`). An RTF-only Outlook item normally
+   lands in step 3: the view derives its HTML (and text) from the RTF, and the body's `Origin` is `RtfConverted`; a de-encapsulated body is `RtfEncapsulated`.
+   When the item also has plain text, the converted HTML wins (step 3, `HtmlPreferred`): it keeps the formatting the author gave the RTF.
 6. Nothing (`NoBody`).
 
 What the candidates are comes from the shared view: for MIME, RFC 2046 §5.1.4 inside the tree (last alternative, first child of `related`/`signed`, a TNEF
 attachment's bodies, see [`shared-view.md`](shared-view.md)); for Outlook items, the stored bodies, then what the RTF body encapsulates, then (when the native
 RTF converter is present) RTF converted to HTML; OLM and DBX items arrive as the view of their own format. A `text/plain; format=flowed` body is returned
-joined (`DerivedMailBody` with `BodyDerivation.FlowedDecoded`). When HTML comes before plain text inside a `multipart/alternative`, HTML is still chosen
+joined (`BodyOrigin.FlowedDecoded`). When HTML comes before plain text inside a `multipart/alternative`, HTML is still chosen
 and the issue `AmbiguousAlternativeOrder` says so.
 
-`BodySelector.GetText(item)` always gives plain text (the stored text, else the best HTML through `HtmlToText`, `BodyDerivation.HtmlToText`);
-`GetHtml(item)` always gives HTML (the stored HTML, else the text through `TextToHtml`, `BodyDerivation.TextToHtml`); both give null when the item has
-neither. `IMailItem.BestBody` is `Select(item).Body`. Derived bodies are `DerivedMailBody` (UTF-8; `Derivation`, `Issues`). `MailBody.IsFormatFlowed` and
+`BodySelector.GetText(item)` always gives plain text (the stored text, else the best HTML through `HtmlToText`, `BodyOrigin.HtmlToText`);
+`GetHtml(item)` always gives HTML (the stored HTML, else the text through `TextToHtml`, `BodyOrigin.TextToHtml`); both give null when the item has
+neither. `IMailItem.BestBody` is `Select(item).Body`. Every body carries one `MailBody.Origin` (`Stored`, `RtfEncapsulated`, `RtfConverted`, `HtmlToText`, `TextToHtml`, `FlowedDecoded`); bodies made here are `DerivedMailBody` (UTF-8; `Issues`). `MailBody.IsFormatFlowed` and
 `FlowedDelSp` tell whether a stored body is flowed.
 
 ## What was checked

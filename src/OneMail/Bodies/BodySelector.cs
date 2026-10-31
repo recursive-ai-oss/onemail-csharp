@@ -23,25 +23,6 @@ public enum BodyKind
     Rtf,
 }
 
-/// <summary>How a body returned by <see cref="BodySelector"/> was made from what the item holds.</summary>
-public enum BodyDerivation
-{
-    /// <summary>It is the item's own body (for an Outlook item that may be a body taken out of its RTF).</summary>
-    None,
-
-    /// <summary>Plain text made from HTML by <see cref="HtmlToText"/>.</summary>
-    HtmlToText,
-
-    /// <summary>HTML made from plain text by <see cref="TextToHtml"/>.</summary>
-    TextToHtml,
-
-    /// <summary>Plain text with its <c>format=flowed</c> soft breaks joined by <see cref="FormatFlowed"/>.</summary>
-    FlowedDecoded,
-
-    /// <summary>A body taken out of the item's RTF by de-encapsulation because the RTF is newer than the stored plain text.</summary>
-    RtfDeencapsulated,
-}
-
 /// <summary>Why <see cref="BodySelector.Select"/> chose what it chose. One value per rule in <c>docs/bodies.md</c>.</summary>
 public enum BodyReason
 {
@@ -76,16 +57,16 @@ public sealed class DerivedMailBody : MailBody
     private readonly string _contentType;
     private readonly string _text;
 
-    internal DerivedMailBody(string contentType, string text, BodyDerivation derivation, IReadOnlyList<BodyIssue> issues)
+    internal DerivedMailBody(string contentType, string text, BodyOrigin origin, IReadOnlyList<BodyIssue> issues)
     {
         _contentType = contentType;
         _text = text;
-        Derivation = derivation;
+        Origin = origin;
         Issues = issues;
     }
 
-    /// <summary>How the body was made.</summary>
-    public BodyDerivation Derivation { get; }
+    /// <inheritdoc/>
+    public override BodyOrigin Origin { get; }
 
     /// <summary>What the conversion reported; empty when it was clean.</summary>
     public IReadOnlyList<BodyIssue> Issues { get; }
@@ -125,7 +106,7 @@ public static class BodySelector
 {
     /// <summary>Chooses the best body of an item.</summary>
     /// <param name="item">The item.</param>
-    /// <returns>The choice. HTML is returned as stored; plain text is returned with <c>format=flowed</c> joined (a <see cref="DerivedMailBody"/> with <see cref="BodyDerivation.FlowedDecoded"/>).</returns>
+    /// <returns>The choice. HTML is returned as stored; plain text is returned with <c>format=flowed</c> joined (a <see cref="DerivedMailBody"/> with <see cref="BodyOrigin.FlowedDecoded"/>).</returns>
     public static SelectedBody Select(IMailItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -239,7 +220,7 @@ public static class BodySelector
         if (best.Kind == BodyKind.Html && best.Body is { } h && TryRead(h) is { } hs)
         {
             BodyConversion c = HtmlToText.Convert(hs, options);
-            return new DerivedMailBody("text/plain", c.Text, BodyDerivation.HtmlToText, c.Issues);
+            return new DerivedMailBody("text/plain", c.Text, BodyOrigin.HtmlToText, c.Issues);
         }
 
         return null;
@@ -267,7 +248,7 @@ public static class BodySelector
         {
             // The text is already unwrapped (Select decoded it), so the conversion must not unwrap it again.
             BodyConversion c = TextToHtml.Convert(ts, (options ?? TextToHtmlOptions.Default) with { Flowed = false });
-            return new DerivedMailBody("text/html", c.Text, BodyDerivation.TextToHtml, c.Issues);
+            return new DerivedMailBody("text/html", c.Text, BodyOrigin.TextToHtml, c.Issues);
         }
 
         return null;
@@ -282,7 +263,7 @@ public static class BodySelector
 
         // Quoted lines come out as "> " prefixes, which is also what TextToHtml reads.
         string decoded = FormatFlowed.Decode(source, text.FlowedDelSp);
-        return new DerivedMailBody("text/plain", decoded, BodyDerivation.FlowedDecoded, []);
+        return new DerivedMailBody("text/plain", decoded, BodyOrigin.FlowedDecoded, []);
     }
 
     private static string? TryRead(MailBody body)
@@ -328,10 +309,10 @@ public static class BodySelector
             switch (r.Kind)
             {
                 case RtfEncapsulation.Html:
-                    html = new DerivedMailBody("text/html", r.Text, BodyDerivation.RtfDeencapsulated, []);
+                    html = new DerivedMailBody("text/html", r.Text, BodyOrigin.RtfEncapsulated, []);
                     return true;
                 case RtfEncapsulation.PlainText:
-                    text = new DerivedMailBody("text/plain", r.Text, BodyDerivation.RtfDeencapsulated, []);
+                    text = new DerivedMailBody("text/plain", r.Text, BodyOrigin.RtfEncapsulated, []);
                     return true;
                 default:
                     return false;

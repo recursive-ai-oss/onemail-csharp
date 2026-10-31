@@ -26,8 +26,8 @@ No Outlook has been run yet.
 | PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | no public ANSI or 512-byte-page Unicode PST from Outlook exists; those layouts and 4 KiB multi-map stores are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
 | PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world sample |
 | TNEF / winmail.dat (MS-OXTNEF) | yes | yes | 0 against tnefparse, tnef and ytnef: 563 checks, 125 explained | attributes identical 17 / 17; MAPI property-exact 17 / 17 | yes | no TNEF-in-MIME message in the public corpora; checked on generated wrappers (64 messages) |
-| Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` attachment positions not applied |
-| HTML and text from RTF (MS-OXRTFEX) | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented) | n/a | yes | native RTF to HTML (non-encapsulated bodies) comes later |
+| Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` positions become placeholders |
+| HTML and text from RTF (MS-OXRTFEX); native RTF to HTML | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented); native RTF to HTML on 123 documents: 0 unexplained against LibreOffice 24.2.7, pandoc 3.13 and unrtf 0.21.10 (pandoc/unrtf rules are class-level) | n/a | yes | |
 | MAPI and MIME conversion (MS-OXCMAIL) | yes | yes | see the conversion table below | 0 silent losses both ways | yes | |
 | ICS recurrence and time zones (RFC 5545 3.8.5, VTIMEZONE, IANA, Windows names) | yes | n/a | 2,384 recurring components: 0 unexplained against recurring-ical-events (2,372 compared), python-dateutil (2,378) and Ical.Net (2,188); every RFC 5545 example passes; DST transitions 108 / 108 in four zones | n/a | yes | |
 | Outlook calendar and task items; DBX; OLM; jCal/jCard/xCal/xCard | not yet | not yet | | | | in progress |
@@ -116,6 +116,55 @@ the olm-reader 1.0.0 npm package (Apache-2.0). Corpus, fetched and never committ
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
 |---|---|---|---|---|---|---|
 | OLM (Outlook for Mac archive) | yes: mail, appointments, contacts, groups, tasks, notes, categories; attachments as lazy streams | no, by design | jar: 0 on both samples and on two generated archives (outlook_example 38 records, bill_rapp 492, generated 54); npm package: 0 on 485 messages, 12 documented tool differences | records keep every element (`OlmElement` tree); raw MIME source kept as text | yes | no Outlook 2011 layout sample; no archive with a raw MIME source, attendees or exceptions seen; a damaged zip is refused (recovery comes later); the working set is not constant in the entry count: OneArchive holds the zip directory (about 1 KB per entry; 123 MiB at 26,678 entries, 309 MiB at 213,345; see [`olm.md`](olm.md)) |
+
+## Conversions and store to store
+
+See [`fidelity.md`](fidelity.md) for the matrix (generated from the code; a test fails when a reported loss is not in its cell) and the
+command line. Checked on the worker with `tools/convert/run.sh`:
+
+| Check | Result |
+|---|---|
+| MIME to EML / mbox / Maildir / EMLX, read back byte-identical | probes 219/224, Mime4j 78/80, dovecot mbox 3,237/3,237, dovecot messages 2,858/2,859, Enron sample 5,032/5,032, DBX store 2,053/2,053; 0 changed (the skipped have no header block) |
+| MAPI to EML to MAPI | MSG 45 items / 8,743 properties and PST 25 items / 2,399 properties: 0 silent; OLM mail 530 items / 10,070 fields: 0 silent |
+| Store to store (OST, Tika PSTs, OLM, DBX, dovecot mbox, Maildir, Enron sample) | read = written + skipped everywhere; folder trees equal; Python `mailbox`/`email` agree on folders and counts in 18 of 18 runs |
+| Memory | CMU Enron (517,401 messages, 3,311 folders) to Maildir: 119 MB peak; to mbox: 129 MB peak |
+
+Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; MSG and PST
+are not destinations until 0.5 (the `IStoreSink` extension point is public).
+
+## Replies and forwards ([`composition.md`](composition.md))
+
+`CreateReply`, `CreateReplyAll` and `CreateForward` (inline and as an attachment) on any item. Each message is made, written, and parsed back by OneMail, MimeKit 4.18.2,
+Python 3.13.17 `email` and Go 1.26.8 `net/mail`; subject, From, To, Cc, In-Reply-To and References are compared with what the composer says it wrote
+(`tools/composition`). A reply, a reply-all and the two forwards are made of every item.
+
+| Source | Items | Messages made | In-process checks failing | Oracle fields compared (MimeKit / Python / Go), differing | Notes |
+|---|---|---|---|---|---|
+| Enron maildir sample | 5,032 | 20,128 | 0 | 120,537 / 120,537 / 120,251, 0 / 0 / 0 | 1,839 parents already had a prefix; none stacked; 5,032 embedded originals byte-identical |
+| Dovecot mbox | 2,858 | 11,432 | 0 | 68,592 each, 0 | 1,524 prefixed parents; 2,858 embedded originals byte-identical |
+| Mime4j test messages (80 files, 4 mbox items) | 78 | 312 | 0 | 1,872 each, 0 | 78 embedded originals byte-identical |
+| MSG (Tika, POI) | 45 | 180 | 0 | 1,080 each, 0 | MAPI threading properties unchanged through MAPI to MIME to MAPI on 180 / 180 |
+| PST, OST | 25 | 100 | 0 | 600 each, 0 | same, 100 / 100 |
+| TNEF | 7 | 28 | 0 | 168 each, 0 | same, 28 / 28 |
+| OLM | 490 | 1,960 | 0 | 11,760 each, 0 | records have no MIME source: the embedded original is rebuilt from the view (`ParentSynthesized`, 490) |
+| DBX | 2,053 | 8,212 | 0 | 49,272 each, 0 | most records of the corpus have no text (no sender, no ID: `NoReplyTarget` 4,038); 34 non-empty originals byte-identical |
+
+Known gaps: addresses with a doubled or edge dot in the local part (`k..allen@x`) are written as they were; the three oracles drop or cut them (ambiguity A15, A16),
+so they are left out of that comparison. Display text that the user would see in other languages (attribution, forward banner) is English unless replaced. The
+subject prefix list is an agent default. No mail client has been compared yet (no Thunderbird run); the Outlook oracle will settle the forward-threading and
+conversation-index choices. Real Outlook conversation indexes carry the FILETIME from their first byte, which differs from the layout MS-OXOMSG draws (see `composition.md`).
+
+## Display HTML (sanitiser, remote-content policy)
+
+Added after 0.2.0-preview.2. Vectors are our own, written from the categories of public evasion lists (no text copied). DOMPurify 3.4.17 (npm) is run as a released program
+only. What the code does is in [`display-html.md`](display-html.md); the sanitiser has not had its independent review yet.
+
+| Area | Checked against | Result | Known gaps |
+|---|---|---|---|
+| Vectors in headless Chrome (per-vector iframes) | 233 vectors: raw page, sanitised with the block policy, sanitised with the allow policy | raw: 42 script executions and 58 requests; block policy: 0 executions, 0 requests; allow policy: 0 executions, 29 paths fetched, none from a removed element | one browser engine |
+| DOMPurify 3.4.17, default configuration, same scorer in the same page | the same 233 vectors | ours 0 findings, DOMPurify 89, raw 194; ours looser in 0 categories | |
+| Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
+| Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
 
 ## Speed
 

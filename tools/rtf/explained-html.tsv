@@ -1,0 +1,55 @@
+# oracle<TAB>document glob<TAB>metric glob<TAB>reason. A difference from that oracle on a matching document and metric is the oracle's
+# documented or observed behaviour, not a defect of OneMail. LibreOffice rows are itemised per document; pandoc and unrtf rows are class-level.
+lo	gen__destinations	text	LibreOffice 24.2.7 includes header, footer and footnote text in the body; OneMail omits those destinations (ambiguity RT20)
+lo	gen__destinations	fmt:sup	LibreOffice writes the footnote anchors as superscript text
+lo	gen__destinations	links	LibreOffice links footnote anchors to #fn
+lo	tika__testRTFTIKA_2899	text	LibreOffice includes header/footer/footnote text (RT20)
+lo	tika__testRTFTIKA_2899	tables	LibreOffice includes header/footer text inside table cells (RT20)
+lo	tika__testRTFVarious	text	LibreOffice includes header/footer/footnote text (RT20)
+lo	tika__testRTFVarious	fmt:sup	LibreOffice footnote anchors are superscript (RT20)
+lo	tika__testRTFVarious	links	LibreOffice footnote anchors are links (RT20)
+lo	tika__testRTFJapanese	text	LibreOffice includes header/footer text (RT20)
+lo	gen__bare-cell	text	LibreOffice joins words across a bare \cell; OneMail writes a tab (RT25)
+lo	tika__testRTFTableCellSeparation2	text	LibreOffice joins words across a bare \cell (RT25)
+lo	gen__specials	text	LibreOffice drops \emspace, \enspace and \qmspace (checked with LibreOffice 26.2)
+lo	gen__unicode-cp1250	text	LibreOffice 24.2.7 decodes \fcharset0 bytes as cp1252 despite \ansicpg1250; LibreOffice 26.2.6 agrees with OneMail (RT19)
+lo	tika__testRTFHyperlinkAndStyles	text	LibreOffice decodes bytes of DEFAULT_CHARSET fonts as U+FFFD
+lo	tika__testRTFHyperlinkAndStyles	links	LibreOffice keeps the doubled backslash of the field code in link targets
+lo	tika__testRTFWithCurlyBraces	fmt:b	LibreOffice drops the text of a \lang1024 run
+lo	gen__attachments	images	LibreOffice drops \object result pictures
+lo	gen__pictures	images	LibreOffice drops the dummy EMF picture
+pandoc	*	headings	pandoc does not map \s paragraph styles to headings (RT29)
+unrtf	*	headings	unrtf does not map \s paragraph styles to headings (RT29)
+pandoc	*	links	pandoc drops or alters HYPERLINK field targets (fragments, multiple fields in one paragraph)
+unrtf	*	links	unrtf prints "hyperlink" instead of the HYPERLINK target
+pandoc	gen__headings	fmt:b	bold comes from the heading style that pandoc ignores
+pandoc	gen__mix*	fmt:b	bold comes from the heading style that pandoc ignores
+unrtf	gen__headings	fmt:b	bold comes from the heading style that unrtf ignores
+unrtf	gen__mix*	fmt:b	bold comes from the heading style that unrtf ignores
+pandoc	gen__*	text	pandoc decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset (charset documents), and omits or alters other destinations
+pandoc	tika__*	text	pandoc decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset (charset documents), and omits or alters other destinations
+pandoc	poi__*	text	pandoc decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset (charset documents), and omits or alters other destinations
+unrtf	gen__*	text	unrtf decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset; it writes hidden text and listtable text
+unrtf	tika__*	text	unrtf decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset; it writes hidden text and listtable text
+unrtf	poi__*	text	unrtf decodes every \'hh as cp1252 and ignores \ansicpg and \fcharset; it writes hidden text and listtable text
+pandoc	gen__*	lists	pandoc drops lists written with \pn or \ls without a list table, and flattens others
+pandoc	tika__*	lists	pandoc drops lists written with \pn or \ls without a list table, and flattens others
+pandoc	poi__*	lists	pandoc drops lists written with \pn or \ls without a list table, and flattens others
+unrtf	gen__*	lists	unrtf produces no lists
+unrtf	tika__*	lists	unrtf produces no lists
+unrtf	poi__*	lists	unrtf produces no lists
+pandoc	gen__*	tables	pandoc splits tables and pads merged cells
+pandoc	tika__*	tables	pandoc splits tables and pads merged cells
+pandoc	poi__*	tables	pandoc splits tables and pads merged cells
+unrtf	gen__*	tables	unrtf rewrites tables (merged cells, nesting)
+unrtf	tika__*	tables	unrtf rewrites tables (merged cells, nesting)
+unrtf	poi__*	tables	unrtf rewrites tables (merged cells, nesting)
+pandoc	gen__*	fmt:*	pandoc applies \caps as uppercase text and ignores some run formatting
+pandoc	tika__*	fmt:*	pandoc applies \caps as uppercase text and ignores some run formatting
+pandoc	poi__*	fmt:*	pandoc applies \caps as uppercase text and ignores some run formatting
+unrtf	gen__*	fmt:*	unrtf ignores some run formatting (hidden text, styles)
+unrtf	tika__*	fmt:*	unrtf ignores some run formatting (hidden text, styles)
+unrtf	poi__*	fmt:*	unrtf ignores some run formatting (hidden text, styles)
+pandoc	gen__attachments	images	pandoc drops \object results
+pandoc	gen__pictures	images	pandoc drops the dummy EMF picture
+unrtf	*	images	unrtf extracts no pictures

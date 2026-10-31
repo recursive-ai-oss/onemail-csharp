@@ -90,3 +90,5 @@ The differential run in `tools/calendar/oracles/forms` runs these released build
 | vinnie, jackson-core, jackson-databind, jackson-annotations, commons-codec, freemarker, jsoup (their dependencies) | 2.0.2, 2.16.1, 2.16.1, 2.16.1, 1.10, 2.3.32, 1.17.2 | Apache-2.0 (vinnie BSD-2-Clause, jsoup MIT) |
 | Node.js | 22.22.1 | MIT and bundled licences |
 | Eclipse Temurin JDK | 21 | GPL-2.0 with Classpath Exception |
+- The `.rtf` test documents of Apache Tika (`tika-parser-microsoft-module`, pinned commit) and Apache POI (`test-data`, pinned commit), listed with hashes in `tools/rtf/rtf-corpus.tsv` (Apache License 2.0, (c) The Apache Software Foundation; data files only, fetched by `tools/rtf/fetch-rtf.sh`, never committed).
+- Run only, as released programs, and never linked, shipped or built from source: pandoc 3.13 (GPL-2.0-or-later), unrtf 0.21.10 (GPL-3.0-or-later) and LibreOffice 24.2.7 (MPL-2.0), used by `tools/rtf/run-html-oracles.sh` to check the RTF to HTML conversion. The Microsoft RTF 1.9.1 specification is cited, not copied.

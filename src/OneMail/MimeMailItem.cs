@@ -222,7 +222,18 @@ public class MimeMailItem : IMailItem
     /// <summary>The store-supplied arrival date, if the store has one.</summary>
     internal virtual MailDate? DeliveryDate() => null;
 
-    /// <summary>Defects the store reader recorded for this message.</summary>
+    // The flags and keywords the store keeps for the message: Maildir's file name or an Apple Mail property list. Items whose
+    // store keeps none read the Status and X-Status fields of an mbox from the header block instead.
+    internal virtual bool FlagsInStore => false;
+
+    internal virtual (Stores.MessageMarks Marks, IReadOnlyList<string> Keywords) StoreFlags() => HeaderFlags(Entity.ToArray());
+
+    internal static (Stores.MessageMarks Marks, IReadOnlyList<string> Keywords) HeaderFlags(ReadOnlySpan<byte> message)
+    {
+        Stores.Mbox.MboxMetadata m = Stores.Mbox.MboxMetadata.Parse(message);
+        return (m.Flags, [.. m.Keywords, .. m.GmailLabels]);
+    }
+
     internal virtual IEnumerable<MailDefect> StoreDefectsOf() => [];
 
     internal static IEnumerable<MailDefect> FromStoreDefects(Stores.StoreDefects flags)
@@ -357,11 +368,16 @@ public class MimeMailItem : IMailItem
         }
     }
 
-    private sealed class MimeMailBody(MimePart part) : MailBody
+    internal sealed class MimeMailBody(MimePart part) : MailBody
     {
+        /// <summary>The leaf part the body is read from; composition reads its <c>format</c> parameter.</summary>
+        internal MimePart Part => part;
+
         public override string ContentType => part.MediaType;
 
         public override string? Charset => part.GetContentTypeParameter("charset")?.ToLowerInvariant();
+
+        internal override string? ContentTypeParameter(string name) => part.GetContentTypeParameter(name);
 
         public override Stream Open() => part.OpenDecodedContent();
 
@@ -394,6 +410,8 @@ public class MimeMailItem : IMailItem
         public string ContentType => entity.MediaType;
 
         public string? ContentId => entity.GetContentId();
+
+        public string? ContentLocation => entity.Headers.GetFirst("Content-Location")?.Value is { } v ? string.Concat(v.Where(c => c is not ('\r' or '\n' or ' ' or '\t'))) : null;
 
         public bool IsInline => entity.Disposition != "attachment" && entity.Headers.GetFirst("Content-ID") is not null && entity.GetContentId() is not null;
 
