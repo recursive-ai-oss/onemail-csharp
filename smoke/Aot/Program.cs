@@ -1,3 +1,4 @@
+using RecursiveAI.OneMail.Display;
 using System.IO;
 using System.Linq;
 using RecursiveAI.OneMail;
@@ -396,13 +397,19 @@ internal static class Program
 
         Console.WriteLine("convert: " + (convertOk ? "ok" : "FAILED"));
 
+        // The display-HTML sanitiser: parser, CSS rewrite, URL policy, cid resolution and the text renderer under NativeAOT.
+        SanitizedHtml san = HtmlSanitizer.Sanitize("<style>body{color:red}a{background:url(http://x.test/b)}</style><p onclick=alert(1) style=\"color:blue;behavior:url(x)\">hi <a href=\"javascript:alert(1)\">x</a><img src=\"http://x.test/i.gif\" width=1 height=1><script>alert(1)</script></p>");
+        IMailItem sanMsg = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: s\r\nContent-Type: text/plain; format=flowed\r\n\r\nsee http://x.test/a \r\nmore\r\n"));
+        bool sanitizerOk = san.Html.Contains(".omx{color:red}", StringComparison.Ordinal) && san.Html.Contains("style=\"color:blue\"", StringComparison.Ordinal)
+            && !san.Html.Contains("script", StringComparison.Ordinal) && !san.Html.Contains("onclick", StringComparison.Ordinal) && !san.Html.Contains("x.test", StringComparison.Ordinal)
+            && san.RemoteReferences.Count == 2 && san.TrackingIndications.Count == 1
+            && sanMsg.ToDisplayHtml().Html.Contains("see <a href=\"http://x.test/a\"", StringComparison.Ordinal);
+        Console.WriteLine("sanitizer: " + (sanitizerOk ? "ok" : "FAILED"));
 
 
 
 
 
-
-
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && convertOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
