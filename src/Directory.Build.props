@@ -23,7 +23,7 @@
     <Copyright>Copyright (c) Recursive AI, LLC</Copyright>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <!-- The one place the package version lives; all packages share it. -->
-    <Version>0.2.0-preview.2</Version>
+    <Version>0.3.0-preview.1</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/recursive-ai-oss/onemail-csharp</RepositoryUrl>
     <PackageProjectUrl>https://recursiveai.org/onemail/</PackageProjectUrl>
