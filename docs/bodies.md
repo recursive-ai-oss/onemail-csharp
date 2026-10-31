@@ -129,6 +129,8 @@ Text to HTML: the output of 1,715 fuzz-style inputs and all unit inputs parses w
 decode returns the paragraphs on 600 generated cases (delSp both ways, widths 20 to 79) and on the fuzz target. Hostile input: depth, huge tables, long whitespace runs and
 output/input limits are unit-tested and fuzzed (`htmltext` target).
 
+Fuzzing: the `htmltext` target (HTML to text with random options, text to HTML checked for parse errors, flowed encode/decode round trip, best body of a parsed message) ran 600 s in the `Checked` build with 7.3 million executions and no findings, after three findings were fixed and kept as tests (a line of only spaces in flowed text, a quote prefix as wide as the line, a link running into a noncharacter).
+
 Allocation, `HtmlToText.Convert` with default options: 21.6 KB per KiChar of HTML on the 118 real bodies (136 KB per message), 56 KB per KiChar on the small generated cases (42 KB
 per document); most of it is OneHtml's parse (a document and its style sheets). Run `BodiesTool alloc <dir>`.
 
