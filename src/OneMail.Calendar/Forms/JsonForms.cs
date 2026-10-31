@@ -128,6 +128,11 @@ public static class JsonForms
             {
                 w.WriteStringValue(S(pa.Values[0]));
             }
+            else if (pa.Values.Count == 0)
+            {
+                // A parameter written without a value ("NAME" or "NAME=") is an empty string; an empty array would not read back as the same text.
+                w.WriteStringValue(string.Empty);
+            }
             else
             {
                 w.WriteStartArray();
@@ -266,7 +271,7 @@ public static class JsonForms
             defects.Add(e.Kind, r.TokenStartIndex, string.Empty);
             return null;
         }
-        catch (JsonException) when (r.CurrentDepth >= Math.Clamp(limits.MaxDepth, 1, 1000))
+        catch (JsonException) when (r.CurrentDepth >= Math.Clamp(limits.MaxDepth, 1, 1000) - 1)
         {
             defects.Add(FormDefectKind.DepthLimitExceeded, r.TokenStartIndex, string.Empty);
             return null;

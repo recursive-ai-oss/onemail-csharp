@@ -219,7 +219,7 @@ public static class XmlForms
 
         if (!IsName(p.Name))
         {
-            losses.Add(FormLossKind.LineNotCarried, path);
+            losses.Add(FormLossKind.PropertyNotCarried, path);
             return;
         }
 
@@ -237,13 +237,14 @@ public static class XmlForms
             {
                 if (!IsName(fp.Name))
                 {
-                    losses.Add(FormLossKind.LineNotCarried, path);
+                    losses.Add(FormLossKind.ParameterNotCarried, path);
                     continue;
                 }
 
                 w.WriteStartElement(null, fp.Name, ns);
                 string pt = FormSchema.ParamXmlType(d, fp.Name);
-                foreach (string v in fp.Values)
+                // A parameter written without a value is one empty value, as in jCal and jCard.
+                foreach (string v in fp.Values.Count == 0 ? [string.Empty] : fp.Values)
                 {
                     WriteParamValue(w, pt, v, ns, d, losses, path);
                 }
@@ -356,6 +357,10 @@ public static class XmlForms
         }
 
         string type = IsName(p.Type) ? p.Type : "unknown";
+        if (!IsName(p.Type))
+        {
+            losses.Add(FormLossKind.TypeNameNotCarried, path);
+        }
         foreach (FormValue v in p.Values)
         {
             switch (v.Kind)

@@ -79,6 +79,15 @@ internal static class FormCodec
         string lname = FormText.Lower(p.Name);
         string ppath = path + "/" + lname;
         FProperty f = new() { Name = lname, Group = p.Group, Offset = p.Offset };
+        int dot = lname.IndexOf('.', StringComparison.Ordinal);
+        if (f.Group is null && dot > 0 && dot < lname.Length - 1)
+        {
+            // RFC 5545 has no groups, but a reader that splits "GROUP.NAME" only for vCard leaves the prefix in the name.
+            // RFC 7095 section 3.3.1.2 carries a group as a parameter in both forms, so it is split here.
+            f.Group = p.Name[..dot];
+            f.Name = lname = lname[(dot + 1)..];
+            ppath = path + "/" + lname;
+        }
         if (!FormText.IsUpper(p.Name))
         {
             losses.Add(FormLossKind.NameCase, ppath);
@@ -142,6 +151,12 @@ internal static class FormCodec
 
         PropInfo info = FormSchema.Lookup(d, lname);
         string raw = p.GetDecodedValue();
+        if (p.Encoding == "QUOTED-PRINTABLE" && raw.Contains("\r\n", StringComparison.Ordinal))
+        {
+            // A decoded 2.1 line break is CR LF; the JSON and XML text forms carry a line feed (RFC 6350 section 3.4).
+            raw = raw.Replace("\r\n", "\n", StringComparison.Ordinal);
+        }
+
         if (p.Encoding == "QUOTED-PRINTABLE")
         {
             losses.Add(FormLossKind.TransferEncodingRemoved, ppath);
@@ -206,6 +221,12 @@ internal static class FormCodec
             }
         }
 
+        if (d == Dialect.ICal && type == "binary" && f.Find("encoding") is null)
+        {
+            // VALUE=BINARY without ENCODING: RFC 5545 section 3.3.1 requires ENCODING=BASE64 with it, and the text writer adds it.
+            f.Params.Add(MakeParam("encoding", ["BASE64"]));
+        }
+
         FormValue[]? vals = ConvertValue(raw, type, shape, lname, d, losses, ppath);
         if (vals is null && vparam is null && d == Dialect.ICal && type == "date-time")
         {
@@ -223,6 +244,12 @@ internal static class FormCodec
             if (type != "unknown")
             {
                 losses.Add(FormLossKind.ValueNotRepresentable, ppath);
+            }
+
+            if (vparam is not null && type != "unknown")
+            {
+                // Keep the declared type as a parameter so the text written back still says what the producer said.
+                f.Params.Add(MakeParam("value", [vparam]));
             }
 
             type = "unknown";
@@ -780,7 +807,7 @@ internal static class FormCodec
                 continue;
             }
 
-            if (fp.Name == "value")
+            if (fp.Name == "value" && f.Type != "unknown")
             {
                 continue;
             }

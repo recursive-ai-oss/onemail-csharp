@@ -122,6 +122,15 @@ public enum FormLossKind
     /// <summary>A top-level component the form cannot hold (a VCARD in xCal, a VCALENDAR in xCard). It was left out.</summary>
     ComponentNotCarried,
 
+    /// <summary>A <c>VALUE</c> that is not an XML name cannot be an element name; the value is written as <c>unknown</c> and the type is lost.</summary>
+    TypeNameNotCarried,
+
+    /// <summary>A property whose name is not an XML name (a space or another character XML names cannot hold) is left out of xCal and xCard.</summary>
+    PropertyNotCarried,
+
+    /// <summary>A parameter whose name is not an XML name (a space or another character XML names cannot hold) is left out of xCal and xCard.</summary>
+    ParameterNotCarried,
+
     /// <summary>A character that XML cannot hold was replaced by U+FFFD.</summary>
     InvalidXmlCharacter,
 

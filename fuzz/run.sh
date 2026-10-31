@@ -42,6 +42,7 @@ case "$target" in
   contentlines) maxlen=65536 ;;
   calendar) maxlen=65536 ;;
   recurrence) maxlen=16384 ;;
+  jcal-jcard|xcal-xcard) maxlen=32768 ;;
   ndb) maxlen=8192 ;;
   ltp) maxlen=8192 ;;
   pst-messaging) maxlen=8192 ;;
