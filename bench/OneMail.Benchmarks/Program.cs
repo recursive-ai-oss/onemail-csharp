@@ -41,6 +41,37 @@ internal static class Program
             return OutlookCommands.Verify();
         }
 
+        if (args.Length == 1 && args[0] == "ccounts")
+        {
+            return CalendarCommands.Counts();
+        }
+
+        if (args.Length == 1 && args[0] == "cverify")
+        {
+            return CalendarCommands.Verify();
+        }
+
+        if (args.Length == 2 && args[0] == "cwrite")
+        {
+            Directory.CreateDirectory(args[1]);
+            foreach (string name in CalendarInputs.IcsAll)
+            {
+                File.WriteAllBytes(Path.Combine(args[1], name + ".ics"), CalendarInputs.Ics(name));
+            }
+
+            return 0;
+        }
+
+        if (args.Length == 1 && args[0] == "cdescribe")
+        {
+            return CalendarCommands.Describe();
+        }
+
+        if (args.Length == 4 && args[0] == "cpeak")
+        {
+            return CalendarCommands.Peak(args[1], args[2] == "ours", args[3]);
+        }
+
         if (args.Length == 1 && args[0] == "counts")
         {
             return OutlookCommands.Counts();
@@ -138,7 +169,31 @@ internal static class Program
             string row = Path.GetFileName(f);
             int dash = row.IndexOf("-report", StringComparison.Ordinal);
             row = row[(row.LastIndexOf('.', dash) + 1)..dash];
-            string area = row switch { "PstRow" or "PstLargeRow" or "PstFourKiBRow" => "PST", "MsgRow" => "MSG", "TnefRow" => "TNEF", _ => "MIME" };
+            string area = row switch
+            {
+                "PstRow" or "PstLargeRow" or "PstFourKiBRow" => "PST", "MsgRow" => "MSG", "TnefRow" => "TNEF",
+                "IcsParseRow" or "IcsParseLargeRow" => "ICS-parse", "IcsWriteRow" or "IcsWriteLargeRow" => "ICS-build-write", "IcsEditRow" or "IcsEditLargeRow" => "ICS-edit-write",
+                "VCardParseRow" => "vCard-parse", "VCardWriteRow" => "vCard-build-write", "VCardEditRow" => "vCard-edit-write",
+                "RecurrenceRow" => "Recurrence", "FormsRow" or "FormsLargeRow" => "Forms", _ => "MIME",
+            };
+            if (row is "FormsRow" or "FormsLargeRow")
+            {
+                // jCal/jCard: OneMail only, so no ratio and outside every geomean.
+                foreach (JsonElement b in doc.RootElement.GetProperty("Benchmarks").EnumerateArray())
+                {
+                    if (b.GetProperty("Statistics").ValueKind == JsonValueKind.Object && b.GetProperty("Memory").GetProperty("BytesAllocatedPerOperation").ValueKind == JsonValueKind.Number)
+                    {
+                        string input = b.GetProperty("Parameters").GetString()!.Replace("Input=", "", StringComparison.Ordinal);
+                        double med = b.GetProperty("Statistics").GetProperty("Median").GetDouble();
+                        long al = b.GetProperty("Memory").GetProperty("BytesAllocatedPerOperation").GetInt64();
+                        counts.TryGetValue(input, out long items);
+                        Console.WriteLine(string.Join('\t', "Forms-ours-only", b.GetProperty("Method").GetString()!, input, med.ToString("F0", CultureInfo.InvariantCulture), "", "", al, "", items > 0 ? items : "", items > 0 ? al / items : ""));
+                    }
+                }
+
+                continue;
+            }
+
             var ours = new Dictionary<string, (double Median, long Alloc)>();
             var theirs = new Dictionary<string, (double Median, long Alloc)>();
             foreach (JsonElement b in doc.RootElement.GetProperty("Benchmarks").EnumerateArray())

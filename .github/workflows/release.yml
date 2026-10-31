@@ -102,7 +102,7 @@ jobs:
         run: dotnet test --solution OneMail.slnx -c Release --no-build --results-directory "$ONEMAIL_ARTIFACTS/TestResults"
 
       - name: Pack
-        # All the shipped packages (the five libraries and the CLI tool), from the binaries the tests ran on. Symbols come out as a .snupkg file.
+        # Every package with content (IsPackable is false on the empty ones), from the binaries the tests ran on. Symbols come out as a .snupkg file.
         run: |
           dotnet pack OneMail.slnx -c Release --no-build -o "$RUNNER_TEMP/packages"
           ls -l "$RUNNER_TEMP/packages"

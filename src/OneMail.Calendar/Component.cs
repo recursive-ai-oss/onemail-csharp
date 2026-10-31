@@ -10,10 +10,14 @@ namespace RecursiveAI.OneMail.Calendar;
 /// </summary>
 public sealed class ParameterList : IReadOnlyList<ContentParameter>
 {
-    private readonly List<ContentParameter> _items = [];
+    private readonly List<ContentParameter> _items;
     private readonly ContentProperty _owner;
 
-    internal ParameterList(ContentProperty owner) => _owner = owner;
+    internal ParameterList(ContentProperty owner, List<ContentParameter>? parsed = null)
+    {
+        _owner = owner;
+        _items = parsed ?? [];
+    }
 
     /// <inheritdoc />
     public int Count => _items.Count;
@@ -118,6 +122,8 @@ public sealed class ContentProperty : ComponentItem
     private string _value;
     private ReadOnlyMemory<byte> _raw;
     private bool _modified;
+    private ParameterList? _parameters;
+    private List<ContentParameter>? _parsed;
 
     /// <summary>Creates a property in memory.</summary>
     /// <param name="name">The property name.</param>
@@ -133,11 +139,12 @@ public sealed class ContentProperty : ComponentItem
         _value = value;
         _group = group;
         Kind = ContentLineKind.Property;
-        Parameters = new ParameterList(this);
         _modified = true;
     }
 
-    internal ContentProperty(ContentLineKind kind, string? group, string name, string value, ReadOnlyMemory<byte> raw, long offset)
+    // 'parsed' is the parameter list read from the line; the ParameterList object is made when someone first asks for it, so a
+    // property nobody inspects costs no list.
+    internal ContentProperty(ContentLineKind kind, string? group, string name, string value, ReadOnlyMemory<byte> raw, long offset, List<ContentParameter>? parsed = null)
     {
         Kind = kind;
         _group = group;
@@ -145,7 +152,7 @@ public sealed class ContentProperty : ComponentItem
         _value = value;
         _raw = raw;
         Offset = offset;
-        Parameters = new ParameterList(this);
+        _parsed = parsed;
     }
 
     /// <summary>Whether this is a real property, or a blank or malformed line kept for fidelity. The latter two cannot be edited.</summary>
@@ -191,7 +198,19 @@ public sealed class ContentProperty : ComponentItem
     }
 
     /// <summary>The parameters.</summary>
-    public ParameterList Parameters { get; }
+    public ParameterList Parameters
+    {
+        get
+        {
+            if (_parameters is null)
+            {
+                Interlocked.CompareExchange(ref _parameters, new ParameterList(this, _parsed), null);
+                _parsed = null;
+            }
+
+            return _parameters;
+        }
+    }
 
     /// <summary>True once the property has been changed (or was created in memory) and will be written from its parts.</summary>
     public bool IsModified => _modified;
@@ -311,7 +330,7 @@ public sealed class ContentProperty : ComponentItem
 /// </summary>
 public sealed class Component : ComponentItem
 {
-    private readonly List<ComponentItem> _items = [];
+    private readonly List<ComponentItem> _items;
     private string _name;
     private ReadOnlyMemory<byte> _beginRaw;
     private ReadOnlyMemory<byte> _endRaw;
@@ -323,6 +342,7 @@ public sealed class Component : ComponentItem
     {
         ArgumentNullException.ThrowIfNull(name);
         _name = name;
+        _items = [];
         IsClosed = true;
         _modifiedName = true;
     }
@@ -330,6 +350,8 @@ public sealed class Component : ComponentItem
     internal Component(string name, ReadOnlyMemory<byte> beginRaw, long offset)
     {
         _name = name;
+        // A parsed component usually holds a dozen properties (a card, an event): one allocation instead of three growth steps.
+        _items = new List<ComponentItem>(16);
         _beginRaw = beginRaw;
         Offset = offset;
     }
@@ -384,7 +406,16 @@ public sealed class Component : ComponentItem
     /// <summary>Finds all properties with this name.</summary>
     /// <param name="name">The property name (ASCII case-insensitive).</param>
     /// <returns>The properties in order.</returns>
-    public IEnumerable<ContentProperty> FindProperties(string name) => _items.OfType<ContentProperty>().Where(p => p.IsNamed(name));
+    public IEnumerable<ContentProperty> FindProperties(string name)
+    {
+        for (int i = 0; i < _items.Count; i++)
+        {
+            if (_items[i] is ContentProperty p && p.IsNamed(name))
+            {
+                yield return p;
+            }
+        }
+    }
 
     /// <summary>Finds the nested components with this name.</summary>
     /// <param name="name">The component name (ASCII case-insensitive).</param>
@@ -536,7 +567,7 @@ public sealed class ContentDocument
 
             if (isBegin)
             {
-                string cname = Encoding.UTF8.GetString(line.Value).Trim();
+                string cname = ComponentName(line.Value);
                 if (cname.Length == 0)
                 {
                     defects.Add(new CalendarDefect(CalendarDefectKind.BeginWithoutName, line.Offset, line.Raw.Length, stack.Count - 1));
@@ -565,7 +596,7 @@ public sealed class ContentDocument
                 }
                 else
                 {
-                    string cname = Encoding.UTF8.GetString(line.Value).Trim();
+                    string cname = ComponentName(line.Value);
                     int k = stack.Count - 1;
                     while (k >= 1 && !stack[k].IsNamed(cname))
                     {
@@ -647,6 +678,13 @@ public sealed class ContentDocument
         return Parse(ms.ToArray(), options);
     }
 
+    // The component name after BEGIN: or END:, without surrounding whitespace. Known names come from the shared token table.
+    private static string ComponentName(ReadOnlySpan<byte> value)
+    {
+        string t = TokenCache.Get(value);
+        return t.Length > 0 && (char.IsWhiteSpace(t[0]) || char.IsWhiteSpace(t[^1])) ? t.Trim() : t;
+    }
+
     private static string DetectNewLine(ReadOnlySpan<byte> data)
     {
         int i = data.IndexOfAny((byte)'\r', (byte)'\n');
@@ -665,11 +703,12 @@ public sealed class ContentDocument
 
     private static ContentProperty BuildProperty(in ContentLine line, ReadOnlyMemory<byte> raw, int depth, List<CalendarDefect> defects)
     {
-        List<ContentParameter> ps = [];
+        List<ContentParameter>? ps = null;
         string? charset = null;
         foreach (ContentParameterSpan p in line.EnumerateParameters())
         {
-            string pname = Encoding.UTF8.GetString(p.Name);
+            ps ??= new List<ContentParameter>(1);
+            string pname = TokenCache.Get(p.Name);
             if (!p.HasValue)
             {
                 ps.Add(ContentParameter.Bare(pname));
@@ -681,40 +720,48 @@ public sealed class ContentDocument
                 defects.Add(new CalendarDefect(CalendarDefectKind.EmptyParameterName, line.Offset, 0, depth));
             }
 
-            List<string> values = [];
+            string[] values = [];
+            int n = 0;
             foreach (ReadOnlySpan<byte> v in p.EnumerateValues())
             {
-                string s = ContentCharsets.Decode(v, null, line.Offset, depth, null);
+                string s = ContentCharsets.IsAscii(v) ? TokenCache.Get(v) : ContentCharsets.Decode(v, null, line.Offset, depth, null);
                 if (ContentValues.HasCaretSequence(s))
                 {
                     defects.Add(new CalendarDefect(CalendarDefectKind.AmbiguousCaretEncoding, line.Offset, 0, depth));
                     s = ContentValues.DecodeCaret(s);
                 }
 
-                values.Add(s);
+                if (n == values.Length)
+                {
+                    Array.Resize(ref values, n == 0 ? 1 : n * 2);
+                }
+
+                values[n++] = s;
             }
 
-            ps.Add(new ContentParameter(pname, values));
+            if (n != values.Length)
+            {
+                Array.Resize(ref values, n);
+            }
+
+            ps.Add(new ContentParameter(pname, values, adopt: true));
         }
 
-        foreach (ContentParameter p in ps)
+        if (ps is not null)
         {
-            if (p.IsNamed("CHARSET") && p.Value is not null)
+            foreach (ContentParameter p in ps)
             {
-                charset = p.Value;
-                break;
+                if (p.IsNamed("CHARSET") && p.Value is not null)
+                {
+                    charset = p.Value;
+                    break;
+                }
             }
         }
 
         string value = ContentCharsets.Decode(line.Value, charset, line.Offset, depth, defects);
         string? group = line.Group.IsEmpty ? null : Encoding.UTF8.GetString(line.Group);
-        ContentProperty prop = new(ContentLineKind.Property, group, Encoding.UTF8.GetString(line.Name), value, raw, line.Offset);
-        foreach (ContentParameter p in ps)
-        {
-            prop.Parameters.AddParsed(p);
-        }
-
-        return prop;
+        return new ContentProperty(ContentLineKind.Property, group, TokenCache.Get(line.Name), value, raw, line.Offset, ps);
     }
 
     /// <summary>Writes the document. Stored lines go out as read; changed or new lines are written from their parts.</summary>

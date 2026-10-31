@@ -8,6 +8,7 @@
     <!-- A tool is not a library: nothing references it, so API validation and trimming do not apply to the package. -->
     <EnablePackageValidation>false</EnablePackageValidation>
     <IsTrimmable>false</IsTrimmable>
+    <PackageValidationBaselineVersion>$(OneMailPublishedVersion)</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>

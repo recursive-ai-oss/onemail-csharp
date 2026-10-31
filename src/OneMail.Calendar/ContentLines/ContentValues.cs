@@ -40,6 +40,15 @@ public sealed class ContentParameter
     {
     }
 
+    // Takes the array as the value list (the reader built it for this parameter), saving the copy the public constructor makes.
+    internal ContentParameter(string name, string[] values, bool adopt)
+    {
+        _ = adopt;
+        Name = name;
+        Values = values;
+        IsBare = false;
+    }
+
     private ContentParameter(string token)
     {
         Name = token;
@@ -121,6 +130,8 @@ public static class ContentCharsets
 
     // Decodes the bytes of one value. Valid UTF-8 is the answer unless a different charset is declared; invalid UTF-8
     // with no usable charset is read as Windows-1252 and flagged (clients' usual guess).
+    internal static bool IsAscii(ReadOnlySpan<byte> bytes) => Ascii.IsValid(bytes);
+
     internal static string Decode(ReadOnlySpan<byte> bytes, string? charset, long offset, int depth, List<CalendarDefect>? defects)
     {
         if (Ascii.IsValid(bytes))

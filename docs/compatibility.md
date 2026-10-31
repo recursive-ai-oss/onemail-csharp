@@ -12,6 +12,15 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## 0.3.0-preview.1
+
+Calendar and contacts, the other stores and the Outlook item semantics on read are complete for this stage; the sections below
+hold each format's numbers. Fuzzing, 600 s per target with 0 findings: `dbx` 8.1M executions, `olm` 17.5M, `oxocal` 0.3M,
+`rtf-html` 5.0M, `jcal-jcard` 12.8M, `xcal-xcard` 19.7M, `contentlines` 20.4M, `calendar` 11.2M, `vcard-view` 11.7M,
+`recurrence` 2.1M, plus the display, bodies and composition targets in their sections. Known gaps: no Outlook-produced
+calendar, contact or distribution-list fixtures yet (needs Outlook), and the display sanitiser has not had its independent
+review.
+
 ## 0.2.0-preview.1
 
 Added since 0.1. The 0.1 rows below still hold. Further oracles for these rows, all run as released programs: Python `extract-msg` 0.55.0,
@@ -131,6 +140,28 @@ command line. Checked on the worker with `tools/convert/run.sh`:
 
 Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; MSG and PST
 are not destinations until 0.5 (the `IStoreSink` extension point is public).
+
+## Replies and forwards ([`composition.md`](composition.md))
+
+`CreateReply`, `CreateReplyAll` and `CreateForward` (inline and as an attachment) on any item. Each message is made, written, and parsed back by OneMail, MimeKit 4.18.2,
+Python 3.13.17 `email` and Go 1.26.8 `net/mail`; subject, From, To, Cc, In-Reply-To and References are compared with what the composer says it wrote
+(`tools/composition`). A reply, a reply-all and the two forwards are made of every item.
+
+| Source | Items | Messages made | In-process checks failing | Oracle fields compared (MimeKit / Python / Go), differing | Notes |
+|---|---|---|---|---|---|
+| Enron maildir sample | 5,032 | 20,128 | 0 | 120,537 / 120,537 / 120,251, 0 / 0 / 0 | 1,839 parents already had a prefix; none stacked; 5,032 embedded originals byte-identical |
+| Dovecot mbox | 2,858 | 11,432 | 0 | 68,592 each, 0 | 1,524 prefixed parents; 2,858 embedded originals byte-identical |
+| Mime4j test messages (80 files, 4 mbox items) | 78 | 312 | 0 | 1,872 each, 0 | 78 embedded originals byte-identical |
+| MSG (Tika, POI) | 45 | 180 | 0 | 1,080 each, 0 | MAPI threading properties unchanged through MAPI to MIME to MAPI on 180 / 180 |
+| PST, OST | 25 | 100 | 0 | 600 each, 0 | same, 100 / 100 |
+| TNEF | 7 | 28 | 0 | 168 each, 0 | same, 28 / 28 |
+| OLM | 490 | 1,960 | 0 | 11,760 each, 0 | records have no MIME source: the embedded original is rebuilt from the view (`ParentSynthesized`, 490) |
+| DBX | 2,053 | 8,212 | 0 | 49,272 each, 0 | most records of the corpus have no text (no sender, no ID: `NoReplyTarget` 4,038); 34 non-empty originals byte-identical |
+
+Known gaps: addresses with a doubled or edge dot in the local part (`k..allen@x`) are written as they were; the three oracles drop or cut them (ambiguity A15, A16),
+so they are left out of that comparison. Display text that the user would see in other languages (attribution, forward banner) is English unless replaced. The
+subject prefix list is an agent default. No mail client has been compared yet (no Thunderbird run); the Outlook oracle will settle the forward-threading and
+conversation-index choices. Real Outlook conversation indexes carry the FILETIME from their first byte, which differs from the layout MS-OXOMSG draws (see `composition.md`).
 
 ## Display HTML (sanitiser, remote-content policy)
 
