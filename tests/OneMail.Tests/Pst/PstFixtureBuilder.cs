@@ -219,7 +219,8 @@ public sealed class PstFixtureBuilder
             new(0x0C1A, StrType, Str(m.SenderName)),
             new(0x0C1E, StrType, Str("SMTP")),
             new(0x0C1F, StrType, Str(m.SenderSmtp)),
-            new(0x0E07, LtpPropertyTypes.PtypInteger32, I32(1)),
+            // MS-OXCMSG 2.2.1.6: MSGFLAG_READ, plus MSGFLAG_HASATTACH when there are attachments; readers that trust the flag skip the table without it.
+            new(0x0E07, LtpPropertyTypes.PtypInteger32, I32(m.Attachments.Count > 0 ? 0x11 : 1)),
             new(0x3FFD, LtpPropertyTypes.PtypInteger32, I32(1252)),
         };
         if (m.Body is not null)

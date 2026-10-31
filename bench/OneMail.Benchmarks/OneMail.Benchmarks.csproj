@@ -7,6 +7,9 @@
     <RootNamespace>RecursiveAI.OneMail.Benchmarks</RootNamespace>
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);CA1822;CA1002;CA1819</NoWarn>
+    <!-- The comparison libraries pull in a System.Security.Cryptography.Pkcs build with an advisory. They are run here as
+         released binaries to time them and are never shipped, so the audit warning is not an error in this project. -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +23,17 @@
     <PackageReference Include="BenchmarkDotNet" />
     <!-- The comparator for the MIME rows. It is run as a released binary and appears nowhere under src/. -->
     <PackageReference Include="MimeKit" />
+    <!-- The comparators for the Outlook-format rows: PST/OST (MS-PL), MSG (MIT), and MimeKit's TNEF reader above. -->
+    <PackageReference Include="XstReader.Api" />
+    <PackageReference Include="MsgReader" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test-side PST writers, used to make stores larger than any public sample. They never run inside a timed region. -->
+    <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" Link="Generated/NdbTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" Link="Generated/LtpTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/PstFixtureBuilder.cs" Link="Generated/PstFixtureBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/PstFixtures.cs" Link="Generated/PstFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>

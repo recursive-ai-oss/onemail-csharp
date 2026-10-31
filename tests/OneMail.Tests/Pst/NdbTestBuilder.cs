@@ -78,8 +78,26 @@ public static class NdbTestBuilder
         options ??= new TestBuild();
         Geometry g = For(format);
         var file = new List<byte>();
-        void PadTo(long n) { while (file.Count < n) { file.Add(0); } }
+        void PadTo(long n) { if (file.Count < n) { file.AddRange(new byte[n - file.Count]); } }
         PadTo(g.FirstData);
+
+        // MS-PST 2.2.2.7.2: an AMap page heads each range of AllocBytes * 8 * Align bytes, the first at g.AMap. Larger files keep
+        // those slots free of data, so a block or page that would touch one starts after it; the pages are written at the end.
+        long span = (long)g.AllocBytes * 8 * g.Align;
+        var amapSlots = new List<long>();
+        void Wedge(int length)
+        {
+            while (true)
+            {
+                long pos = file.Count;
+                long k = (pos - g.AMap) / span;
+                if (k >= 1 && pos < g.AMap + (k * span) + g.Page) { PadTo(g.AMap + (k * span) + g.Page); if (!amapSlots.Contains(g.AMap + (k * span))) { amapSlots.Add(g.AMap + (k * span)); } continue; }
+                long next = g.AMap + ((k + 1) * span);
+                if (pos + length <= next) { return; }
+                PadTo(next + g.Page);
+                amapSlots.Add(next);
+            }
+        }
 
         ulong nextBlock = 4;     // external BIDs count in steps of 4; internal ones add 2 (MS-PST 2.2.2.2)
         ulong nextPage = 0x100;
@@ -90,7 +108,6 @@ public static class NdbTestBuilder
         {
             ulong bid = nextBlock | (isInternal ? 2UL : 0);
             nextBlock += 4;
-            long ib = file.Count;
             byte[] stored = data;
             int uncompressed = 0;
             if (format == NdbFormat.Unicode4K && options.Compress && !isInternal && data.Length > 32)
@@ -107,6 +124,8 @@ public static class NdbTestBuilder
             }
 
             int total = ((stored.Length + g.Trailer + g.Align - 1) / g.Align) * g.Align;
+            Wedge(total);
+            long ib = file.Count;
             var blk = new byte[total];
             stored.CopyTo(blk, 0);
             Span<byte> tr = blk.AsSpan(total - g.Trailer);
@@ -215,6 +234,7 @@ public static class NdbTestBuilder
 
             ulong bid = nextPage; nextPage += 4;
             PadTo(((file.Count + g.Page - 1) / g.Page) * g.Page);  // pages sit on page boundaries, blocks only on block ones
+            Wedge(g.Page);
             long ib = file.Count;
             FinishPage(g, page, ptype, bid, (ulong)ib);
             file.AddRange(page);
@@ -254,16 +274,19 @@ public static class NdbTestBuilder
         var bbtRoot = BuildTree(0x80, bbtEntries, bbtLeaf, idx, bbtPages);
 
         long eof = file.Count;
-        // Allocation: everything from the AMap on is allocated up to the end of the file; the rest of the map is free.
-        // Only files that fit in the first AMap are built, so no later AMap has to be wedged between blocks.
-        long span = (long)g.AllocBytes * 8 * g.Align;
-        if (eof - g.AMap > span) { throw new InvalidOperationException("test file is larger than one AMap covers"); }
-        int usedBits = (int)((eof - g.AMap + g.Align - 1) / g.Align);
-        var amap = new byte[g.Page];
-        for (int b = 0; b < usedBits; b++) { amap[g.AllocOffset + (b >> 3)] |= (byte)(1 << (b & 7)); }
-        long freeBytes = ((long)g.AllocBytes * 8 - usedBits) * g.Align;
-        FinishPage(g, amap, 0x84, (ulong)g.AMap, (ulong)g.AMap, allocation: true);
-        amap.CopyTo(CollectionsMarshalSpan(file, g.AMap, g.Page));
+        // Allocation: everything from each AMap on is allocated up to the end of the file; the rest of the last map is free.
+        long lastAMap = g.AMap;
+        long freeBytes = 0;
+        foreach (long at in new[] { g.AMap }.Concat(amapSlots.Order()))
+        {
+            int usedBits = (int)Math.Min(g.AllocBytes * 8L, (eof - at + g.Align - 1) / g.Align);
+            var amap = new byte[g.Page];
+            for (int b = 0; b < usedBits; b++) { amap[g.AllocOffset + (b >> 3)] |= (byte)(1 << (b & 7)); }
+            freeBytes = ((long)g.AllocBytes * 8 - usedBits) * g.Align;
+            lastAMap = at;
+            FinishPage(g, amap, 0x84, (ulong)at, (ulong)at, allocation: true);
+            amap.CopyTo(CollectionsMarshalSpan(file, at, g.Page));
+        }
 
         // Density list page, empty. 512-byte files also get the (obsolete but customary) PMap at 0x4600.
         var dl = new byte[g.Page];
@@ -278,7 +301,7 @@ public static class NdbTestBuilder
 
         eof = file.Count;
         byte[] bytes = file.ToArray();
-        WriteHeader(g, bytes, options.Crypt, nextBlock, nextPage, (ulong)eof, (ulong)g.AMap, (ulong)freeBytes, nbtRoot, bbtRoot);
+        WriteHeader(g, bytes, options.Crypt, nextBlock, nextPage, (ulong)eof, (ulong)lastAMap, (ulong)freeBytes, nbtRoot, bbtRoot);
         return new Result { Bytes = bytes, BlockOffsets = offsets, NbtPages = nbtPages, BbtPages = bbtPages, AMapOffset = g.AMap };
     }
 
