@@ -132,6 +132,28 @@ command line. Checked on the worker with `tools/convert/run.sh`:
 Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; MSG and PST
 are not destinations until 0.5 (the `IStoreSink` extension point is public).
 
+## Replies and forwards ([`composition.md`](composition.md))
+
+`CreateReply`, `CreateReplyAll` and `CreateForward` (inline and as an attachment) on any item. Each message is made, written, and parsed back by OneMail, MimeKit 4.18.2,
+Python 3.13.17 `email` and Go 1.26.8 `net/mail`; subject, From, To, Cc, In-Reply-To and References are compared with what the composer says it wrote
+(`tools/composition`). A reply, a reply-all and the two forwards are made of every item.
+
+| Source | Items | Messages made | In-process checks failing | Oracle fields compared (MimeKit / Python / Go), differing | Notes |
+|---|---|---|---|---|---|
+| Enron maildir sample | 5,032 | 20,128 | 0 | 120,537 / 120,537 / 120,251, 0 / 0 / 0 | 1,839 parents already had a prefix; none stacked; 5,032 embedded originals byte-identical |
+| Dovecot mbox | 2,858 | 11,432 | 0 | 68,592 each, 0 | 1,524 prefixed parents; 2,858 embedded originals byte-identical |
+| Mime4j test messages (80 files, 4 mbox items) | 78 | 312 | 0 | 1,872 each, 0 | 78 embedded originals byte-identical |
+| MSG (Tika, POI) | 45 | 180 | 0 | 1,080 each, 0 | MAPI threading properties unchanged through MAPI to MIME to MAPI on 180 / 180 |
+| PST, OST | 25 | 100 | 0 | 600 each, 0 | same, 100 / 100 |
+| TNEF | 7 | 28 | 0 | 168 each, 0 | same, 28 / 28 |
+| OLM | 490 | 1,960 | 0 | 11,760 each, 0 | records have no MIME source: the embedded original is rebuilt from the view (`ParentSynthesized`, 490) |
+| DBX | 2,053 | 8,212 | 0 | 49,272 each, 0 | most records of the corpus have no text (no sender, no ID: `NoReplyTarget` 4,038); 34 non-empty originals byte-identical |
+
+Known gaps: addresses with a doubled or edge dot in the local part (`k..allen@x`) are written as they were; the three oracles drop or cut them (ambiguity A15, A16),
+so they are left out of that comparison. Display text that the user would see in other languages (attribution, forward banner) is English unless replaced. The
+subject prefix list is an agent default. No mail client has been compared yet (no Thunderbird run); the Outlook oracle will settle the forward-threading and
+conversation-index choices. Real Outlook conversation indexes carry the FILETIME from their first byte, which differs from the layout MS-OXOMSG draws (see `composition.md`).
+
 ## Display HTML (sanitiser, remote-content policy)
 
 Added after 0.2.0-preview.2. Vectors are our own, written from the categories of public evasion lists (no text copied). DOMPurify 3.4.17 (npm) is run as a released program

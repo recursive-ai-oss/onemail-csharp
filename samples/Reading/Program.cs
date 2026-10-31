@@ -24,6 +24,9 @@ try
 
     // 3. Iterate an mbox: who each message is from, when it was written, how many files it carries.
     foreach (IMailItem m in inbox.Enumerate()) Console.WriteLine($"{(m.From.Count > 0 ? m.From[0].ToString() : "-")} {m.Sent?.Value:u} {m.Attachments.Count}");
+
+    // 4. Reply to a message: the subject, the threading headers, the recipients and the quoted text are made for you.
+    Console.WriteLine(Mail.Parse(File.ReadAllBytes(eml)).CreateReply().Subject);
 }
 finally
 {
