@@ -134,6 +134,13 @@ internal static class Program
 
         Console.WriteLine($"{input} -> {format}: read {r.ItemsRead}, written {r.ItemsWritten}, skipped {r.ItemsSkipped} [{string.Join(", ", r.SkippedByReason.Select(p => p.Key + " " + p.Value))}], errors {r.Errors.Count}");
         Console.WriteLine($"  read back {back}: byte-identical to what was written {identical}, changed {changed}; {sw.Elapsed.TotalSeconds:F1}s");
+        if (HashingSink.RawChecked > 0)
+        {
+            Console.WriteLine($"  source files compared with what the sink received: {HashingSink.RawChecked}, different {HashingSink.RawDiffers}");
+            HashingSink.RawChecked = 0;
+            changed += HashingSink.RawDiffers;
+            HashingSink.RawDiffers = 0;
+        }
         foreach (LossTotal t in r.Losses.Take(8))
         {
             Console.WriteLine($"  {t.Kind} {t.Code} ({t.Family}) in {t.Items} items");
@@ -145,9 +152,24 @@ internal static class Program
     // Passes entries through and records the hash of every message's bytes as the sink received them.
     private sealed class HashingSink(IStoreSink inner, Dictionary<string, int> seen, ConvertFormat format) : IStoreSink
     {
+        public static long RawChecked;
+        public static long RawDiffers;
+
         public async ValueTask<string?> WriteAsync(StoreEntry entry, CancellationToken cancellationToken)
         {
             string? where = await inner.WriteAsync(entry, cancellationToken);
+
+            // Messages that live in a file of their own: what the sink got is the file's bytes (the message range of an .emlx).
+            if (entry.Item is MimeMailItem { Provenance: { Format: MailFormat.Eml or MailFormat.Emlx or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle, Location: { } loc, Length: >= 0 } p } && File.Exists(loc))
+            {
+                using FileStream fs = File.OpenRead(loc);
+                byte[] raw = new byte[p.Length];
+                fs.Seek(p.Offset, SeekOrigin.Begin);
+                fs.ReadExactly(raw);
+                RawChecked++;
+                RawDiffers += raw.AsSpan().SequenceEqual(entry.Content.Span) ? 0 : 1;
+            }
+
             if (entry.Kind == PayloadKind.Message)
             {
                 // What the destination holds: an mbox cannot end a message without a line ending.

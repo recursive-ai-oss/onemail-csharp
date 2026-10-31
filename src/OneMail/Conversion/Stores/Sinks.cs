@@ -488,20 +488,20 @@ internal sealed class MaildirSink : MailSinkBase
             _store.CreateFolder(folder);
         }
 
-        MaildirEntry delivered;
+        string delivered;
         try
         {
-            delivered = _store.Deliver(entry.Content, folder, entry.Marks & ~MessageMarks.Recent, entry.Keywords);
+            delivered = _store.DeliverPath(entry.Content, folder, entry.Marks & ~MessageMarks.Recent, entry.Keywords);
         }
         catch (InvalidOperationException)
         {
             // More than 26 distinct keywords in one folder: the flags go in, the keywords do not.
-            delivered = _store.Deliver(entry.Content, folder, entry.Marks & ~MessageMarks.Recent);
+            delivered = _store.DeliverPath(entry.Content, folder, entry.Marks & ~MessageMarks.Recent);
             entry.Report.Add("store", "keywords", LossKind.Dropped, "KeywordsNotCarried", "A Maildir folder holds at most 26 distinct keywords.");
         }
 
-        StorePaths.SetTime(Path.Combine(_root, delivered.Path.Replace('/', Path.DirectorySeparatorChar)), entry.Received);
-        return new ValueTask<string?>(delivered.Path);
+        StorePaths.SetTime(Path.Combine(_root, delivered.Replace('/', Path.DirectorySeparatorChar)), entry.Received);
+        return new ValueTask<string?>(delivered);
     }
 
     public override ValueTask CompleteAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
