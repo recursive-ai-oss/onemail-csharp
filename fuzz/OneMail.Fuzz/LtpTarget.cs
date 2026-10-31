@@ -11,22 +11,6 @@ namespace RecursiveAI.OneMail.Fuzz;
 // Every PC and TC in the file is then opened and read in full; only typed results may come out.
 internal static class LtpTarget
 {
-    private static readonly (byte[] File, long From, long To)[] Bases = [Make(NdbFormat.Ansi), Make(NdbFormat.Unicode), Make(NdbFormat.Unicode4K)];
-
-    private static (byte[], long, long) Make(NdbFormat format)
-    {
-        var big = new byte[9000];
-        new Random(5).NextBytes(big);
-        var nodes = new List<TestNode>
-        {
-            PcBuilder.Build(0x2004, [new PcSpec(0x37, 0x1F, "subject"u8.ToArray()), new PcSpec(0x0E07, 3, [1, 0, 0, 0]), new PcSpec(0x1013, 0x102, big, InSubnode: true), new PcSpec(0x3701, 0x102, big[..3000]), new PcSpec(0x6801, 0x101F, [2, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 65, 0, 66, 0])], nodeCapacity: 2, blockCapacity: 120),
-            TcBuilder.Build(0x80E, new TcSpec { Columns = [(0x3001, 0x1F), (0x0E08, 3), (0x3FF9, 0x48)], Rows = Enumerable.Range(0, 40).Select(i => ((uint)(0x2004 + (i * 32)), new byte[]?[] { i % 4 == 0 ? null : "abcdefgh"u8.ToArray(), BitConverter.GetBytes(i), new byte[16] })).ToList(), RowsInSubnode = true, MatrixBlockSize = 400, BlockCapacity = 300 }),
-            TcBuilder.Build(0x80F, new TcSpec { Columns = [(0x3001, 0x1F)], Rows = Enumerable.Range(0, 6).Select(i => ((uint)(0x2004 + (i * 32)), new byte[]?[] { "xyz"u8.ToArray() })).ToList() }),
-        };
-        var built = NdbTestBuilder.Build(format, nodes, new TestBuild { Compress = format == NdbFormat.Unicode4K });
-        return (built.Bytes, built.BlockOffsets.Values.Min(), built.BlockOffsets.Values.Max() + 64);
-    }
-
     public static void Run(ReadOnlySpan<byte> data)
     {
         if (data.Length == 0)
@@ -34,22 +18,7 @@ internal static class LtpTarget
             return;
         }
 
-        byte[] file;
-        int which = data[0] & 3;
-        if (which == 3)
-        {
-            file = data[1..].ToArray();
-        }
-        else
-        {
-            (byte[] baseFile, long from, long to) = Bases[which];
-            file = (byte[])baseFile.Clone();
-            for (int i = 1; i + 3 < data.Length; i += 4)
-            {
-                long pos = from + ((data[i] | (data[i + 1] << 8) | (data[i + 2] << 16)) % (to - from));
-                file[pos] = data[i + 3];
-            }
-        }
+        byte[] file = LtpWalk.FuzzFile(data);
 
         var options = new NdbOptions { MaxDefects = 1000, MaxDataTreeLeaves = 10_000, MaxSubnodeEntries = 10_000 };
         if (!NdbFile.TryOpen(file, out NdbFile? f, out _, options) || f is null)

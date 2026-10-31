@@ -286,6 +286,46 @@ public static class TcBuilder
 /// <summary>Reads every heap, property context and table context in a file, the way a damaged-input test or a fuzz target wants it: everything, never throwing.</summary>
 public static class LtpWalk
 {
+    private static readonly (byte[] File, long From, long To)[] Bases = [FuzzBase(NdbFormat.Ansi), FuzzBase(NdbFormat.Unicode), FuzzBase(NdbFormat.Unicode4K)];
+
+    // Small multi-block heaps, a multi-level BTH, a subnode value, a multi-valued value, and tables with rows in the heap and in a subnode.
+    private static (byte[], long, long) FuzzBase(NdbFormat format)
+    {
+        var big = new byte[9000];
+        new Random(5).NextBytes(big);
+        var nodes = new List<TestNode>
+        {
+            PcBuilder.Build(0x2004, [new PcSpec(0x37, LtpPropertyTypes.PtypString, "subject"u8.ToArray()), new PcSpec(0x0E07, LtpPropertyTypes.PtypInteger32, [1, 0, 0, 0]), new PcSpec(0x1013, LtpPropertyTypes.PtypBinary, big, InSubnode: true), new PcSpec(0x3701, LtpPropertyTypes.PtypBinary, big[..3000]), new PcSpec(0x6801, (ushort)(LtpPropertyTypes.PtypString | LtpPropertyTypes.MultiValueFlag), [2, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 65, 0, 66, 0])], nodeCapacity: 2, blockCapacity: 120),
+            TcBuilder.Build(0x80E, new TcSpec { Columns = [(0x3001, LtpPropertyTypes.PtypString), (0x0E08, LtpPropertyTypes.PtypInteger32), (0x3FF9, LtpPropertyTypes.PtypGuid)], Rows = Enumerable.Range(0, 40).Select(i => ((uint)(0x2004 + (i * 32)), new byte[]?[] { i % 4 == 0 ? null : "abcdefgh"u8.ToArray(), BitConverter.GetBytes(i), new byte[16] })).ToList(), RowsInSubnode = true, MatrixBlockSize = 400, BlockCapacity = 300 }),
+            TcBuilder.Build(0x80F, new TcSpec { Columns = [(0x3001, LtpPropertyTypes.PtypString)], Rows = Enumerable.Range(0, 6).Select(i => ((uint)(0x2004 + (i * 32)), new byte[]?[] { "xyz"u8.ToArray() })).ToList() }),
+        };
+        var built = NdbTestBuilder.Build(format, nodes, new TestBuild { Compress = format == NdbFormat.Unicode4K });
+        return (built.Bytes, built.BlockOffsets.Values.Min(), built.BlockOffsets.Values.Max() + 64);
+    }
+
+    /// <summary>
+    /// The file a fuzz input stands for. Byte 0, bits 0-1: which valid file (0 ANSI, 1 Unicode, 2 4 KiB; 3 = the rest of the input is the file);
+    /// then 4-byte records of a 24-bit offset (taken modulo the data region) and the byte to put there. A patched block keeps its old
+    /// checksum, which the block reader reports and carries on from, so patches reach the LTP code.
+    /// </summary>
+    public static byte[] FuzzFile(ReadOnlySpan<byte> input)
+    {
+        int which = input[0] & 3;
+        if (which == 3)
+        {
+            return input[1..].ToArray();
+        }
+
+        (byte[] baseFile, long from, long to) = Bases[which];
+        byte[] file = (byte[])baseFile.Clone();
+        for (int i = 1; i + 3 < input.Length; i += 4)
+        {
+            file[from + ((input[i] | (input[i + 1] << 8) | (input[i + 2] << 16)) % (to - from))] = input[i + 3];
+        }
+
+        return file;
+    }
+
     /// <summary>Opens each node, then each subnode, as a PC or TC by its client signature and reads every value. Stops after <paramref name="budget"/> operations.</summary>
     public static (int Contexts, int Values) ReadEverything(NdbFile f, int budget = 20000)
     {

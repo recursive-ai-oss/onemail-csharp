@@ -513,8 +513,10 @@ public sealed partial class NdbFile : IDisposable
             length = total;
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
+            // The input is an in-memory copy of the block, so an IOException here is the inflater's own failure (its "unexpected
+            // error code" for some corrupt streams), not a storage error.
             Report(NdbDefectKind.BlockDecompressionFailed, ib, ex.Message);
             return false;
         }

@@ -394,6 +394,23 @@ public class LtpHostileTests
         Assert.Contains(d, x => x.Kind == LtpDefectKind.TcRowIndexShape);
     }
 
+    [Fact]
+    public void FuzzReproCorruptDeflateStreamIsATypedDefect()
+    {
+        // Found by the ltp fuzz target: the framework's inflater threw an IOException ("unexpected error code") on a corrupt
+        // compressed block instead of InvalidDataException.
+        byte[] repro = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(ThisFile())!, "..", "..", "..", "testdata", "fuzz", "ltp-corrupt-deflate-stream.bin"));
+        byte[] file = LtpWalk.FuzzFile(repro);
+        Assert.True(NdbFile.TryOpen(file, out NdbFile? f, out _));
+        using (f)
+        {
+            LtpWalk.ReadEverything(f!);
+            Assert.Contains(f!.Defects, d => d.Kind == NdbDefectKind.BlockDecompressionFailed);
+        }
+    }
+
+    private static string ThisFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     // ---- random damage ----
 
     private static (byte[] File, long From, long To) BaseFile(NdbFormat format)
