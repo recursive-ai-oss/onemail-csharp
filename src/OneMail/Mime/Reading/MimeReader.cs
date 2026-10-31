@@ -151,6 +151,9 @@ public sealed class MimeReader : IDisposable
         public int BoundaryLen;
         public int HeaderBytes;
         public int HeaderCount;
+        public bool SawDelimiter;
+        public bool BoundaryTrimmed;
+        public bool EpilogueReported;
     }
 
     private readonly MimeLimits _limits;
@@ -182,6 +185,12 @@ public sealed class MimeReader : IDisposable
     private bool _atLineStart;
     private int _entityCount;
     private long _lastAmbiguousBoundary = -1;
+
+    private int _eolStyle; // 0 not seen yet, 1 LF, 2 CRLF: the style of the first line end in the message
+    private bool _mixedReported;
+
+    private static readonly System.Buffers.SearchValues<byte> ControlBytes = System.Buffers.SearchValues.Create(
+        [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127]);
 
     private bool _pend;
     private int _pendIdx;
@@ -344,6 +353,8 @@ public sealed class MimeReader : IDisposable
         _atLineStart = false;
         _entityCount = 0;
         _lastAmbiguousBoundary = -1;
+        _eolStyle = 0;
+        _mixedReported = false;
         _pend = false;
         _consume = 0;
         _kind = MimeEventKind.None;
@@ -631,7 +642,8 @@ public sealed class MimeReader : IDisposable
         ref Frame f = ref _frames[_n - 1];
         if (f.Type == MimeEntityType.Multipart && !f.Closed)
         {
-            AddDefect(MimeDefectKind.MissingFinalBoundary, _bufBase + _start, 0);
+            // With no delimiter at all the body is all preamble (a multipart that never started); otherwise it never ended.
+            AddDefect(f.SawDelimiter ? MimeDefectKind.MissingFinalBoundary : MimeDefectKind.MissingStartBoundary, _bufBase + _start, 0);
         }
 
         _evType = f.Type;
@@ -651,6 +663,8 @@ public sealed class MimeReader : IDisposable
     {
         ref Frame f = ref _frames[_n - 1];
         _pend = false;
+        f.SawDelimiter = true;
+        NoteLineEnd(_buf.Span.Slice(_start, _pendLen), _bufBase + _start);
         _evClose = _pendClose;
         if (_pendClose)
         {
@@ -664,6 +678,26 @@ public sealed class MimeReader : IDisposable
 
         _atLineStart = true;
         return Emit(MimeEventKind.Delimiter, _start, _pendLen);
+    }
+
+    // RFC 5322 §2.2: lines end in CRLF, but LF-only mail is common. Mixing the two in one message is reported once.
+    private void NoteLineEnd(ReadOnlySpan<byte> endsWithLineEnd, long offset)
+    {
+        if (endsWithLineEnd.IsEmpty || endsWithLineEnd[^1] != (byte)'\n')
+        {
+            return;
+        }
+
+        int style = endsWithLineEnd.Length > 1 && endsWithLineEnd[^2] == (byte)'\r' ? 2 : 1;
+        if (_eolStyle == 0)
+        {
+            _eolStyle = style;
+        }
+        else if (style != _eolStyle && !_mixedReported)
+        {
+            _mixedReported = true;
+            AddDefect(MimeDefectKind.MixedLineEndings, offset + endsWithLineEnd.Length - style, style);
+        }
     }
 
     // ---- headers ----
@@ -800,6 +834,12 @@ public sealed class MimeReader : IDisposable
             from = at + 1;
         }
 
+        if (field.IndexOfAny(ControlBytes) >= 0)
+        {
+            AddDefect(MimeDefectKind.ControlCharacterInHeader, abs, len);
+        }
+
+        NoteLineEnd(b.Slice(s, len), abs);
         _nameStart = s;
         _nameLen = trimmed - s;
         _valStart = nameEnd + 1;
@@ -922,6 +962,19 @@ public sealed class MimeReader : IDisposable
                 n = v.Length;
             }
 
+            // A delimiter may be followed by padding, so trimming trailing blanks off the boundary matches both readings.
+            int trimmedLength = n;
+            while (trimmedLength > 0 && _bnd[f.BoundaryStart + 2 + trimmedLength - 1] is (byte)' ' or (byte)'\t')
+            {
+                trimmedLength--;
+            }
+
+            if (trimmedLength != n && trimmedLength > 0)
+            {
+                f.BoundaryTrimmed = true;
+                n = trimmedLength;
+            }
+
             if (n == 0)
             {
                 f.BoundaryState = BoundaryState.Empty;
@@ -951,6 +1004,7 @@ public sealed class MimeReader : IDisposable
             AddDefect(defect, pos, 0);
         }
 
+        NoteLineEnd(_buf.Span.Slice(_start, separatorLength), pos);
         bool multipart = f.MediaMultipart;
         bool message = f.MediaMessage;
         if (!f.SawContentType && _n >= 2 && _frames[_n - 2].Type == MimeEntityType.Multipart && _frames[_n - 2].Digest)
@@ -958,11 +1012,13 @@ public sealed class MimeReader : IDisposable
             message = true; // RFC 2046 §5.1.5: the default type inside multipart/digest is message/rfc822
         }
 
-        // RFC 2045 §6.4: multipart and message entities must not be base64 or quoted-printable encoded.
+        // RFC 2045 §6.4: multipart and message entities must not be base64 or quoted-printable encoded. Two of the three
+        // reference libraries parse a multipart's parts from the raw body anyway, and so do we; an embedded message is
+        // kept as a leaf whose decoded content the caller can parse.
         if ((multipart || message) && f.Encoding is ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable)
         {
             AddDefect(MimeDefectKind.AmbiguousEncodedComposite, pos, 0);
-            multipart = message = false;
+            message = false;
         }
 
         if (multipart && f.BoundaryState != BoundaryState.Ok)
@@ -1012,6 +1068,11 @@ public sealed class MimeReader : IDisposable
                     AddDefect(MimeDefectKind.AmbiguousDuplicateBoundary, pos, 0);
                     break;
                 }
+            }
+
+            if (f.BoundaryTrimmed)
+            {
+                AddDefect(MimeDefectKind.BoundaryHasTrailingSpace, pos, 0);
             }
 
             _evBoundaryStart = f.BoundaryStart + 2;
@@ -1066,8 +1127,10 @@ public sealed class MimeReader : IDisposable
             return EndTop();
         }
 
+        bool atStart = _atLineStart;
         if (_flood || !AnyBoundary())
         {
+            CheckEpilogue(ref f, kind, b, s, e - s, atStart);
             return Emit(kind, s, e - s);
         }
 
@@ -1149,7 +1212,39 @@ public sealed class MimeReader : IDisposable
         }
 
         _atLineStart = false;
+        CheckEpilogue(ref f, kind, b, s, ce - s, atStart);
         return Emit(kind, s, ce - s);
+    }
+
+    // After the closing delimiter everything is epilogue, even a line that looks like a delimiter of the same multipart
+    // (RFC 2046 §5.1.1); that is reported once.
+    private void CheckEpilogue(ref Frame f, MimeEventKind kind, ReadOnlySpan<byte> b, int s, int length, bool atLineStart)
+    {
+        if (kind != MimeEventKind.Epilogue || f.EpilogueReported || f.BoundaryLen == 0)
+        {
+            return;
+        }
+
+        ReadOnlySpan<byte> chunk = b.Slice(s, length);
+        ReadOnlySpan<byte> bnd = _bnd.AsSpan(f.BoundaryStart, f.BoundaryLen);
+        for (int from = 0; from < chunk.Length;)
+        {
+            int i = chunk[from..].IndexOf(bnd);
+            if (i < 0)
+            {
+                return;
+            }
+
+            int at = from + i;
+            if ((at == 0 && atLineStart) || (at > 0 && chunk[at - 1] == (byte)'\n'))
+            {
+                f.EpilogueReported = true;
+                AddDefect(MimeDefectKind.EpilogueHasDelimiter, _bufBase + s + at, bnd.Length);
+                return;
+            }
+
+            from = at + 1;
+        }
     }
 
     private Classified Classify(ReadOnlySpan<byte> b, int ls) => Classify(b, ls, ls);

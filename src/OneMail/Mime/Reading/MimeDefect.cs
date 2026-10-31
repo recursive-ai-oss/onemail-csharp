@@ -83,6 +83,131 @@ public enum MimeDefectKind
     /// <summary>A multipart had no closing delimiter: the input ended, or an enclosing multipart's delimiter came first.</summary>
     MissingFinalBoundary,
 
+    // ---- Reader structure, text, addresses, dates, identifiers ----
+
+    /// <summary>A Content-Type or Content-Disposition parameter has no <c>=</c>; it was dropped.</summary>
+    InvalidParameter,
+
+    /// <summary>A multipart whose body has no delimiter line at all. The whole body is its preamble; there are no parts.</summary>
+    MissingStartBoundary,
+
+    /// <summary>After the closing delimiter, a line looks like a delimiter of the same multipart. It stays epilogue text.</summary>
+    EpilogueHasDelimiter,
+
+    /// <summary>The message mixes LF and CRLF line ends in its headers and delimiters. Each line may end either way; reported once per message.</summary>
+    MixedLineEndings,
+
+    /// <summary>A header field contains a control character other than NUL, tab, CR and LF. Kept as written.</summary>
+    ControlCharacterInHeader,
+
+    /// <summary>A boundary parameter ends in spaces or tabs. The trimmed boundary is matched, which also matches the literal one because delimiters may carry trailing blanks.</summary>
+    BoundaryHasTrailingSpace,
+
+    /// <summary>Bytes that are not valid in the declared charset were replaced by U+FFFD.</summary>
+    InvalidCharsetBytes,
+
+    /// <summary>A charset label is unknown; the text was decoded as UTF-8 if valid, else windows-1252.</summary>
+    AmbiguousUnknownCharset,
+
+    /// <summary>An RFC 2047 encoded word is malformed and was left as literal text.</summary>
+    MalformedEncodedWord,
+
+    /// <summary>The base64 of an encoded word is damaged; what could be decoded was kept.</summary>
+    InvalidEncodedWordBase64,
+
+    /// <summary>The Q encoding of an encoded word has a bad escape.</summary>
+    InvalidEncodedWordQuotedPrintable,
+
+    /// <summary>An encoded word is longer than 75 characters; it was decoded anyway.</summary>
+    EncodedWordTooLong,
+
+    /// <summary>An encoded word inside a quoted string or parameter value, where RFC 2047 forbids it; decoded, as clients do.</summary>
+    AmbiguousEncodedWordInQuotedString,
+
+    /// <summary>Adjacent encoded words split a multibyte character; they were decoded as one byte stream.</summary>
+    AmbiguousSplitMultibyte,
+
+    /// <summary>A percent escape in an RFC 2231 value is malformed; kept literally.</summary>
+    InvalidParameterEscape,
+
+    /// <summary>An RFC 2231 extended value lacks the charset and language quote marks; the whole value was used.</summary>
+    MalformedExtendedParameter,
+
+    /// <summary>RFC 2231 continuation segments are not contiguous from 0; all present were joined in index order.</summary>
+    AmbiguousParameterSegments,
+
+    /// <summary>The same RFC 2231 segment number appears twice; both were used.</summary>
+    DuplicateParameterSegment,
+
+    /// <summary>A parameter is given both plainly and in RFC 2231 form; the RFC 2231 form won.</summary>
+    AmbiguousParameterForms,
+
+    /// <summary>The same parameter name appears twice; the first one wins.</summary>
+    DuplicateParameter,
+
+    /// <summary>A text-layer resource limit (parameters, segments) was reached; the excess was ignored.</summary>
+    TextLimitExceeded,
+
+    /// <summary>A comma inside an unquoted display name before an angle address; kept as part of the name.</summary>
+    AmbiguousUnquotedCommaInPhrase,
+
+    /// <summary>Words followed by a bare address; the words became the display name.</summary>
+    MissingAngleBrackets,
+
+    /// <summary>An obsolete source route (RFC 5322 section 4.4) was dropped.</summary>
+    ObsoleteRoute,
+
+    /// <summary>A mailbox has an empty address (&lt;&gt;).</summary>
+    EmptyAddress,
+
+    /// <summary>An address has no domain.</summary>
+    MissingDomain,
+
+    /// <summary>An angle address is not closed; it was closed at the end of the value.</summary>
+    UnclosedAngle,
+
+    /// <summary>A quoted string is not closed; it ends at the next angle bracket or the end of the value.</summary>
+    UnterminatedQuote,
+
+    /// <summary>Two angle addresses in one mailbox; both were kept as separate mailboxes.</summary>
+    AmbiguousAdjacentAngleAddrs,
+
+    /// <summary>Text that is not an address (after a semicolon, for example) was left unparsed.</summary>
+    UnparsedAddressText,
+
+    /// <summary>A local part with leading, trailing or doubled dots (obsolete syntax); kept as written.</summary>
+    ObsoleteLocalPart,
+
+    /// <summary>An address list element is not valid and was skipped.</summary>
+    InvalidAddressSyntax,
+
+    /// <summary>The day of the week does not match the date; the weekday is ignored.</summary>
+    WeekdayMismatch,
+
+    /// <summary>A two-digit year; 00-68 mean 2000-2068 and 69-99 mean 1969-1999.</summary>
+    AmbiguousTwoDigitYear,
+
+    /// <summary>A three-digit year; 1900 was added (RFC 5322 section 4.3).</summary>
+    ThreeDigitYear,
+
+    /// <summary>A zone of -0000, a military letter or no zone: the instant is read as UTC and the zone is unknown.</summary>
+    UnknownTimeZone,
+
+    /// <summary>A zone offset out of range was read as unknown.</summary>
+    InvalidTimeZone,
+
+    /// <summary>Seconds of 60; the instant is clamped to :59.</summary>
+    LeapSecond,
+
+    /// <summary>Fractional seconds were dropped.</summary>
+    FractionalSeconds,
+
+    /// <summary>A date value is not a valid date; it reads as absent.</summary>
+    InvalidDate,
+
+    /// <summary>A message identifier list element is not a valid msg-id; it was skipped or taken as written.</summary>
+    InvalidMessageId,
+
     // ---- Resource limits ----
 
     /// <summary>Nesting went deeper than <see cref="MimeLimits.MaxDepth"/>; the deeper content is kept as a leaf body.</summary>
@@ -114,7 +239,15 @@ public readonly record struct MimeDefect(MimeDefectKind Kind, long Offset, int L
         or MimeDefectKind.AmbiguousDuplicateTransferEncoding
         or MimeDefectKind.AmbiguousDuplicateBoundary
         or MimeDefectKind.AmbiguousBoundaryLikeLine
-        or MimeDefectKind.AmbiguousEncodedComposite;
+        or MimeDefectKind.AmbiguousEncodedComposite
+        or MimeDefectKind.AmbiguousUnknownCharset
+        or MimeDefectKind.AmbiguousEncodedWordInQuotedString
+        or MimeDefectKind.AmbiguousSplitMultibyte
+        or MimeDefectKind.AmbiguousParameterSegments
+        or MimeDefectKind.AmbiguousParameterForms
+        or MimeDefectKind.AmbiguousUnquotedCommaInPhrase
+        or MimeDefectKind.AmbiguousAdjacentAngleAddrs
+        or MimeDefectKind.AmbiguousTwoDigitYear;
 
     /// <summary>True for the kinds that report a resource limit being reached.</summary>
     public bool IsLimit => Kind >= MimeDefectKind.DepthLimitExceeded;
@@ -150,6 +283,47 @@ public readonly record struct MimeDefect(MimeDefectKind Kind, long Offset, int L
         MimeDefectKind.HeaderLimitExceeded => "A header block is larger than the limit.",
         MimeDefectKind.HeaderFieldLimitExceeded => "A header field is longer than the limit.",
         MimeDefectKind.TotalSizeLimitExceeded => "The input is larger than the limit.",
+        MimeDefectKind.MissingStartBoundary => "A multipart entity has no delimiter line.",
+        MimeDefectKind.EpilogueHasDelimiter => "The epilogue contains a delimiter-looking line.",
+        MimeDefectKind.MixedLineEndings => "The message mixes LF and CRLF line ends.",
+        MimeDefectKind.ControlCharacterInHeader => "A header contains a control character.",
+        MimeDefectKind.BoundaryHasTrailingSpace => "A boundary ends in whitespace.",
+        MimeDefectKind.InvalidCharsetBytes => "Text has bytes that are invalid in its charset.",
+        MimeDefectKind.AmbiguousUnknownCharset => "A charset label is not known.",
+        MimeDefectKind.MalformedEncodedWord => "An encoded word is malformed.",
+        MimeDefectKind.InvalidEncodedWordBase64 => "An encoded word has damaged base64.",
+        MimeDefectKind.InvalidEncodedWordQuotedPrintable => "An encoded word has a bad Q escape.",
+        MimeDefectKind.EncodedWordTooLong => "An encoded word is longer than 75 characters.",
+        MimeDefectKind.AmbiguousEncodedWordInQuotedString => "An encoded word appears inside a quoted string.",
+        MimeDefectKind.AmbiguousSplitMultibyte => "Encoded words split a multibyte character.",
+        MimeDefectKind.InvalidParameterEscape => "A parameter has a malformed percent escape.",
+        MimeDefectKind.MalformedExtendedParameter => "An extended parameter value is malformed.",
+        MimeDefectKind.AmbiguousParameterSegments => "Parameter continuations are not contiguous.",
+        MimeDefectKind.DuplicateParameterSegment => "A parameter continuation index repeats.",
+        MimeDefectKind.AmbiguousParameterForms => "A parameter is given in two forms.",
+        MimeDefectKind.DuplicateParameter => "A parameter name is repeated.",
+        MimeDefectKind.TextLimitExceeded => "A parameter limit was reached.",
+        MimeDefectKind.AmbiguousUnquotedCommaInPhrase => "An unquoted display name contains a comma.",
+        MimeDefectKind.MissingAngleBrackets => "A display name is followed by an address without angle brackets.",
+        MimeDefectKind.ObsoleteRoute => "An address has an obsolete source route.",
+        MimeDefectKind.EmptyAddress => "A mailbox has an empty address.",
+        MimeDefectKind.MissingDomain => "An address has no domain.",
+        MimeDefectKind.UnclosedAngle => "An angle bracket is not closed.",
+        MimeDefectKind.UnterminatedQuote => "A quoted string is not closed.",
+        MimeDefectKind.AmbiguousAdjacentAngleAddrs => "Two angle addresses follow each other.",
+        MimeDefectKind.UnparsedAddressText => "Part of an address list could not be parsed.",
+        MimeDefectKind.ObsoleteLocalPart => "A local part has misplaced dots.",
+        MimeDefectKind.InvalidAddressSyntax => "An address is not valid.",
+        MimeDefectKind.WeekdayMismatch => "The weekday does not match the date.",
+        MimeDefectKind.AmbiguousTwoDigitYear => "A date has a two-digit year.",
+        MimeDefectKind.ThreeDigitYear => "A date has a three-digit year.",
+        MimeDefectKind.UnknownTimeZone => "A date has an unknown time zone.",
+        MimeDefectKind.InvalidTimeZone => "A date has an invalid time zone.",
+        MimeDefectKind.LeapSecond => "A date has a leap second.",
+        MimeDefectKind.FractionalSeconds => "A date has fractional seconds.",
+        MimeDefectKind.InvalidDate => "A date is not valid.",
+        MimeDefectKind.InvalidMessageId => "A message identifier is not valid.",
+        MimeDefectKind.InvalidParameter => "A parameter has no value.",
         _ => "No defect.",
     };
 }

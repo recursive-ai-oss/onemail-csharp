@@ -3,6 +3,7 @@ using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Mime.Transfer;
 using RecursiveAI.OneMail.Mime.Writing;
 using RecursiveAI.OneMail.Sources;
+using RecursiveAI.OneMail.Text;
 
 namespace RecursiveAI.OneMail.Mime;
 
@@ -64,7 +65,7 @@ internal sealed class RawContent
 /// A tree read from memory, a file or a seekable stream keeps using that source until it is discarded: do not dispose or
 /// change the source meanwhile. Entities are not thread-safe for modification.
 /// </remarks>
-public abstract class MimeEntity
+public abstract partial class MimeEntity
 {
     private static readonly byte[] Crlf = [(byte)'\r', (byte)'\n'];
 
@@ -156,48 +157,6 @@ public abstract class MimeEntity
             MimeHeader? h = Headers.GetFirst("Content-Transfer-Encoding");
             return h is null ? ContentTransferEncoding.SevenBit : StructuredHeader.ParseTransferEncoding(h.RawValue.Span);
         }
-    }
-
-    /// <summary>
-    /// A <c>Content-Type</c> parameter by name (ASCII case-insensitive), unquoted. RFC 2231 continuations and extended values
-    /// are not interpreted at this layer: <c>filename*=</c> is its own name.
-    /// </summary>
-    /// <param name="name">The parameter name.</param>
-    /// <returns>The value, or null if the parameter is absent.</returns>
-    public string? GetContentTypeParameter(string name)
-    {
-        ArgumentNullException.ThrowIfNull(name);
-        MimeHeader? h = Headers.GetFirst("Content-Type");
-        if (h is null)
-        {
-            return null;
-        }
-
-        ReadOnlySpan<byte> v = h.RawValue.Span;
-        if (!StructuredHeader.TryParseMediaType(v, out _, out _, out int next))
-        {
-            return null;
-        }
-
-        var en = new StructuredHeader.ParameterEnumerator(v, next);
-        while (en.MoveNext())
-        {
-            if (!string.Equals(HeaderText.DecodeName(en.Name), name, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!en.Quoted)
-            {
-                return HeaderText.Decode(en.Value);
-            }
-
-            byte[] tmp = new byte[en.Value.Length];
-            int n = StructuredHeader.Unquote(en.Value, tmp);
-            return HeaderText.Decode(tmp.AsSpan(0, n));
-        }
-
-        return null;
     }
 
     private void ParseContentType(out string type, out string sub)
@@ -845,7 +804,7 @@ internal sealed class MimeTreeBuilder
             {
                 ReadOnlySpan<byte> raw = r.Raw;
                 int valueOffset = raw.IndexOf((byte)':') + 1;
-                _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length));
+                _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length) { SourceOffset = r.Offset });
                 break;
             }
 

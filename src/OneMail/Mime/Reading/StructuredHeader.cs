@@ -194,7 +194,19 @@ internal static class StructuredHeader
             Name = default;
             Value = default;
             Quoted = false;
+            Unterminated = false;
+            NameStart = 0;
+            FirstInvalid = -1;
         }
+
+        /// <summary>Whether the current value was a quoted string with no closing quote (it then runs to the end of the value).</summary>
+        public bool Unterminated { get; private set; }
+
+        /// <summary>Index in the header value where the current parameter name starts.</summary>
+        public int NameStart { get; private set; }
+
+        /// <summary>Index of the first item that was skipped because it had no <c>=</c> (a parameter without a value), or -1.</summary>
+        public int FirstInvalid { get; private set; }
 
         /// <summary>The parameter name as written.</summary>
         public ReadOnlySpan<byte> Name { get; private set; }
@@ -232,6 +244,11 @@ internal static class StructuredHeader
                 _i = SkipCfws(v, _i);
                 if (_i >= v.Length || v[_i] != (byte)'=')
                 {
+                    if (FirstInvalid < 0)
+                    {
+                        FirstInvalid = ns;
+                    }
+
                     if (ne == ns)
                     {
                         _i++; // a stray character; step over it so the scan always advances
@@ -242,6 +259,8 @@ internal static class StructuredHeader
 
                 _i = SkipCfws(v, _i + 1);
                 Name = v[ns..ne];
+                NameStart = ns;
+                Unterminated = false;
                 if (_i < v.Length && v[_i] == (byte)'"')
                 {
                     int vs = ++_i;
@@ -251,19 +270,42 @@ internal static class StructuredHeader
                     }
 
                     int ve = Math.Min(_i, v.Length);
+                    Unterminated = _i >= v.Length;
                     Value = v[vs..ve];
                     Quoted = true;
                     _i = Math.Min(_i + 1, v.Length);
                 }
                 else
                 {
+                    // An unquoted value runs to the next semicolon, so "a b" and "a/b=c" stay whole; a trailing comment is not part of it.
                     int vs = _i;
-                    while (_i < v.Length && !IsWsp(v[_i]) && v[_i] != (byte)';')
+                    while (_i < v.Length && v[_i] != (byte)';')
                     {
                         _i++;
                     }
 
-                    Value = v[vs.._i];
+                    int ve = _i;
+                    while (ve > vs && IsWsp(v[ve - 1]))
+                    {
+                        ve--;
+                    }
+
+                    while (ve > vs && v[ve - 1] == (byte)')')
+                    {
+                        int open = v[vs..ve].LastIndexOf((byte)'(');
+                        if (open < 0)
+                        {
+                            break;
+                        }
+
+                        ve = vs + open;
+                        while (ve > vs && IsWsp(v[ve - 1]))
+                        {
+                            ve--;
+                        }
+                    }
+
+                    Value = v[vs..ve];
                     Quoted = false;
                 }
 

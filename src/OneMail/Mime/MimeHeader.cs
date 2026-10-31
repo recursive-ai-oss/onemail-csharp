@@ -1,49 +1,25 @@
 using System.Text;
 using RecursiveAI.OneMail.Mime.Reading;
+using RecursiveAI.OneMail.Text;
 
 namespace RecursiveAI.OneMail.Mime;
 
 /// <summary>
-/// Header text decoding. This is the one place the tree turns header bytes into text, so the charset and encoded-word
-/// layer plugs in here. Until it is wired in, a value that is valid UTF-8 (RFC 6532) reads as UTF-8 and anything else as
-/// Latin-1; RFC 2047 encoded words are left undecoded.
+/// Header text decoding. This is the one place the tree turns header bytes into text: unstructured values go through
+/// RFC 2047 (<see cref="Rfc2047"/>), which also reads undeclared 8-bit text as UTF-8 when valid and windows-1252 otherwise.
 /// </summary>
 internal static class HeaderText
 {
-    /// <summary>Unfolds (RFC 5322 §2.2.3: remove the line breaks of folds), trims, and decodes to text.</summary>
-    public static string Decode(ReadOnlySpan<byte> rawValue)
+    /// <summary>Unfolds (RFC 5322 §2.2.3), decodes encoded words, trims. A lone CR is data, not a line end, and is dropped from the text.</summary>
+    public static string Decode(ReadOnlySpan<byte> rawValue, List<TextIssue>? issues = null)
     {
-        // Unfolding only removes line breaks, so a value without any needs no copy.
-        ReadOnlySpan<byte> v = rawValue;
-        if (v.IndexOfAny((byte)'\r', (byte)'\n') >= 0)
+        string s = Rfc2047.DecodeText(rawValue, issues, EncodedWordContext.Unstructured);
+        if (s.Contains('\r', StringComparison.Ordinal))
         {
-            byte[] copy = new byte[rawValue.Length];
-            int n = 0;
-            foreach (byte c in rawValue)
-            {
-                if (c is not ((byte)'\r' or (byte)'\n'))
-                {
-                    copy[n++] = c;
-                }
-            }
-
-            v = copy.AsSpan(0, n);
+            s = s.Replace("\r", string.Empty, StringComparison.Ordinal);
         }
 
-        int s = 0;
-        int e = v.Length;
-        while (s < e && v[s] is (byte)' ' or (byte)'\t')
-        {
-            s++;
-        }
-
-        while (e > s && v[e - 1] is (byte)' ' or (byte)'\t')
-        {
-            e--;
-        }
-
-        v = v[s..e];
-        return System.Text.Unicode.Utf8.IsValid(v) ? Encoding.UTF8.GetString(v) : Encoding.Latin1.GetString(v);
+        return s.Trim(' ', '\t');
     }
 
     /// <summary>Header names are ASCII.</summary>
@@ -84,6 +60,12 @@ public sealed class MimeHeader
 
     internal MimeHeaderList? Owner { get; set; }
 
+    /// <summary>Offset of the field in the parsed input, or -1 for a field that was created.</summary>
+    public long SourceOffset { get; internal set; } = -1;
+
+    /// <summary>Offset in the parsed input of the first byte after the colon, or -1 for a field that was created.</summary>
+    public long ValueSourceOffset => SourceOffset < 0 ? -1 : SourceOffset + _valueOffset;
+
     /// <summary>The field name as written (case preserved), without surrounding whitespace.</summary>
     public string Name => _name ??= HeaderText.DecodeName(_raw.AsSpan(0, _nameLength));
 
@@ -95,6 +77,19 @@ public sealed class MimeHeader
 
     /// <summary>The value unfolded and trimmed, as text. Encoded words (RFC 2047) are not decoded at this layer.</summary>
     public string Value => HeaderText.Decode(_raw.AsSpan(_valueOffset, _valueLength));
+
+    /// <summary>Like <see cref="Value"/>, and reports what decoding repaired or guessed.</summary>
+    /// <param name="defects">Receives one defect per repair, with offsets in the parsed input (0-based from the value for fields that were created).</param>
+    /// <param name="depth">The nesting depth to record in the defects.</param>
+    /// <returns>The decoded text.</returns>
+    public string GetValue(List<MimeDefect> defects, int depth = 0)
+    {
+        ArgumentNullException.ThrowIfNull(defects);
+        var issues = new List<TextIssue>();
+        string s = HeaderText.Decode(_raw.AsSpan(_valueOffset, _valueLength), issues);
+        HeaderDecoding.Report(issues, defects, Math.Max(0, ValueSourceOffset), depth);
+        return s;
+    }
 
     /// <summary>Whether the field name equals <paramref name="name"/>, ignoring ASCII case.</summary>
     /// <param name="name">The name to compare.</param>
