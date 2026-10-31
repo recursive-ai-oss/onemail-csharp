@@ -82,6 +82,29 @@ public enum MapiDefectKind
 
     /// <summary>The code page number names no encoding the library has; windows-1252 is used for 8-bit strings.</summary>
     UnsupportedCodePage,
+
+    // ---- PST / OST objects
+
+    /// <summary>A node the structure refers to (a folder, message, table) is not in the node tree; it is skipped.</summary>
+    NodeMissing,
+
+    /// <summary>A node is there but is not a property context or table context of the expected kind; it is skipped.</summary>
+    ContextUnreadable,
+
+    /// <summary>A value could not be read from its heap or subnode; the property is kept with an empty value.</summary>
+    ValueUnreadable,
+
+    /// <summary>A lower layer (node database or lists-tables-properties) reported a defect while the object was read; the detail names it.</summary>
+    LowerLayerDefect,
+
+    /// <summary>A folder is its own ancestor, or nesting is deeper than the limit; the loop is not followed.</summary>
+    FolderLoop,
+
+    /// <summary>A message has attachment subnodes but no attachment table; the subnodes found are used (ambiguity table).</summary>
+    AmbiguousAttachmentTableMissing,
+
+    /// <summary>A table's row identifier is not the NID the object it describes is stored under, or an object is listed twice.</summary>
+    RowIdMismatch,
 }
 
 /// <summary>One thing a MAPI reader found wrong, and where.</summary>
@@ -93,7 +116,8 @@ public readonly record struct MapiDefect(MapiDefectKind Kind, string Location, l
 {
     /// <summary>True for the documented resolutions of known ambiguities (kinds named <c>Ambiguous*</c>).</summary>
     public bool IsAmbiguity => Kind is MapiDefectKind.AmbiguousDuplicateProperty or MapiDefectKind.AmbiguousOrphanValueStream
-        or MapiDefectKind.AmbiguousStringType or MapiDefectKind.AmbiguousCodePage;
+        or MapiDefectKind.AmbiguousStringType or MapiDefectKind.AmbiguousCodePage
+        or MapiDefectKind.AmbiguousAttachmentTableMissing;
 
     /// <inheritdoc/>
     public override string ToString() => $"{Kind} at {Location}+{Offset}: {Detail}";

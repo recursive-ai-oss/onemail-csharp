@@ -25,6 +25,23 @@ if (args is ["pad", var padPath, var megabytes])
     return 0;
 }
 
+if (args is ["messaging" or "propexact", var mpath, ..])
+{
+    // The messaging layer over a whole file: "messaging <file> <pffexport .export dir>" compares with pffexport; "propexact <file>" checks every
+    // property bag against the raw lists-tables-properties entries; both end by printing counts and the first differences.
+    if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(mpath, out var store, out var why) || store is null) { Console.WriteLine("open failed " + string.Join("; ", why)); return 1; }
+    using (store)
+    {
+        if (args[0] == "messaging") return MessagingCompare.Run(store, args[2], args.Length > 3);
+        var r = RecursiveAI.OneMail.Tests.Pst.PstChecks.PropertyExact(store, default);
+        foreach (string d in r.Differences.Take(40)) Console.WriteLine("DIFF " + d);
+        var counts = store.ReadEverything();
+        Console.WriteLine($"propexact objects {r.Objects} properties {r.Properties} differences {r.Differences.Count}; folders {counts.Folders} messages {counts.Messages} recipients {counts.Recipients} attachments {counts.Attachments} embedded {counts.EmbeddedMessages}; defects {store.Defects.Count} dropped {store.DroppedDefects} ndbDefects {store.DatabaseDefects.Count}");
+        foreach (var g in store.Defects.GroupBy(d => d.Kind)) Console.WriteLine($"defect {g.Key} {g.Count()} first: {g.First()}");
+        return r.Differences.Count == 0 ? 0 : 3;
+    }
+}
+
 if (args.Length < 2) { Console.Error.WriteLine("usage: PstOracle dump|nodes <file>"); return 2; }
 if (!NdbFile.TryOpen(args[1], out NdbFile? f, out IReadOnlyList<NdbDefect> openDefects) || f is null)
 {

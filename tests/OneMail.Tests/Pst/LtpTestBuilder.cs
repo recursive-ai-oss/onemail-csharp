@@ -125,7 +125,7 @@ public static class BthBuilder
 }
 
 /// <summary>A property to put in a generated property context.</summary>
-public sealed record PcSpec(ushort Id, ushort Type, byte[] Value, bool InSubnode = false);
+public sealed record PcSpec(ushort Id, ushort Type, byte[] Value, bool InSubnode = false, uint ForcedHnid = 0);
 
 public static class PcBuilder
 {
@@ -147,7 +147,11 @@ public static class PcBuilder
                 continue;
             }
 
-            if (p.InSubnode)
+            if (p.ForcedHnid != 0)
+            {
+                hnid = p.ForcedHnid;   // the caller supplies the subnode (an embedded message, say)
+            }
+            else if (p.InSubnode)
             {
                 hnid = (uint)(((subs.Count + 1) << 5) | 0x1F);
                 subs.Add(new TestNode { Nid = hnid, Data = p.Value });
