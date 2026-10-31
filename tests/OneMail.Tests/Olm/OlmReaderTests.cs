@@ -174,6 +174,17 @@ public class OlmReaderTests
     private static readonly string[] DayNames = ["allDays", "friday", "monday", "saturday", "sunday", "thursday", "tuesday", "wednesday", "weekdays", "weekenddays"];
 
     [Fact]
+    public void XmlWithAnInvalidUcs4CharacterIsAnEntryDefectNotAnException()
+    {
+        // Found by fuzzing: a UCS-4 byte-order mark followed by a value above U+10FFFF throws from inside the XML reader's decoder.
+        byte[] bad = [0x00, 0x00, 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x3C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        byte[] zip = OlmTestArchive.WithFolders().Add("Local/Calendar/Calendar.xml", bad).Build();
+        using OlmArchive olm = Open(zip);
+        Assert.Empty(olm.Enumerate());
+        Assert.Contains(olm.Defects, d => d.Kind is OlmDefectKind.EntryUnreadable or OlmDefectKind.XmlMalformed);
+    }
+
+    [Fact]
     public void HostileZoneTextAndAddressesStillWriteAsCalendar()
     {
         // Found by fuzzing: an unterminated VTIMEZONE swallows lines that have no colon, and a line break in an address or UID must not reach the writer.

@@ -468,7 +468,7 @@ internal static class OlmPaths
 
     // Everything a corrupt, hostile or unsupported zip can throw from OneArchive's reader or the streams under it.
     public static bool IsReadFailure(Exception ex) =>
-        ex is CompressionException or IOException or InvalidDataException or NotSupportedException or InvalidOperationException or ArgumentException or OverflowException or EndOfStreamException;
+        ex is System.Xml.XmlException or CompressionException or IOException or InvalidDataException or NotSupportedException or InvalidOperationException or ArgumentException or OverflowException or EndOfStreamException;
 
     public static OlmDefectKind Classify(Exception ex, OlmDefectKind fallback) =>
         ex is ArchiveSafetyException or CompressionLimitException ? OlmDefectKind.ArchiveLimitExceeded : fallback;
