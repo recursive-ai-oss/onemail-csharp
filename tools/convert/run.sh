@@ -39,7 +39,7 @@ for s in $stages; do
         for f in eml mbox maildir emlx; do echo "== ${set%%:*} -> $f"; ct bytes "${set#*:}" $f "$W/work-bytes" || rc=1; done
       done ;;
     store)
-      for set in "ost:$ost" "tika-pst:$tika" "olm-generated:$root/testdata/olm/generated.olm" "olm-samples:$C/olm" "dbx-store:$dbxstore" "dbx-file:$dbxstore/Inbox.dbx" "dovecot-mbox:$C/dovecot-crlf" "enron-sample:$C/enron-sample"; do
+      for set in "ost:$ost" "tika-pst:$tika" "olm-generated:$root/testdata/olm/generated.olm" "olm-samples:$C/olm" "dbx-store:$dbxstore" "dbx-file:$dbxstore/alt.2600.cardz.dbx" "dovecot-mbox:$C/dovecot-crlf" "enron-sample:$C/enron-sample"; do
         [ -e "${set#*:}" ] || { echo "== ${set%%:*}: missing"; continue; }
         for f in eml mbox maildir emlx; do echo "== ${set%%:*} -> $f"; ct store "${set#*:}" $f "$W/work-store-$f" "$W/folders-${set%%:*}-$f.tsv" || rc=1; done
       done

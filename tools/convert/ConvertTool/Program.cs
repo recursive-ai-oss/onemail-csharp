@@ -83,7 +83,9 @@ internal static class Program
                 {
                     foreach (IMailItem item in c.Enumerate())
                     {
-                        yield return ((item.Provenance.Folder ?? string.Empty).Replace('.', '/'), ((MimeMailItem)item).Entity.ToArray());
+                        // Maildir++ names a subfolder ".Parent.Child"; an Apple Mail bundle names its folders by directory.
+                        string folder = item.Provenance.Folder ?? string.Empty;
+                        yield return (format == ConvertFormat.Maildir ? folder.Replace('.', '/') : folder, ((MimeMailItem)item).Entity.ToArray());
                     }
                 }
 
@@ -199,7 +201,7 @@ internal static class Program
         Console.WriteLine($"{input} -> {format}: read {r.ItemsRead}, written {r.ItemsWritten}, skipped {r.ItemsSkipped} [{string.Join(", ", r.SkippedByReason.Select(p => p.Key + " " + p.Value))}], with content loss {r.ItemsWithContentLoss}, errors {r.Errors.Count}; in = out + skipped: {(r.ItemsRead == r.ItemsWritten + r.ItemsSkipped ? "yes" : "NO")}");
         Console.WriteLine($"  {secs:F1}s, peak working set {Process.GetCurrentProcess().PeakWorkingSet64 / (1024 * 1024)} MB");
         int bad = 0;
-        if (format is ConvertFormat.Eml or ConvertFormat.Mbox or ConvertFormat.Maildir or ConvertFormat.AppleMail)
+        if (r.ItemsWritten > 0 && format is ConvertFormat.Eml or ConvertFormat.Mbox or ConvertFormat.Maildir or ConvertFormat.AppleMail)
         {
             // Folder trees: messages per folder in the destination against what the source folder held that was written as mail.
             var got = new SortedDictionary<string, long>(StringComparer.Ordinal);
@@ -224,9 +226,9 @@ internal static class Program
 
             foreach ((string folder, long n) in got)
             {
-                long written = r.Folders.Where(p => Same(p.Key, folder)).Sum(p => p.Value.Written);
+                long written = r.Folders.Where(p => Same(p.Key, folder, format)).Sum(p => p.Value.Written);
                 string sideRoot = Path.Combine(dest, "_items");
-                long sideInFolder = side == 0 ? 0 : Directory.EnumerateFiles(sideRoot, "*", SearchOption.AllDirectories).Count(f => Same(RelFolder(sideRoot, f), folder));
+                long sideInFolder = side == 0 ? 0 : Directory.EnumerateFiles(sideRoot, "*", SearchOption.AllDirectories).Count(f => Same(RelFolder(sideRoot, f), folder, format));
                 if (n + sideInFolder != written)
                 {
                     Console.WriteLine($"  folder '{folder}': {n} messages + {sideInFolder} side files, source says {written} written");
@@ -252,9 +254,14 @@ internal static class Program
     }
 
     // Folder names are compared as the destination spells them: unsafe characters replaced.
-    private static bool Same(string source, string dest) => string.Equals(SafeName(source), dest, StringComparison.Ordinal);
+    private static bool Same(string source, string dest, ConvertFormat format) => string.Equals(SafeName(source, format), dest, StringComparison.Ordinal);
 
-    private static string SafeName(string folder) => string.Join('/', folder.Split('/').Select(p => new string([.. p.Select(c => c < 0x20 || "<>:\"/\\|?*".Contains(c, StringComparison.Ordinal) ? '_' : c)]).TrimEnd('.', ' ')).Select(p => p.Length == 0 ? "_" : p));
+    private static string SafeName(string folder, ConvertFormat format) => folder.Length == 0 ? string.Empty : string.Join('/', folder.Split('/').Select(part =>
+    {
+        string p = format == ConvertFormat.Maildir ? part.Replace('.', '_') : part;
+        string safe = new string([.. p.Select(c => c < 0x20 || "<>:\"/\\|?*".Contains(c, StringComparison.Ordinal) ? '_' : c)]).TrimEnd('.', ' ');
+        return safe.Length == 0 || safe is "." or ".." ? "_" : safe;
+    }));
 
     // ---- olm ----
 
