@@ -20,7 +20,7 @@ for path in sorted(glob.glob(os.path.join(out, "*.mbox"))):
     variant, count = lines[0].split("\t")
     want = [x for x in lines[1:] if x]
     if variant == "mboxcl2":
-        # Python's mbox ignores Content-Length and cl2 does not quote, so it would split inside messages (table entry X6).
+        # Python's mbox ignores Content-Length and cl2 does not quote, so it would split inside messages (table entry S6).
         print("skip", os.path.basename(path), variant, "(not readable by Python's mailbox by design)")
         continue
     box = mailbox.mbox(path)

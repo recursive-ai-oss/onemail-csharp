@@ -6,11 +6,11 @@ usage: compare_mbox.py --omr "<cmd for OneMailRanges>" --mk "<cmd for MailboxDum
 Three comparisons per file:
   1. OneMail in oracle-compatible mode (every "From " line delimits, Content-Length ignored) against Python:
      message count, envelope offset and message end must match. One explained difference: Python keeps the CR LF of a
-     CRLF separator line inside the message, OneMail does not (ambiguities.md, mailbox section, X3).
+     CRLF separator line inside the message, OneMail does not (ambiguities.md, mailbox section, S3).
   2. The same OneMail run against MimeKit: message count, envelope offset and record end. MimeKit raising on a file
-     is reported as such and the file is skipped for this comparison (X4).
+     is reported as such and the file is skipped for this comparison (S4).
   3. OneMail's defaults against its own oracle-compatible run: a difference must be explained by a defect the default
-     run reported (AmbiguousFromLine -> X1, Content-Length used -> X2).
+     run reported (AmbiguousFromLine -> S1, Content-Length used -> S2).
 Prints a summary and every unexplained difference; exit status 1 if there is any.
 """
 import argparse
@@ -39,7 +39,7 @@ def run(cmd, files, extra=()):
 
 
 def has_bare_from(path):
-    # A line that is only "From ": every other reader splits there, MimeKit does not (X5).
+    # A line that is only "From ": every other reader splits there, MimeKit does not (S5).
     with open(path, "rb") as fh:
         data = fh.read()
     return data.startswith((b"From \n", b"From \r\n")) or b"\nFrom \n" in data or b"\nFrom \r\n" in data
@@ -63,7 +63,7 @@ def main():
     py = run(a.py, files)
     mk = run(a.mk, files)
 
-    counts = {"files": len(files), "py_same": 0, "py_X3": 0, "mk_same": 0, "mk_skipped_X4": 0, "mk_X5": 0, "def_same": 0, "def_X1": 0, "def_X2": 0}
+    counts = {"files": len(files), "py_same": 0, "py_S3": 0, "mk_same": 0, "mk_skipped_S4": 0, "mk_S5": 0, "def_same": 0, "def_S1": 0, "def_S2": 0}
     unexplained = []
     messages = 0
     for f in files:
@@ -82,7 +82,7 @@ def main():
             if a_pairs == p_pairs:
                 counts["py_same"] += 1
             elif len(a_pairs) == len(p_pairs) and all(x[0] == y[0] and (x[1] == y[1] or x[1] == y[1] - 2) for x, y in zip(a_pairs, p_pairs)):
-                counts["py_X3"] += 1
+                counts["py_S3"] += 1
             else:
                 unexplained.append((f, "vs Python: %d vs %d messages or ranges" % (len(a_pairs), len(p_pairs))))
         else:
@@ -95,20 +95,20 @@ def main():
             if a_rec == m_rec:
                 counts["mk_same"] += 1
             elif has_bare_from(f):
-                counts["mk_X5"] += 1
+                counts["mk_S5"] += 1
             else:
                 unexplained.append((f, "vs MimeKit: %d vs %d messages or ranges" % (len(a_rec), len(m_rec))))
         else:
-            counts["mk_skipped_X4"] += 1
+            counts["mk_skipped_S4"] += 1
         # 3. defaults against compatible mode
         if [r[:3] for r in od] == [r[:3] for r in oa]:
             counts["def_same"] += 1
         else:
             kinds = " ".join(r[3] for r in od)
             if "AmbiguousFromLine" in kinds or not od:
-                counts["def_X1"] += 1
+                counts["def_S1"] += 1
             elif any(r[4] != "-1" for r in od):
-                counts["def_X2"] += 1
+                counts["def_S2"] += 1
             else:
                 unexplained.append((f, "defaults differ with no defect to explain it"))
     print("messages (OneMail, compatible mode): %d" % messages)
