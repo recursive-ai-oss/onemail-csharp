@@ -16,8 +16,25 @@ return args.Length > 0 ? args[0] switch
     "expand" => Expand(args[1], args[2], args.Contains("--no-runtime-zones")),
     "zones" => Zones(args[1..]),
     "rate" => Rate(args[1..]),
+    "offset" => Offset(args[1], args[2], args[3]),
     _ => Usage(),
 } : Usage();
+
+// RecurrenceDump offset <file> <tzid> <utc instant>: how the file's calendar resolves a zone at an instant
+static int Offset(string file, string tzid, string utc)
+{
+    IcsComponent cal = Calendars(file).First();
+    ExpansionReport report = new();
+    IcsTimeZone? z = new TimeZoneResolver(cal, null, report).Resolve(tzid);
+    DateTime t = DateTime.ParseExact(utc, "yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+    Console.WriteLine(z is null ? "unresolved" : $"{z.Source} offset {z.GetUtcOffset(t)} local {z.ToLocal(t):s}");
+    foreach (RecurrenceDefect d in report.Defects)
+    {
+        Console.WriteLine($"  {d.Kind} {d.Detail} x{d.Count}");
+    }
+
+    return 0;
+}
 
 static int Usage()
 {

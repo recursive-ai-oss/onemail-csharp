@@ -31,6 +31,7 @@ while [ "$rc" = 75 ]; do
 done
 status=0
 for o in rec du ical; do
-  python3 "$repo/tools/calendar/oracles/compare_expand.py" "$work/ours.jsonl" "$work/$o.jsonl" "$o" --explained "$repo/tools/calendar/oracles/explained_expand.tsv" || status=1
+  peers=(); for p in rec du ical; do [ "$p" != "$o" ] && peers+=(--peer "$work/$p.jsonl"); done
+  python3 "$repo/tools/calendar/oracles/compare_expand.py" "$work/ours.jsonl" "$work/$o.jsonl" "$o" "${peers[@]}" || status=1
 done
 exit $status

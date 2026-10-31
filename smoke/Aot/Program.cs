@@ -3,6 +3,8 @@ using System.Linq;
 using RecursiveAI.OneMail;
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.Ics;
+using RecursiveAI.OneMail.Calendar.Recurrence;
+using RecursiveAI.OneMail.Calendar.TimeZones;
 using RecursiveAI.OneMail.Calendar.VCard;
 using RecursiveAI.OneMail.Client;
 using RecursiveAI.OneMail.Cryptography;
@@ -171,8 +173,24 @@ internal static class Program
             && MailFormatSniffer.Sniff(new MemorySource("BEGIN:VCALENDAR\r\n"u8.ToArray())) == MailFormat.Ics;
         Console.WriteLine("view: " + (viewOk ? "ok" : "FAILED"));
 
+        // Recurrence: a zoned daily rule across the spring-forward day with the file's own VTIMEZONE (no tz database needed), an EXDATE,
+        // a Windows zone name and a hostile rule that must end at a limit.
+        const string recIcs = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:Eastern Standard Time\r\nBEGIN:DAYLIGHT\r\nDTSTART:20070311T020000\r\nTZOFFSETFROM:-0500\r\nTZOFFSETTO:-0400\r\nRRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\nEND:DAYLIGHT\r\n"
+            + "BEGIN:STANDARD\r\nDTSTART:20071104T020000\r\nTZOFFSETFROM:-0400\r\nTZOFFSETTO:-0500\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+            + "BEGIN:VEVENT\r\nUID:a\r\nDTSTART;TZID=Eastern Standard Time:20260307T093000\r\nRRULE:FREQ=DAILY;COUNT=4\r\nEXDATE;TZID=Eastern Standard Time:20260309T093000\r\nEND:VEVENT\r\n"
+            + "BEGIN:VEVENT\r\nUID:b\r\nDTSTART:20260105T090000Z\r\nRRULE:FREQ=SECONDLY;BYMONTH=2;BYMONTHDAY=31\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        IcsComponent recCal = IcsDocument.Calendars(ContentDocument.Parse(System.Text.Encoding.UTF8.GetBytes(recIcs))).Single();
+        ExpansionReport recReport = new();
+        Occurrence[] recOccurrences = CalendarRecurrence.Expand(recCal, OccurrenceWindow.All,
+            new ExpansionOptions { MaxIterationsWithoutHit = 20000, TimeZones = new TimeZoneResolverOptions { UseRuntimeDatabase = false } }, recReport).ToArray();
+        IcsTimeZone? recZone = new TimeZoneResolver(null).Resolve("Eastern Standard Time");
+        bool recurrenceOk = recOccurrences.Length == 4 && recOccurrences[0].StartUtc == new DateTime(2026, 3, 7, 14, 30, 0, DateTimeKind.Utc)
+            && recOccurrences[1].StartUtc == new DateTime(2026, 3, 8, 13, 30, 0, DateTimeKind.Utc) && recOccurrences[2].StartUtc == new DateTime(2026, 3, 10, 13, 30, 0, DateTimeKind.Utc)
+            && recReport.CountOf(RecurrenceDefectKind.IterationLimit) == 1 && (recZone is null || recZone.Source == ZoneSource.WindowsName);
+        Console.WriteLine("recurrence: " + (recurrenceOk ? "ok" : "FAILED"));
 
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && recurrenceOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
