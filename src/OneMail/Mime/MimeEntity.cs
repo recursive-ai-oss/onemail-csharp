@@ -743,6 +743,17 @@ public sealed class MimeMultipart : MimeEntity
 
     internal void SetParsedClose(byte[] delimiter) => _closeDelimiter = delimiter;
 
+    // Takes the last parsed child out of the list and returns the delimiter that introduced it.
+    internal byte[] RemoveLastParsed()
+    {
+        int last = _children.Count - 1;
+        byte[] delimiter = _delimiters[last]!;
+        _children[last].Parent = null;
+        _children.RemoveAt(last);
+        _delimiters.RemoveAt(last);
+        return delimiter;
+    }
+
     internal override IEnumerable<MimeEntity> ChildEntities() => _children;
 
     internal override IEnumerable<WriteSegment> BodySegments(bool forceAssemble)
@@ -791,6 +802,8 @@ internal sealed class MimeTreeBuilder
         public MimeEntity? Entity;
         public long BodyStart;
         public byte[]? PendingDelimiter;
+        public MimeEntity? GhostCandidate;
+        public List<MimeDefect>? DefectsOfGhost;
         public long PreambleEnd = -1;
         public long EpilogueStart = -1;
     }
@@ -830,6 +843,20 @@ internal sealed class MimeTreeBuilder
                 Pending p = _stack.Peek();
                 var m = (MimeMultipart)p.Entity!;
                 byte[] bytes = r.Raw.ToArray();
+                if (p.GhostCandidate is not null)
+                {
+                    // Two delimiter lines in a row: Python and MimeKit read them as one, so the empty part between them is
+                    // not a child. Its (empty) bytes and delimiter stay in the next delimiter, so writing is unchanged.
+                    byte[] carried = m.RemoveLastParsed();
+                    byte[] merged = new byte[carried.Length + bytes.Length];
+                    carried.CopyTo(merged, 0);
+                    bytes.CopyTo(merged, carried.Length);
+                    bytes = merged;
+                    p.DefectsOfGhost?.ForEach(d => p.Defects.Add(d));
+                    p.GhostCandidate = null;
+                    p.DefectsOfGhost = null;
+                }
+
                 if (p.PreambleEnd < 0)
                 {
                     p.PreambleEnd = r.Offset;
@@ -913,6 +940,18 @@ internal sealed class MimeTreeBuilder
         MimeEntity e = p.Entity!;
         long end = r.Offset;
         e.SourceLength = end - p.Start;
+        if (e is MimePart && e.Headers.Count == 0 && e.Separator.Length == 0 && end == p.BodyStart && _stack.Count > 0
+            && _stack.Peek().Entity is MimeMultipart)
+        {
+            _stack.Peek().GhostCandidate = e;
+            _stack.Peek().DefectsOfGhost = [.. e.DefectList];
+        }
+        else if (_stack.Count > 0)
+        {
+            _stack.Peek().GhostCandidate = null;
+            _stack.Peek().DefectsOfGhost = null;
+        }
+
         switch (e)
         {
             case MimePart leaf:

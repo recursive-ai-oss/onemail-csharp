@@ -684,6 +684,13 @@ public static class AddressParser
                 }
 
                 string local = atSign < 0 ? address : address[..atSign];
+                if (UnquotedAtSigns(address) > 1)
+                {
+                    // An address rewritten by a gateway ("a@b@gateway"): kept as written. MimeKit keeps the first domain and
+                    // Python gives up, so there is no common reading to follow (ambiguity A16).
+                    Defect(MimeDefectKind.InvalidAddressSyntax, at);
+                }
+
                 if (local.Length > 0 && local[0] != '"' && (local[0] == '.' || local[^1] == '.' || local.Contains("..", StringComparison.Ordinal)))
                 {
                     Defect(MimeDefectKind.ObsoleteLocalPart, at);
@@ -691,6 +698,30 @@ public static class AddressParser
             }
 
             result.Add(new MimeMailbox(name, address));
+        }
+
+        private static int UnquotedAtSigns(string address)
+        {
+            int n = 0;
+            bool quoted = false;
+            for (int i = 0; i < address.Length; i++)
+            {
+                char c = address[i];
+                if (quoted && c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '"')
+                {
+                    quoted = !quoted;
+                }
+                else if (c == '@' && !quoted)
+                {
+                    n++;
+                }
+            }
+
+            return n;
         }
 
         // The address text: tokens joined without white space or comments; quoted strings keep their quotes.
@@ -771,7 +802,7 @@ public static class AddressParser
                 Defect(HeaderDecoding.Map(i.Kind), words[0].Start, 0);
             }
 
-            text = text.Trim();
+            text = text.Trim(' ', '\t');
             return text.Length == 0 ? null : text;
         }
 
@@ -811,7 +842,7 @@ public static class AddressParser
             }
 
             _ = depth;
-            string text = Rfc2047.DecodeText([.. sb], null, EncodedWordContext.Unstructured).Trim();
+            string text = Rfc2047.DecodeText([.. sb], null, EncodedWordContext.Unstructured).Trim(' ', '\t');
             return text.Length == 0 ? null : text;
         }
     }

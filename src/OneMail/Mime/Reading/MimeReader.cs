@@ -793,16 +793,15 @@ public sealed class MimeReader : IDisposable
             trimmed--;
         }
 
-        if (trimmed == s)
-        {
-            return EndHeaders(ref f, 0, MimeDefectKind.MissingHeaderBodySeparator);
-        }
-
+        // RFC 5322 §2.2 allows only printable ASCII in a field name, but MimeKit and Go accept anything before the colon, so a line
+        // like "X Bad: v" stays a header (reported), and no line with a colon silently becomes body text.
+        bool badName = trimmed == s; // an empty name (": text") is a header too, as in the three reference parsers
         for (int i = s; i < trimmed; i++)
         {
             if (b[i] is <= 32 or > 126)
             {
-                return EndHeaders(ref f, 0, MimeDefectKind.MissingHeaderBodySeparator);
+                badName = true;
+                break;
             }
         }
 
@@ -817,6 +816,11 @@ public sealed class MimeReader : IDisposable
         }
 
         long abs = _bufBase + s;
+        if (badName)
+        {
+            AddDefect(MimeDefectKind.InvalidHeaderName, abs, trimmed - s);
+        }
+
         if (trimmed != nameEnd)
         {
             AddDefect(MimeDefectKind.WhitespaceBeforeHeaderColon, abs, nameEnd - trimmed);

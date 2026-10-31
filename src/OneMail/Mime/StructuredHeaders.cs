@@ -237,8 +237,14 @@ public static class DateParser
     private static int? ZoneOffset(string zone, out bool invalid)
     {
         invalid = false;
-        if (zone.Length >= 5 && (zone[0] == '+' || zone[0] == '-') && zone[1..].Replace(":", string.Empty, StringComparison.Ordinal) is { Length: 4 } digits && digits.All(char.IsAsciiDigit))
+        if (zone.Length >= 4 && (zone[0] == '+' || zone[0] == '-') && zone[1..].Replace(":", string.Empty, StringComparison.Ordinal) is { Length: 3 or 4 } digits && digits.All(char.IsAsciiDigit))
         {
+            // Old mailers wrote -600 for -0600 (Python and MimeKit read it that way).
+            if (digits.Length == 3)
+            {
+                digits = "0" + digits;
+            }
+
             int hh = int.Parse(digits[..2], CultureInfo.InvariantCulture);
             int mm = int.Parse(digits[2..], CultureInfo.InvariantCulture);
             if (hh > 23 || mm > 59)

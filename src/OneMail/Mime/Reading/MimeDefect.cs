@@ -36,6 +36,12 @@ public enum MimeDefectKind
     /// </summary>
     AmbiguousEightBitHeader,
 
+    /// <summary>
+    /// A header field name contains a space, a control byte or a byte above 0x7E (RFC 5322 §2.2 allows printable ASCII only). The line
+    /// is still a header field, with the name as written; <c>Name</c> is read as Latin-1 and a leading UTF-8 byte-order mark is ignored.
+    /// </summary>
+    InvalidHeaderName,
+
     /// <summary>A header field name is followed by whitespace before the colon (obsolete syntax, RFC 5322 §4.2). Informational.</summary>
     WhitespaceBeforeHeaderColon,
 
@@ -266,6 +272,7 @@ public readonly record struct MimeDefect(MimeDefectKind Kind, long Offset, int L
         MimeDefectKind.NulInHeader => "A header contains a NUL byte.",
         MimeDefectKind.Utf8Header => "A header contains UTF-8 text.",
         MimeDefectKind.AmbiguousEightBitHeader => "A header contains 8-bit bytes that are not UTF-8.",
+        MimeDefectKind.InvalidHeaderName => "A header field name contains a space, a control byte or a byte above 0x7E; the line is kept as a header.",
         MimeDefectKind.WhitespaceBeforeHeaderColon => "A header name is followed by whitespace before the colon.",
         MimeDefectKind.AmbiguousDuplicateContentType => "There is more than one Content-Type; the first one is used.",
         MimeDefectKind.AmbiguousDuplicateTransferEncoding => "There is more than one Content-Transfer-Encoding; the first one is used.",

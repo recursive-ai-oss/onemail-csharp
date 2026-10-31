@@ -102,7 +102,9 @@ def header_diffs(a, b, ordered, out, prefix):
                 break
         for x, y in zip(va, vb):
             if x[2] is not None and y[2] is not None and x[2] != y[2]:
-                out.append((prefix + "header.decoded", n, "%s: %r vs %r" % (n, x[2][:80], y[2][:80])))
+                # A difference in white space alone (a tab or a run of blanks kept or collapsed, a trailing blank) has its own class.
+                ws = " ".join(x[2].split()) == " ".join(y[2].split())
+                out.append((prefix + ("header.decoded.ws" if ws else "header.decoded"), n, "%s: %r vs %r" % (n, x[2][:80], y[2][:80])))
                 break
 
 
@@ -166,7 +168,8 @@ def compare_records(a, b):
             elif [i["addr"] for i in x] != [i["addr"] for i in y]:
                 out.append(("address.addr", k, "%s: %r vs %r" % (k, [i["addr"] for i in x][:3], [i["addr"] for i in y][:3])))
             else:
-                out.append(("address.name", k, "%s: %r vs %r" % (k, [i["name"] for i in x][:3], [i["name"] for i in y][:3])))
+                ws = [" ".join(i["name"].split()) for i in x] == [" ".join(i["name"].split()) for i in y]
+                out.append(("address.name.ws" if ws else "address.name", k, "%s: %r vs %r" % (k, [i["name"] for i in x][:3], [i["name"] for i in y][:3])))
     da, db = a.get("date"), b.get("date")
     if (da is None) != (db is None):
         out.append(("date.parse-failed", na if da is None else nb, "%r vs %r" % (da, db)))

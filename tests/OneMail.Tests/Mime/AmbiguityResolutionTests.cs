@@ -37,6 +37,8 @@ public class AmbiguityResolutionTests
     [InlineData("A13", "<a@x.example><b@y.example>", "|a@x.example; |b@y.example")]
     [InlineData("A14", "a@x.example; b@y.example", "|a@x.example")]
     [InlineData("A15", ".a@x.example, b.@x.example, c..d@x.example", "|.a@x.example; |b.@x.example; |c..d@x.example")]
+    [InlineData("A16", "<\"price\"@nyiso.com@gw.example>", "|\"price\"@nyiso.com@gw.example")]
+    [InlineData("A16", "<a@b@gw.example>", "|a@b@gw.example")]
     [InlineData("N13", "=?utf-8?q?Zo=C3=AB?= <z@x.example>", "Zo\u00eb|z@x.example")]
     public void AddressResolutions(string entry, string value, string expected)
     {
@@ -82,6 +84,8 @@ public class AmbiguityResolutionTests
     [InlineData("D4", "Mon, 14 May 2001 23:39:00 -0000", "2001-05-14T23:39:00Z ?")]
     [InlineData("D4", "Mon, 14 May 2001 23:39:00 Z", "2001-05-14T23:39:00Z ?")]
     [InlineData("D4", "Mon, 14 May 2001 23:39:00", "2001-05-14T23:39:00Z ?")]
+    [InlineData("D4", "Mon, 21 Aug 95 13:30:57 -600", "1995-08-21T19:30:57Z -360")]
+    [InlineData("D4", "Mon, 21 Aug 95 13:30:57 +530", "1995-08-21T08:00:57Z 330")]
     [InlineData("D5", "Mon, 14 May 2001 23:59:60 +0000", "2001-05-14T23:59:59Z 0")]
     [InlineData("D6", "Mon, 14 May 2001 23:39:00 +2400", "2001-05-14T23:39:00Z ?")]
     [InlineData("D7", "2001-05-14 23:39:00", "none")]

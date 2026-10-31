@@ -22,8 +22,8 @@ internal static class HeaderText
         return s.Trim(' ', '\t');
     }
 
-    /// <summary>Header names are ASCII.</summary>
-    public static string DecodeName(ReadOnlySpan<byte> name) => Encoding.ASCII.GetString(name);
+    /// <summary>Header names and media types are ASCII; a byte above 0x7F in one is kept as the Latin-1 character so that nothing is lost.</summary>
+    public static string DecodeName(ReadOnlySpan<byte> name) => Encoding.Latin1.GetString(name);
 }
 
 /// <summary>One header field of an entity, kept as the bytes it was read from until it is changed.</summary>
@@ -67,7 +67,14 @@ public sealed class MimeHeader
     public long ValueSourceOffset => SourceOffset < 0 ? -1 : SourceOffset + _valueOffset;
 
     /// <summary>The field name as written (case preserved), without surrounding whitespace.</summary>
-    public string Name => _name ??= HeaderText.DecodeName(_raw.AsSpan(0, _nameLength));
+    public string Name => _name ??= HeaderText.DecodeName(NameBytes());
+
+    // A UTF-8 byte-order mark in front of the first field name is not part of the name (the raw bytes keep it).
+    private ReadOnlySpan<byte> NameBytes()
+    {
+        ReadOnlySpan<byte> n = _raw.AsSpan(0, _nameLength);
+        return n.Length > 3 && n.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }) ? n[3..] : n;
+    }
 
     /// <summary>The whole field exactly as read or generated: name, colon, value with folds, and line end.</summary>
     public ReadOnlyMemory<byte> Raw => _raw;

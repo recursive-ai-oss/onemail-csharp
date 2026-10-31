@@ -85,3 +85,43 @@ M3	*	^(nest-06)	.*
 M4	*	^(nest-0[89])	.*			
 M5	*	^(nest-12)	.*			
 M6	*	^(nest-15)	.*			
+
+# --- classes seen across the corpora ---
+H10	*	.	(part\.)?header\.decoded\.ws			
+H10	*	.	address\.name\.ws			
+LIMIT-go-empty-address-list	go	.	address\.presence			
+LIMIT-go-address-list	go	.	address\.parse-failed			
+LIMIT-go-address-quoting	go	.	address\.addr			m
+H2	mimekit	.	address\.count			m
+A4	python	.	address\.name			m
+L6	*	.	address\.name			m
+E2	*	.	entity\.(cte|children)			
+B7	*	.	body\.final-newline			m
+E7	go	.	body\.content			m
+E1	python	.	body\.content			m
+LIMIT-mimekit-filename-blank	*	.	entity\.filename			m
+H11	*	.	(part\.)?header\.decoded\.ws			
+B10	python	.	body\.presence|entity\.children			m
+E8	*	.	body\.presence|entity\.message			m
+LIMIT-go-mediatype	go	.	body\.presence|entity\.children|entity\.type|entity\.params			m
+M3	go	.	entity\.type		message/rfc822	m
+A12	python	.	address\.count			m
+H8	go	.	header\.names	^from 		
+H5	mimekit	.	header\.names|body\.content|parse-failed			m
+H5	go	.	parse-failed			
+D4	go	.	date\.parse-failed			
+N1	*	russian	entity\.(filename|params|disposition)			
+N1	go	.	entity\.(filename|params|disposition)			
+C1	mimekit	.	entity\.type			m
+E3-E6	mimekit	.	body\.content			m
+B6	*	multipartemptypart|weird-boundary	entity\.epilogue			
+LIMIT-boundary-length	*	very-(very-)?long-boundary	body\.presence|entity\.children			
+D10	go	.	date\.instant			m
+H3	*	obsolete\.msg	header\.names			
+A16	*	.	address\.addr		@[^@\s,]*@	
+A10	python	.	address\.addr			m
+N15	mimekit	.	header\.decoded	subject|comments|keywords|content-description		m
+N11	python	.	header\.decoded			m
+H4	python	.	header\.names|entity\.params|body\..*			m
+H5	go	.	header\.names			m
+H5	mimekit	.	header\.names|entity\.params|body\..*			m

@@ -57,7 +57,7 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | L4 | `raw-02` NUL in a header name | header | body starts here | header | Accepted as a header name; the raw bytes are kept. | `InvalidHeaderName` | 2 of 3 |
 | L5 | `raw-03`, `raw-07`, `raw-08` NUL in a body; 3000-character header; 20000-character body line | kept | kept | kept | No length limits below the configured resource limits; the defect `LineTooLong` marks lines over 998. | `LineTooLong` | all agree |
 | L6 | `raw-04`, `raw-05`, `raw-11`, `adr-24` raw 8-bit octets in headers | UTF-8, else Latin-1 | `U+FFFD` for non-ASCII | invalid bytes become `U+FFFD`; one address list fails | A raw 8-bit header value is decoded as UTF-8 if valid, otherwise as Windows-1252 (RFC 6532 for the UTF-8 case). | `AmbiguousEightBitHeader` | prov. (MK) |
-| L7 | `raw-10` UTF-8 byte-order mark before the first header | header found | body starts here | the BOM stays in the first name, which then goes unrecognised | Not recognised: the BOM bytes make the first line a non-header, so it starts the body and nothing is lost. | `MissingHeaderBodySeparator` | prov. (Py) |
+| L7 | `raw-10` UTF-8 byte-order mark before the first header | header found | body starts here | the BOM stays in the first name, which then goes unrecognised | The BOM is ignored when the name is read (the raw bytes keep it), so the first field is found. | `InvalidHeaderName` | prov. (MK) |
 | L8 | `raw-06`, `cte-14`, `ct-14` 8-bit body declared 7bit or without charset | bytes kept | bytes kept | bytes kept | Body bytes are never altered; charset choice is the encodings layer's. | `EightBitIn7BitBody` | all agree |
 
 ## Header block
@@ -67,7 +67,7 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | H1 | `hdr-01`, `hdr-02`, `hdr-03` duplicate `Content-Type`, `MIME-Version`, `Content-Transfer-Encoding` | first | first | first | The first occurrence is the one in force; all stay in the tree. | `DuplicateHeader` | all agree |
 | H2 | `hdr-04`, `adr-25` duplicate `From`, `To`, `Subject`, `Date` | `From`/`To` lists merge; all `Subject`s kept | first | first | The typed accessors use the first occurrence; every header stays in the tree. | `DuplicateHeader` | 2 of 3 |
 | H3 | `hdr-07` whitespace before the colon (`Subject : x`) | header | body starts here | header | Accepted; the name is trimmed (RFC 5322 4.2 obsolete syntax). | `WhitespaceBeforeHeaderColon` | 2 of 3 |
-| H4 | `hdr-14` space inside a header name | header | body starts here | header | Accepted as written. | `InvalidHeaderName` | 2 of 3 |
+| H4 | `hdr-14` space inside a header name | header | body starts here | header | Accepted as written; the name is kept (Latin-1) and `InvalidHeaderName` is reported. | `InvalidHeaderName` | 2 of 3 |
 | H5 | `hdr-05`, `hdr-06`, `hdr-09` a line without a colon in or after the headers | line skipped (or parse error on the first line) | body starts at the line | error | The first non-header line ends the header block and starts the body, so no byte is dropped. | `MissingHeaderBodySeparator` | prov. (Py) |
 | H6 | `hdr-10` body line that looks like a header (`Note: x`) with no blank line | header | header | error | It is a header. | `MissingHeaderBodySeparator` | all agree where parsed |
 | H7 | `hdr-08` continuation line before the first header | parse error | ignored | error | A line that starts with white space where a field should begin ends the header block and starts the body. | `HeaderContinuationWithoutHeader` | prov. |
@@ -183,10 +183,8 @@ The decoders and the tree keep what they repair without a defect where the repai
 |---|---|
 | `InvalidBase64`, `MissingBase64Padding`, `DataAfterBase64Padding`, `InvalidQuotedPrintable` (E1, E3, E4, E6) | Body decoding is lazy, so the decoders report `TransferIssues` flags on the decoding stream, not tree defects. |
 | `DuplicateHeader` (H1, H2) | Not raised: all copies stay in the tree; only a repeated `Content-Type` or `Content-Transfer-Encoding` is a defect (`AmbiguousDuplicateContentType`, `AmbiguousDuplicateTransferEncoding`). |
-| `InvalidHeaderName` (H4, L4) | Not raised: a name with a space or control byte is stored as written. |
 | `NoHeaders`, `EmptyMessage`, `TruncatedHeader` (H9, H12, H14, M2) | Not raised: an empty or cut-off message is a valid empty tree; `MissingHeaderBodySeparator` marks a header block that ran into the end of input. |
 | `MissingMimeVersion` (H13) | Not raised: a missing `MIME-Version` does not change parsing. |
-| `LeadingBom` (L7) | Not raised; see L7. |
 | `LineTooLong`, `EightBitIn7BitBody` (L5, L8) | Not raised: body bytes are never judged. |
 | `EnvelopeLine` (H8) | Not a defect: the reader emits an `EnvelopeLine` event. |
 | `UnsafeFilename` (N10) | Not raised: a file name is kept as written. |

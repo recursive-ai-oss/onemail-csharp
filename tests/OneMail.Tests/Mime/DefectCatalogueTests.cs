@@ -57,6 +57,7 @@ public class DefectCatalogueTests
         { MimeDefectKind.InvalidParameter, Msg("Content-Type: text/plain; charset\r\n") },
         { MimeDefectKind.MissingStartBoundary, Msg("Content-Type: multipart/mixed; boundary=b\r\n", "just text\r\n") },
         { MimeDefectKind.EpilogueHasDelimiter, Msg("Content-Type: multipart/mixed; boundary=b\r\n", "--b\r\n\r\nx\r\n--b--\r\n--b\r\nagain\r\n") },
+        { MimeDefectKind.InvalidHeaderName, Msg("X Bad Name: v\r\n") },
         { MimeDefectKind.MixedLineEndings, "A: 1\r\nB: 2\n\r\nbody" },
         { MimeDefectKind.ControlCharacterInHeader, Msg("Subject: a\u0001b\r\n") },
         { MimeDefectKind.BoundaryHasTrailingSpace, Msg("Content-Type: multipart/mixed; boundary=\"b \"\r\n", "--b \r\n\r\nx\r\n--b --\r\n") },
@@ -90,6 +91,8 @@ public class DefectCatalogueTests
         { MimeDefectKind.UnparsedAddressText, Msg("To: a@x.example; b@y.example\r\n") },
         { MimeDefectKind.ObsoleteLocalPart, Msg("To: .a@x.example\r\n") },
         { MimeDefectKind.InvalidAddressSyntax, Msg("To: <<>>\r\n") },
+        { MimeDefectKind.InvalidAddressSyntax, Msg("To: <a@b@gw.example>\r\n") },
+        { MimeDefectKind.InvalidHeaderName, Msg("", "").Replace("\r\n\r\n", "\r\n: empty name\r\n\r\n") },
 
         // dates
         { MimeDefectKind.WeekdayMismatch, Msg("Date: Tue, 14 May 2001 23:39:00 +0000\r\n") },
@@ -148,5 +151,22 @@ public class EnvelopeLineTests
     {
         MimeEntity e = MimeEntity.Parse(T.B("Subject: hi\r\nFrom alice@example.com\r\n\r\nbody"));
         Assert.True(e.EnvelopeLine.IsEmpty);
+    }
+}
+
+public class DoubledDelimiterTests
+{
+    [Theory]
+    [InlineData("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n--b\r\nContent-Type: text/plain\r\n\r\none\r\n--b--\r\n", 1)]
+    [InlineData("Content-Type: multipart/mixed; boundary=b\r\n\r\npre\r\n--b\r\nContent-Type: text/plain\r\n\r\none\r\n--b\r\n--b\r\n\r\ntwo\r\n--b--\r\n", 2)]
+    [InlineData("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n\r\none\r\n--b\r\n--b--\r\n", 1)]
+    [InlineData("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n", 1)]
+    public void ConsecutiveDelimitersAreOneAndTheBytesSurvive(string text, int parts)
+    {
+        byte[] data = T.B(text);
+        var root = (MimeMultipart)MimeEntity.Parse(data);
+        Assert.Equal(parts, root.Children.Count);
+        Assert.Equal(data, root.ToArray());
+        Assert.Equal(data, root.ToArrayAssembled());
     }
 }
