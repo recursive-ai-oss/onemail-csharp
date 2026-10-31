@@ -42,7 +42,7 @@ internal static class RtfTargets
         RtfEncapsulation detected = RtfDeencapsulator.Detect(data);
         RtfDeencapsulationResult r = RtfDeencapsulator.Deencapsulate(data, new RtfDeencapsulationOptions { MaxGroupDepth = 64 });
         Require((r.Kind == RtfEncapsulation.None) == (detected == RtfEncapsulation.None), "Detect and Deencapsulate disagree");
-        Require(r.Kind == RtfEncapsulation.None ? r.Text.Length == 0 : r.Text is not null, "text for a non-encapsulated document");
+        Require(r.Kind != RtfEncapsulation.None || r.Text.Length == 0, "text for a non-encapsulated document");
         Require(!HasLoneSurrogate(r.Text), "lone surrogate in the result");
         if (r.Kind == RtfEncapsulation.None || r.Text.Length > 1 << 16)
         {
