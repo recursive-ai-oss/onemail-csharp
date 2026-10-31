@@ -3,7 +3,7 @@
 `RecursiveAI.OneMail.Rtf` reads and writes what Outlook stores in `PidTagRtfCompressed` and recovers the HTML or plain text
 that Outlook wraps inside an RTF body. The namespace uses only the .NET base class library: it does not reference any other
 part of OneMail, so it can be lifted out as the seed of a general RTF reader. Nothing in it throws on malformed input: damage
-is a typed `RtfDefect` with a byte offset, and the ambiguity entries (RT1–RT18) are in [ambiguities.md](ambiguities.md).
+is a typed `RtfDefect` with a byte offset, and the ambiguity entries (RT1–RT33) are in [ambiguities.md](ambiguities.md).
 
 | Piece | Type | Spec |
 |---|---|---|
@@ -125,3 +125,51 @@ distinct streams:
 | 3,000 damaged streams (truncations, bit flips, header edits, insertions) | OneMail reports a defect on 2,998; the 2 without are valid; oracle refuses 2,616 of them; bytes equal wherever both decode, except 123 where OneMail's size or ratio limit refused what the oracle decoded (RT14) |
 
 Corpus bodies are not committed; the specification's example blocks are in `testdata/rtf` and the tests.
+
+## Native RTF to HTML (`RtfHtmlConverter`)
+
+Outlook items whose RTF was authored as RTF (no `\fromhtml`/`\fromtext`) have no other body. `RtfHtmlConverter.Convert(bytes, options)`
+turns them into HTML and plain text; the MAPI view uses it when an item has no HTML or text body (`MailBody.Origin` is
+`RtfConverted`). The same independence rule holds: the namespace uses only the BCL (a test scans the sources).
+
+- **Model.** A parse pass builds a small document model (paragraphs, runs, lists, tables, pictures, links) from fonts, colours,
+  the stylesheet (names only, for headings), list tables and `\pn` lists, fields (HYPERLINK), shapes, `\object` results,
+  `\objattph` positions, `\u`/`\uc` and code pages (RT19). Both writers read that model, so the text always matches the HTML.
+- **HTML shape.** One `<div class="rtf-body">` fragment with the dominant font and size on the div; `p`, `h1`–`h6`, `ul`/`ol`/`li`,
+  `table`, `a`, `img` and a few inline spans. Images are `data:` URIs by default, `cid:` with `RtfImageMode.ContentId`. EMF/WMF become
+  an attachment-style placeholder. The output is well-formed and identical for identical input.
+- **Text.** CRLF line breaks; list markers and tab-separated cells.
+- **Limits** (`RtfHtmlOptions`): group depth 1000, 4 M nodes, 64 Mi output characters, 16 MiB per picture, 64 MiB of pictures; a
+  hit is a typed defect and the output so far is kept. No input throws.
+- **Defects added:** `InvalidPictureData`, `PictureLimitExceeded`, `UndefinedReference`, `NestedTableFlattened`,
+  `AmbiguousPictureFormat`, `AmbiguousListLevel`, `AmbiguousSymbolFont`, `ContentLimitExceeded`, `AmbiguousBareCell`.
+- **Resolutions:** RT19–RT33 in [ambiguities.md](ambiguities.md). RT19 differs from RT9 on purpose: the de-encapsulator reads RTF that
+  Outlook wrote around HTML (the specification's own example has `\fcharset0` text under `\ansicpg1251`, decoded as 1252), while the
+  converter reads RTF authored by Word and others, where `\fcharset0` means "ANSI" and the document's `\ansicpg` is the code page
+  (LibreOffice 26.2.6 agrees; 24.2.7, pandoc and unrtf decode as 1252). No client was observed on either; both are provisional.
+
+### Method and results
+
+`tools/rtf/run-html-oracles.sh` converts every document with pandoc 3.13, unrtf 0.21.10 and LibreOffice 24.2.7 (`--convert-to
+html`), all run as released programs, and `htmlcompare.py` reduces every output to a normalised model: words, which words are
+bold/italic/underlined/struck/super-/subscript, list items, table cells, link targets, heading levels, image count. HTML bytes are
+never compared. A metric an oracle never produces in any document (unrtf: lists, headings) is n/a for it. Every remaining
+difference needs a rule in `tools/rtf/explained-html.tsv`; LibreOffice rows are itemised per document, pandoc and unrtf rows are
+**class-level** (they decode every `\'hh` as 1252, drop heading styles and lists, and so on), restricted to the generated, Tika and
+POI documents, so a difference on any other document would show up as unexplained.
+
+123 documents: 17 native RTF bodies from the MSG/OST/PST/TNEF corpora (of 52 RTF bodies in 85 items; 35 are encapsulated), 43 Tika/POI
+`.rtf` test documents, and 63 generated (23 feature documents, 40 seeded mixes).
+
+| Oracle | Metrics agreeing | Explained | Unexplained | n/a |
+|---|---|---|---|---|
+| LibreOffice 24.2.7 | 1,446 | 18 | 0 | 0 |
+| pandoc 3.13 | 1,327 | 113 | 0 | 0 |
+| unrtf 0.21.10 | 1,105 | 125 | 0 | 246 |
+
+On the 17 native bodies LibreOffice agrees on every metric; pandoc and unrtf differ only on two Chinese bodies (lists, tables, code
+page). Text content of every native body agrees with LibreOffice.
+
+Allocations (Release): over 83 documents (2,282 KB of RTF) 1,559 B per KB of RTF for HTML and 1,891 B/KB for HTML plus text; documents
+without pictures (662 KB): 2,990 and 3,978 B/KB. Tests include truncation at every length and 3,000 seeded mutants; the
+`rtf-html` fuzz target checks that the HTML is well-formed and deterministic.

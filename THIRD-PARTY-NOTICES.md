@@ -71,6 +71,11 @@ The recurrence and calendar checks in `tools/calendar` run these released packag
 | Ical.Net (NuGet) | 5.2.3 | MIT |
 | FolkerKinzel.VCards (NuGet) | 8.2.0 | MIT |
 
+## Outlook for Mac archive test data and oracles (fetched, never committed)
+
+- **OLMReader sample archives** (`src/test/resources/Outlook16/outlook_example.olm` and `bill_rapp.olm`, at a pinned commit; `tools/corpus/olm-corpus.tsv`) and the element schemas the reader's layout follows (`src/main/resources/schema/*.xsd`, read as schema documents only): BSD 2-Clause License, Copyright (c) 2016, Tom Everett. All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the copyright notice, the list of conditions and the disclaimer of that licence are retained. Data files only; none is stored in this repository. The bill_rapp archive holds messages of the public Enron e-mail data set (Creative Commons Attribution 3.0 United States; cite ZL Technologies, Inc.), and nothing from it is quoted.
+- **OLM comparison programs** (run as separate processes, never linked or shipped): the olmreader 1.9.0 jar (Maven Central, BSD 2-Clause, Copyright (c) 2016 Tom Everett) and the olm-reader 1.0.0 npm package (Apache-2.0). No source of either was read.
+
 ## jCal, jCard, xCal and xCard
 
 `testdata/calendar/forms/rfc` holds the examples printed in RFC 6321, 6351, 7095 and 7265, with the corrections listed in `ERRATA.txt` (the IETF documents are © IETF Trust and the persons identified as the document authors; used under the IETF Trust Legal Provisions, which license code components extracted from RFCs under the Revised BSD License).
@@ -85,3 +90,5 @@ The differential run in `tools/calendar/oracles/forms` runs these released build
 | vinnie, jackson-core, jackson-databind, jackson-annotations, commons-codec, freemarker, jsoup (their dependencies) | 2.0.2, 2.16.1, 2.16.1, 2.16.1, 1.10, 2.3.32, 1.17.2 | Apache-2.0 (vinnie BSD-2-Clause, jsoup MIT) |
 | Node.js | 22.22.1 | MIT and bundled licences |
 | Eclipse Temurin JDK | 21 | GPL-2.0 with Classpath Exception |
+- The `.rtf` test documents of Apache Tika (`tika-parser-microsoft-module`, pinned commit) and Apache POI (`test-data`, pinned commit), listed with hashes in `tools/rtf/rtf-corpus.tsv` (Apache License 2.0, (c) The Apache Software Foundation; data files only, fetched by `tools/rtf/fetch-rtf.sh`, never committed).
+- Run only, as released programs, and never linked, shipped or built from source: pandoc 3.13 (GPL-2.0-or-later), unrtf 0.21.10 (GPL-3.0-or-later) and LibreOffice 24.2.7 (MPL-2.0), used by `tools/rtf/run-html-oracles.sh` to check the RTF to HTML conversion. The Microsoft RTF 1.9.1 specification is cited, not copied.

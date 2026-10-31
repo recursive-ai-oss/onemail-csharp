@@ -18,6 +18,24 @@ internal sealed class RtfBodies
 
     public RtfEncapsulation Kind { get; private init; }
 
+    private RtfHtmlResult? _native;
+    private bool _nativeDone;
+
+    /// <summary>The RTF converted to HTML and text when it is written as RTF (it encapsulates neither HTML nor text); null when there is no RTF body or it is an encapsulation.</summary>
+    public RtfHtmlResult? Native()
+    {
+        if (!_nativeDone)
+        {
+            _nativeDone = true;
+            if (Data is not null && Kind == RtfEncapsulation.None)
+            {
+                _native = RtfHtmlConverter.Convert(Data);
+            }
+        }
+
+        return _native;
+    }
+
     public static RtfBodies Read(MapiMessage m)
     {
         if (m.Properties.Get(MapiPid.RtfCompressed, MapiType.Binary) is not { } p)

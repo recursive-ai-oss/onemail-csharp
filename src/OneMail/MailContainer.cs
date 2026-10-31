@@ -9,6 +9,7 @@ using RecursiveAI.OneMail.Stores.Dbx;
 using RecursiveAI.OneMail.Stores.Emlx;
 using RecursiveAI.OneMail.Stores.Maildir;
 using RecursiveAI.OneMail.Stores.Mbox;
+using RecursiveAI.OneMail.Stores.Olm;
 
 namespace RecursiveAI.OneMail;
 
@@ -53,6 +54,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     private MboxReader? _messageReader;
     private PstStore? _pst;
     private MsgFile? _msg;
+    private OlmArchive? _olm;
     private Tnef.TnefMessage? _tnef;
     private bool _disposed;
 
@@ -132,7 +134,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     {
         ArgumentNullException.ThrowIfNull(source);
         MailFormat f = MailFormatSniffer.Sniff(source);
-        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg or MailFormat.Tnef or MailFormat.Dbx))
+        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg or MailFormat.Tnef or MailFormat.Olm or MailFormat.Dbx))
         {
             throw new UnsupportedMailFormatException(f, path);
         }
@@ -147,6 +149,17 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
             }
 
             c._pst = store;
+        }
+        else if (f == MailFormat.Olm)
+        {
+            try
+            {
+                c._olm = OlmArchive.Open(source, ownsSource: false, path);
+            }
+            catch (InvalidDataException e)
+            {
+                throw new InvalidDataException("The Olm archive cannot be read: " + e.Message, e);
+            }
         }
         else if (f == MailFormat.Msg)
         {
@@ -202,6 +215,14 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                         ThrowIfDisposed();
                         yield return new MapiMailItem(m, new MailProvenance(Format, Location, path.Length == 0 ? null : path, -1, -1, at++));
                     }
+                }
+
+                break;
+            case MailFormat.Olm:
+                foreach (OlmItem olmItem in _olm!.Enumerate())
+                {
+                    ThrowIfDisposed();
+                    yield return olmItem;
                 }
 
                 break;
@@ -285,7 +306,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 }
 
                 break;
-            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef or MailFormat.Pst or MailFormat.Ost or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle or MailFormat.Dbx or MailFormat.DbxStore:
+            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef or MailFormat.Pst or MailFormat.Ost or MailFormat.Olm or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle or MailFormat.Dbx or MailFormat.DbxStore:
                 // Directory stores and single files do their I/O one small file at a time; the sync enumeration is already cheap per item.
                 foreach (IMailItem item in Enumerate())
                 {
@@ -309,6 +330,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         _messageReader?.Dispose();
         _pst?.Dispose();
         _msg?.Dispose();
+        _olm?.Dispose();
         if (_ownsSource)
         {
             _source?.Dispose();

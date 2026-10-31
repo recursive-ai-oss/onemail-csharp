@@ -434,6 +434,21 @@ Entries without an observed Outlook-side result are provisional. Method: [rtf.md
 | RT16 | Data ends before the end marker | compressed-rtf returns what it decoded | The decoded bytes, with a defect | `MissingEndMarker` | prov. |
 | RT17 | RAWSIZE disagrees with the output; `MELA` contents | spec: MELA CRC not validated, size may be read either way | Output is what the data holds (growing up to the limit), with a defect; MELA is the contents as stored | `RawSizeMismatch` | spec 2.2.3.1 |
 | RT18 | Compressing nothing | spec note: Outlook writes `02 00 0D 00` | `01 0C F0` (end marker only) is written; `02 00 0D 00` is read as one NUL byte | none | spec |
+| RT19 | `\fcharset0`/`\fcharset1` fonts under another `\ansicpg` (native RTF to HTML) | pandoc and unrtf decode every `\'hh` as 1252; LibreOffice 24.2.7 uses 1252 for `\fcharset0`, LibreOffice 26.2.6 follows `\ansicpg` | Follows the document's `\ansicpg` (0 and 1 both mean "the document's ANSI code page"). The de-encapsulator keeps RT9 (0 = 1252) because it reads what Outlook wrote, where the spec example shows `\fcharset0` under `\ansicpg1251`; a document authored by Word names a Central European font with its own `\fcharset238`, so `\fcharset0` there is Latin text typed under that page | none | no client observed; oracles split, the newer one agrees; provisional |
+| RT20 | Header, footer, footnote and endnote destinations | LibreOffice puts them in the body; pandoc/unrtf vary | Omitted from the mail body, text and HTML | none | provisional: a message body has no page furniture |
+| RT21 | Hidden text (`\v`) | unrtf writes it | Omitted | none | spec: hidden text is not displayed |
+| RT22 | A table inside a table cell | oracles flatten or nest differently | Flattened into the outer cell's text | `NestedTableFlattened` | provisional |
+| RT23 | Shapes (`\shp`) | pandoc shows `\shprslt` only | The `\shpinst` text box content is read; `\shprslt` is skipped when a `\shpinst` is present | none | RTF 1.9.1 (the result is the fallback for readers that skip `\shpinst`) |
+| RT24 | Picture whose bytes disagree with the declared `\pngblip`/`\jpegblip` | none | The bytes decide (magic numbers); EMF/WMF are not rendered and become an attachment-style placeholder | `AmbiguousPictureFormat`, `InvalidPictureData` | provisional |
+| RT25 | A `\cell` outside any row | LibreOffice joins the words on each side | A tab between them | `AmbiguousBareCell` | provisional |
+| RT26 | `\object` with a result | LibreOffice drops the result picture | The result is shown; an object with only its placeholder becomes an attachment placeholder | none | provisional |
+| RT27 | Empty paragraphs; content after the root group | none | An empty paragraph is `<p><br></p>`, trailing empty paragraphs are dropped; anything after the root group's closing brace is ignored | none | provisional |
+| RT28 | List level beyond the list table, or an `\ls` with no list table | pandoc drops the list | Level clamped to the deepest defined; an undefined `\ls` renders as a bullet list | `AmbiguousListLevel`, `UndefinedReference` | provisional |
+| RT29 | Headings | pandoc and unrtf make none from `\s` styles | A paragraph style whose stylesheet name is "heading N" becomes `<hN>`; the stylesheet is read for names only and its formatting is not inherited | none | provisional |
+| RT30 | `\objattph` | none | The attachment position is a placeholder, and the single space after it is consumed | none | spec |
+| RT31 | Text in a symbol font (`\fcharset2`, Symbol, Wingdings) | none | Private-use code points are kept, except the bullet | `AmbiguousSymbolFont` | provisional |
+| RT32 | `HYPERLINK \l "x"` | none | `href="#x"` | none | spec (field switches) |
+| RT33 | `\caps`/`\scaps` | pandoc upcases the text | The text is unchanged and a CSS `text-transform` carries the effect | none | provisional |
 
 ## TNEF
 
@@ -494,3 +509,21 @@ No Outlook has been observed yet: every row is an agent default settled by the s
 | OC4 | `WKST` when an RRULE has none | MS-OXCICAL: a missing WKST means Sunday; RFC 5545 3.3.10: Monday | `WKST` is always written from the pattern's first day of week when exporting; a missing WKST is read as RFC 5545 says (Monday) by the shared engine | none | dateutil and recurring-ical-events agree on all 54 generated series (the two-week patterns with Sunday and Monday differ without it); test `RRuleExpansionEqualsTheSpecDayWalk` weekly-2w cases; prov. |
 | OC5 | The UID of an appointment | 2.1.3.1.1.20.26: a global object ID whose data (from byte 40) starts with `vCal-Uid` and 0x01000000 carries the UID text from byte 52; otherwise the UID is the hex of the ID with the instance date zeroed | Exactly that; an item with no usable ID gets a UID made from a hash of subject and times | `UidSynthesized` (Approximated) | spec text; tests; prov. |
 | OC6 | The zone of a VEVENT with a `VTIMEZONE` | 2.1.3.1.1.20.2: the zone becomes a TZDEFINITION | The rules are recovered by sampling the zone hourly in the DTSTART year: two changes are a DST rule, none a fixed offset, anything else the fixed offset at DTSTART | `UnknownTimeZone` when the TZID is neither defined nor known | prov. |
+
+
+## OLM (Outlook for Mac)
+
+Observed on the two public sample archives (Outlook 16 layout) and our generated ones, against the released olmreader 1.9.0 jar and the
+olm-reader 1.0.0 npm package as black-box oracles. No Outlook for Mac has been observed, so each resolution is provisional. Details: [`olm.md`](olm.md).
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| O1 | Dates have no zone (`2018-06-20T23:49:52`) | the jar returns the text and leaves the reading to the caller; the npm package reads it in the machine's zone (UTC when `TZ=UTC`, and then writes it as GMT) | UTC, `ZoneKnown` false | `AmbiguousDateZone` | prov.; the npm package agrees under `TZ=UTC` on 478 + 7 messages |
+| O2 | `OPFMessageCopyBody` and `OPFMessageCopyHTMLBody` hold the same text | the npm package writes text and strips tags | `OPFMessageGetHasHTML` decides: true gives an HTML body, false a plain one; with no flag, a body that differs from the HTML element or looks like HTML is HTML | `AmbiguousBodyKind` (flag absent only) | prov.; 470 of 483 and 7 of 7 sample messages have the two elements equal |
+| O3 | Two attachments of one message share a name | the jar keys bytes by name and keeps one | Both are listed, each with its own bytes | none | oracle limit (1 message in the Enron sample) |
+| O4 | The declared attachment size (`OPFAttachmentContentFileSize`, written as `5.0614E4`) differs from the entry's size | not used by either oracle | The entry's size is the size; the declared one stays in the XML | none | every attachment in the Outlook-example sample differs |
+| O5 | An address element has a name and no address | the npm package writes `unknown@unknown.com` for a missing sender | Name kept, address empty | `AddressMissing` | 12 recipients in the Enron sample |
+| O6 | A date of year 4501 or later | n/a | No date (Outlook's "none" value) | none | MS-OXOCAL; prov. |
+| O7 | Contact e-mail slot type 0, 1, 2 | n/a | work, home, other | none | prov.; the sample's addresses are named after their slot |
+| O8 | Recurrence with both a count and an end date | n/a | The count (`COUNT`) when the record says it is numbered, else the end date as a UTC `UNTIL` | `RecurrenceEnd` (loss entry) | prov.; all four sample patterns are numbered |
+| O9 | An attachment URL that matches no entry | the jar returns no bytes | Listed with no content | `AttachmentMissing` | prov. |

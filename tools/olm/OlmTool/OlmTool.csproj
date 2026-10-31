@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Dumps an OLM archive through OneMail's public API as canonical JSON lines for tools/olm/compare.py, and measures memory
+       and allocations over a large archive. A tool, never packed. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OlmTool</AssemblyName>
+    <RootNamespace>OneMail.Tools.Olm</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- OneArchive's zip reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

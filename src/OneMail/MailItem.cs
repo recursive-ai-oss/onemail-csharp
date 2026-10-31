@@ -77,6 +77,19 @@ public readonly record struct MailDefect(string Family, string Code, long Offset
 /// <param name="Index">The item's position in its container, from 0, or -1 when it is not part of one.</param>
 public readonly record struct MailProvenance(MailFormat Format, string? Location, string? Folder, long Offset, long Length, int Index);
 
+/// <summary>How a <see cref="MailBody"/> came to be.</summary>
+public enum BodyOrigin
+{
+    /// <summary>The body is stored in the item as it is.</summary>
+    Stored = 0,
+
+    /// <summary>The body is the HTML or the plain text that the item's RTF body encapsulates (the original of an HTML or text message).</summary>
+    RtfEncapsulated,
+
+    /// <summary>The item has only an RTF body written as RTF; the body was made from it by the RTF to HTML converter, so it is an approximation of the author's layout.</summary>
+    RtfConverted,
+}
+
 /// <summary>
 /// A body of an item in one representation. It is a projection: nothing is read until the caller asks.
 /// </summary>
@@ -85,6 +98,9 @@ public abstract class MailBody
     internal MailBody()
     {
     }
+
+    /// <summary>Where the body comes from: stored as it is, taken out of an encapsulating RTF, or converted from RTF written as RTF. <see cref="BodyOrigin.Stored"/> unless a derived body says otherwise.</summary>
+    public virtual BodyOrigin Origin => BodyOrigin.Stored;
 
     /// <summary>The media type of the body, lower case: <c>text/plain</c>, <c>text/html</c> or <c>application/rtf</c>.</summary>
     public abstract string ContentType { get; }

@@ -26,8 +26,8 @@ No Outlook has been run yet.
 | PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | no public ANSI or 512-byte-page Unicode PST from Outlook exists; those layouts and 4 KiB multi-map stores are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
 | PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world sample |
 | TNEF / winmail.dat (MS-OXTNEF) | yes | yes | 0 against tnefparse, tnef and ytnef: 563 checks, 125 explained | attributes identical 17 / 17; MAPI property-exact 17 / 17 | yes | no TNEF-in-MIME message in the public corpora; checked on generated wrappers (64 messages) |
-| Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` attachment positions not applied |
-| HTML and text from RTF (MS-OXRTFEX) | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented) | n/a | yes | native RTF to HTML (non-encapsulated bodies) comes later |
+| Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` positions become placeholders |
+| HTML and text from RTF (MS-OXRTFEX); native RTF to HTML | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented); native RTF to HTML on 123 documents: 0 unexplained against LibreOffice 24.2.7, pandoc 3.13 and unrtf 0.21.10 (pandoc/unrtf rules are class-level) | n/a | yes | |
 | MAPI and MIME conversion (MS-OXCMAIL) | yes | yes | see the conversion table below | 0 silent losses both ways | yes | |
 | ICS recurrence and time zones (RFC 5545 3.8.5, VTIMEZONE, IANA, Windows names) | yes | n/a | 2,384 recurring components: 0 unexplained against recurring-ical-events (2,372 compared), python-dateutil (2,378) and Ical.Net (2,188); every RFC 5545 example passes; DST transitions 108 / 108 in four zones | n/a | yes | |
 | Outlook calendar and task items; DBX; OLM; jCal/jCard/xCal/xCard | not yet | not yet | | | | in progress |
@@ -60,9 +60,9 @@ Windows file names cannot hold, while both are read everywhere ([`mailboxes.md`]
 | Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21: 2,053 real records (34 with text) in 13 folders, 3,512 generated messages in 12 folders | n/a | dbx | one real store (a Windows XP laptop image, 28 files); OE4 files and deleted messages are not read |
 | EMLX and Apple Mail `.mbox` bundles | yes | yes | ground truth 14 / 14 | 14 / 14 | yes | flag bits unverified against a real Apple Mail store |
 | ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines, component trees, typed views; contacts below) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
-| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | MSG, PST, DBX and OLM items not in the view yet |
+| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | DBX items not in the view yet |
 | PST / OST node database (MS-PST NDB) | yes (lower layer only) | no | NIST CFReDS OST: every node and block enumerates, header agrees with libpff | n/a | yes | no messages from PST yet; ANSI and 512-byte-page Unicode PSTs untested on real files (no public sample) |
-| MSG/OFT, TNEF, OLM, compressed RTF | not yet | not yet | | | | planned |
+
 
 ## Contacts (vCard typed view, Outlook contacts, MS-OXVCARD)
 
@@ -106,6 +106,16 @@ direction. Method and rules: [`conversion.md`](conversion.md). No Outlook has be
 | Item to ICS, expansion | 18 recurrences in 3 zones (54 series) against dateutil 2.9.0.post0, recurring-ical-events 3.8.2, Ical.Net 5.2.3 | dateutil 54/54, recurring-ical-events 54/54, Ical.Net 38/54 (16 explained: window wall clock 5, outvoted by the other two 11), 0 unexplained | |
 | ICS we write | Python icalendar 7.3.0, Ical.Net 5.2.3 parse | 58 of 58 files parse in both; icalendar facts identical 58/58; Ical.Net facts identical 54/58 (the rest are typed properties its public API does not list) | |
 | Item to ICS to item, ICS to item to ICS | `OxcIcalRoundTripTests`, `OxocalTool` | 13 generated items property-exact, corpus items 4 of 4 stable, generated ICS 54 of 54 stable on the second pass, 0 silent | Outlook-written meetings and exceptions unseen |
+
+## OLM (Outlook for Mac) read
+
+Added after 0.2.0-preview.1. Oracles, run as released programs and never linked: the olmreader 1.9.0 jar (Maven Central, BSD-2-Clause) and
+the olm-reader 1.0.0 npm package (Apache-2.0). Corpus, fetched and never committed: the two sample archives of the OLMReader project
+(BSD-2-Clause; [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)). No Outlook for Mac has been run.
+
+| Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
+|---|---|---|---|---|---|---|
+| OLM (Outlook for Mac archive) | yes: mail, appointments, contacts, groups, tasks, notes, categories; attachments as lazy streams | no, by design | jar: 0 on both samples and on two generated archives (outlook_example 38 records, bill_rapp 492, generated 54); npm package: 0 on 485 messages, 12 documented tool differences | records keep every element (`OlmElement` tree); raw MIME source kept as text | yes | no Outlook 2011 layout sample; no archive with a raw MIME source, attendees or exceptions seen; a damaged zip is refused (recovery comes later); the working set is not constant in the entry count: OneArchive holds the zip directory (about 1 KB per entry; 123 MiB at 26,678 entries, 309 MiB at 213,345; see [`olm.md`](olm.md)) |
 
 ## Speed
 
