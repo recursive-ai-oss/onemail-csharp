@@ -1,4 +1,5 @@
 using RecursiveAI.OneMail.Sources;
+using RecursiveAI.OneMail.Stores.Dbx;
 using RecursiveAI.OneMail.Stores.Emlx;
 using RecursiveAI.OneMail.Stores.Mbox;
 
@@ -7,15 +8,20 @@ namespace RecursiveAI.OneMail.Stores;
 /// <summary>Content-based detection of the mail store formats of this layer. Never decides by file extension.</summary>
 public static class StoreSniffer
 {
-    /// <summary>Recognises a single file: an mbox (starts with an envelope line) or an <c>.emlx</c> (byte-count line, message, then a property list or nothing).</summary>
+    /// <summary>Recognises a single file: an Outlook Express database (class id in the header), an mbox (starts with an envelope line) or an <c>.emlx</c> (byte-count line, message, then a property list or nothing).</summary>
     /// <param name="source">The file's bytes; only the first 4 KiB and, for EMLX, the bytes at the end of the message are read.</param>
-    /// <returns><see cref="StoreFormat.Mbox"/>, <see cref="StoreFormat.Emlx"/> or <see cref="StoreFormat.Unknown"/>.</returns>
+    /// <returns><see cref="StoreFormat.Dbx"/>, <see cref="StoreFormat.Mbox"/>, <see cref="StoreFormat.Emlx"/> or <see cref="StoreFormat.Unknown"/>.</returns>
     public static StoreFormat Sniff(IRandomAccessSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
         byte[] head = new byte[4096];
         int n = source.ReadFully(0, head);
         ReadOnlySpan<byte> h = head.AsSpan(0, n);
+        if (DbxReader.Detect(h) != DbxFileKind.Unknown)
+        {
+            return StoreFormat.Dbx;
+        }
+
         if (MboxSniffer.LooksLikeMbox(h))
         {
             return StoreFormat.Mbox;
@@ -55,7 +61,7 @@ public static class StoreSniffer
 
     /// <summary>
     /// Recognises a directory store: a Maildir folder (<c>cur</c> and <c>new</c>), a Maildir++ root (dot-prefixed Maildir
-    /// subfolders), or an Apple Mail bundle (<c>Messages</c> directories of <c>.emlx</c> files).
+    /// subfolders), an Apple Mail bundle (<c>Messages</c> directories of <c>.emlx</c> files), or an Outlook Express store folder (<c>Folders.dbx</c>).
     /// </summary>
     /// <param name="fileSystem">The file system.</param>
     /// <param name="path">The directory; empty for the file system's root.</param>
@@ -88,6 +94,11 @@ public static class StoreSniffer
             return StoreFormat.MaildirFolder;
         }
 
-        return new AppleMailBundle(fileSystem, path).Exists() ? StoreFormat.AppleMailBundle : StoreFormat.Unknown;
+        if (new AppleMailBundle(fileSystem, path).Exists())
+        {
+            return StoreFormat.AppleMailBundle;
+        }
+
+        return DbxStoreFolder.Sniff(fileSystem, path) ? StoreFormat.DbxStoreFolder : StoreFormat.Unknown;
     }
 }

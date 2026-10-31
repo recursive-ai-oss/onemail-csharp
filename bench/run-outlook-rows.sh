@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the Outlook-format rows (PST/OST, MSG, TNEF: OneMail vs XstReader.Api, MsgReader and MimeKit) and prints the ratio table.
 # Inputs: the corpora that tools/corpus/fetch-*.sh fetch (ONEMAIL_CORPUS, default ~/onemail/corpus) and the large stores this script
-# writes with the test-side PST writer into ONEMAIL_STORES (default ~/onemail/u17/stores). Run it through the machine's bench queue,
+# writes with the test-side PST writer into ONEMAIL_STORES (default ~/onemail/work/stores). Run it through the machine's bench queue,
 # alone on the machine.
 #
 #   run-outlook-rows.sh OUTDIR [BenchmarkDotNet args, e.g. -f '*TnefRow*']
@@ -16,7 +16,7 @@ out="${1:?output directory}"; shift || true
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
 if [ -x "$HOME/dotnet10/dotnet" ]; then export PATH="$HOME/dotnet10:$PATH" DOTNET_ROOT="$HOME/dotnet10"; elif [ -f "$HOME/onemail/env.sh" ]; then . "$HOME/onemail/env.sh"; fi
 export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 ONEMAIL_ARTIFACTS="${ONEMAIL_ARTIFACTS:-$out/artifacts}"
-export ONEMAIL_STORES="${ONEMAIL_STORES:-$HOME/onemail/u17/stores}"
+export ONEMAIL_STORES="${ONEMAIL_STORES:-$HOME/onemail/work/stores}"
 
 machine() {
   echo "== $1 $(date -u +%FT%TZ)"; uptime; echo "cores: $(getconf _NPROCESSORS_ONLN)"
@@ -66,11 +66,11 @@ if [ "$full" = 1 ]; then
       for input in cfreds-ost tika-pst tika-bodytypes gen-u1k gen-u10k gen-u50k; do
         f=$(dotnet "$dll" path pst "$input" 2>/dev/null || true); [ -f "$f" ] || continue
         for run in 1 2 3; do
-          rm -rf "$HOME/onemail/u17/pffout"; mkdir -p "$HOME/onemail/u17/pffout"
-          /usr/bin/time -f "$input\t$run\t%e\t%M" -a -o "$out/pffexport.tsv" pffexport -q -m items -f text -t "$HOME/onemail/u17/pffout/x" "$f" > /dev/null 2>&1 || true
+          rm -rf "$HOME/onemail/work/pffout"; mkdir -p "$HOME/onemail/work/pffout"
+          /usr/bin/time -f "$input\t$run\t%e\t%M" -a -o "$out/pffexport.tsv" pffexport -q -m items -f text -t "$HOME/onemail/work/pffout/x" "$f" > /dev/null 2>&1 || true
         done
       done
-      rm -rf "$HOME/onemail/u17/pffout" )
+      rm -rf "$HOME/onemail/work/pffout" )
   fi
 fi
 

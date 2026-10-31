@@ -43,6 +43,7 @@ case "$target" in
   calendar) maxlen=65536 ;;
   recurrence) maxlen=16384 ;;
   vcard-view) maxlen=16384 ;;
+  jcal-jcard|xcal-xcard) maxlen=32768 ;;
   ndb) maxlen=8192 ;;
   ltp) maxlen=8192 ;;
   pst-messaging) maxlen=8192 ;;
@@ -50,6 +51,7 @@ case "$target" in
   tnef) maxlen=2048 ;;
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;
+  dbx) maxlen=4096 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;
   mail-open) maxlen=65536 ;;
   rtf-decompress) maxlen=65536 ;;

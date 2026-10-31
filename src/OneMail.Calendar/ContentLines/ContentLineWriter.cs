@@ -172,6 +172,12 @@ public sealed class ContentLineWriter
                 }
             }
 
+            if (pos + take < l.Length && take > 1 && l[pos + take - 1] == (byte)'=')
+            {
+                // A physical line ending in '=' is a quoted-printable soft break to a vCard 2.1 reader, so the fold moves one octet earlier.
+                take--;
+            }
+
             _output.Write(l.Slice(pos, take));
             pos += take;
             if (pos >= l.Length)

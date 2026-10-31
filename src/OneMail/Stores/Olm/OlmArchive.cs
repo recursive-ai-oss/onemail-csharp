@@ -10,7 +10,7 @@ namespace RecursiveAI.OneMail.Stores.Olm;
 /// An Outlook for Mac archive (<c>.olm</c>): a zip of XML records. Mail, appointments, contacts, tasks, notes and groups each live in XML
 /// entries, one record per element, and attachments are separate entries named by the record. This class reads the zip through OneArchive's
 /// reader, lists the folders, and streams the records one at a time, so enumerating a large archive holds one record at a time plus the
-/// zip directory (names only) and a table of the attachment entries.
+/// zip directory (OneArchive keeps it in memory, about 1 KB per entry, so the working set grows with the entry count) and a table of the attachment entries.
 /// </summary>
 /// <remarks>
 /// <para>Content decides what a file is: the sniffer looks for the archive's own folders in the zip directory, never at the extension.</para>

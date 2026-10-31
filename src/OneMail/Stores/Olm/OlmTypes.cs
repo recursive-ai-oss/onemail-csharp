@@ -67,13 +67,13 @@ public enum OlmDefectKind
     /// <summary>An address element has no address. The name alone is kept.</summary>
     AddressMissing,
 
-    /// <summary>A file in the archive is not an XML record file, an attachment or a folder marker. It is not read.</summary>
+    /// <summary>An entry in the archive is a link, a device or another kind that is not a file, so it is neither an XML record file nor an attachment. It is not read.</summary>
     UnrecognisedEntry,
 
     /// <summary>Ambiguity: OLM dates carry no zone. They are read as UTC, flagged as having no known zone.</summary>
     AmbiguousDateZone,
 
-    /// <summary>Ambiguity: the plain-text and HTML body elements hold the same text. The message's HTML flag decides which body it is.</summary>
+    /// <summary>Ambiguity: the plain-text and HTML body elements hold the same text. Raised only when the message carries no HTML flag; with the flag, the element is the HTML body without a defect.</summary>
     AmbiguousBodyKind,
 }
 

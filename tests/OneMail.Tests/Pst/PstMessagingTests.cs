@@ -5,6 +5,12 @@ using RecursiveAI.OneMail.Pst.Ndb;
 
 namespace RecursiveAI.OneMail.Tests.Pst;
 
+/// <summary>Tests that measure the process-wide managed heap run alone, after the parallel tests, so other tests' allocations
+/// cannot show up in their numbers.</summary>
+[CollectionDefinition(nameof(HeapMeasurement), DisableParallelization = true)]
+public sealed class HeapMeasurement;
+
+[Collection(nameof(HeapMeasurement))]
 public class PstMessagingTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -302,16 +308,28 @@ public class PstMessagingTests
     {
         var many = new FxFolder { Name = "many", Messages = [.. Enumerable.Range(0, 400).Select(i => new FxMessage { Subject = "m" + i, Body = "b" + i, Recipients = [new FxRecipient { Name = "r", Smtp = "r@x" }] })] };
         using PstStore s = Open(Build(NdbFormat.Unicode4K, new FxFolder { Name = "top", Children = [many] }));
-        _ = s.ReadEverything(Ct);
-        GC.Collect();
-        long before = GC.GetTotalMemory(true);
-        for (int i = 0; i < 5; i++)
+        // Warm-up walks first (tiering, caches), then three equal windows of five walks. A leak of L bytes per walk shows in every window,
+        // while runtime noise (pools, background threads) comes and goes, so the smallest window is the measure: under 512 KiB over five
+        // walks still catches anything above about 100 KiB per walk.
+        for (int i = 0; i < 3; i++)
         {
             _ = s.ReadEverything(Ct);
         }
 
-        GC.Collect();
-        long after = GC.GetTotalMemory(true);
-        Assert.True(after - before < 512 * 1024, $"live heap grew by {after - before} bytes over five walks");
+        long Window()
+        {
+            GC.Collect();
+            long start = GC.GetTotalMemory(true);
+            for (int i = 0; i < 5; i++)
+            {
+                _ = s.ReadEverything(Ct);
+            }
+
+            GC.Collect();
+            return GC.GetTotalMemory(true) - start;
+        }
+
+        long[] windows = [Window(), Window(), Window()];
+        Assert.True(windows.Min() < 512 * 1024, $"live heap grew in every window of five walks: {string.Join(", ", windows)} bytes");
     }
 }

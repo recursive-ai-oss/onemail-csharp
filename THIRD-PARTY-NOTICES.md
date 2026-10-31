@@ -75,3 +75,18 @@ The recurrence and calendar checks in `tools/calendar` run these released packag
 
 - **OLMReader sample archives** (`src/test/resources/Outlook16/outlook_example.olm` and `bill_rapp.olm`, at a pinned commit; `tools/corpus/olm-corpus.tsv`) and the element schemas the reader's layout follows (`src/main/resources/schema/*.xsd`, read as schema documents only): BSD 2-Clause License, Copyright (c) 2016, Tom Everett. All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the copyright notice, the list of conditions and the disclaimer of that licence are retained. Data files only; none is stored in this repository. The bill_rapp archive holds messages of the public Enron e-mail data set (Creative Commons Attribution 3.0 United States; cite ZL Technologies, Inc.), and nothing from it is quoted.
 - **OLM comparison programs** (run as separate processes, never linked or shipped): the olmreader 1.9.0 jar (Maven Central, BSD 2-Clause, Copyright (c) 2016 Tom Everett) and the olm-reader 1.0.0 npm package (Apache-2.0). No source of either was read.
+
+## jCal, jCard, xCal and xCard
+
+`testdata/calendar/forms/rfc` holds the examples printed in RFC 6321, 6351, 7095 and 7265, with the corrections listed in `ERRATA.txt` (the IETF documents are © IETF Trust and the persons identified as the document authors; used under the IETF Trust Legal Provisions, which license code components extracted from RFCs under the Revised BSD License).
+
+The differential run in `tools/calendar/oracles/forms` runs these released builds as separate processes (never linked or shipped). Their test files that the corpus check reads are fetched, not committed (see `tools/calendar/README.md`).
+
+| Program | Version | Licence |
+|---|---|---|
+| ical.js (npm) | 2.2.1 | MPL-2.0 |
+| ez-vcard (Maven Central) | 0.12.2 | BSD-2-Clause |
+| biweekly (Maven Central) | 0.6.8 | BSD-2-Clause |
+| vinnie, jackson-core, jackson-databind, jackson-annotations, commons-codec, freemarker, jsoup (their dependencies) | 2.0.2, 2.16.1, 2.16.1, 2.16.1, 1.10, 2.3.32, 1.17.2 | Apache-2.0 (vinnie BSD-2-Clause, jsoup MIT) |
+| Node.js | 22.22.1 | MIT and bundled licences |
+| Eclipse Temurin JDK | 21 | GPL-2.0 with Classpath Exception |

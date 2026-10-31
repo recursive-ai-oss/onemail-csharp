@@ -52,6 +52,24 @@ public enum MailFormat
 
     /// <summary>An Outlook for Mac archive: a zip holding the <c>Local/</c> message, address book, calendar, task and note folders.</summary>
     Olm,
+
+    /// <summary>iCalendar as JSON, jCal (RFC 7265): an array starting <c>["vcalendar"</c>, or an array of such arrays.</summary>
+    JCal,
+
+    /// <summary>vCard as JSON, jCard (RFC 7095): an array starting <c>["vcard"</c>, or an array of such arrays.</summary>
+    JCard,
+
+    /// <summary>iCalendar as XML, xCal (RFC 6321): a root in the <c>urn:ietf:params:xml:ns:icalendar-2.0</c> namespace.</summary>
+    XCal,
+
+    /// <summary>vCard as XML, xCard (RFC 6351): a root in the <c>urn:ietf:params:xml:ns:vcard-4.0</c> namespace.</summary>
+    XCard,
+
+    /// <summary>An Outlook Express 5/6 database file (<c>.dbx</c>): a message folder such as <c>Inbox.dbx</c>, or <c>Folders.dbx</c> or a helper database (those hold no messages).</summary>
+    Dbx,
+
+    /// <summary>An Outlook Express store folder: a directory holding <c>Folders.dbx</c> and the message files it names.</summary>
+    DbxStore,
 }
 
 /// <summary>
@@ -114,6 +132,11 @@ public static class MailFormatSniffer
             return MailFormat.Emlx;
         }
 
+        if (store == StoreFormat.Dbx)
+        {
+            return MailFormat.Dbx;
+        }
+
         return SniffText(h);
     }
 
@@ -128,6 +151,7 @@ public static class MailFormatSniffer
             StoreFormat.MaildirFolder => MailFormat.MaildirFolder,
             StoreFormat.MaildirRoot => MailFormat.MaildirRoot,
             StoreFormat.AppleMailBundle => MailFormat.AppleMailBundle,
+            StoreFormat.DbxStoreFolder => MailFormat.DbxStore,
             _ => MailFormat.Unknown,
         };
     }
@@ -157,6 +181,25 @@ public static class MailFormatSniffer
             return MailFormat.VCard;
         }
 
+        if (t.Length > 0 && t[0] == (byte)'[')
+        {
+            return SniffJson(t);
+        }
+
+        if (t.Length > 0 && t[0] == (byte)'<')
+        {
+            // RFC 6321 section 3 and RFC 6351 section 3: the root element is in the format's namespace.
+            if (t.IndexOf("urn:ietf:params:xml:ns:icalendar-2.0"u8) >= 0)
+            {
+                return MailFormat.XCal;
+            }
+
+            if (t.IndexOf("urn:ietf:params:xml:ns:vcard-4.0"u8) >= 0)
+            {
+                return MailFormat.XCard;
+            }
+        }
+
         // RFC 5322 §3.6: a message starts with a header field: a name of printable ASCII, then a colon, on the first line.
         // Leading blank lines mean the message has no headers, which is indistinguishable from any text file.
         if (h.Length == 0 || h[0] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
@@ -178,6 +221,39 @@ public static class MailFormatSniffer
         }
 
         return end > 0 && colon < h.Length && h[colon] == (byte)':' ? MailFormat.Eml : MailFormat.Unknown;
+    }
+
+    // RFC 7265 section 3 and RFC 7095 section 3.3: the first element of the top array is the component name, "vcalendar" or "vcard".
+    // A jCard document may also be an array of such arrays (RFC 7095 section 3.1).
+    private static MailFormat SniffJson(ReadOnlySpan<byte> t)
+    {
+        int i = 0;
+        for (int depth = 0; depth < 2; depth++)
+        {
+            if (i >= t.Length || t[i] != (byte)'[')
+            {
+                return MailFormat.Unknown;
+            }
+
+            i++;
+            while (i < t.Length && t[i] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            {
+                i++;
+            }
+
+            ReadOnlySpan<byte> rest = t[i..];
+            if (StartsWithIgnoreCase(rest, "\"VCALENDAR\""u8))
+            {
+                return MailFormat.JCal;
+            }
+
+            if (StartsWithIgnoreCase(rest, "\"VCARD\""u8))
+            {
+                return MailFormat.JCard;
+            }
+        }
+
+        return MailFormat.Unknown;
     }
 
     private static bool StartsWithIgnoreCase(ReadOnlySpan<byte> data, ReadOnlySpan<byte> upperAscii)

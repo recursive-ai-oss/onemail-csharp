@@ -5,6 +5,7 @@ using RecursiveAI.OneMail.Msg;
 using RecursiveAI.OneMail.Pst.Messaging;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores;
+using RecursiveAI.OneMail.Stores.Dbx;
 using RecursiveAI.OneMail.Stores.Emlx;
 using RecursiveAI.OneMail.Stores.Maildir;
 using RecursiveAI.OneMail.Stores.Mbox;
@@ -91,7 +92,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         if (Directory.Exists(path))
         {
             MailFormat dir = MailFormatSniffer.SniffDirectory(path);
-            if (dir is not (MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle))
+            if (dir is not (MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle or MailFormat.DbxStore))
             {
                 throw new UnsupportedMailFormatException(MailFormat.Unknown, path);
             }
@@ -133,7 +134,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     {
         ArgumentNullException.ThrowIfNull(source);
         MailFormat f = MailFormatSniffer.Sniff(source);
-        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg or MailFormat.Tnef or MailFormat.Olm))
+        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg or MailFormat.Tnef or MailFormat.Olm or MailFormat.Dbx))
         {
             throw new UnsupportedMailFormatException(f, path);
         }
@@ -257,6 +258,27 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 }
 
                 break;
+            case MailFormat.Dbx:
+                // Folders.dbx and the helper databases hold no mail: they enumerate as empty.
+                DbxReader dbx = new(_source!);
+                if (dbx.Kind == DbxFileKind.MessageDatabase)
+                {
+                    foreach (DbxMessageEntry e in dbx.EnumerateMessages())
+                    {
+                        yield return new DbxFileItem(this, dbx, e);
+                    }
+                }
+
+                break;
+            case MailFormat.DbxStore:
+                DbxStoreFolder dbxStore = new(new PhysicalStoreFileSystem(_directory!));
+                int m2 = 0;
+                foreach (DbxStoreMessage dm in dbxStore.EnumerateMessages())
+                {
+                    yield return new DbxStoreItem(this, dbxStore, dm, m2++);
+                }
+
+                break;
         }
     }
 
@@ -284,7 +306,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 }
 
                 break;
-            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef or MailFormat.Pst or MailFormat.Ost or MailFormat.Olm or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle:
+            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef or MailFormat.Pst or MailFormat.Ost or MailFormat.Olm or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle or MailFormat.Dbx or MailFormat.DbxStore:
                 // Directory stores and single files do their I/O one small file at a time; the sync enumeration is already cheap per item.
                 foreach (IMailItem item in Enumerate())
                 {
@@ -396,6 +418,79 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         internal override MailDate? DeliveryDate() => StoreDate(entry.Modified);
 
         internal override IEnumerable<MailDefect> StoreDefectsOf() => FromStoreDefects(entry.Defects);
+    }
+
+    // Outlook Express stores keep the message text as a chain of fixed-size segments; the chain is read when the item's bytes are first needed.
+    private abstract class DbxItemBase : MimeMailItem
+    {
+        private readonly MailContainer _owner;
+        private DbxChainInfo? _info;
+
+        protected DbxItemBase(MailContainer owner, MailProvenance provenance, DbxMessageEntry entry)
+            : base(owner._mime, provenance)
+        {
+            _owner = owner;
+            Entry = entry;
+        }
+
+        protected DbxMessageEntry Entry { get; }
+
+        internal override ReadOnlyMemory<byte> LoadBytes()
+        {
+            _owner.ThrowIfDisposed();
+            byte[] b = Read(out DbxChainInfo info);
+            _info = info;
+            return b;
+        }
+
+        internal override MailDate? DeliveryDate() => StoreDate(Entry.DateReceived ?? Entry.DateSaved ?? Entry.DateSent);
+
+        internal override IEnumerable<MailDefect> StoreDefectsOf()
+        {
+            _owner.ThrowIfDisposed();
+            _info ??= Measure();
+            return FromStoreDefects(Entry.Defects | _info.Value.Defects | ExtraDefects);
+        }
+
+        protected virtual StoreDefects ExtraDefects => StoreDefects.None;
+
+        protected abstract byte[] Read(out DbxChainInfo info);
+
+        protected abstract DbxChainInfo Measure();
+    }
+
+    private sealed class DbxFileItem : DbxItemBase
+    {
+        private readonly DbxReader _reader;
+
+        public DbxFileItem(MailContainer owner, DbxReader reader, DbxMessageEntry entry)
+            : base(owner, new MailProvenance(MailFormat.Dbx, owner.Location, null, entry.ChainOffset, -1, entry.Position), entry)
+        {
+            _reader = reader;
+        }
+
+        protected override byte[] Read(out DbxChainInfo info) => _reader.ReadMessage(Entry, out info);
+
+        protected override DbxChainInfo Measure() => _reader.MeasureMessage(Entry);
+    }
+
+    private sealed class DbxStoreItem : DbxItemBase
+    {
+        private readonly DbxStoreFolder _store;
+        private readonly DbxStoreMessage _message;
+
+        public DbxStoreItem(MailContainer owner, DbxStoreFolder store, DbxStoreMessage message, int index)
+            : base(owner, new MailProvenance(MailFormat.DbxStore, message.File, message.Folder.Length == 0 ? null : message.Folder, message.Message.ChainOffset, -1, index), message.Message)
+        {
+            _store = store;
+            _message = message;
+        }
+
+        protected override StoreDefects ExtraDefects => _message.Defects;
+
+        protected override byte[] Read(out DbxChainInfo info) => _store.ReadMessage(_message, out info);
+
+        protected override DbxChainInfo Measure() => _store.MeasureMessage(_message);
     }
 
     // A file holding one message. A bundle's files are opened for each read and closed again, so enumerating a bundle holds no handles.

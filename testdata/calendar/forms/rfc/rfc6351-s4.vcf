@@ -1,0 +1,19 @@
+BEGIN:VCARD
+VERSION:4.0
+FN:Simon Perreault
+N:Perreault;Simon;;;ing. jr,M.Sc.
+BDAY:--0203
+ANNIVERSARY:20090808T1430-0500
+GENDER:M
+LANG;PREF=1:fr
+LANG;PREF=2:en
+ORG;TYPE=work:Viagenie
+ADR;TYPE=work;LABEL="Simon Perreault\n2875 boul. Laurier, suite D2-630\nQuebec, QC, Canada\nG1V 2M2":;;2875 boul. Laurier\, suite D2-630;Quebec;QC;G1V 2M2;Canada
+TEL;VALUE=uri;TYPE="work,voice":tel:+1-418-656-9254;ext=102
+TEL;VALUE=uri;TYPE="work,text,voice,cell,video":tel:+1-418-262-6501
+EMAIL;TYPE=work:simon.perreault@viagenie.ca
+GEO;TYPE=work:geo:46.766336,-71.28955
+KEY;TYPE=work:http://www.viagenie.ca/simon.perreault/simon.asc
+TZ:America/Montreal
+URL;TYPE=home:http://nomis80.org
+END:VCARD

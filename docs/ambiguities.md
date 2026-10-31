@@ -231,6 +231,30 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | CV6 | An empty text property in a contact (`PidTagDepartmentName` = "") | n/a | n/a | Treated as absent: no vCard property is written and the report says so. | `EmptyValueNotWritten` | agent default |
 | CV7 | CR CR LF in a vCard | tolerated by vobject | n/a | Two line ends (K1); a folded value that contains it is cut, as the reader does for any line end. A reader-level decision is open. | none | prov. |
 
+### JSON and XML forms (jCal, jCard, xCal, xCard)
+
+Observed black-box on ical.js 2.2.1, Python `icalendar` 7.3.0, biweekly 0.6.8 and ez-vcard 0.12.2 (`tools/calendar/oracles/forms`); the rows say how we resolve what the RFCs leave open or what the oracles do differently. Reasons and the full class list: [`jcal-xcal.md`](jcal-xcal.md) and `explained.tsv`.
+
+| ID | Case | Oracles | Resolution | Defect or loss | Basis |
+|---|---|---|---|---|---|
+| J1 | Value that does not fit its type (`DTSTAMP:19970901T1300Z`, `TRIGGER:19980403T120000`) | ical.js, biweekly print a guessed, often garbled typed value | Carried as `unknown` with the raw text; the declared `VALUE` stays as a parameter, so the text writes back as read | `ValueNotRepresentable` | lossless |
+| J2 | `DTSTART:19971102` with no `VALUE=DATE` | ical.js, biweekly: date-time with a garbled time | A date (RFC 7265 Appendix B.1 shows it) | `AmbiguousValueType` | RFC example |
+| J3 | `ENCODING=BASE64` without `VALUE=BINARY` on `ATTACH` or an extension property; `VALUE=BINARY` without `ENCODING` | n/a | Both are `binary`; `ENCODING=BASE64` is added in the second case | `AmbiguousValueType` | RFC 5545 §3.3.1 |
+| J4 | `TZ:-0500` | ical.js text | `utc-offset` (RFC 7095 Appendix B.1); `VALUE` is not written back | none | RFC example |
+| J5 | Parameter with no value (`ATTENDEE;MAILTO:`) | ical.js, icalendar drop it | One empty value, in JSON and XML | none | lossless |
+| J6 | Parameter given twice | ical.js, icalendar keep the last | Values merged in order | `DuplicateParameterMerged` | lossless |
+| J7 | Same JSON object key twice | n/a | Both kept | `DuplicateKey` | lossless |
+| J8 | `TYPE`, `PID`, `SORT-AS` values, also a quoted `"a,b"` | ez-vcard keeps one string | Split into arrays (RFC 7095 §3.3.1.1) | none | RFC |
+| J9 | Inline vCard base64 (`PHOTO`, `KEY`) | ical.js keeps `binary` and `ENCODING` | `data:` URI; media type from `TYPE`, else `application/octet-stream` | `InlineBinaryAsDataUri` | RFC 7095 §3.5, RFC 2397 |
+| J10 | Backslash escapes in a vCard URI value (`URL:http\://x`) | ical.js and ez-vcard unescape | Unescaped (`\\ \, \; \:`); a backslash cannot occur in a URI | none | 2 of 2 |
+| J11 | vCard 2.1/3.0 data in xCard | ez-vcard writes 4.0 everywhere | 4.0 forms for `GEO`, `TYPE=pref`; `VERSION` dropped. jCard keeps the source version and type names | `VersionNotCarried`, `VersionSpecificForm` | RFC 6351 |
+| J12 | Group prefix on iCalendar data | ical.js keeps `GROUP.NAME` as the name | Split into the `group` parameter | `GroupNotCarried` in XML | RFC 7095 §3.3.1.2 |
+| J13 | Property, parameter, component or type name that is not an XML name | biweekly, ez-vcard drop or rename | Left out of xCal/xCard (JSON carries it) | `PropertyNotCarried`, `ParameterNotCarried`, `ComponentNotCarried`, `TypeNameNotCarried` | XML 1.0 |
+| J14 | Character XML cannot hold (U+000C, NUL, lone surrogate) | n/a | U+FFFD | `InvalidXmlCharacter` | XML 1.0 |
+| J15 | vCard 2.1 quoted-printable `=0D=0A` | ez-vcard keeps CR LF in `LABEL` | Line feed in the form; the text writer uses quoted-printable again and never folds a line after `=` | none | RFC 6350 §3.4 |
+| J16 | Components outside a `VCALENDAR` (bare `VEVENT` examples) | biweekly writes calendars only | Carried at the top level of the form | none | lossless |
+| J17 | Durations, UTC offsets, `TZID` values, repeated `FREEBUSY` periods, URI scheme case, local times with `TZID` | icalendar, biweekly normalise (`P7W` to `P49D`, `-00:00` to `+00:00`, local to UTC, `MAILTO:` to `mailto:`) | Kept as written | none | lossless |
+
 ## Recurrence and time zones
 
 Ours against `recurring-ical-events` 3.8.2 on `icalendar` 7.3.0 (**rec**), `python-dateutil` 2.9.0.post0 `rrule` through our glue (**du**) and Ical.Net 5.2.3 (**ical**), black-box, over every recurring component of the public calendar corpus plus our generated fixtures: 2,384 components, each in a fixed window (`tools/calendar/run_expand_diff.sh`; method in `docs/recurrence.md`). A component is *identical* when the sorted start lists are equal, *differing* otherwise, *not expanded* when the oracle errors or times out (330 libical components have an invalid DTSTART that every oracle rejects). Counts are components. Each difference gets exactly one id, the first cause that applies; the id is the entry below. Basis as in the other sections: all agree, 2 of 3, or provisional (our default).
@@ -254,6 +278,7 @@ Ours against `recurring-ical-events` 3.8.2 on `icalendar` 7.3.0 (**rec**), `pyth
 | Z2 | A vendor-prefixed `TZID` (`/softwarestudio.org/Olson_20011030_5/America/New_York`) | not compared | The longest tail of up to three segments that names a zone. | `AmbiguousZoneName` | n/a | prov. |
 | Z3 | A Windows zone name with no VTIMEZONE | not compared; instants checked for 5 names (`W. Europe`, `Eastern`, `AUS Eastern`, `New Zealand`, `Pacific`) | The CLDR default-territory IANA zone. | `AmbiguousWindowsZone` | n/a | prov. (CLDR) |
 | Z4 | A `TZID` that resolves nowhere | not compared | The values stay floating; no instant is claimed. | `UnknownTimeZone` | n/a | prov. |
+| Z5 | An IANA `TZID` on a host whose runtime knows only Windows zone ids (Windows without ICU, or with `InvariantGlobalization`) | not compared | The runtime lookup is repeated under the Windows zone CLDR assigns the IANA name (default-territory row first, then any territory). The zone keeps its IANA `Id` and `ZoneSource.Iana`. Windows zone data has fewer historic rules than IANA (US dates before 2007 follow the current rules), so such instants can differ from the same file read on Linux or macOS | none | n/a | our default (CLDR) |
 
 Limits of one oracle (not ambiguities; no entry in the resolution column):
 
@@ -290,6 +315,13 @@ The reader's behaviour is in [`mailboxes.md`](mailboxes.md). MK = MimeKit, Py = 
 | S11 | Maildir file in `new` | subdir `new`, no flags | n/a | Flags from the name, plus `Recent` | none | all agree |
 | S12 | Mail's `flags` word and `date-sent`/`date-received` reals in EMLX plists | n/a | n/a | Bits 0, 1, 2, 4, 6, 8 map to seen, deleted, answered, flagged, draft, forwarded; the raw word is always kept. A real is Unix seconds from 1e9, otherwise seconds since 2001-01-01. **No real Mail store has been inspected**, so this is a default to check against one | none | our default |
 | S13 | Courier `courierimapkeywords/:list` | n/a | n/a | Keyword names, an empty line, then `unique:n n` rows with zero-based positions. Written from Courier's published description of the directory; the line format inside the files is not in that document, so this is unchecked against Courier | `MalformedControlFile` | our default |
+| S14 | DBX: the length a message record states (field 0x11) differs from the chain's | n/a | n/a | undbx 0.21 writes the chain's bytes whatever the record states (3 records: stated 10 vs 3,024 bytes, 99,999 vs 63, 0 vs 723). The chain wins; the notes warn the field "can be wrong" | `AmbiguousDbxDeclaredLength` | undbx 0.21 on generated stores, and on a real store (NIST CFReDS Hacking Case): 33 of the 34 news posts that have text state a length 5 to 380 bytes different from the chain's, and undbx's file equals the chain in all 34 |
+| S15 | DBX: the character set of record strings (subject, sender, folder names) | n/a | n/a | windows-1252. The notes name none; the strings are in the system ANSI code page of the machine that wrote them, which the file does not record | none | our default; not observable through undbx |
+| S16 | DBX: a message file in the store folder that `Folders.dbx` does not name | n/a | n/a | Read, as a folder named after the file | `DbxUnlistedFile` | undbx 0.21 also extracts every file in the directory; our default for the folder name |
+| S17 | DBX: a message record with no text chain (a header that was never downloaded) | n/a | n/a | An empty message in the folder, flagged. undbx 0.21 writes a 0-byte file for it (its `-i` option skips empty messages) | `AmbiguousDbxNoMessageText` | undbx 0.21 on a generated store; the real store above has 2,019 header-only records among 2,053 (news headers), and undbx writes each as a 0-byte file |
+| S18 | DBX: field 0x09 of a folder record | n/a | n/a | Read as the special-folder kind (1 Inbox, 2 Outbox, 3 Sent, 4 Deleted, 5 Drafts). The notes describe the field twice (a per-folder index and the kind) | none | a real `Folders.dbx` (35,527 records) has the kinds on Inbox 1, Outbox 2, Sent Items 3, Deleted Items 4, Drafts 5 and absent on the rest |
+
+| S19 | The character before the Maildir info section (`unique:2,FS` or `unique;2,FS`) | Py `mailbox` writes and reads `:` only | n/a | Read: the first `:`, else the first `;` that is followed by `2,`. Written: `MaildirStoreOptions.InfoSeparator`, default `;` on Windows (where a file name cannot hold `:`) and `:` elsewhere; isync's `InfoDelimiter` documents the same default. No Windows mail client has been observed | none | our default (isync documentation) |
 
 ## Reports, authentication results and MHTML
 

@@ -1,0 +1,69 @@
+# id<TAB>report regex<TAB>class regex<TAB>context regex (ours tuple || oracle tuple)<TAB>why
+# Every difference the oracle comparison finds is listed under one id with the reason; docs/jcal-xcal.md carries the same table.
+X1	.*	oracle (error|wrote nothing).*	.*	The oracle rejects input it cannot parse (broken names, parameters, line structure); we keep it as a typed defect and carry what we can.
+X2	.*	type: unknown vs .*	^\["[^"]*", \{[^}]*\}, "unknown"	Malformed value: it does not fit its declared or default type, so we carry it as an unknown raw string (lossless, ValueNotRepresentable) while the oracle guesses a typed value, often garbled.
+X2	.*	param only ours: value \[.*\]	"unknown"	The declared VALUE stays as a parameter on an unknown value so the text writes back the same.
+X2	.*	value \[rrule\]	^\["[^"]*", \{\}, "recur", "FREQ=	A recurrence rule with an invalid part is carried as the raw text (ValueNotRepresentable); the oracle repairs parts to something it can print.
+X3	.*	value \[rrule\]	wkst=[A-Z]{2}.*\|\|.*wkst=[0-9]	ical.js writes the WKST rule part as a number; RFC 7265 section 3.3.10 requires the day string (MO..SU), which we write.
+X4	.*	type: date vs date-time	T::"	A DATE-TIME property holding only a date is read as a date (AmbiguousValueType, as RFC 7265 Appendix B.1 shows); the oracle prints a time of colons.
+X5	.*	param only ours: mailto	"mailto": \[""\]	A bare parameter (no =value) is kept with an empty value; the oracle drops it.
+X6	.*	type: text vs unknown \[color\]		COLOR is a text property (RFC 7986 section 5.9); the oracle does not know it.
+X7	.*	param value: .*	\["[A-Z]+", "[A-Z]+"\]	A parameter given twice has its values merged in order (DuplicateParameterMerged); the oracle keeps the last.
+X8	.*	only (ours|oracle) \[(x-test|group1\.x-test)\]		A group prefix on an iCalendar property becomes the group parameter (the RFC 7095 section 3.3.1.2 form); the oracle keeps GROUP.NAME as the name.
+X9	.*	only (ours|oracle) \[.*participants\]		A property whose name contains a line break (broken folding in a fuzz file) is cut differently.
+V1	icaljs-.*-vcf|icaljs-read-it-vcf	type: .*(phone-number|date-and-or-time|timestamp|date-time|date|uri|text|binary) vs .*	.*	ical.js keeps the vCard 3.0 value type names (phone-number, date, text for UID, uri for TEL) where jCard is the 4.0 mapping (RFC 7095 section 3.5, RFC 6350 section 6): we use the type RFC 6350 gives the property and the value's own form.
+V2	icaljs-.*	value \[(n|adr|org|gender)\]	\"[^"]*,"\]|,,	Structured values (N, ADR) keep every component the property defines, padding empty ones (StructuredPadded); the oracle leaves trailing empties out.
+V3	icaljs-.*	value \[(geo|source|url)\]	\\\\	A backslash in a uri value stays literal (uri values are not text-unescaped); the oracle unescapes it.
+V4	icaljs-.*	(only (ours|oracle)|value) \[.*\]	(\\r"\]|@@ .*John_Doe_IPHONE)	The oracle keeps a carriage return at the end of a value when the file ends its lines with CR CR LF or a bare CR; we split lines on CR LF, LF or CR.
+V5	icaljs-.*	param only oracle: encoding \[(photo|logo|sound|key)\]		Inline base64 binary becomes a data: URI because jCard has no binary type (InlineBinaryAsDataUri); the oracle keeps its binary type and encoding parameter.
+V6	icaljs-.*	param only oracle: charset \[.*\]		CHARSET parameters (vCard 2.1/3.0) are dropped after decoding (CharsetRemoved); JSON is Unicode.
+V7	icaljs-.*	type: utc-offset vs text \[tz\]		TZ holding an offset is typed utc-offset, as RFC 7095 Appendix B.1 shows; the oracle keeps text.
+V8	icaljs-.*	type: .* vs unknown \[.*\]		The oracle types properties it does not know (LANG, PRODID, and later additions) as unknown; we use the RFC 6350 type.
+V9	icaljs-.*	param value: pid		PID values (and TYPE, SORT-AS) are lists in jCard (RFC 7095 section 3.3.1.1); the oracle keeps the comma-joined string.
+V10	icaljs-.*	only (ours|oracle) \[(item[0-9]+\.)?[a-z-]+\]	("item[0-9]+", )|(\|\| \["", \{.*"unknown")	A vCard group prefix (item1.EMAIL) becomes the group parameter (RFC 7095 section 3.3.1.2); the oracle keeps the dotted name.
+V11	.*	value \[(tz|x-abdate|x-anniversary|bday|anniversary|rev)\]	\d{2}:\d{2}|T\d{2}:\d{2}:\d{2}.*\|\|.*\d{8}T\d{6}|-\d{4}"\]	Dates, times and offsets use the extended spelling in jCard and xCal (RFC 7095 Appendix B.1, RFC 7265 section 3.3); the oracle keeps the basic spelling it read.
+V12	icaljs-.*	param only ours: type \[email\]	" type"	A space before a parameter name (EMAIL; TYPE=INTERNET) is dropped; the oracle keeps it as part of the name.
+V13	icaljs-.*	value \[note\]		Text escapes (backslash-semicolon) are decoded in plain text values (RFC 6350 section 3.4); the oracle leaves the backslash.
+X5	icalendar-.*|biweekly-.*	only ours \[(attendee|recurrence-id)\]	"(mailto|thisandfuture)": \[""\]	A bare parameter (MAILTO, THISANDFUTURE with no =value) is kept with an empty value; the oracle drops the parameter or the property.
+Y1	icalendar-.*|biweekly-.*	value \[(trigger|duration)\]	"-?P\w+".*\|\|	Durations keep the source spelling (P7W, -P0DT0H30M0S); the oracle rewrites them (P49D, -PT30M).
+Y2	icalendar-.*|biweekly-.*	value \[tzoffset(to|from)\]	"-00:00"	A UTC offset keeps its source sign (-00:00 is not valid RFC 5545 but is read as written); the oracle normalises it to +00:00.
+Y3	icalendar-.*|biweekly-.*	value \[(dtstart|dtend|dtstamp|due|recurrence-id|created|last-modified)\]	"tzid": \["[^"]+"\].*\|\|.*\d\d\d\dZ?"\]|:\d\d"\] \|\| .*:\d\dZ"\]	A local time with a TZID stays local with its TZID parameter (RFC 7265 section 3.6); the oracle converts it to UTC and appends Z.
+Y4	icalendar-.*	param value: cn \[attendee\]	\\\\"\]	A quoted parameter value holding backslash-quote (fuzz input) is cut at a different quote.
+Y5	icalendar-.*	value \[freebusy\]|only oracle \[freebusy\]		Repeated PERIOD values in FREEBUSY are kept as written; the oracle removes the duplicates.
+Y6	icalendar-.*|biweekly-.*	param value: tzid \[.*\]	"/[A-Za-z]	A TZID with a leading slash (RFC 5545 section 3.2.19 globally unique name) is kept as written; the oracle strips the slash.
+Y7	icalendar-.*|biweekly-.*	param only ours: tzid \[.*\]		A TZID that names no known zone stays as a parameter; the oracle drops it.
+V14	icaljs-.*	value \[agent\]		AGENT (vCard 3.0, an embedded card) keeps its text escapes as written; the oracle unescapes them.
+Z1	ezvcard-.*	(only oracle|value) \[(prodid|version)\]		ez-vcard writes every card as vCard 4.0 with its own PRODID; we keep the source version and PRODID.
+Z1	ezvcard-.*	(param only (oracle|ours)|param value): (pref|type) \[.*\]	(?i)pref	ez-vcard rewrites vCard 2.1/3.0 TYPE=PREF as PREF=1 (the 4.0 form); we keep TYPE=PREF in jCard and make the same change only for xCard (VersionSpecificForm).
+Z1	ezvcard-.*	type: (float|uri|text) vs (uri|text|unknown) \[(geo|uid|member)\]		ez-vcard writes the vCard 4.0 types (GEO as a geo URI, UID as uri, MEMBER as text); we keep the type of the source version in jCard and use the geo URI in xCard.
+Z1	ezvcard-.*	param only oracle: (label|mediatype)(,pref)? \[.*\]		ez-vcard moves LABEL into ADR (4.0 form) and adds MEDIATYPE to URL photos; we keep LABEL as its own property and add no parameters.
+Z1	ezvcard-.*	only ours \[(label|class|sort-string|mailer|profile|name|agent|source|x-[a-z-]+|key|xml|geo|logo|photo)\]		Properties of vCard 3.0 and earlier (LABEL, CLASS, SORT-STRING, MAILER, PROFILE, NAME, AGENT) have no vCard 4.0 form; ez-vcard drops or rewrites them while we carry them.
+Z2	ezvcard-.*	type: (date-and-or-time|date-time|timestamp|date|time) vs (date-and-or-time|date-time|timestamp|date|time) \[.*\]		ez-vcard picks the type name from the value (date, date-time, timestamp); we use the type RFC 6350 gives the property (date-and-or-time for BDAY, ANNIVERSARY, X- dates) unless VALUE says otherwise.
+Z3	ezvcard-.*	value \[(note|n|adr|org|bday|xml|sound|key|tz|source|geo)\]		Text and value details: unknown escapes (backslash-quote) are kept as written, a value invalid in its declared charset is decoded as windows-1252 as a whole, media types for data: URIs come from TYPE (audio/basic) or default to application/octet-stream, xCard uses repeated elements for list components, and an empty element is written as a start and end tag.
+Z4	ezvcard-.*	param value: (type|pid) \[.*\]		TYPE and PID lists: we split comma lists, including a quoted list, into separate values (RFC 7095 section 3.3.1.1); the oracle keeps one string.
+Z5	ezvcard-.*	type: text vs utc-offset \[tz\]		A TZ value that is not a valid offset (1:00) stays text; the oracle repairs it.
+Z6	ezvcard-.*	photo|param only oracle: encoding.*		Inline binary is a data: URI (InlineBinaryAsDataUri); line folding inside the base64 text differs only in whitespace.
+W7	biweekly-.*	only (ours|oracle) \[.*\]	@@ [^@]*@@ /(?!vcalendar)	Components outside a VCALENDAR (examples with bare VEVENT or VTIMEZONE) are carried by us; the oracle writes only calendars.
+W1	biweekly-.*	value \[(attendee|organizer|url|attach|tzurl|source|conference|related-to|uid)\]	(?i)"mailto:.*\|\|.*"mailto:	The oracle lower-cases the URI scheme (MAILTO: to mailto:); we keep the source spelling.
+W2	biweekly-.*	value \[tzoffset(from|to)\]	\d{2}:\d{2}:\d{2}"\]	The oracle drops the seconds of a UTC offset; RFC 5545 section 3.3.14 allows them and we keep them.
+W3	biweekly-.*	value \[(freebusy|rdate|exdate)\]		The oracle writes a PERIOD as one string (start/end); RFC 7265 section 3.3.5 requires an array of two strings, which we write.
+W4	biweekly-.*	value \[request-status\]|type: .* vs (text|code,description[a-z,]*) \[request-status\]		REQUEST-STATUS: the oracle writes an empty third element; RFC 7265 section 3.4.1.2 says the last element should not be present when there is no additional data.
+W5	biweekly-.*	type: uri vs text \[(location|attach)\]		LOCATION is text in RFC 5545; the oracle treats it as text only when it is not a URL, and we keep the property's type.
+W6	biweekly-.*	only oracle \[version\]		The oracle adds VERSION:2.0 to a calendar that has none; we write what was read.
+X1	.*	oracle wrote no properties		The oracle writes an empty document for the input (it cannot hold the calendar or card, or stops at its first problem); we write every property.
+W8	biweekly-.*	param value: rsvp \[.*\]	"(true|false)".*\|\|.*"(TRUE|FALSE)"	Boolean values are true or false in lower case (RFC 6321 section 3.3.1 xs:boolean, RFC 7265 section 3.3.1); the oracle writes TRUE and FALSE.
+Y3	biweekly-.*	value \[rrule\]	T\d\d:\d\d:\d\d"\].*\|\|.*T\d\d:\d\d:\d\dZ"\]	A local UNTIL stays local; the oracle converts it to UTC.
+X5	biweekly-.*	param only ours: thisandfuture \[recurrence-id\]		A bare THISANDFUTURE parameter (RFC 2445) is kept as written; the oracle maps it to TYPE=THISANDFUTURE.
+G1	biweekly-.*	.*	@@ libical/test-data/(crash|issue25[0-9]|malloc|stresstest|zday|smallcluster)\.ics	Deliberately corrupt inputs (fuzzer output shipped with the corpus): names, parameters and values are cut at different bytes by the oracle and by us. These are not parser disagreements on valid input; the same files are in the round-trip and hostile-input checks.
+W9	biweekly-.*	value \[x-[a-z-]+\]	"(boolean|date|date-time|time|utc-offset)"	For X- properties the oracle writes the value as it read it (basic spelling 20120901T130000, 230000, -0500, TRUE); RFC 7265 section 3.3 requires the extended spelling and lower-case booleans, which we write.
+W10	biweekly-.*	type: period vs date-time \[rdate\]		The oracle loses RDATE periods in this input (empty date-time); we carry them.
+W11	biweekly-.*	type: date vs date-time \[(rdate|created|exdate)\]		The oracle writes a date-only RDATE or CREATED as a date-time at 00:00:00; we keep the date.
+W12	biweekly-.*	value \[attach\]		Base64 text is carried without line breaks (RFC 7265 section 3.4.1.1), and the oracle's re-encoded text differs in padding or whitespace only.
+G2	biweekly-.*	param only (ours|oracle): .* \[attendee\]	(?i)mailto:b@example\.com	The same ATTENDEE address appears many times with different parameters, and the oracle lower-cases the scheme; re-pairing by value cannot tell the copies apart, so a case difference shows as a parameter difference. The multiset of parameters is the same.
+Z7	ezvcard-.*	value \[group\]		The properties inside an xCard group (a vCard group prefix) come in document order; the oracle lists them in its own order.
+Z8	ezvcard-.*	type: text vs unknown \[version\]	"\s\d\.\d"	A VERSION value with stray blanks is not recognised by the oracle and stays text for us.
+Z9	ezvcard-.*	param value: label \[adr\]	\\n.*\|\|.*\\r\\n	LABEL text uses LF for a line break (RFC 6350 section 3.4); the oracle keeps the CR LF it read.
+V12	ezvcard-.*	param only ours: type \[email\]	" type"	A space before a parameter name (EMAIL; TYPE=INTERNET) is dropped; the oracle keeps it as part of the name.
+Y3	biweekly-.*	value \[rrule\]	T\d\d:\d\d:\d\d,.*\|\|.*T\d\d:\d\d:\d\dZ,	A local UNTIL stays local; the oracle converts it to UTC.
+X8	biweekly-.*	group \[x-test\]		A group prefix on an iCalendar property becomes the group parameter (RFC 7095 section 3.3.1.2 form); the oracle keeps GROUP.NAME as the name.
+X10	.*	param value: .*	\|\|.*\\n	A parameter value written with a line break (RFC 6868 ^n) cannot be a parameter value in a content line; the line break becomes a space and LineBreakEscaped is reported.

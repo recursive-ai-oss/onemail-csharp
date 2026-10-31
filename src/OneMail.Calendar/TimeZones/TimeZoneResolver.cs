@@ -20,8 +20,24 @@ internal static partial class WindowsZones
         return d;
     }
 
+    private static Dictionary<string, string>? s_reverse;
+
+    private static Dictionary<string, string> BuildReverse()
+    {
+        Dictionary<string, string> d = new(IanaRows.Length, StringComparer.OrdinalIgnoreCase);
+        foreach ((string iana, string windows) in IanaRows)
+        {
+            d[iana] = windows;
+        }
+
+        return d;
+    }
+
     /// <summary>Looks up a Windows zone name, ignoring case.</summary>
     internal static bool TryGetIana(string windowsName, out string iana) => (s_map ??= Build()).TryGetValue(windowsName, out iana!);
+
+    /// <summary>Looks up the Windows zone name of an IANA zone, ignoring case. CLDR's default-territory row wins over territory rows.</summary>
+    internal static bool TryGetWindows(string ianaName, out string windows) => (s_reverse ??= BuildReverse()).TryGetValue(ianaName, out windows!);
 }
 
 /// <summary>What <see cref="TimeZoneResolver"/> may use besides the file's own VTIMEZONE components.</summary>
@@ -35,6 +51,12 @@ public sealed record TimeZoneResolverOptions
 
     /// <summary>Map Windows zone names (<c>Eastern Standard Time</c>) to IANA names before the runtime lookup. Default true.</summary>
     public bool UseWindowsNames { get; init; } = true;
+
+    /// <summary>
+    /// Test seam: replaces the runtime's <see cref="TimeZoneInfo.FindSystemTimeZoneById(string)"/> (null result = not found). It lets
+    /// tests run the Windows-only path, where the runtime knows Windows ids and not IANA names, on any platform.
+    /// </summary>
+    internal Func<string, TimeZoneInfo?>? RuntimeLookup { get; init; }
 }
 
 /// <summary>
@@ -50,6 +72,7 @@ public sealed class TimeZoneResolver
     private readonly Dictionary<string, IcsTimeZone?> _cache = new(StringComparer.Ordinal);
     private readonly TimeZoneResolverOptions _options;
     private readonly ExpansionReport _report;
+    private readonly Func<string, TimeZoneInfo?> _find;
 
     /// <summary>Creates a resolver.</summary>
     /// <param name="calendar">A VCALENDAR whose VTIMEZONE children define zones, or null for none (only the runtime database is used).</param>
@@ -59,6 +82,7 @@ public sealed class TimeZoneResolver
     {
         _options = options ?? new TimeZoneResolverOptions();
         _report = report ?? new ExpansionReport();
+        _find = _options.RuntimeLookup ?? FindInRuntime;
         if (calendar is not null)
         {
             foreach (IcsComponent tz in calendar.TimeZones)
@@ -136,6 +160,17 @@ public sealed class TimeZoneResolver
             return null;
         }
 
+        // A Windows name goes through the table on every platform, so the result (source, defect, zone) does not depend on whether
+        // the runtime happens to know Windows ids (Windows) or not (Linux, macOS).
+        if (_options.UseWindowsNames && WindowsZones.TryGetIana(id, out string? mapped))
+        {
+            if (TryRuntime(mapped, ZoneSource.WindowsName) is { } win)
+            {
+                _report.Add(RecurrenceDefectKind.AmbiguousWindowsZone, id);
+                return win;
+            }
+        }
+
         if (TryRuntime(id, ZoneSource.Iana) is { } iana)
         {
             return iana;
@@ -153,12 +188,6 @@ public sealed class TimeZoneResolver
                     return stripped;
                 }
             }
-        }
-
-        if (_options.UseWindowsNames && WindowsZones.TryGetIana(id, out string? mapped) && TryRuntime(mapped, ZoneSource.WindowsName) is { } win)
-        {
-            _report.Add(RecurrenceDefectKind.AmbiguousWindowsZone, id);
-            return win;
         }
 
         return null;
@@ -195,16 +224,29 @@ public sealed class TimeZoneResolver
         return true;
     }
 
-    private static RuntimeTimeZone? TryRuntime(string name, ZoneSource source)
+    private RuntimeTimeZone? TryRuntime(string name, ZoneSource source)
     {
         if (!LooksLikeZoneName(name))
         {
             return null;
         }
 
+        // Without ICU (InvariantGlobalization, or a stripped host) Windows knows only its own ids, so an IANA name is looked up again
+        // under the Windows zone CLDR assigns it. Windows zone data has fewer historic rules than IANA (see docs/recurrence.md).
+        TimeZoneInfo? info = _find(name);
+        if (info is null && WindowsZones.TryGetWindows(name, out string? windowsId))
+        {
+            info = _find(windowsId);
+        }
+
+        return info is null ? null : new RuntimeTimeZone(name, source, info);
+    }
+
+    private static TimeZoneInfo? FindInRuntime(string name)
+    {
         try
         {
-            return new RuntimeTimeZone(name, source, TimeZoneInfo.FindSystemTimeZoneById(name));
+            return TimeZoneInfo.FindSystemTimeZoneById(name);
         }
         catch (TimeZoneNotFoundException)
         {

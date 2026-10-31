@@ -1,5 +1,6 @@
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.ContentLines;
+using RecursiveAI.OneMail.Calendar.Forms;
 using RecursiveAI.OneMail.Calendar.Ics;
 using RecursiveAI.OneMail.Calendar.Recurrence;
 using RecursiveAI.OneMail.Calendar.TimeZones;
@@ -16,6 +17,8 @@ internal static class CalendarTargets
         targets["contentlines"] = static d => ContentLines(d);
         targets["calendar"] = static d => Calendar(d);
         targets["recurrence"] = static d => Recurrence(d);
+        targets["jcal-jcard"] = static d => Forms(d, xml: false);
+        targets["xcal-xcard"] = static d => Forms(d, xml: true);
         return targets;
     }
 
@@ -111,6 +114,25 @@ internal static class CalendarTargets
             {
                 Check(CalendarRecurrence.Expand(cal, window, options, new ExpansionReport()), options);
             }
+        }
+    }
+
+    // jCal/jCard and xCal/xCard: reading never throws; what is read writes again in both forms; the form written from the read
+    // result reads back to the same form (the pivot is a fixed point), and the text form re-parses.
+    private static void Forms(ReadOnlySpan<byte> data, bool xml)
+    {
+        FormLimits limits = new() { MaxDepth = 24, MaxNodes = 20_000, MaxStringChars = 1 << 20 };
+        byte[] bytes = data.ToArray();
+        FormReadResult r = xml ? XmlForms.FromXml(bytes, limits) : JsonForms.FromJson(bytes, limits);
+        _ = ContentDocument.Parse(r.Document.ToArray());
+        FormWriteResult json = JsonForms.ToJson(r.Document);
+        FormWriteResult x = XmlForms.ToXCal(r.Document);
+        FormWriteResult card = XmlForms.ToXCard(r.Document);
+        _ = (x.Bytes.Length, card.Bytes.Length);
+        FormReadResult again = JsonForms.FromJson(json.Bytes);
+        if (!JsonForms.ToJson(again.Document).Bytes.AsSpan().SequenceEqual(json.Bytes))
+        {
+            throw new InvalidOperationException("jCal/jCard output does not read back to itself");
         }
     }
 
