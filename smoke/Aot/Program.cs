@@ -1,5 +1,8 @@
+using System.Linq;
 using RecursiveAI.OneMail;
 using RecursiveAI.OneMail.Calendar;
+using RecursiveAI.OneMail.Calendar.Ics;
+using RecursiveAI.OneMail.Calendar.VCard;
 using RecursiveAI.OneMail.Client;
 using RecursiveAI.OneMail.Cryptography;
 using RecursiveAI.OneMail.Mime;
@@ -47,6 +50,17 @@ internal static class Program
         var part = (MimePart)root.Children[0];
         bool mimeOk = System.Text.Encoding.ASCII.GetString(part.GetDecodedContent()) == "Hi" && root.ToArray().AsSpan().SequenceEqual(message);
         Console.WriteLine(mimeOk ? "mime ok" : "mime FAILED");
+
+        // Calendar: parse, read typed values, edit one line and write back, all under NativeAOT.
+        ContentDocument cal = ContentDocument.Parse("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:a\\,b\r\nDTSTART;TZID=Europe/Paris:20260101T100000\r\nRRULE:FREQ=DAILY;COUNT=2\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+        IcsComponent ev = IcsDocument.Calendars(cal).Single().Events.Single();
+        ev.SetText("SUMMARY", "c;d");
+        ContentDocument card = ContentDocument.Parse("BEGIN:VCARD\r\nVERSION:2.1\r\nN;ENCODING=QUOTED-PRINTABLE:M=C3=BCller;Hans\r\nTEL;WORK:+1\r\nEND:VCARD\r\n");
+        VCardView c = VCardDocument.Cards(card).Single();
+        if (ev.Summary != "c;d" || ev.RecurrenceRules.Count != 1 || c.Name?.Given[0] != "Hans" || c.Phones[0].Types[0] != "WORK" || cal.ToArray().Length == 0)
+        {
+            return 2;
+        }
 
         return textOk && mimeOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }

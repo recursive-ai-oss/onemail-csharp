@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool: round-trip checks, allocation counts and the normalised "facts" dump that the oracle comparison
+       reads (tools/calendar/README.md). It uses OneMail.Calendar only. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>CalendarDump</AssemblyName>
+    <RootNamespace>OneMail.Tools.CalendarDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+  </ItemGroup>
+
+</Project>

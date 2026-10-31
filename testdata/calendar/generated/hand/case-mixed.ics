@@ -1,0 +1,7 @@
+begin:vcalendar
+version:2.0
+Begin:VEvent
+uid:ci
+dtstart;tzid=Europe/Paris:20260101T100000
+End:vevent
+end:VCALENDAR

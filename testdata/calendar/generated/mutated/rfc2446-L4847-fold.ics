@@ -1,0 +1,42 @@
+BEGIN:VCA
+ LENDAR
+METHOD:COUNTER
+	
+PRODID:
+ -//RDU Software//NONSGML HandCal//EN
+VE
+	R
+  SION:2.0
+BEGIN:V
+	EVENT
+UID:guid-1@host1.com
+RECURRENCE-ID:19970715T
+  210000Z
+SEQUENCE:4
+ORGANIZER:Mailto:A@example.com
+ATT
+	EN
+	DEE;ROLE=CHAIR;RSVP=TRUE:Mailto:A@exampl
+  e.com
+ATTENDEE;RSVP=TRUE:
+  Mailto:B@example.com
+ATTENDEE;RSVP=TRUE:Mailto:C@example.com
+ATTENDEE;RSVP=TRUE:Mailto:D@exam
+ ple.com
+DE
+  SCRIPTION:IETF-C&S Conference Call
+CLAS
+	S:PU
+ BLIC
+SUMMARY:IETF Calendari
+ ng Workin
+ g Group Mee
+  ting
+DTSTART:19970715T220000Z
+DTEND:19970715T230000Z
+LOCATION:Conference Call
+COMMENT:May we bump this by an hour? I have a conflict
+DTSTAMP:19970629T094000Z
+END:VEVENT
+END:VCAL
+	ENDAR

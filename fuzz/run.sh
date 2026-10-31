@@ -39,6 +39,8 @@ case "$target" in
   # <target>) maxlen=<bytes> ;;   one line per target in the harness
   text) maxlen=4096 ;;
   mime-reader|mime-tree) maxlen=65536 ;;
+  contentlines) maxlen=65536 ;;
+  calendar) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
@@ -73,6 +75,7 @@ mkdir -p "$corpus" "$findings"
 [[ -n "$(ls -A "$corpus")" ]] || printf '\x00' >"$corpus/seed-empty"
 
 "$instrument" "$bin/RecursiveAI.OneMail.dll" >/dev/null
+"$instrument" "$bin/RecursiveAI.OneMail.Calendar.dll" >/dev/null
 
 # An extra seed directory is read-only for libFuzzer: new finds go to $corpus.
 dirs=("$corpus")

@@ -1,0 +1,34 @@
+BEGIN:VCAL
+ ENDAR
+PRODID:-//Example/E
+ xampleCalendar
+  Client//EN
+M
+ ETHOD:REQUEST
+VERSION:2.0
+BEGIN:VEVENT
+ORGANIZER:mailto:a@example.com
+ATTENDEE;PARTST
+  AT=
+  DECLINED;
+ DELEGATED-FROM="mailto:c@example.com":mail
+  to:e@example.c
+	om
+ATTENDEE;RSVP=TRUE:mailto
+	:c@example.com
+UID:calsrv.example.com-873970198738777@example.com
+SEQUENCE:0
+SUMMARY:Phone Conference
+DTSTART:19970701T180
+	000Z
+DTEND:19970701T200000Z
+DTSTAMP:19970
+	6
+ 14T20000
+	0Z
+COMMENT:DELEGATE (ATTENDE
+	E mailto:e@example.com) DECLINED YOUR
+ INVITATION
+END:VEVENT
+E
+ ND:VCALENDAR

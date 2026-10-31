@@ -1,0 +1,11 @@
+BEGIN:VCÄLENDÄR
+PRODID:-//Example/ExampleCalendarClient//EN
+METHOD:REFRESH
+VERSION:2.0
+BEGIN:VEVENT
+ORGÄNIZER:mailto:a@example.com
+ATTENDEE:mailto:b@example.com
+UID:example-12345@example.com
+DTSTAMP:19970603T094000
+END:VEVENT
+END:VCALENDAR

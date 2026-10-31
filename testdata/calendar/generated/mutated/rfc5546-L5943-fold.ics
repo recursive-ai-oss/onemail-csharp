@@ -1,0 +1,39 @@
+BEGI
+ N:VCALENDAR
+METHOD:COUNTER
+PRODID:-//Example/ExampleCalendarClient//EN
+VERSION:2.0
+BEGIN:VEVENT
+UID:guid-1@example.com
+RECURRENCE-ID:19970715T210000Z
+  
+SEQUENCE:
+ 4
+ORGANIZER:m
+ ailto:a@example.com
+ATTENDE
+	E;ROLE=CHAIR;RSVP=TRUE:mailto:a@example.com
+ATTENDEE;RSVP
+  =TRUE:mailto:b@examp
+	le.
+	com
+ATTENDEE;RSVP=TRUE:mailto:c@example.com
+ATTEN
+  DEE;RSVP=TRUE:mailto:d@example.com
+DESC
+	RIPTION:IE
+  TF-C&S Con
+ ference Ca
+ ll
+CLASS:PUBLIC
+SUMMARY:IETF Calendaring Working Group Meeting
+D
+ TSTART:19970715T220000Z
+DTEND:19970715T230000Z
+LOCATION:Confe
+  rence Call
+COMMENT:May we bump this by an hour? I have a conflict
+DTSTAMP:19970629T094000Z
+END:VEVENT
+END:VCAL
+ ENDAR

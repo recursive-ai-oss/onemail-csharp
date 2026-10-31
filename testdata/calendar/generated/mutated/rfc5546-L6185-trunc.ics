@@ -1,0 +1,9 @@
+BEGIN:VCALENDAR
+PRODID:-//Example/ExampleCalendarClient//EN
+METHOD:REPLY
+VERSION:2.0
+BEGIN:VTODO
+ORGANIZER:mailto:a@example.com
+ATTENDEE;PARTSTAT=IN-PROCESS:mailto:b@example.com
+PERCENT-COMPLETE:75
+UID:calsrv.example

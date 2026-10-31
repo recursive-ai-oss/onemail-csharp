@@ -1,0 +1,8 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:c
+ATTENDEE;CN="Sir ^'Bob^' Smith^nJr ^^ x":mailto:b@example.com
+X-P;A=1;A=2;B="x,y",z:v
+END:VEVENT
+END:VCALENDAR

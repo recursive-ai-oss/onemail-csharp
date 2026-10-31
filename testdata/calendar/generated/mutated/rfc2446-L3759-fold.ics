@@ -1,0 +1,24 @@
+BEGIN:
+  VCALENDAR
+PRODID:-//ACME/Desk
+	topCalendar//EN
+METHOD:DECLINECOUNTER
+VERSION:2
+ .0
+BEGIN:VEVENT
+ORGANIZER:
+ Mailto:A@example.com
+ATTENDEE;RSVP=TRUE;TYPE=INDIVIDUAL:Mailto:B@exam
+  ple.com
+COMMENT:So
+	rry, I cannot change this meeting time
+UID:calsrv.example.com-873970198738777
+	@example.co
+ m
+  
+SEQUENCE:0
+DTSTAMP:19970614T1
+ 90000Z
+END:VEVENT
+END
+ :VCALENDAR

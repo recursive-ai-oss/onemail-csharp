@@ -1,0 +1,18 @@
+BEGIN:VCARD
+VERSION:4.0
+KIND:individual
+FN:Ann Smith
+N:Smith;Ann;;;
+EMAIL;TYPE=work;PREF=1:ann@example.com
+TEL;TYPE="voice,work";VALUE=uri;PREF=1:tel:+1-555-0100
+ADR;LABEL="1 Main St^nTown":;;1 Main St;Town;;12345;US
+BDAY:--0229
+ANNIVERSARY:20100101T120000Z
+GEO:geo:37.386013,-122.082932
+LANG;PREF=1:en
+PHOTO:data:image/png;base64,AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7
+MEMBER:urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af
+RELATED;TYPE=friend:urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6
+CLIENTPIDMAP:1;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b
+X-CUSTOM;X-PARAM="a,b":custom
+END:VCARD

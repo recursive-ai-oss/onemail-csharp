@@ -1,0 +1,22 @@
+BEGIN:VCALENDAR
+PRODID:-//Example/ExampleCal
+	endarClient//EN
+METHOD:REQUEST
+VERSION:2.0
+BEGI
+	N:VFREEBUSY
+ORGANIZER:mailto:a@example.com
+ATTEND
+  EE
+	;ROLE=CHAIR:mailto:
+  a@example.com
+ATTENDEE:mailto:b@
+	example.com
+ATTENDEE:mailto:c@example.com
+DTSTAMP:19970613T190000Z
+DTSTART:1997
+	0701T080000Z
+DTEND:19970701T200000
+UID:calsrv.example.com-873970198738777@example.com
+END:VFREEBUSY
+END:VCALENDAR

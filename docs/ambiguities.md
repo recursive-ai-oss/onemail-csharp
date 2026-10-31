@@ -174,3 +174,30 @@ All forms are read into an instant plus the written zone; the source text is kep
 | M5 | `nest-12` cut inside a part's header | partial part | partial part | no part | The part exists with its partial header. | `TruncatedHeader` | 2 of 3 |
 | M6 | `nest-14`, `nest-15`, `nest-16` 10 and 200 nested multiparts, 3000 parts | all parsed | all parsed | all parsed | None of the three limits depth (200) or part count (3000). OneMail's limits are on by default and are listed in the resource-limit notes. | `NestingTooDeep`, `TooManyParts` | no oracle limit |
 | M7 | `nest-10`, `nest-11`, `nest-18`, `nest-19`, `nest-20`, `nest-21` alternative/related, signed, QP HTML, inline and unknown dispositions, a lying `Content-Length`, mbox-like trailer lines | same | same | same | Structure as written; `Content-Length` is advisory and ignored; an unknown disposition is kept as written. | none | all agree |
+
+## Calendar and contacts (ICS, vCard)
+
+Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9 (**Py-vobj**), over the public corpus and our probes (`tools/calendar/oracles`). Ical.Net 5.2.3 and FolkerKinzel.VCards 8.2.0 expose typed models only, so they settle value questions, not line syntax. The tree always keeps every byte (untouched input writes back identical); the rows below govern the decoded view and the defects. Every row is an agent default, marked provisional where fewer than two oracles agree.
+
+| ID | Case | Py-ical | Py-vobj | Resolution | Defect | Basis |
+|---|---|---|---|---|---|---|
+| K1 | Line ends: LF only, lone CR | accepts LF | accepts LF | CRLF, LF and lone CR all end a line. Reported once per file, at the first. | `BareLineFeed`, `BareCarriageReturn` | all agree for LF; CR prov. |
+| K2 | Fold with two whitespace characters after the break | one removed (`ab cd`) | one removed | Exactly one space or tab is removed (RFC 5545 §3.1); the rest is content. | none | all agree |
+| K3 | Fold inside a multi-byte UTF-8 sequence | n/a | n/a | Lines are unfolded as bytes before decoding, so the character is whole. | none | RFC 5545 §3.1 |
+| K4 | Line with no colon | skipped | parse error | Kept in place as a malformed line (written back as read); not a property. | `MissingColon` | prov. (lossless) |
+| K5 | Space before the colon (`SUMMARY :x`) | accepts | parse error | Accepted; the name is trimmed. | `WhitespaceAroundDelimiter` | prov. (1 of 2) |
+| K6 | Lower-case names and `begin:vcalendar` | accepts | accepts | Names and component names compare ASCII case-insensitively; case is kept as written. | none | all agree |
+| K7 | `END:` that does not match the open component | error | error | Closes up to the matching open component; the components in between are left unclosed. With no match, the line is kept as malformed. | `MissingEnd`, `UnmatchedEnd` | prov. (both reject; ours must not) |
+| K8 | RFC 6868 caret sequences in a parameter value (`^n`, `^^`, `^'`) | decoded | literal | Decoded. | `AmbiguousCaretEncoding` | prov. (1 of 2) |
+| K9 | The same parameter twice (`ROLE=A,B;ROLE=C`) | last wins | merged | Both are kept in order as written; readers that want one value take the first. | none | lossless |
+| K10 | Unknown text escape (`\q`, `\"`, `\:`) | `\q` and `\"` kept, `\:` becomes `:` | `\q` and `\:` kept, `\"` becomes `"` | The backslash and the character stay as written. Only `\\ \; \, \n \N` are resolved (vCard 2.1: `\\ \;`). | none | prov.; `\q` agrees |
+| K11 | Escapes in `X-` properties | raw | unescaped | Unescaped like any TEXT value (RFC 5545 §3.8.8.2 gives `X-` properties the TEXT type). | none | prov. (1 of 2) |
+| K12 | Invalid UTF-8 text | U+FFFD | U+FFFD | The line is read as Windows-1252, the reading clients use for legacy files, unless `CHARSET` names a charset we can decode. The source bytes are untouched. | `AmbiguousNonUtf8Text` | prov. (agent default) |
+| K13 | vCard 2.1 `CHARSET` we cannot decode | n/a | n/a | Read as UTF-8, or Windows-1252 when that is invalid. | `UnknownCharset` | agent default |
+| K14 | vCard 2.1 quoted-printable soft break (`=` at line end) | n/a | joined | Joined whenever the line is marked `QUOTED-PRINTABLE`, in vCard and ICS alike. | `QuotedPrintableSoftBreak` | prov. |
+| K15 | vCard 2.1 base64 data on unindented lines, ended by an empty line | n/a | joined | Joined when the line carries `ENCODING=BASE64`/`B`/bare `BASE64` and the next line holds only base64 characters. The ending empty line belongs to the property. | `Base64ContinuationWithoutFold` | prov. |
+| K16 | vCard 2.1 bare parameters (`TEL;WORK;VOICE`) | n/a | dropped on some inputs | Kept as bare parameters; the typed view lists them as types together with `TYPE=` values. | none | lossless |
+| K17 | Comma lists with an empty element (`ADR` street `5,`) | n/a | element dropped | The empty element is dropped in the typed view; the raw value keeps it. | none | prov. |
+| K18 | Properties inside `VCALENDAR` after `BEGIN:VCARD` junk, stray lines around components | n/a | n/a | Kept as items of the document root, in order. | `MissingColon`, `UnmatchedEnd` | lossless |
+| K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
+| K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |

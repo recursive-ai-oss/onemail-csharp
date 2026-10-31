@@ -1,0 +1,12 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Hopson;Ross
+FN:Ross Hopson
+ORG:On Technology, Inc.
+ADR;TYPE=WORK,POSTAL,PARCEL:;Suite 1600;434 Fayetteville St.
+  Mall\, Two Hannover Square;Raleigh;NC;27601
+TEL;TYPE=WORK,MSG:+1-919-890-4036
+TEL;TYPE=WORK,FAX:+1-919-890-4100
+EMAIL;TYPE=INTERNET:rhopson@on.com
+EMAIL;TYPE=INTERNET:rhopson@on.com
+END:VCARD

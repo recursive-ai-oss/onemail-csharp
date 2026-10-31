@@ -1,0 +1,30 @@
+BEGIN:VCALENDAR
+PRODID:-//ACME/DesktopC
+	alendar//EN
+METHOD:REPLY
+VERSION:2.0
+BEGIN:VEVENT
+ORGANIZER:MAILTO:A@Example.com
+ATTENDEE;PA
+  RTSTAT=DE
+  L
+  EGATED;
+ DELEGATED-TO="Mailto:E@example.com":M
+  ailto:C@example.com
+ATTENDEE;PARTSTAT=DECLINED;
+ DELEGATED-FROM="Mailto:C@e
+  xamp
+  le
+ .com":Mailto:E@example.com
+COMMENT:Sorry, I will
+  be out of town at that time.
+ 
+UID:calsrv.example.com-87397019
+ 8738777@examp
+	le.c
+  om
+SEQUENCE:0
+REQUEST-STATUS:2.0;Success
+DTSTAMP:19970614T190000Z
+END:VEVENT
+END:VCALENDAR

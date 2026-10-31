@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:4.0
+U
+	ID:urn:uuid:4fb
+ e89
+  71-0bc3-
+	424c-9c26-36c3e1eff6b1
+FN:J. Doe
+N:Doe;J.;;;
+EMAIL;PID=1.1:jdoe@example.com
+EMAIL;PI
+	D=2.1:bos
+ s@example.
+	com
+EMAIL;PID=3.1:ceo@example.com
+TEL;PID=1.1
+	;VALUE=uri:tel:+1-555-555-5555
+TEL;PID=2.1;VALUE=uri:tel:+1-666-666-6666
+CLIENTPIDMAP:1;urn:
+  uuid:53e374d
+ 9-3
+ 37e-4727-8803-a1e9c14e0556
+END:VCARD

@@ -1,0 +1,8 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:A
+this is not a property
+END:VCARD
+END:VCARD
+BEGIN:VCARD
+FN:unterminated

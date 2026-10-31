@@ -1,0 +1,20 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iPhone OS 17.0//EN
+N:Smith;Ann;Marie;Dr.;Jr.
+FN:Dr. Ann Marie Smith Jr.
+NICKNAME:Annie,Am
+ORG:Acme\, Inc.;R&D;Lab
+TITLE:Engineer
+item1.EMAIL;type=INTERNET;type=pref:ann@example.com
+item1.X-ABLabel:_$!<Work>!$_
+item2.URL;type=pref:https://example.com
+item2.X-ABLabel:_$!<HomePage>!$_
+TEL;type=CELL;type=VOICE;type=pref:+1 (555) 010-0100
+ADR;type=HOME;type=pref:;;1 Infinite Loop;Cupertino;CA;95014;USA
+BDAY:1980-02-29
+NOTE:Line 1\nLine 2\, with comma\; and semicolon
+PHOTO;ENCODING=b;TYPE=JPEG:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKiss
+CATEGORIES:friends,work
+X-SOCIALPROFILE;type=twitter;x-user=ann:http://twitter.com/ann
+END:VCARD

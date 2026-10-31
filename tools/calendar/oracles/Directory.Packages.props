@@ -1,0 +1,10 @@
+<Project>
+  <!-- Oracle packages are pinned here, apart from the shipped packages' central versions. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Ical.Net" Version="5.2.3" />
+    <PackageVersion Include="FolkerKinzel.VCards" Version="8.2.0" />
+  </ItemGroup>
+</Project>
