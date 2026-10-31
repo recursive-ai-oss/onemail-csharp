@@ -49,7 +49,7 @@
 
   // Positive controls: known-bad outputs must be flagged, otherwise a clean result proves nothing.
   var controls = ['<img src=x onerror=alert(1)>', '<a href="javascript:alert(1)">x</a>', '<svg><circle/></svg>', '<p style="background:expression(x)">x</p>',
-    '<script>x</script>', '<img src="http://h.test/a" srcset="javascript:x 1x">', '<style>@import url(x);</style>'];
+    '<script>x<\/script>', '<img src="http://h.test/a" srcset="javascript:x 1x">', '<style>@import url(x);</style>'];
   var flagged = 0;
   controls.forEach(function (c) { var before = violations.length; var d = document.createElement('div'); d.innerHTML = c; checkTree('control', d); if (violations.length > before) flagged++; });
   violations.length = 0;
