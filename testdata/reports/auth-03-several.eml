@@ -1,0 +1,13 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Authentication-Results: example.com;
+          auth=pass (cram-md5) smtp.auth=sender@example.net;
+          spf=pass smtp.mailfrom=example.net
+Authentication-Results: example.com; iprev=pass
+          policy.iprev=192.0.2.200
+Content-Type: text/plain
+
+body

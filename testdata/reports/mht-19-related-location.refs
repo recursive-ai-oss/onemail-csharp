@@ -1,0 +1,6 @@
+a.png
+sub/b.png
+./a.png
+sub/../a.png
+http://www.example.org/pages/a.png
+c.png

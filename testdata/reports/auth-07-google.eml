@@ -1,0 +1,12 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@example.net header.s=sel header.b=Abc123;
+       spf=pass (google.com: domain of a@example.net designates 192.0.2.1 as permitted sender) smtp.mailfrom=a@example.net;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=example.net
+Content-Type: text/plain
+
+body

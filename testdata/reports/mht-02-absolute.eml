@@ -1,0 +1,29 @@
+From: <saved@example.org>
+Subject: page
+MIME-Version: 1.0
+Content-Type: multipart/related; type="text/html"; boundary="rb"
+
+--rb
+Content-Type: text/html; charset=utf-8
+Content-Location: http://www.example.org/dir/page.html
+
+<html><body>page</body></html>
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: http://www.example.org/dir/a.png
+
+iVBORw0KGgo=
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: http://www.example.org/img/b.png
+
+iVBORw0KGgo=
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: http://other.example.net/c.png
+
+iVBORw0KGgo=
+--rb--

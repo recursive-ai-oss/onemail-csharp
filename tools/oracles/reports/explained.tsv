@@ -1,0 +1,3 @@
+# The explained map for the report differential: every difference between OneMail and an oracle must match a line here, or the run fails.
+# Fields (tab separated): id, oracle (mimekit|python|*), file-name regex (search), class regex (whole), sub-class regex (search),
+# detail regex (search). First matching line wins. The id names an entry of docs/ambiguities.md.

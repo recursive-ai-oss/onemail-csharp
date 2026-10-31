@@ -1,0 +1,33 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+This is a report.
+--b1
+Content-Type: message/disposition-notification
+
+Reporting-UA: joes-pc.cs.example.com; Foomail 97.1
+Original-Recipient: rfc822;Joe_Recipient@example.com
+Final-Recipient: rfc822;Joe_Recipient@example.com
+Original-Message-ID: <199509192301.23456@example.org>
+Disposition: manual-action/MDN-sent-manually; displayed
+Disposition: automatic-action/MDN-sent-automatically; displayed
+--b1
+Content-Type: message/rfc822
+
+From: <sender@example.com>
+To: <user@remote.example>
+Subject: hello
+Date: Sat, 2 Jul 1994 17:10:28 -0400
+Message-ID: <orig1@example.com>
+
+The original body.
+--b1--

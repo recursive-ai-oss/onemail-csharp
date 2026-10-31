@@ -1,0 +1,9 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Received-SPF: fail (mx.example.org: domain of x@example.com does not designate 192.0.2.9 as permitted sender) client-ip=192.0.2.9; envelope-from=x@example.com; helo=bad.example; identity=mailfrom; receiver=mx.example.org; mechanism=-all; problem=none
+Content-Type: text/plain
+
+body

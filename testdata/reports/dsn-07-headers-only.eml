@@ -1,0 +1,29 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=delivery-status;
+ boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+This is a report.
+--b1
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; cs.utk.edu
+
+Final-Recipient: rfc822;x@example.org
+Action: failed
+Status: 5.1.1
+--b1
+Content-Type: text/rfc822-headers
+
+From: <sender@example.com>
+To: <x@example.org>
+Subject: hi
+Message-ID: <orig2@example.com>
+--b1--

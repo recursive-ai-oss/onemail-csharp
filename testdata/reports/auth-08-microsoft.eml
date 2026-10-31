@@ -1,0 +1,9 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Authentication-Results: spf=pass (sender IP is 192.0.2.1) smtp.mailfrom=example.net; dkim=pass (signature was verified) header.d=example.net; dmarc=pass action=none header.from=example.net;compauth=pass reason=100
+Content-Type: text/plain
+
+body

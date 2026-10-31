@@ -1,0 +1,6 @@
+images/a.png
+./images/a.png
+b.png
+images/../b.png
+/b.png
+c.png

@@ -1,0 +1,13 @@
+a.png
+./a.png
+../img/b.png
+/img/b.png
+http://www.example.org/dir/a.png
+http://other.example.net/c.png
+//other.example.net/c.png
+HTTP://WWW.EXAMPLE.ORG/dir/a.png
+a.png#frag
+a.png?x=1
+missing.png
+http://www.example.org:80/dir/a.png
+page.html

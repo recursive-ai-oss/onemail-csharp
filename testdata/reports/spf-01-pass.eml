@@ -1,0 +1,11 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Received-SPF: pass (mybox.example.org: domain of myname@example.com designates 192.0.2.1 as permitted sender)
+ receiver=mybox.example.org; client-ip=192.0.2.1;
+ envelope-from="myname@example.com"; helo=foo.example.com;
+Content-Type: text/plain
+
+body

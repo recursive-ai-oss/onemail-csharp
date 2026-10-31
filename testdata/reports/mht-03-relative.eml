@@ -1,0 +1,23 @@
+From: <saved@example.org>
+Subject: page
+MIME-Version: 1.0
+Content-Type: multipart/related; type="text/html"; boundary="rb"
+
+--rb
+Content-Type: text/html; charset=utf-8
+Content-Location: index.html
+
+<html><body>page</body></html>
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: images/a.png
+
+iVBORw0KGgo=
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: b.png
+
+iVBORw0KGgo=
+--rb--
