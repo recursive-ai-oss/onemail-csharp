@@ -151,8 +151,11 @@ public sealed record FormLimits
     /// <summary>Longest input in bytes. Default 256 MiB.</summary>
     public int MaxInputBytes { get; init; } = 256 * 1024 * 1024;
 
-    /// <summary>Deepest nesting of JSON arrays/objects or XML elements. Default 64.</summary>
-    public int MaxDepth { get; init; } = 64;
+    /// <summary>
+    /// Deepest nesting of JSON arrays/objects or XML elements. Default 128: the content-line parser allows 32 nested components,
+    /// and each takes up to three levels in either form, so everything the library writes it reads back.
+    /// </summary>
+    public int MaxDepth { get; init; } = 128;
 
     /// <summary>Most JSON values or XML elements in a document. Default 16,000,000.</summary>
     public int MaxNodes { get; init; } = 16_000_000;

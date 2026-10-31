@@ -182,8 +182,17 @@ internal static class FormCodec
                 losses.Add(FormLossKind.AmbiguousValueType, ppath);
                 f.Params.Add(MakeParam("encoding", [encOriginal ?? "BASE64"]));
             }
-            else if (d.IsVCard() && FormSchema.IsInlineBinaryProperty(lname))
+            else if (d == Dialect.ICal && type == "unknown")
             {
+                // An extension property with base64 data: binary, the type RFC 5545 §3.3.1 has for it.
+                type = "binary";
+                shape = Shape.Single;
+                losses.Add(FormLossKind.AmbiguousValueType, ppath);
+                f.Params.Add(MakeParam("encoding", [encOriginal ?? "BASE64"]));
+            }
+            else if (d.IsVCard() && (FormSchema.IsInlineBinaryProperty(lname) || type == "unknown"))
+            {
+                // jCard and xCard have no binary type (RFC 7095 §3.5): inline data becomes a data: URI (RFC 6350 §6.2.4).
                 string media = MediaTypeFor(lname, f.Find("type"));
                 raw = "data:" + media + ";base64," + StripWhitespace(raw);
                 type = "uri";
@@ -733,7 +742,7 @@ internal static class FormCodec
         bool dataUriToEncoding = false;
 
         // Inline binary of vCard 2.1/3.0 goes back to ENCODING=b/BASE64.
-        if (d is Dialect.VCard21 or Dialect.VCard30 && FormSchema.IsInlineBinaryProperty(f.Name) && type == "uri" && f.Values.Count == 1 && f.Values[0].Kind == FKind.String
+        if (d is Dialect.VCard21 or Dialect.VCard30 && (FormSchema.IsInlineBinaryProperty(f.Name) || f.Name.StartsWith("x-", StringComparison.Ordinal)) && type == "uri" && f.Values.Count == 1 && f.Values[0].Kind == FKind.String
             && TrySplitBase64DataUri(f.Values[0].Text, out string payload))
         {
             text = payload;
@@ -780,7 +789,14 @@ internal static class FormCodec
             ps.Add(new ContentParameter(FormText.Upper(fp.Name), vals));
         }
 
-        if (d == Dialect.VCard21 && !Ascii.IsValid(Encoding.UTF8.GetBytes(text)))
+        if (d == Dialect.VCard21 && text.AsSpan().IndexOfAny('\r', '\n') >= 0)
+        {
+            // vCard 2.1 carries a line break only through quoted-printable.
+            text = ContentValues.EncodeQuotedPrintable(Encoding.UTF8.GetBytes(text.Replace("\r\n", "\n", StringComparison.Ordinal)));
+            ps.Add(new ContentParameter("ENCODING", "QUOTED-PRINTABLE"));
+            ps.Add(new ContentParameter("CHARSET", "UTF-8"));
+        }
+        else if (d == Dialect.VCard21 && !Ascii.IsValid(Encoding.UTF8.GetBytes(text)))
         {
             ps.Add(new ContentParameter("CHARSET", "UTF-8"));
         }
@@ -836,7 +852,6 @@ internal static class FormCodec
 
     private static string ValuesToText(FProperty f, Dialect d, string type, Shape shape, string ppath, DefectSink defects)
     {
-        TextEscapeStyle style = d.Style();
         FormValue? first = f.Values.Count > 0 ? f.Values[0] : null;
         switch (shape)
         {
@@ -856,12 +871,12 @@ internal static class FormCodec
                     {
                         for (int j = 0; j < c.Items.Count; j++)
                         {
-                            sb.Append(j > 0 ? "," : string.Empty).Append(ContentValues.Escape(c.Items[j].ScalarText, style));
+                            sb.Append(j > 0 ? "," : string.Empty).Append(EscapeText(c.Items[j].ScalarText, d));
                         }
                     }
                     else
                     {
-                        sb.Append(ContentValues.Escape(c.ScalarText, style));
+                        sb.Append(EscapeText(c.ScalarText, d));
                     }
                 }
 
@@ -878,7 +893,7 @@ internal static class FormCodec
             case Shape.RequestStatus when type == "text":
                 if (first is { Kind: FKind.Array } rs)
                 {
-                    return string.Join(';', rs.Items.Select(i => ContentValues.Escape(i.ScalarText, style)));
+                    return string.Join(';', rs.Items.Select(i => EscapeText(i.ScalarText, d)));
                 }
 
                 break;
@@ -925,7 +940,7 @@ internal static class FormCodec
         switch (type)
         {
             case "text":
-                return ContentValues.Escape(s, d.Style());
+                return EscapeText(s, d);
             case "boolean":
                 return s.Equals("true", StringComparison.OrdinalIgnoreCase) ? "TRUE" : s.Equals("false", StringComparison.OrdinalIgnoreCase) ? "FALSE" : s;
             case "integer" or "float":
@@ -990,6 +1005,18 @@ internal static class FormCodec
                 losses.Add(FormLossKind.VersionSpecificForm, path + "/" + p.Name);
             }
         }
+    }
+
+    // Text escaping for a value. vCard 2.1 has no \n escape (a line break needs quoted-printable, applied to the whole
+    // value afterwards), so only backslash and semicolon are escaped there.
+    private static string EscapeText(string text, Dialect d)
+    {
+        if (d != Dialect.VCard21)
+        {
+            return ContentValues.Escape(text, TextEscapeStyle.Rfc5545);
+        }
+
+        return text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace(";", "\\;", StringComparison.Ordinal);
     }
 
     internal static string InvariantInt(int n) => n.ToString(CultureInfo.InvariantCulture);
