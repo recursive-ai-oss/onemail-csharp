@@ -1,7 +1,7 @@
 # The MAPI property model
 
 What `RecursiveAI.OneMail.Mapi` is: the in-memory form of an Outlook item (message, recipient, attachment), independent of
-the file it came from. MSG files fill it today (`docs/msg.md`); the PST layers will fill the same types. Types and tags are
+the file it came from. MSG files fill it today (`docs/msg.md`); the PST/OST messaging layer fills the same types (`docs/pst-messaging.md`). Types and tags are
 MS-OXCDATA 2.11.1 and MS-OXPROPS; nothing here is taken from another implementation.
 
 ## Objects

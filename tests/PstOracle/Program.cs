@@ -25,6 +25,65 @@ if (args is ["pad", var padPath, var megabytes])
     return 0;
 }
 
+if (args is ["genpst", var gpath, var gfmt, var gpreset, ..])
+{
+    // genpst <out> ansi|unicode|4k sample|big [messagesPerFolder]: a PST/OST written by the test builder, for the pffexport comparison.
+    NdbFormat gf = gfmt switch { "ansi" => NdbFormat.Ansi, "unicode" => NdbFormat.Unicode, _ => NdbFormat.Unicode4K };
+    var tree = gpreset == "big" ? RecursiveAI.OneMail.Tests.Pst.PstFixtures.Big(args.Length > 4 ? int.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) : 200, args.Length > 5 ? int.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 300_000) : gpreset == "medium" ? RecursiveAI.OneMail.Tests.Pst.PstFixtures.Big(30, 12_000) : RecursiveAI.OneMail.Tests.Pst.PstFixtures.Sample();
+    File.WriteAllBytes(gpath, new RecursiveAI.OneMail.Tests.Pst.PstFixtureBuilder(gf).Build(tree, "Generated store", compress: gf == NdbFormat.Unicode4K).Bytes);
+    return 0;
+}
+
+if (args is ["pstalloc", var apath, var passes])
+{
+    // pstalloc <file> <passes>: walks the whole store several times (every folder, message, recipient and attachment read) and prints the bytes
+    // allocated per message and the working set after each pass; a flat working set across passes is the constant-memory claim.
+    if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(apath, out var astore, out var awhy) || astore is null) { Console.WriteLine("open failed " + string.Join("; ", awhy)); return 1; }
+    using (astore)
+    {
+        long peak = 0;
+        for (int pass = 0; pass < int.Parse(passes, System.Globalization.CultureInfo.InvariantCulture); pass++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            var c = astore.ReadEverything();
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long ws = Environment.WorkingSet;
+            peak = Math.Max(peak, ws);
+            Console.WriteLine($"pass {pass}: messages {c.Messages} recipients {c.Recipients} attachments {c.Attachments} allocated {allocated / 1024} KiB = {allocated / Math.Max(1, c.Messages)} B/message; working set {ws / 1048576} MiB; managed {GC.GetTotalMemory(true) / 1048576} MiB");
+        }
+
+        Console.WriteLine($"peak working set {peak / 1048576} MiB; file {new FileInfo(apath).Length / 1048576} MiB");
+    }
+
+    return 0;
+}
+
+if (args is ["messaging" or "propexact" or "props", var mpath, ..])
+{
+    // The messaging layer over a whole file: "messaging <file> <pffexport .export dir>" compares with pffexport; "propexact <file>" checks every
+    // property bag against the raw lists-tables-properties entries; both end by printing counts and the first differences.
+    if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(mpath, out var store, out var why) || store is null) { Console.WriteLine("open failed " + string.Join("; ", why)); return 1; }
+    using (store)
+    {
+        if (args[0] == "props")
+        {
+            // props <file> <nid hex>: every property of one message, with value lengths and a short text/hex preview.
+            store.TryOpenMessage(new RecursiveAI.OneMail.Pst.Ndb.Nid(Convert.ToUInt32(args[2], 16)), out var pm);
+            foreach (var pr in pm!.Properties) Console.WriteLine($"{pr.Tag} {RecursiveAI.OneMail.Mapi.MapiPropertyNames.GetName(pr.Id)} len={pr.GetByteLength()} {Convert.ToHexString(pr.GetBytes().Span[..Math.Min(24, pr.GetBytes().Length)])}");
+            foreach (var d in pm.Defects) Console.WriteLine("defect " + d);
+            return 0;
+        }
+
+        if (args[0] == "messaging") return MessagingCompare.Run(store, args[2], args.Length > 3);
+        var r = RecursiveAI.OneMail.Tests.Pst.PstChecks.PropertyExact(store, default);
+        foreach (string d in r.Differences.Take(40)) Console.WriteLine("DIFF " + d);
+        var counts = store.ReadEverything();
+        Console.WriteLine($"propexact objects {r.Objects} properties {r.Properties} differences {r.Differences.Count}; folders {counts.Folders} messages {counts.Messages} recipients {counts.Recipients} attachments {counts.Attachments} embedded {counts.EmbeddedMessages}; defects {store.Defects.Count} dropped {store.DroppedDefects} ndbDefects {store.DatabaseDefects.Count}");
+        foreach (var g in store.Defects.GroupBy(d => d.Kind)) Console.WriteLine($"defect {g.Key} {g.Count()} first: {g.First()}");
+        return r.Differences.Count == 0 ? 0 : 3;
+    }
+}
+
 if (args.Length < 2) { Console.Error.WriteLine("usage: PstOracle dump|nodes <file>"); return 2; }
 if (!NdbFile.TryOpen(args[1], out NdbFile? f, out IReadOnlyList<NdbDefect> openDefects) || f is null)
 {

@@ -244,7 +244,8 @@ public static class TcBuilder
             rows.Add(row);
         }
 
-        Hid rowIndexHid = rows.Count == 0 ? default : BthBuilder.Write(heap, 4, 4, rowIndex, 50);
+        // An empty table still has a (empty) row-index BTH: other readers refuse a table whose index header is missing.
+        Hid rowIndexHid = BthBuilder.Write(heap, 4, 4, rowIndex, 50);
         uint hnidRows = 0;
         if (rows.Count > 0)
         {

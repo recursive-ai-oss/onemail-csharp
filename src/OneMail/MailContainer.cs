@@ -1,5 +1,8 @@
 using System.Runtime.CompilerServices;
+using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime.Reading;
+using RecursiveAI.OneMail.Msg;
+using RecursiveAI.OneMail.Pst.Messaging;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores;
 using RecursiveAI.OneMail.Stores.Emlx;
@@ -47,6 +50,8 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     private readonly MimeReaderOptions? _mime;
     private readonly MboxReaderOptions? _mbox;
     private MboxReader? _messageReader;
+    private PstStore? _pst;
+    private MsgFile? _msg;
     private bool _disposed;
 
     private MailContainer(MailFormat format, string? location, IRandomAccessSource? source, bool ownsSource, string? directory, MimeReaderOptions? mime, MboxReaderOptions? mbox)
@@ -66,15 +71,16 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     /// <summary>The path that was opened, or null when opened from memory or a stream.</summary>
     public string? Location { get; }
 
-    /// <summary>True when the container holds many messages (everything but <see cref="MailFormat.Eml"/> and <see cref="MailFormat.Emlx"/>).</summary>
-    public bool IsStore => Format is not (MailFormat.Eml or MailFormat.Emlx);
+    /// <summary>True when the container holds many messages (everything but <see cref="MailFormat.Eml"/>, <see cref="MailFormat.Emlx"/> and <see cref="MailFormat.Msg"/>).</summary>
+    public bool IsStore => Format is not (MailFormat.Eml or MailFormat.Emlx or MailFormat.Msg);
 
     /// <summary>Opens a file or a directory, deciding what it is from its content.</summary>
     /// <param name="path">A file, or a Maildir / Maildir++ / Apple Mail bundle directory.</param>
     /// <param name="mime">The MIME reader's own options (limits and so on), or null for the defaults.</param>
     /// <param name="mbox">The mbox reader's own options, or null. Used only for mbox files.</param>
     /// <returns>The collection. Dispose it to close the file.</returns>
-    /// <exception cref="UnsupportedMailFormatException">The content is not recognised, or is recognised but not readable yet (PST, OST, MSG, TNEF, ICS, vCard, other compound files).</exception>
+    /// <exception cref="UnsupportedMailFormatException">The content is not recognised, or is recognised but not readable yet (TNEF, ICS, vCard, other compound files).</exception>
+    /// <exception cref="InvalidDataException">The file is a PST, OST or MSG by its content but nothing in it can be read (a damaged header or container).</exception>
     /// <exception cref="FileNotFoundException">There is no file or directory at <paramref name="path"/>.</exception>
     public static MailContainer Open(string path, MimeReaderOptions? mime = null, MboxReaderOptions? mbox = null)
     {
@@ -124,13 +130,33 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     {
         ArgumentNullException.ThrowIfNull(source);
         MailFormat f = MailFormatSniffer.Sniff(source);
-        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx))
+        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg))
         {
             throw new UnsupportedMailFormatException(f, path);
         }
 
         // A stream wrapper made by Open(Stream) is ours to drop; a caller's source is not.
-        return new MailContainer(f, path, source, owns && (path is not null || source is StreamSource), null, mime, mbox);
+        var c = new MailContainer(f, path, source, owns && (path is not null || source is StreamSource), null, mime, mbox);
+        if (f is MailFormat.Pst or MailFormat.Ost)
+        {
+            if (!PstStore.TryOpen(source, leaveOpen: true, out PstStore? store, out IReadOnlyList<MapiDefect> why))
+            {
+                throw new InvalidDataException("The " + f + " file cannot be read: " + (why.Count > 0 ? why[0].ToString() : "unusable header"));
+            }
+
+            c._pst = store;
+        }
+        else if (f == MailFormat.Msg)
+        {
+            if (!MsgFile.TryOpen(source, leaveOpen: true, out MsgFile? msg, out IReadOnlyList<MapiDefect> why))
+            {
+                throw new InvalidDataException("The Msg file cannot be read: " + (why.Count > 0 ? why[0].ToString() : "unusable"));
+            }
+
+            c._msg = msg;
+        }
+
+        return c;
     }
 
     /// <summary>Enumerates the items in the container's order.</summary>
@@ -145,6 +171,29 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 break;
             case MailFormat.Emlx:
                 yield return new EmlxMimeItem(this, _source, null, Location, 0);
+                break;
+            case MailFormat.Msg:
+                yield return new MapiMailItem(_msg!.Message, new MailProvenance(MailFormat.Msg, Location, null, 0, _source!.Length, 0));
+                break;
+            case MailFormat.Pst or MailFormat.Ost:
+                // Normal messages of every folder, depth-first. Folder-associated messages (rules, views, settings) are not mail and are
+                // reached through PstStore. Search folders only list messages that live in other folders, so they are skipped.
+                int at = 0;
+                foreach (Pst.Messaging.PstFolder folder in _pst!.EnumerateFolders())
+                {
+                    if (folder.IsSearchFolder)
+                    {
+                        continue;
+                    }
+
+                    string path = folder.Path;
+                    foreach (Pst.Messaging.PstMessage m in folder.EnumerateMessages())
+                    {
+                        ThrowIfDisposed();
+                        yield return new MapiMailItem(m, new MailProvenance(Format, Location, path.Length == 0 ? null : path, -1, -1, at++));
+                    }
+                }
+
                 break;
             case MailFormat.Mbox:
                 using (MboxReader r = new(_source!, _mbox))
@@ -205,7 +254,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 }
 
                 break;
-            case MailFormat.Emlx or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle:
+            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Pst or MailFormat.Ost or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle:
                 // Directory stores and single files do their I/O one small file at a time; the sync enumeration is already cheap per item.
                 foreach (IMailItem item in Enumerate())
                 {
@@ -227,6 +276,8 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
 
         _disposed = true;
         _messageReader?.Dispose();
+        _pst?.Dispose();
+        _msg?.Dispose();
         if (_ownsSource)
         {
             _source?.Dispose();

@@ -9,6 +9,10 @@
 
   <ItemGroup>
     <Compile Include="../OneMail.Tests/Pst/NdbTestBuilder.cs" />
+    <Compile Include="../OneMail.Tests/Pst/PstChecks.cs" />
+    <Compile Include="../OneMail.Tests/Pst/LtpTestBuilder.cs" />
+    <Compile Include="../OneMail.Tests/Pst/PstFixtureBuilder.cs" />
+    <Compile Include="../OneMail.Tests/Pst/PstFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>
