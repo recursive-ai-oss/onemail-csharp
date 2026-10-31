@@ -288,6 +288,20 @@ public class OutlookCalendarTests
         Assert.Equal(new DateTime(2007, 4, 2, 10, 0, 0), cal.Events.First().Start!.Value.Value);
     }
 
+    // Found by fuzzing: a rule whose 16-bit year (or an absolute transition year) is past 9999 once overflowed DateTime.
+    [Fact]
+    public void ARuleYearBeyond9999StillMakesAVTimeZone()
+    {
+        byte[] blob = Convert.FromBase64String("ASwBAAAAADAAxP///wAAAAAACwABAAIAAAAAAAACArm5ubm5ubm5ubm5uQICAAAAAAACAP7//f//9wAAAA==")[1..];
+        if (TimeZoneDefinition.TryParse(blob, out TimeZoneDefinition? d) && d is not null)
+        {
+            Assert.NotNull(d.ToVTimeZone("Fuzz"));
+        }
+
+        TzRule far = new(3, 65000, -60, 0, -60, new SystemTime(65000, 3, 0, 15, 2, 0, 0, 0), new SystemTime(65000, 10, 0, 15, 2, 0, 0, 0));
+        Assert.NotNull(new TimeZoneDefinition("Far", [far]).ToVTimeZone("Far"));
+    }
+
     [Fact]
     public void MonthlyDay30IsAnAmbiguityNotASilentChange()
     {

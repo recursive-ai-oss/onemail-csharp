@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # The Checked suite, the browser smoke and a 600 s run of the oxocal fuzz target, in one job (run from the repository root).
+# With the argument "fuzz" only the fuzz run is done.
 set -u
 export PATH=~/dotnet10:~/.local/bin:$PATH DOTNET_ROOT=~/dotnet10 ONEMAIL_ARTIFACTS=~/onemail/oxocal/artifacts DOTNET_CLI_TELEMETRY_OPTOUT=1
 export LIBFUZZER_DOTNET=~/onemail/tools/libfuzzer-dotnet SHARPFUZZ=~/onemail/tools/sharpfuzz ONEMAIL_FUZZ_WORK=~/onemail/oxocal/fuzzwork
 L=~/onemail/oxocal/logs; mkdir -p $L
+if [ "${1:-}" != fuzz ]; then
 echo "== suite"; dotnet build tests/OneMail.Tests -c Checked -v quiet -clp:NoSummary > $L/build.log 2>&1; tail -2 $L/build.log
 dotnet test --project tests/OneMail.Tests -c Checked --no-build > $L/suite.log 2>&1; tail -7 $L/suite.log
 echo "== wasm"; bash smoke/Wasm/run-headless.sh ~/onemail/oxocal/wasm > $L/wasm.log 2>&1; echo "wasm exit $?"; grep -E 'oxocal|wasm smoke|exit:' $L/wasm.log | head
+fi
 echo "== fuzz oxocal"
 mkdir -p ~/onemail/oxocal/seeds
 python3 - <<'E'

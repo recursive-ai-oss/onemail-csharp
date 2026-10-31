@@ -272,8 +272,8 @@ internal static class TimeZoneBuilder
         for (int i = 0; i < rules.Count; i++)
         {
             TzRule rule = rules[i];
-            int year = Math.Max((int)rule.Year, 1601);
-            int? untilYear = i + 1 < rules.Count ? Math.Max((int)rules[i + 1].Year, 1601) : null;
+            int year = Math.Clamp((int)rule.Year, 1601, 9999);   // the field is 16 bits; DateTime stops at 9999
+            int? untilYear = i + 1 < rules.Count ? Math.Clamp((int)rules[i + 1].Year, 1601, 9999) : null;
             if (!rule.HasDaylight)
             {
                 vtz.Add(Observance("STANDARD", new DateTime(year, 1, 1), rule.StandardOffset, rule.StandardOffset, null, untilYear));
@@ -290,7 +290,7 @@ internal static class TimeZoneBuilder
 
     private static DateTime Transition(int year, SystemTime t)
     {
-        int y = t.Year != 0 ? t.Year : year;
+        int y = t.Year != 0 ? Math.Clamp((int)t.Year, 1, 9999) : year;
         int month = Math.Clamp((int)t.Month, 1, 12);
         DateTime date;
         if (t.Year != 0)
