@@ -26,6 +26,7 @@ internal static class Program
             ["msg"] = MsgTarget.Run,
             ["mail-open"] = MailTarget.Run,
             ["ltp"] = LtpTarget.Run,
+            ["pst-messaging"] = PstMessagingTarget.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

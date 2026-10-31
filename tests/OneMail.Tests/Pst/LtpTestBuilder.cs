@@ -125,7 +125,7 @@ public static class BthBuilder
 }
 
 /// <summary>A property to put in a generated property context.</summary>
-public sealed record PcSpec(ushort Id, ushort Type, byte[] Value, bool InSubnode = false, uint ForcedHnid = 0);
+public sealed record PcSpec(ushort Id, ushort Type, byte[] Value, bool InSubnode = false);
 
 public static class PcBuilder
 {
@@ -147,11 +147,7 @@ public static class PcBuilder
                 continue;
             }
 
-            if (p.ForcedHnid != 0)
-            {
-                hnid = p.ForcedHnid;   // the caller supplies the subnode (an embedded message, say)
-            }
-            else if (p.InSubnode)
+            if (p.InSubnode)
             {
                 hnid = (uint)(((subs.Count + 1) << 5) | 0x1F);
                 subs.Add(new TestNode { Nid = hnid, Data = p.Value });
@@ -248,7 +244,8 @@ public static class TcBuilder
             rows.Add(row);
         }
 
-        Hid rowIndexHid = rows.Count == 0 ? default : BthBuilder.Write(heap, 4, 4, rowIndex, 50);
+        // An empty table still has a (empty) row-index BTH: other readers refuse a table whose index header is missing.
+        Hid rowIndexHid = BthBuilder.Write(heap, 4, 4, rowIndex, 50);
         uint hnidRows = 0;
         if (rows.Count > 0)
         {

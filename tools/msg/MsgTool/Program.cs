@@ -11,6 +11,7 @@ using RecursiveAI.OneMail.Msg;
 // MsgTool: reads MSG files with OneMail and prints what it found.
 //   MsgTool summary <file|dir>...   one line per file: counts, defects, allocation and time of opening
 //   MsgTool json <file>             every object and property as JSON, for comparison with other readers
+//   MsgTool view <file>             the shared view of the first item (subject, addresses by kind, dates, bodies, attachments, embedded items) as JSON
 //   MsgTool streams <file|dir>...   re-encodes each object's property and value streams and compares them with the file's
 //   MsgTool gen <dir>               writes the generated fixtures (the same files the tests build in memory)
 namespace MsgTool;
@@ -51,6 +52,9 @@ internal static class Program
             case "json":
                 Json(files[0]);
                 return 0;
+            case "view":
+                View(files[0]);
+                return 0;
             case "streams":
                 int bad = 0;
                 foreach (string f in files)
@@ -63,6 +67,93 @@ internal static class Program
                 Console.Error.WriteLine("unknown command " + args[0]);
                 return 2;
         }
+    }
+
+    private static void View(string path)
+    {
+        using RecursiveAI.OneMail.MailContainer c = RecursiveAI.OneMail.Mail.Open(path);
+        using var stream = Console.OpenStandardOutput();
+        using var w = new Utf8JsonWriter(stream);
+        foreach (RecursiveAI.OneMail.IMailItem item in c.Enumerate())
+        {
+            ViewItem(w, item);
+            break;
+        }
+    }
+
+    private static void Addrs(Utf8JsonWriter w, string name, IReadOnlyList<RecursiveAI.OneMail.MailAddress> list)
+    {
+        w.WriteStartArray(name);
+        foreach (RecursiveAI.OneMail.MailAddress a in list)
+        {
+            w.WriteStartObject();
+            w.WriteString("name", a.Name);
+            w.WriteString("addr", a.Address);
+            w.WriteEndObject();
+        }
+
+        w.WriteEndArray();
+    }
+
+    private static void ViewItem(Utf8JsonWriter w, RecursiveAI.OneMail.IMailItem item)
+    {
+        w.WriteStartObject();
+        w.WriteString("kind", item.Kind.ToString());
+        w.WriteString("subject", item.Subject);
+        Addrs(w, "from", item.From);
+        w.WriteStartArray("sender");
+        if (item.Sender is { } snd)
+        {
+            w.WriteStartObject();
+            w.WriteString("name", snd.Name);
+            w.WriteString("addr", snd.Address);
+            w.WriteEndObject();
+        }
+
+        w.WriteEndArray();
+        Addrs(w, "to", item.ToRecipients);
+        Addrs(w, "cc", item.Cc);
+        Addrs(w, "bcc", item.Bcc);
+        foreach (RecursiveAI.OneMail.MailDateSource src in new[] { RecursiveAI.OneMail.MailDateSource.ClientSubmit, RecursiveAI.OneMail.MailDateSource.Delivery, RecursiveAI.OneMail.MailDateSource.Creation })
+        {
+            w.WriteString("date" + src, item.TryGetDate(src, out RecursiveAI.OneMail.MailDate d) ? d.Value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture) : null);
+        }
+
+        w.WriteString("messageId", item.MessageId);
+        w.WriteString("conversationTopic", item.ConversationTopic);
+        w.WriteString("text", item.TextBody?.ReadText());
+        w.WriteString("html", item.HtmlBody?.ReadText());
+        w.WriteString("htmlCharset", item.HtmlBody?.Charset);
+        w.WriteBoolean("hasRtf", item.RtfBody is not null);
+        w.WriteStartArray("attachments");
+        foreach (RecursiveAI.OneMail.IMailAttachment a in item.Attachments)
+        {
+            w.WriteStartObject();
+            w.WriteString("name", a.FileName);
+            w.WriteString("type", a.ContentType);
+            w.WriteString("contentId", a.ContentId);
+            w.WriteBoolean("inline", a.IsInline);
+            w.WriteNumber("size", a.Size);
+            using (Stream s = a.Open())
+            {
+                w.WriteString("sha256", Convert.ToHexString(SHA256.HashData(s)));
+            }
+
+            w.WritePropertyName("embedded");
+            if (a.Embedded is { } e)
+            {
+                ViewItem(w, e);
+            }
+            else
+            {
+                w.WriteNullValue();
+            }
+
+            w.WriteEndObject();
+        }
+
+        w.WriteEndArray();
+        w.WriteEndObject();
     }
 
     private static IEnumerable<string> Expand(string p) =>

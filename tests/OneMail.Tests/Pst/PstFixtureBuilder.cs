@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Buffers.Binary;
 using System.Text;
 using RecursiveAI.OneMail.Mapi;
@@ -71,6 +75,9 @@ public sealed class PstFixtureBuilder
 
     private bool Ansi => _format == NdbFormat.Ansi;
 
+    // MS-PST 2.3.4.4.1: every row block of a large table is 8192 bytes with its trailer, so the rows in it add up to that much less.
+    private int MatrixBlock => _format switch { NdbFormat.Ansi => 8192 - 12, NdbFormat.Unicode => 8192 - 16, _ => 8192 - 24 };
+
     private ushort StrType => Ansi ? LtpPropertyTypes.PtypString8 : LtpPropertyTypes.PtypString;
 
     public byte[] Str(string s) => Ansi ? Encoding.Latin1.GetBytes(s) : Encoding.Unicode.GetBytes(s);
@@ -81,7 +88,7 @@ public sealed class PstFixtureBuilder
     public NdbTestBuilder.Result Build(FxFolder root, string storeName = "Test Store", bool compress = false, byte crypt = 0)
     {
         _nodes.Clear();
-        AddFolder(root, 0x122, isRoot: true);
+        AddFolder(root, 0x122, 0x122, isRoot: true);
         _nodes.Add(PcBuilder.Build(0x21, Sorted([new PcSpec(0x3001, StrType, Str(storeName)), new PcSpec(0x67FF, LtpPropertyTypes.PtypInteger32, I32(0))])));
         _nodes.Add(BuildNameMap());
         return NdbTestBuilder.Build(_format, _nodes, new TestBuild { Compress = compress && _format == NdbFormat.Unicode4K, Crypt = crypt });
@@ -140,7 +147,10 @@ public sealed class PstFixtureBuilder
         }
     }
 
-    private uint AddFolder(FxFolder f, uint nid, bool isRoot = false)
+    // The node tree links folders and messages to their parents (the NBT entry's parent NID); other readers build the folder tree from it.
+    private static TestNode Under(TestNode n, uint parent) => new() { Nid = n.Nid, Parent = parent, Blocks = n.Blocks, Data = n.Data, Subnodes = n.Subnodes };
+
+    private uint AddFolder(FxFolder f, uint nid, uint parentNid = 0, bool isRoot = false)
     {
         var childNids = new List<(uint Nid, FxFolder Folder)>();
         foreach (FxFolder c in f.Children)
@@ -149,12 +159,12 @@ public sealed class PstFixtureBuilder
             childNids.Add((cn, c));
         }
 
-        _nodes.Add(PcBuilder.Build(nid, Sorted([
+        _nodes.Add(Under(PcBuilder.Build(nid, Sorted([
             new PcSpec(0x3001, StrType, Str(f.Name)),
             new PcSpec(0x3602, LtpPropertyTypes.PtypInteger32, I32(f.Messages.Count)),
             new PcSpec(0x360A, LtpPropertyTypes.PtypBoolean, [(byte)(f.Children.Count > 0 ? 1 : 0)]),
             new PcSpec(0x3613, StrType, Str("IPF.Note")),
-        ])));
+        ])), parentNid));
         uint baseNid = nid & ~0x1Fu;
         List<(uint RowId, byte[]?[] Cells)> hier =
         [
@@ -165,36 +175,37 @@ public sealed class PstFixtureBuilder
         {
             Columns = [(0x3001, StrType), (0x3602, 3), (0x360A, 0x0B)],
             Rows = [.. hier.OrderBy(r => r.RowId)],
+            RowsInSubnode = hier.Count > 100, MatrixBlockSize = MatrixBlock,
         }));
 
         var rows = new List<(uint RowId, byte[]?[] Cells)>();
         foreach (FxMessage m in f.Messages)
         {
             uint mn = (_messageIdx++ << 5) | 4;
-            AddMessage(m, mn);
+            AddMessage(m, mn, nid);
             rows.Add((mn, [Str(m.Subject), BitConverter.GetBytes(m.SubmitFileTime)]));
         }
 
-        _nodes.Add(TcBuilder.Build(baseNid | 0x0E, new TcSpec { Columns = [(0x0037, StrType), (0x0039, 0x40)], Rows = rows }));
+        _nodes.Add(TcBuilder.Build(baseNid | 0x0E, new TcSpec { Columns = [(0x0037, StrType), (0x0039, 0x40)], Rows = rows, RowsInSubnode = rows.Count > 100, MatrixBlockSize = MatrixBlock }));
         var assoc = new List<(uint RowId, byte[]?[] Cells)>();
         foreach (FxMessage m in f.Associated)
         {
             uint mn = (_messageIdx++ << 5) | 8;
-            AddMessage(m, mn);
+            AddMessage(m, mn, nid);
             assoc.Add((mn, [Str(m.Subject), BitConverter.GetBytes(m.SubmitFileTime)]));
         }
 
-        _nodes.Add(TcBuilder.Build(baseNid | 0x0F, new TcSpec { Columns = [(0x0037, StrType), (0x0039, 0x40)], Rows = assoc }));
+        _nodes.Add(TcBuilder.Build(baseNid | 0x0F, new TcSpec { Columns = [(0x0037, StrType), (0x0039, 0x40)], Rows = assoc, RowsInSubnode = assoc.Count > 100, MatrixBlockSize = MatrixBlock }));
         foreach ((uint cn, FxFolder child) in childNids)
         {
-            AddFolder(child, cn);
+            AddFolder(child, cn, nid);
         }
 
         _ = isRoot;
         return nid;
     }
 
-    private void AddMessage(FxMessage m, uint nid) => _nodes.Add(MessageNode(m, nid));
+    private void AddMessage(FxMessage m, uint nid, uint folder) => _nodes.Add(Under(MessageNode(m, nid), folder));
 
     // The message's property context plus, as subnodes, the recipient table, the attachment table, the attachment objects and any value
     // too big for the heap. An embedded message is built the same way and hangs under its attachment (MS-PST 2.4.6.2.2).
@@ -241,6 +252,7 @@ public sealed class PstFixtureBuilder
             {
                 Columns = [(0x0C15, 3), (0x3000, 3), (0x3001, StrType), (0x3002, StrType), (0x3003, StrType), (0x39FE, StrType)],
                 Rows = [.. m.Recipients.Select((r, i) => ((uint)(i + 1), new byte[]?[] { I32(r.Type), I32(i), Str(r.Name), Str("SMTP"), Str(r.Smtp), Str(r.Smtp) }))],
+                RowsInSubnode = m.Recipients.Count > 40, MatrixBlockSize = MatrixBlock,
             }));
         }
 
@@ -254,7 +266,7 @@ public sealed class PstFixtureBuilder
                 rows.Add((an, [I32(a.Data.Length), I32(a.Embedded is null ? 1 : 5), Str(a.Name)]));
             }
 
-            subs.Add(TcBuilder.Build(0x671, new TcSpec { Columns = [(0x0E20, 3), (0x3705, 3), (0x3707, StrType)], Rows = rows }));
+            subs.Add(TcBuilder.Build(0x671, new TcSpec { Columns = [(0x0E20, 3), (0x3705, 3), (0x3707, StrType)], Rows = rows, RowsInSubnode = rows.Count > 100, MatrixBlockSize = MatrixBlock }));
         }
 
         return new TestNode { Nid = nid, Blocks = pc.Blocks, Subnodes = subs };
@@ -279,7 +291,8 @@ public sealed class PstFixtureBuilder
         {
             uint hnid = (uint)(0x7000 << 5) | 0x1F;
             embedded = MessageNode(e, hnid);
-            props.Add(new PcSpec(0x3701, 0x000D, [], ForcedHnid: hnid));
+            // MS-PST 2.3.3.5: the object property is an allocation holding the subnode NID and the object size.
+            props.Add(new PcSpec(0x3701, 0x000D, [.. BitConverter.GetBytes(hnid), .. BitConverter.GetBytes(4096)]));
         }
         else
         {

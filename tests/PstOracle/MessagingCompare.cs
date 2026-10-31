@@ -13,18 +13,19 @@ using RecursiveAI.OneMail.Pst.Messaging;
 // Compares what the messaging layer reads with what pffexport exports (-f all -m all) for the same file: the folder tree, the items
 // in each folder, and for every item the values pffexport exposes (times, size, flags, subject, sender, importance ..., recipients,
 // body files, internet headers, conversation index, attachment files and their bytes, embedded messages). Test-side only.
-internal sealed class MessagingCompare
+internal sealed partial class MessagingCompare
 {
-    private int _differences, _folders, _items, _recipients, _attachments, _embedded, _fields, _skippedFolders, _search, _assoc;
+    private int _differences, _folders, _items, _recipients, _attachments, _embedded, _fields, _skippedFolders, _search, _assoc, _assocUnexported, _otherItems;
     private readonly List<string> _log = [];
 
     public static int Run(PstStore store, string exportDir, bool verbose)
     {
+        if (!Directory.Exists(exportDir)) { Console.WriteLine("DIFF pffexport produced no export directory (it could not read the file)"); return 4; }
         var c = new MessagingCompare();
         c.Walk(store, exportDir);
         foreach (string l in c._log.Take(verbose ? int.MaxValue : 60)) Console.WriteLine("DIFF " + l);
         int recovered = Directory.Exists(exportDir.Replace(".export", ".recovered")) ? Directory.GetDirectories(exportDir.Replace(".export", ".recovered"), "Message*", SearchOption.AllDirectories).Length : 0;
-        Console.WriteLine($"messaging folders {c._folders} (unmatched-name {c._skippedFolders}, search {c._search}) items {c._items} (associated {c._assoc}) recipients {c._recipients} attachments {c._attachments} embedded {c._embedded} fields {c._fields} recoveredByLibpff {recovered} differences {c._differences}");
+        Console.WriteLine($"messaging folders {c._folders} (unmatched-name {c._skippedFolders}, search {c._search}) items {c._items} (non-mail {c._otherItems}, associated {c._assoc}, of which libpff exports {c._assoc - c._assocUnexported}) recipients {c._recipients} attachments {c._attachments} embedded {c._embedded} fields {c._fields} recoveredByLibpff {recovered} differences {c._differences}");
         return c._differences == 0 ? 0 : 3;
     }
 
@@ -61,7 +62,7 @@ internal sealed class MessagingCompare
             Folder(c, Path.Combine(dir, n), logical + "/" + c.Name);
         }
 
-        foreach (string sub in Directory.GetDirectories(dir).Where(d => !Path.GetFileName(d).StartsWith("Message", StringComparison.Ordinal)))
+        foreach (string sub in Directory.GetDirectories(dir).Where(d => !ItemDir().IsMatch(Path.GetFileName(d))))
         {
             if (!kids.Any(c => Safe(c.Name ?? "") == Path.GetFileName(sub))) Diff($"{logical}: folder only in libpff: {Path.GetFileName(sub)}");
         }
@@ -88,23 +89,32 @@ internal sealed class MessagingCompare
         var ours = new List<(PstMessage M, bool Assoc)>();
         foreach (PstMessage m in f.EnumerateMessages(PstMessageSet.Normal)) ours.Add((m, false));
         foreach (PstMessage m in f.EnumerateMessages(PstMessageSet.Associated)) ours.Add((m, true));
-        int paired = 0, unpairedAssoc = 0;
+        int paired = 0, unpairedAssoc = 0, otherOurs = 0;
         foreach ((PstMessage m, bool assoc) in ours)
         {
             string k = OurKey(m);
+            if (assoc) _assoc++;
+            // libpff writes appointments, contacts, tasks and the like as AppointmentNNNNN, ContactNNNNN ... with other files; they are
+            // counted here and read by the item-semantics layer later.
+            if (!assoc && MapiMailItem.KindOf(m.MessageClass) != MailItemKind.Message) { otherOurs++; continue; }
             if (byKey.TryGetValue(k, out Queue<string>? q) && q.Count > 0)
             {
                 paired++;
-                if (assoc) _assoc++;
                 Message(m, q.Dequeue(), logical + "#" + m.Nid);
             }
-            else if (assoc) unpairedAssoc++;
+            else if (assoc) _assocUnexported++;
             else Diff($"{logical}: item {m.Nid} \"{Trunc(m.Subject)}\" is not in the export (key {k})");
         }
 
+        int otherTheirs = Directory.GetDirectories(dir).Count(d => ItemDir().IsMatch(Path.GetFileName(d)) && !Path.GetFileName(d).StartsWith("Message", StringComparison.Ordinal));
+        _otherItems += otherOurs;
+        if (otherOurs != otherTheirs) Diff($"{logical}: non-mail items ours {otherOurs} libpff {otherTheirs}");
         foreach (Queue<string> q in byKey.Values) foreach (string left in q) Diff($"{logical}: libpff item {Path.GetFileName(left)} is not in ours");
         _ = paired; _ = unpairedAssoc; _ = rootLevel;
     }
+
+    [GeneratedRegex(@"^[A-Za-z]+\d{5}$")]
+    private static partial Regex ItemDir();
 
     private static string Trunc(string? s) => s is null ? "" : s.Length > 40 ? s[..40] : s;
 
@@ -162,7 +172,7 @@ internal sealed class MessagingCompare
         void Opt(string label, string ours)
         {
             // libpff leaves a line out when the value is not set.
-            Check(where, label, ours, h.GetValueOrDefault(label, ""));
+            Check(where, label, ours.TrimEnd(), h.GetValueOrDefault(label, ""));
         }
 
         Opt("Client submit time", Ft(m, 0x0039));
@@ -171,7 +181,7 @@ internal sealed class MessagingCompare
         Opt("Modification time", Ft(m, 0x3008));
         Opt("Size", m.Properties.Get(0x0E08, MapiType.Integer32)?.AsInt32() is int sz ? ((uint)sz).ToString(CultureInfo.InvariantCulture) : "");
         Opt("Conversation topic", S(0x0070));
-        Opt("Subject", view.Subject ?? "");
+        Opt("Subject", (view.Subject ?? "").TrimEnd());
         Opt("Sender name", S(0x0C1A));
         Opt("Sender email address", S(0x0C1F));
         Opt("Sent representing name", S(0x0042));
@@ -194,7 +204,7 @@ internal sealed class MessagingCompare
         var theirs = Regex.Split(text, @"(?m)^(?=Display name:)").Where(b => b.StartsWith("Display name:", StringComparison.Ordinal))
             .Select(b => string.Join("/", RecipientFields.Select(l => Field(b, l)))).ToList();
         var ours = m.Recipients.Select(r => string.Join("/", r.GetString(0x3001) ?? "", r.GetString(0x5FF6) ?? "", r.GetString(0x3003) ?? "", r.GetString(0x3002) ?? "",
-            r.GetInt32(0x0C15) switch { 1 => "To", 2 => "Cc", 3 => "Bcc", 0 => "Originator", _ => "" })).ToList();
+            r.GetInt32(0x0C15) switch { 1 => "To", 2 => "CC", 3 => "BCC", 0 => "Originator", _ => "" })).ToList();
         _recipients += ours.Count;
         _fields++;
         // Row order is the table's; libpff lists recipients in the same order, so the lists are compared in order.
@@ -255,7 +265,8 @@ internal sealed class MessagingCompare
         string ci = Path.Combine(dir, "ConversationIndex.txt");
         _fields++;
         ReadOnlyMemory<byte> idx = view.ConversationIndex;
-        if ((idx.Length > 0) != File.Exists(ci)) Diff($"{where}: conversation index present ours {idx.Length > 0} libpff {File.Exists(ci)}");
+        // libpff writes ConversationIndex.txt for every message, with no blocks when the property is missing.
+        if (idx.Length == 0 ? File.Exists(ci) && File.ReadAllText(ci).Contains("Header block", StringComparison.Ordinal) : !File.Exists(ci)) Diff($"{where}: conversation index ours {idx.Length} bytes, libpff file {File.Exists(ci)}");
         else if (idx.Length >= 22)
         {
             // MS-OXOMSG 2.2.1.3: byte 0 is reserved, bytes 1-5 are the high 40 bits of a FILETIME's upper 48, then a 16-byte GUID.

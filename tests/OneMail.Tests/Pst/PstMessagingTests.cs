@@ -11,60 +11,11 @@ public class PstMessagingTests
 
     public static TheoryData<NdbFormat> Formats => NdbTests.Formats;
 
-    private static readonly Guid Set1 = new("11111111-2222-3333-4444-555555555555");
+    private static readonly Guid Set1 = PstFixtures.Set1;
 
-    internal static byte[] Data(int n, int seed) => NdbTests.Pattern(n, seed);
+    internal static byte[] Data(int n, int seed) => PstFixtures.Data(n, seed);
 
-    internal static FxFolder SampleTree()
-    {
-        var embedded = new FxMessage
-        {
-            Subject = "Forwarded inner",
-            Body = "inner body",
-            Recipients = [new FxRecipient { Name = "Inner Rcpt", Smtp = "inner@example.com" }],
-            Attachments = [new FxAttachment { Name = "deep.txt", Data = Data(300, 3) }],
-        };
-        return new FxFolder
-        {
-            Name = "Top of Test Store",
-            Children =
-            [
-                new FxFolder
-                {
-                    Name = "Inbox",
-                    Messages =
-                    [
-                        new FxMessage
-                        {
-                            Subject = "Hello world",
-                            Body = "Plain body",
-                            Html = "<p>Hello <b>world</b></p>",
-                            Recipients =
-                            [
-                                new FxRecipient { Name = "Ann", Smtp = "ann@example.com", Type = 1 },
-                                new FxRecipient { Name = "Bob", Smtp = "bob@example.com", Type = 2 },
-                                new FxRecipient { Name = "Cy", Smtp = "cy@example.com", Type = 3 },
-                            ],
-                            NamedNumbers = [(Set1, 0x8101, 42)],
-                            NamedStrings = [(Set1, "x-custom-name", "custom value")],
-                            Attachments =
-                            [
-                                new FxAttachment { Name = "small.bin", Data = Data(100, 1) },
-                                new FxAttachment { Name = "large.bin", Data = Data(70_000, 2) },
-                                new FxAttachment { Name = "inline.png", Data = Data(50, 4), ContentId = "<img1@example.com>" },
-                                new FxAttachment { Name = "inner.msg", Embedded = embedded },
-                            ],
-                        },
-                        new FxMessage { Subject = "Second", Body = new string('x', 5000), Html = "<p>" + new string('y', 6000) + "</p>" },
-                    ],
-                    Associated = [new FxMessage { Subject = "Rule", MessageClass = "IPM.Rule.Message" }],
-                    Children = [new FxFolder { Name = "Deep", Messages = [new FxMessage { Subject = "In deep" }] }],
-                },
-                new FxFolder { Name = "Empty" },
-                new FxFolder { Name = "Calendar", Messages = [new FxMessage { Subject = "Meeting", MessageClass = "IPM.Appointment" }] },
-            ],
-        };
-    }
+    internal static FxFolder SampleTree() => PstFixtures.Sample();
 
     internal static PstStore Open(byte[] bytes)
     {

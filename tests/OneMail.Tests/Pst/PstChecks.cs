@@ -112,7 +112,7 @@ public static class PstChecks
                     using (ah)
                     {
                         if (PropertyContext.TryOpen(ah, out PropertyContext? apc) && apc is not null && apc.TryGet(0x3701, out PcProperty op)
-                            && ah.Subnodes is { } asubs && asubs.TryGet(new Nid(op.Value.Hnid), out SubnodeEntry ee))
+                            && ah.Subnodes is { } asubs && asubs.TryGet(new Nid(ObjectNid(ah, op)), out SubnodeEntry ee))
                         {
                             Message(store, em, ee.Data, ee.Sub, aw + " embedded", r);
                         }
@@ -125,6 +125,10 @@ public static class PstChecks
             }
         }
     }
+
+    // MS-PST 2.3.3.5: the object property is an allocation of (subnode NID, size).
+    private static uint ObjectNid(HeapNode heap, PcProperty p) =>
+        p.Value.Kind == LtpValueKind.Heap && heap.ReadValue(p.Value) is { Length: >= 4 } b ? BinaryPrimitives.ReadUInt32LittleEndian(b) : p.Value.Hnid;
 
     private static byte[]? Bytes(HeapNode heap, LtpValueRef v)
     {

@@ -103,6 +103,9 @@ public enum MapiDefectKind
     /// <summary>A message has attachment subnodes but no attachment table; the subnodes found are used (ambiguity table).</summary>
     AmbiguousAttachmentTableMissing,
 
+    /// <summary>An object property (an embedded message) names its subnode directly instead of through the NID-and-size structure; the NID is used (ambiguity table).</summary>
+    AmbiguousObjectReference,
+
     /// <summary>A table's row identifier is not the NID the object it describes is stored under, or an object is listed twice.</summary>
     RowIdMismatch,
 }
@@ -117,7 +120,7 @@ public readonly record struct MapiDefect(MapiDefectKind Kind, string Location, l
     /// <summary>True for the documented resolutions of known ambiguities (kinds named <c>Ambiguous*</c>).</summary>
     public bool IsAmbiguity => Kind is MapiDefectKind.AmbiguousDuplicateProperty or MapiDefectKind.AmbiguousOrphanValueStream
         or MapiDefectKind.AmbiguousStringType or MapiDefectKind.AmbiguousCodePage
-        or MapiDefectKind.AmbiguousAttachmentTableMissing;
+        or MapiDefectKind.AmbiguousAttachmentTableMissing or MapiDefectKind.AmbiguousObjectReference;
 
     /// <inheritdoc/>
     public override string ToString() => $"{Kind} at {Location}+{Offset}: {Detail}";

@@ -12,6 +12,8 @@ namespace RecursiveAI.OneMail.Tests.Pst;
 public sealed class TestNode
 {
     public required uint Nid { get; init; }
+    /// <summary>The NBT entry's parent NID (a message's folder, a folder's parent folder); 0 for nodes that have none.</summary>
+    public uint Parent { get; init; }
     public byte[] Data { get; init; } = [];
     public IReadOnlyList<TestNode> Subnodes { get; init; } = [];
     /// <summary>When set, the node's data blocks exactly as given (one block each, under an XBLOCK when there are several) and <see cref="Data"/> is ignored; for heaps, whose blocks are meaningful.</summary>
@@ -180,6 +182,7 @@ public static class NdbTestBuilder
             int sz = g.Ansi ? 16 : 32;
             var e = new byte[sz];
             PutId(e, n.Nid); PutId(e.AsSpan(g.IdSize), d); PutId(e.AsSpan(2 * g.IdSize), sub);
+            BinaryPrimitives.WriteUInt32LittleEndian(e.AsSpan(3 * g.IdSize), n.Parent);
             nbtEntries.Add((n.Nid, e));
         }
 

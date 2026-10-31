@@ -426,8 +426,9 @@ internal sealed class MapiMailAttachment(MapiAttachment attachment, MailProvenan
         }
     }
 
+    // An embedded message has no flat bytes to give: it is read through Embedded.
     public Stream Open() =>
-        attachment.Properties.Get(MapiPid.AttachDataBinary, MapiType.Binary, MapiType.EmbeddedObject)?.OpenRead() ?? new MemoryStream([], writable: false);
+        attachment.EmbeddedMessage is null ? attachment.Properties.Get(MapiPid.AttachDataBinary, MapiType.Binary)?.OpenRead() ?? new MemoryStream([], writable: false) : new MemoryStream([], writable: false);
 
     public IMailItem? Embedded
     {

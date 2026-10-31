@@ -485,12 +485,51 @@ public sealed class PstAttachment : MapiAttachment
 
         using (heap)
         {
-            if (!PropertyContext.TryOpen(heap, out PropertyContext? pc) || pc is null || !pc.TryGet(MapiPid.AttachDataBinary, out PcProperty p)
-                || p.Value.Kind != LtpValueKind.Subnode || heap.Subnodes is not { } subs || !subs.TryGet(new Nid(p.Value.Hnid), out SubnodeEntry e))
+            PcProperty p = default;
+            SubnodeEntry e = default;
+            string? why = null;
+            if (!PropertyContext.TryOpen(heap, out PropertyContext? pc) || pc is null)
+            {
+                why = "the attachment is not a property context";
+            }
+            else if (!pc.TryGet(MapiPid.AttachDataBinary, out p))
+            {
+                why = "the attachment has no object property";
+            }
+            else if (heap.Subnodes is not { } subs)
+            {
+                why = "the attachment has no subnodes";
+            }
+            else
+            {
+                // MS-PST 2.3.3.5: a PtypObject value is an allocation holding the object's subnode NID and size. A value that is a
+                // subnode NID itself is read the same way, as an ambiguity.
+                uint nid = 0;
+                if (p.Value.Kind == LtpValueKind.Heap && heap.ReadValue(p.Value) is { Length: >= 4 } obj)
+                {
+                    nid = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(obj);
+                }
+                else if (p.Value.Kind == LtpValueKind.Subnode)
+                {
+                    nid = p.Value.Hnid;
+                    _ctx.Report(this, MapiDefectKind.AmbiguousObjectReference, _location, 0, "the object property is a subnode NID, not the NID-and-size structure; the NID is used");
+                }
+
+                if (nid == 0)
+                {
+                    why = $"the object property holds no subnode NID (value is {p.Value.Kind})";
+                }
+                else if (!subs.TryGet(new Nid(nid), out e))
+                {
+                    why = $"subnode {new Nid(nid)} is not among the attachment's {subs.Entries.Count} subnodes";
+                }
+            }
+
+            if (why is not null)
             {
                 if (declared)
                 {
-                    _ctx.Report(this, MapiDefectKind.EmbeddedObjectMissing, _location, 0, "the attachment method says an embedded message, but the object subnode is missing");
+                    _ctx.Report(this, MapiDefectKind.EmbeddedObjectMissing, _location, 0, "the attachment method says an embedded message, but " + why);
                 }
 
                 return null;
