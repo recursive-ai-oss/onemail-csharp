@@ -494,3 +494,21 @@ No Outlook has been observed yet: every row is an agent default settled by the s
 | OC4 | `WKST` when an RRULE has none | MS-OXCICAL: a missing WKST means Sunday; RFC 5545 3.3.10: Monday | `WKST` is always written from the pattern's first day of week when exporting; a missing WKST is read as RFC 5545 says (Monday) by the shared engine | none | dateutil and recurring-ical-events agree on all 54 generated series (the two-week patterns with Sunday and Monday differ without it); test `RRuleExpansionEqualsTheSpecDayWalk` weekly-2w cases; prov. |
 | OC5 | The UID of an appointment | 2.1.3.1.1.20.26: a global object ID whose data (from byte 40) starts with `vCal-Uid` and 0x01000000 carries the UID text from byte 52; otherwise the UID is the hex of the ID with the instance date zeroed | Exactly that; an item with no usable ID gets a UID made from a hash of subject and times | `UidSynthesized` (Approximated) | spec text; tests; prov. |
 | OC6 | The zone of a VEVENT with a `VTIMEZONE` | 2.1.3.1.1.20.2: the zone becomes a TZDEFINITION | The rules are recovered by sampling the zone hourly in the DTSTART year: two changes are a DST rule, none a fixed offset, anything else the fixed offset at DTSTART | `UnknownTimeZone` when the TZID is neither defined nor known | prov. |
+
+
+## OLM (Outlook for Mac)
+
+Observed on the two public sample archives (Outlook 16 layout) and our generated ones, against the released olmreader 1.9.0 jar and the
+olm-reader 1.0.0 npm package as black-box oracles. No Outlook for Mac has been observed, so each resolution is provisional. Details: [`olm.md`](olm.md).
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| O1 | Dates have no zone (`2018-06-20T23:49:52`) | the jar returns the text and leaves the reading to the caller; the npm package reads it in the machine's zone (UTC when `TZ=UTC`, and then writes it as GMT) | UTC, `ZoneKnown` false | `AmbiguousDateZone` | prov.; the npm package agrees under `TZ=UTC` on 478 + 7 messages |
+| O2 | `OPFMessageCopyBody` and `OPFMessageCopyHTMLBody` hold the same text | the npm package writes text and strips tags | `OPFMessageGetHasHTML` decides: true gives an HTML body, false a plain one; with no flag, a body that differs from the HTML element or looks like HTML is HTML | `AmbiguousBodyKind` (flag absent only) | prov.; 470 of 483 and 7 of 7 sample messages have the two elements equal |
+| O3 | Two attachments of one message share a name | the jar keys bytes by name and keeps one | Both are listed, each with its own bytes | none | oracle limit (1 message in the Enron sample) |
+| O4 | The declared attachment size (`OPFAttachmentContentFileSize`, written as `5.0614E4`) differs from the entry's size | not used by either oracle | The entry's size is the size; the declared one stays in the XML | none | every attachment in the Outlook-example sample differs |
+| O5 | An address element has a name and no address | the npm package writes `unknown@unknown.com` for a missing sender | Name kept, address empty | `AddressMissing` | 12 recipients in the Enron sample |
+| O6 | A date of year 4501 or later | n/a | No date (Outlook's "none" value) | none | MS-OXOCAL; prov. |
+| O7 | Contact e-mail slot type 0, 1, 2 | n/a | work, home, other | none | prov.; the sample's addresses are named after their slot |
+| O8 | Recurrence with both a count and an end date | n/a | The count (`COUNT`) when the record says it is numbered, else the end date as a UTC `UNTIL` | `RecurrenceEnd` (loss entry) | prov.; all four sample patterns are numbered |
+| O9 | An attachment URL that matches no entry | the jar returns no bytes | Listed with no content | `AttachmentMissing` | prov. |

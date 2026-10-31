@@ -31,6 +31,7 @@ internal static class Program
             ["rtf-decompress"] = RtfTargets.Decompress,
             ["rtf-deencap"] = RtfTargets.Deencapsulate,
             ["oxcmail"] = OxcMailTarget.Run,
+            ["olm"] = OlmTarget.Run,
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
         };

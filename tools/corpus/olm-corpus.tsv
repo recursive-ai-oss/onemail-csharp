@@ -1,0 +1,3 @@
+# set	repo	commit	path	bytes	sha256
+olmreader	teverett/OLMReader	c3f14c3e49d181f180750a2125984fb67a82fd58	src/test/resources/Outlook16/outlook_example.olm	1404748	cb8e3a70c70ca7f5b758fbee63278df0f188361ee987918a405c226286cf685c
+olmreader	teverett/OLMReader	c3f14c3e49d181f180750a2125984fb67a82fd58	src/test/resources/Outlook16/bill_rapp.olm	5781944	344c0f81165b8b082b5715564d9145c1a35985e308438d33c95e3c43f2e8e814
