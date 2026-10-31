@@ -203,6 +203,12 @@ Codes added by these two converters:
 | `DtstampAsLastModified` | Approximated | ICS to item | DTSTAMP stands in for the last-modified time |
 | `TaskCancelledAsDeferred` | Approximated | ICS to item | a cancelled VTODO is stored as deferred |
 
+## Whole stores
+
+`StoreConverter` (`RecursiveAI.OneMail.Conversion.Stores`) applies these converters to every item of a store and adds the store-level
+codes (folders, flags, keywords, mbox line endings). The matrix of what each source and target carries, and those codes, are in
+[`fidelity.md`](fidelity.md).
+
 ## Loss codes
 
 `AddressSpellingFromTransportHeader`, `AddressUnresolved`, `AttachmentByReference`, `AttachmentWithoutData`, `BccNotWritten`,

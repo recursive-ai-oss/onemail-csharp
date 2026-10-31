@@ -134,6 +134,9 @@ public sealed class MapiToMimeConverter : IItemConversion<MapiMessage, MimeEntit
         MapiPid.AttachContentId, MapiPid.AttachContentLocation, PidAttachContentDisposition, MapiPid.AttachFlags, MapiPid.AttachMethod,
     ];
 
+    // The address-field spelling (display names as RFC 2047 words) for other converters that write mailbox fields.
+    internal static string FormatMailbox(string? name, string address) => Exporter.FormatMailbox(name, address);
+
     private sealed class Exporter(OxcMailExportOptions options, LossReport report)
     {
         // Header names that came from PS_INTERNET_HEADERS properties rather than from a property with a defined mapping.

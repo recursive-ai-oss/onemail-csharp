@@ -6,7 +6,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `StoreConverter` and `Mail.ConvertAsync`/`Mail.Convert`: any readable store or directory to EML, mbox, Maildir++, Apple Mail bundles, ICS, vCard, the j/x forms or TNEF, keeping folders, flags and keywords where the target has them, with progress, cancellation, an aggregate loss report and an `IStoreSink` extension point; the fidelity matrix is in `docs/fidelity.md`.
+- `onemail convert` and `onemail export`, with `--json`.
+- `MaildirStore.DeliverPath`: delivers and returns the path (`Deliver` re-listed the directory per message).
 - `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
+
+### Changed
+
+- `MimeWriter` keeps the white space inside a header value when it writes one (runs of spaces and tabs were collapsed); untouched messages still write from their raw bytes.
 
 ## [0.2.0-preview.2]
 

@@ -1,3 +1,5 @@
+using RecursiveAI.OneMail.Conversion;
+using RecursiveAI.OneMail.Conversion.Stores;
 using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores.Mbox;
@@ -43,4 +45,23 @@ public static class Mail
     /// <param name="mbox">The mbox reader's options, or null.</param>
     /// <returns>The collection.</returns>
     public static MailContainer Open(IRandomAccessSource source, MimeReaderOptions? mime = null, MboxReaderOptions? mbox = null) => MailContainer.Open(source, mime, mbox);
+
+    /// <summary>Converts a file, store or directory of files into another format, folder by folder, and says what did not carry over.</summary>
+    /// <param name="source">What to read; see <see cref="StoreConverter.ConvertAsync(string, ConvertFormat, string, IProgress{StoreItemResult}?, CancellationToken)"/>.</param>
+    /// <param name="format">What to write.</param>
+    /// <param name="destination">Where to write it (a directory; for mbox a file name with an extension means one file).</param>
+    /// <param name="options">The conversion's options, or null for the defaults.</param>
+    /// <param name="progress">Called with each item's result, or null.</param>
+    /// <param name="cancellationToken">Cancels between items.</param>
+    /// <returns>Counts per folder, skipped items by reason, and loss totals.</returns>
+    public static Task<StoreConversionReport> ConvertAsync(string source, ConvertFormat format, string destination, StoreConversionOptions? options = null, IProgress<StoreItemResult>? progress = null, CancellationToken cancellationToken = default) =>
+        new StoreConverter(options).ConvertAsync(source, format, destination, progress, cancellationToken);
+
+    /// <summary>Converts one item into the bytes of a format.</summary>
+    /// <param name="item">Any item the library reads.</param>
+    /// <param name="format">The target form.</param>
+    /// <param name="options">The conversion's options, or null for the defaults.</param>
+    /// <returns>The bytes (null when the item has no form in the target) and the loss report.</returns>
+    public static ConversionResult<byte[]?> Convert(IMailItem item, ConvertFormat format, StoreConversionOptions? options = null) =>
+        StoreConverter.ConvertItem(item, format, options);
 }
