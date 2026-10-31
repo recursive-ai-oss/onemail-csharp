@@ -96,6 +96,17 @@ public class FormatFlowedTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LongRunsOfSpacesSurviveWrapping(bool delSp)
+    {
+        // Found by fuzzing: a line of only spaces is still a flowed line when it ends in a space.
+        FlowedParagraph[] input = [new FlowedParagraph(0, "north delta" + new string(' ', 60) + "epsilon contract")];
+        string enc = FormatFlowed.Encode(input, 24, delSp);
+        Assert.Equal(input[0].Text, Assert.Single(FormatFlowed.Parse(enc, delSp)).Text);
+    }
+
     [Fact]
     public void PathologicalInputDoesNotThrow()
     {

@@ -76,7 +76,11 @@ internal static class HtmlTextTarget
         IReadOnlyList<FlowedParagraph> first = FormatFlowed.Parse(text, delSp);
         string encoded = FormatFlowed.Encode(first, width, delSp);
         IReadOnlyList<FlowedParagraph> back = FormatFlowed.Parse(encoded, delSp);
-        Require(back.Count == first.Count, "paragraph count changed through Encode and Parse");
+        if (back.Count != first.Count)
+        {
+            throw new InvalidOperationException($"paragraph count {first.Count} became {back.Count}; first: {Describe(first)}; back: {Describe(back)}");
+        }
+
         for (int i = 0; i < first.Count; i++)
         {
             string expected = first[i].Text.Replace('\r', ' ').Replace('\n', ' ');
@@ -90,6 +94,9 @@ internal static class HtmlTextTarget
 
         _ = FormatFlowed.Decode(text, delSp);
     }
+
+    private static string Describe(IReadOnlyList<FlowedParagraph> p) =>
+        string.Join("|", p.Take(12).Select(x => x.QuoteDepth + ":" + x.Text.Replace("\n", "\\n", StringComparison.Ordinal)[..Math.Min(x.Text.Length, 30)]));
 
     private static void SelectRun(ReadOnlySpan<byte> mime)
     {

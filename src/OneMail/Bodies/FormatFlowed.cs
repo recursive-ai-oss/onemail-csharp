@@ -56,7 +56,7 @@ public static class FormatFlowed
             }
 
             bool signature = line.SequenceEqual("-- ");
-            bool flowed = line.Length > 0 && line[^1] == ' ' && !signature && !line.IsWhiteSpace();
+            bool flowed = line.Length > 0 && line[^1] == ' ' && !signature;
             ReadOnlySpan<char> content = flowed && delSp ? line[..^1] : line;
 
             if (open is not null && openDepth != depth)
