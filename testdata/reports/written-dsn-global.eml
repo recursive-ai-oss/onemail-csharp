@@ -1,0 +1,29 @@
+Content-Type: multipart/report; report-type=delivery-status;
+ boundary="dsn-boundary"
+
+--dsn-boundary
+Content-Type: text/plain; charset=utf-8
+
+Delivery failed.
+--dsn-boundary
+Content-Type: message/global-delivery-status
+Content-Transfer-Encoding: 8bit
+
+Reporting-MTA: dns; mx.example.org
+
+Final-Recipient: utf-8; 用户@example.org
+Action: failed
+Status: 5.1.1
+Diagnostic-Code: smtp; 550 用户 unknown
+
+--dsn-boundary
+Content-Type: message/rfc822
+
+From: <s@example.com>
+To: <a@example.org>
+Subject: hi
+Message-ID: <o1@example.com>
+
+body
+
+--dsn-boundary--

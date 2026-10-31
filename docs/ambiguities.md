@@ -223,3 +223,40 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K18 | Properties inside `VCALENDAR` after `BEGIN:VCARD` junk, stray lines around components | n/a | n/a | Kept as items of the document root, in order. | `MissingColon`, `UnmatchedEnd` | lossless |
 | K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
 | K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |
+
+## Reports, authentication results and MHTML (u8)
+
+Probes are `testdata/reports/…` (`cases.tsv` describes each); MK is MimeKit 4.18.2's public API, Py is Python 3.13 `email`
+(plus `urllib.parse.urljoin` for MH6–MH8). Go has no report or MHTML support and is not compared. All entries are provisional
+(no client observed). Method: [reports-and-mhtml.md](reports-and-mhtml.md).
+
+| ID | Probe | MK | Py | Resolution | Defect | Basis |
+|---|---|---|---|---|---|---|
+| RP1 | `dsn-11`, `dsn-12`, `dsn-32` extra blank lines between or around blocks | skipped | each is an empty block | Runs of blank lines are skipped; one defect per run. | `AmbiguousReportBlankLines` | prov. (MK, RFC) |
+| RP2 | MDN/ARF body with a leading blank line, or several blocks | empty first block | empty first block | The first block is empty; further blocks are kept as extra blocks. | `AmbiguousReportExtraBlocks` | MK and Py agree |
+| RP3 | `dsn-13` a line without a colon in a block | kept as a field named by the line | block ends there | Skipped, reported. | `ReportMalformedLine` | prov. (no two agree) |
+| RP4 | `dsn-34` a name with a space | kept as a field | block ends there | Kept under its text before the colon. | `InvalidHeaderName` | prov. |
+| RP5 | `dsn-18` whitespace before the colon | trimmed | field lost | Trimmed, reported. | `WhitespaceBeforeHeaderColon` | prov. (MK, RFC 5322 obs-) |
+| RP6 | `dsn-14` a fold before any field | ignored | n/a | Skipped, reported. | `ReportMalformedLine` | prov. |
+| RP7 | `dsn-26` a lone CR in a value | kept | line split at CR | Stays data. | `BareCarriageReturnInHeader` | MK, same as the header reader |
+| RP8 | `dsn-21` an empty delivery-status body | no report | one empty block | A report with no groups. | `ReportMissingGroup` | prov. |
+| RP9 | a whitespace-only line inside a block | fold | fold | A fold, not a block end. | none | all agree |
+| RP10 | repeated single-use field (`dsn-15` Action twice) | both kept in order | n/a | Both stay in the block; the typed accessor reads the first. | `AmbiguousReportDuplicateField` | prov. (lossless) |
+| AR1 | `auth-26`, `auth-08` first token is `name=…` (no authserv-id) | no id | n/a | No authserv-id; the token starts the first result. | `AuthenticationResultsMissingId` | MK |
+| AR2 | `auth-08` a property with no ptype (`action=none`) | dropped | n/a | Kept with an empty ptype. | `AmbiguousAuthenticationResultsProperty` | prov. (lossless) |
+| AR3 | `auth-11,12,14,15,16,18,19,27` broken fields (bad version, empty clause, garbage, `none` beside results, unterminated quote or comment) | the whole field fails | n/a | The clauses that can be read are kept, each repair is a defect. | `AuthenticationResultsInvalidVersion`, `InvalidAuthenticationResults`, `AmbiguousAuthenticationResultsNone`, `UnterminatedQuote` | lossless |
+| AR4 | `auth-10` quoted authserv-id, property value or reason (valid per RFC 8601 §2.2) | the field fails | n/a | Parsed. | none | RFC |
+| RS1 | `spf-06,07,10` unknown result, words that are not pairs, bad `client-ip` | no oracle | no oracle | Unknown result kept as `SpfResult.Unknown` with the text; bad pairs skipped. | `InvalidReceivedSpf` | prov. (RFC 7208 §9.1 only) |
+| MH1 | `mht-01` `cid:` references, with brackets, `%40`, or case | no match | n/a (no MHTML) | Matches `Content-ID` only, brackets stripped, percent-decoded, exact then ASCII case-insensitive. | none | RFC 2557 §8.3 |
+| MH2 | `mht-02,06,08,09,10,11,15,19` base from the part's or an enclosing entity's `Content-Location` | base only from the multipart's `Content-Base` | n/a | Base order of RFC 2557 §5 as written in the method note. | none | RFC |
+| MH3 | `mht-03` dot segments, no base | no match | n/a | RFC 3986 §5.2.4 on `thismessage:/`. | none | RFC |
+| MH4 | `mht-07` percent escapes, space, case of `%hex` | exact only | n/a | Exact first, then normalised. | none | prov. |
+| MH5 | `mht-17` `mid:` | no match | n/a | Needs a matching Message-ID and Content-ID. | none | RFC 2392 |
+| MH6 | `urljoin` with base `thismessage:/…` | n/a | returns the reference unchanged (scheme not hierarchical for it) | Resolved per RFC 3986. | none | RFC |
+| MH7 | `urljoin` of `http:g` against `http:` base | n/a | non-strict: `http://a/b/c/g` | Strict: `http:g` (RFC 3986 §5.2.2). | none | RFC |
+| MH8 | `urljoin` with an upper-case scheme or host in the reference | n/a | lower-cases the scheme | Left as written; `Normalize` lower-cases when matching. | none | lossless |
+| MH9 | two parts with the same location or content id (`mht-06`) | first | n/a | First wins. | `AmbiguousMhtmlDuplicateLocation`, `AmbiguousMhtmlDuplicateContentId` | prov. |
+| MH10 | `start` names no part (`mht-05`) | n/a | n/a | The first part is the root. | `MhtmlStartNotFound` | RFC 2387 |
+
+Documented oracle limits (not ambiguities; in `explained.tsv` as `LIMIT-*`): Python does not read
+`message/global-delivery-status` or transfer-encoded report parts as reports.

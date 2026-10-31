@@ -77,6 +77,16 @@ public class ReportFieldTests
     }
 
     [Fact]
+    public void ALoneCarriageReturnStaysDataAndIsReported()
+    {
+        var d = new List<MimeDefect>();
+        List<ReportFieldBlock> blocks = Parse("A: x\ry\r\n", d);
+        Assert.Single(blocks);
+        MimeDefect x = Assert.Single(d, y => y.Kind == MimeDefectKind.BareCarriageReturnInHeader);
+        Assert.Equal(4, x.Offset);
+    }
+
+    [Fact]
     public void AFoldBeforeAnyFieldIsReported()
     {
         var d = new List<MimeDefect>();
@@ -249,9 +259,9 @@ public class DeliveryStatusTests
     [Fact]
     public void BuiltReportsWriteAndReadBack()
     {
-        var pm = new ReportFieldBlock();
-        pm.Add("Reporting-MTA", "dns; mx.example.org");
-        var r = new DeliveryStatusReport(pm, [
+        var perMessage = new ReportFieldBlock();
+        perMessage.Add("Reporting-MTA", "dns; mx.example.org");
+        var r = new DeliveryStatusReport(perMessage, [
             RecipientStatus.Create("a+b@example.org", DsnAction.Failed, new EnhancedStatusCode(5, 1, 1), "smtp; 550 5.1.1 no such user", "dns; mail.example.org", "list@example.org"),
             RecipientStatus.Create("c@example.org", DsnAction.Delayed, new EnhancedStatusCode(4, 4, 1)),
         ]);
@@ -267,9 +277,9 @@ public class DeliveryStatusTests
     [Fact]
     public void NonAsciiAddressesNeedTheGlobalMediaType()
     {
-        var pm = new ReportFieldBlock();
-        pm.Add("Reporting-MTA", "dns; mx.example.org");
-        var r = new DeliveryStatusReport(pm, [RecipientStatus.Create("\u7528\u6237@example.org", DsnAction.Failed, new EnhancedStatusCode(5, 1, 1))]);
+        var perMessage = new ReportFieldBlock();
+        perMessage.Add("Reporting-MTA", "dns; mx.example.org");
+        var r = new DeliveryStatusReport(perMessage, [RecipientStatus.Create("\u7528\u6237@example.org", DsnAction.Failed, new EnhancedStatusCode(5, 1, 1))]);
         Assert.True(r.RequiresGlobal);
         MimeMultipart m = MimeReport.CreateDeliveryStatus("text", r);
         Assert.Equal("message/global-delivery-status", m.Children[1].MediaType);

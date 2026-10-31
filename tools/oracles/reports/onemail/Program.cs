@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -28,6 +29,12 @@ internal static class Program
             if (args[i] == "--root" && i + 1 < args.Length)
             {
                 root = args[++i];
+            }
+
+            if (args[i] == "--write" && i + 1 < args.Length)
+            {
+                WriteSamples(args[++i]);
+                return 0;
             }
 
             if (args[i] == "--urljoin")
@@ -70,6 +77,49 @@ internal static class Program
         return 0;
     }
 
+    // Writes messages built with the report and MHTML writers, so every reader can be pointed at what OneMail produces.
+    private static void WriteSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var perMessage = new ReportFieldBlock();
+        perMessage.Add("Reporting-MTA", "dns; mx.example.org");
+        perMessage.Add("Arrival-Date", "Sat, 02 Jan 2027 03:04:05 +0000");
+        var dsn = new DeliveryStatusReport(perMessage, [
+            RecipientStatus.Create("a+b@example.org", DsnAction.Failed, new EnhancedStatusCode(5, 1, 1), "smtp; 550 5.1.1 no such user", "dns; mail.example.org", "list@example.org"),
+            RecipientStatus.Create("c@example.org", DsnAction.Delayed, new EnhancedStatusCode(4, 4, 1)),
+        ]);
+        byte[] original = Encoding.ASCII.GetBytes("From: <s@example.com>\r\nTo: <a@example.org>\r\nSubject: hi\r\nMessage-ID: <o1@example.com>\r\n\r\nbody\r\n");
+        File.WriteAllBytes(Path.Combine(dir, "written-dsn.eml"), MimeReport.CreateDeliveryStatus("Delivery failed.", dsn, original, false, "dsn-boundary").ToArray());
+        File.WriteAllBytes(Path.Combine(dir, "written-dsn-headers.eml"), MimeReport.CreateDeliveryStatus("Delivery failed.", dsn, original, true, "dsn-boundary").ToArray());
+
+        var globalMessage = new ReportFieldBlock();
+        globalMessage.Add("Reporting-MTA", "dns; mx.example.org");
+        var global = new DeliveryStatusReport(globalMessage, [RecipientStatus.Create("\u7528\u6237@example.org", DsnAction.Failed, new EnhancedStatusCode(5, 1, 1), "smtp; 550 \u7528\u6237 unknown")]);
+        File.WriteAllBytes(Path.Combine(dir, "written-dsn-global.eml"), MimeReport.CreateDeliveryStatus("Delivery failed.", global, original, false, "dsn-boundary").ToArray());
+
+        if (!MdnDisposition.TryParse("manual-action/MDN-sent-manually; displayed", out MdnDisposition? disposition))
+        {
+            throw new InvalidOperationException("sample disposition");
+        }
+
+        var mdn = DispositionNotification.Create("pc; OneMail", "j@example.com", "<o1@example.com>", disposition!);
+        File.WriteAllBytes(Path.Combine(dir, "written-mdn.eml"), MimeReport.CreateDispositionNotification("Your message was displayed.", mdn, original, true, "mdn-boundary").ToArray());
+
+        FeedbackReport arf = FeedbackReport.Create("abuse", "OneMail/1", IPAddress.Parse("192.0.2.1"), new DateTimeOffset(2027, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        File.WriteAllBytes(Path.Combine(dir, "written-arf.eml"), MimeReport.CreateFeedbackReport("This is an abuse report.", arf, original, false, "arf-boundary").ToArray());
+
+        var b = new MhtmlBuilder { Subject = "Saved page", From = "Saved <saved@example.org>", Date = new DateTimeOffset(2027, 1, 2, 3, 4, 5, TimeSpan.Zero), Boundary = "mht-boundary" };
+        b.SetRoot("<html><body><img src=\"img/a.png\"><img src=\"cid:b@example.org\"></body></html>", "http://www.example.org/dir/page.html");
+        b.AddResource(new byte[] { 1, 2, 3, 4 }, "image/png", "http://www.example.org/dir/img/a.png");
+        b.AddResource(new byte[] { 5, 6, 7 }, "image/png", null, "b@example.org");
+        using (FileStream fs = File.Create(Path.Combine(dir, "written-mht.eml")))
+        {
+            b.WriteTo(fs);
+        }
+
+        File.WriteAllText(Path.Combine(dir, "written-mht.refs"), "img/a.png\ncid:b@example.org\n./img/a.png\nmissing.png\n");
+    }
+
     private static string L1(ReadOnlyMemory<byte> b) => Encoding.Latin1.GetString(b.Span);
 
     private static JsonArray Block(ReportFieldBlock b)
@@ -95,6 +145,10 @@ internal static class Program
             ["error"] = null,
         };
 
+        var rt = new MemoryStream();
+        root.WriteTo(rt);
+        o["roundtrip"] = rt.GetBuffer().AsSpan(0, (int)rt.Length).SequenceEqual(data);
+
         var reports = new JsonArray();
         Walk(root, reports);
         o["reports"] = reports;
@@ -114,7 +168,13 @@ internal static class Program
                 results.Add(new JsonObject { ["method"] = r.Method, ["mv"] = r.MethodVersion, ["result"] = r.Result, ["comment"] = r.ResultComment, ["reason"] = r.Reason, ["props"] = props });
             }
 
-            auth.Add(new JsonObject { ["authserv"] = ar.AuthServId, ["version"] = ar.Version, ["results"] = results });
+            var kinds = new JsonArray();
+            foreach (MimeDefect d in ar.Defects)
+            {
+                kinds.Add(d.Kind.ToString());
+            }
+
+            auth.Add(new JsonObject { ["authserv"] = ar.AuthServId, ["version"] = ar.Version, ["results"] = results, ["defects"] = kinds });
         }
 
         o["auth"] = auth;

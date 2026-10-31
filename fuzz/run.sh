@@ -42,6 +42,7 @@ case "$target" in
   contentlines) maxlen=65536 ;;
   calendar) maxlen=65536 ;;
   ndb) maxlen=8192 ;;
+  reports|authres|mhtml-uri) maxlen=4096 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

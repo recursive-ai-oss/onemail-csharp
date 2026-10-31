@@ -85,9 +85,10 @@ def diffs(file, ours, theirs, oracle):
         else:
             for i, (xa, xb) in enumerate(zip(a, b)):
                 if xb.get("failed"):
-                    yield ("auth.parse-failed", oracle, "field %d" % i)
+                    kinds = sorted(set(xa.get("defects") or []))
+                    yield ("auth.parse-failed", oracle, "field %d: ours defects=%s" % (i, "|".join(kinds) or "none"))
                     continue
-                if norm(xa["authserv"]) != norm(xb["authserv"]):
+                if (norm(xa["authserv"]) or "") != (norm(xb["authserv"]) or ""):
                     yield ("auth.authserv", "", "%r vs %r" % (xa["authserv"], xb["authserv"]))
                 if xa["version"] != xb["version"]:
                     yield ("auth.version", "", "%r vs %r" % (xa["version"], xb["version"]))
@@ -179,6 +180,8 @@ def cmd_run(a):
     lines = ["# report differential", ""]
     reports = {k: sum(len(r.get("reports") or []) for r in dumps[k].values()) for k in dumps}
     auth = {k: sum(len(r.get("auth") or []) for r in dumps[k].values()) for k in dumps}
+    rt = [r.get("roundtrip") for r in dumps["onemail"].values()]
+    lines.append("round trip byte-identical: %d of %d" % (sum(1 for x in rt if x), len(rt)))
     lines.append("files: %d; report parts found: %s; Authentication-Results fields found: %s" % (len(names), reports, auth))
     for oracle in ("mimekit", "python"):
         lines.append("")

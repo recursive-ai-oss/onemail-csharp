@@ -306,6 +306,13 @@ public static class ReportFieldParser
 
             blankRunReported = false;
 
+            // A lone CR inside a line stays data, as in the MIME header reader, but is reported.
+            int cr = s[pos..contentEnd].IndexOf((byte)'\r');
+            if (cr >= 0)
+            {
+                defects?.Add(new MimeDefect(MimeDefectKind.BareCarriageReturnInHeader, baseOffset + pos + cr, 1, depth));
+            }
+
             if (s[pos] is (byte)' ' or (byte)'\t')
             {
                 if (name is not null)

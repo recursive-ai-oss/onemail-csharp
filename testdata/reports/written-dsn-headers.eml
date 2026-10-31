@@ -1,0 +1,33 @@
+Content-Type: multipart/report; report-type=delivery-status;
+ boundary="dsn-boundary"
+
+--dsn-boundary
+Content-Type: text/plain; charset=utf-8
+
+Delivery failed.
+--dsn-boundary
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; mx.example.org
+Arrival-Date: Sat, 02 Jan 2027 03:04:05 +0000
+
+Original-Recipient: rfc822; list@example.org
+Final-Recipient: rfc822; a+2Bb@example.org
+Action: failed
+Status: 5.1.1
+Remote-MTA: dns; mail.example.org
+Diagnostic-Code: smtp; 550 5.1.1 no such user
+
+Final-Recipient: rfc822; c@example.org
+Action: delayed
+Status: 4.4.1
+
+--dsn-boundary
+Content-Type: text/rfc822-headers
+
+From: <s@example.com>
+To: <a@example.org>
+Subject: hi
+Message-ID: <o1@example.com>
+
+--dsn-boundary--

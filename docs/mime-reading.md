@@ -82,6 +82,13 @@ Header decoding reports the text layer's issues as defects too (`InvalidCharsetB
 `Ambiguous*` marks places where mail clients disagree. The reading above is the library's choice; it has not yet been confirmed
 against how particular clients behave, and may change once it is.
 
+Reports, MHTML and authentication results add the defects below (details in [reports-and-mhtml.md](reports-and-mhtml.md)):
+`ReportMalformedLine`, `ReportMissingField`, `ReportInvalidFieldValue`, `AmbiguousReportDuplicateField`, `ReportMissingGroup`,
+`AmbiguousReportExtraBlocks`, `AmbiguousReportBlankLines`, `ReportStructureInvalid`, `ReportLimitExceeded`,
+`MhtmlStartNotFound`, `InvalidContentLocation`, `AmbiguousMhtmlDuplicateLocation`, `AmbiguousMhtmlDuplicateContentId`,
+`AuthenticationResultsMissingId`, `AuthenticationResultsInvalidVersion`, `InvalidAuthenticationResults`,
+`AmbiguousAuthenticationResultsNone`, `AmbiguousAuthenticationResultsProperty`, `InvalidReceivedSpf`.
+
 ## Resource limits (on by default)
 
 Reaching a limit reports a defect and keeps the rest of the input as body text, so nothing is lost and nothing is allocated for it.

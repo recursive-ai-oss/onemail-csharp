@@ -6,6 +6,9 @@ using RecursiveAI.OneMail.Calendar.VCard;
 using RecursiveAI.OneMail.Client;
 using RecursiveAI.OneMail.Cryptography;
 using RecursiveAI.OneMail.Mime;
+using RecursiveAI.OneMail.Mime.Authentication;
+using RecursiveAI.OneMail.Mime.Mhtml;
+using RecursiveAI.OneMail.Mime.Reports;
 using RecursiveAI.OneMail.Render;
 using RecursiveAI.OneMail.Pst.Ndb;
 using RecursiveAI.OneMail.Text;
@@ -95,6 +98,15 @@ internal static class Program
             && MimeHeaderValue.Parameter("filename", "caf\u00e9.txt").Contains("filename*=", StringComparison.Ordinal);
         Console.WriteLine("structured: " + (structuredOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Reports, MHTML and authentication results.
+        byte[] dsn = "Content-Type: multipart/report; report-type=delivery-status; boundary=b\r\nAuthentication-Results: mx.example.org; spf=pass smtp.mailfrom=a@example.com\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nfailed\r\n--b\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; mx.example.org\r\n\r\nFinal-Recipient: rfc822;a@example.org\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n--b--\r\n"u8.ToArray();
+        MimeEntity dm = MimeEntity.Parse(dsn);
+        DeliveryStatusReport? ds = MimeReport.Find(dm)?.GetDeliveryStatus();
+        var ar = dm.GetAuthenticationResults();
+        bool reportsOk = ds is { Recipients.Count: 1 } && ds.Recipients[0].Action == DsnAction.Failed && ds.Recipients[0].Status == new EnhancedStatusCode(5, 1, 1)
+            && ar.Count == 1 && ar[0].Results[0].Method == "spf" && MhtmlUri.Resolve("http://a/b/c/d", "../g") == "http://a/b/g";
+        Console.WriteLine("reports: " + (reportsOk ? "ok" : "FAILED"));
+
+        return reportsOk && textOk && mimeOk && ndbOk && structuredOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
