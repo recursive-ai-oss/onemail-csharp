@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
+
 ## [0.2.0-preview.2]
 
 The first preview on nuget.org. It has everything in 0.2.0-preview.1 plus the changes below. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
