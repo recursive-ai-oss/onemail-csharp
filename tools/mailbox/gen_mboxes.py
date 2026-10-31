@@ -168,18 +168,18 @@ def main():
     sidecar(p, "mboxrd", m)
 
     # Python's own writer (mboxo-style quoting). Bodies avoid ">From" lines, which it would leave as they are.
-    pm = msgs(nmsg, no_gt)
+    py_msgs = msgs(nmsg, no_gt)
     p = os.path.join(out, "python-mbox.mbox")
     if os.path.exists(p):
         os.remove(p)
     box = mailbox.mbox(p)
     box.lock()
-    for x in pm:
+    for x in py_msgs:
         box.add(x)
     box.flush()
     box.unlock()
     box.close()
-    sidecar(p, "mboxo", pm)
+    sidecar(p, "mboxo", py_msgs)
     print("wrote", len(os.listdir(out)), "files to", out)
 
 
