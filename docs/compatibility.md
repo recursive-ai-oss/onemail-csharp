@@ -12,6 +12,21 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## Calendar card (unreleased)
+
+`CalendarCard` ([`calendar-card.md`](calendar-card.md)), checked on the calendar corpora (libical, ical.js, biweekly, sabre/vobject, Thunderbird holidays, the
+RFC examples) and the generated fixtures `testdata/calendar/card`, the MSG, OLM, TNEF and PST/OST corpora, and Outlook items generated from the
+iCalendar files by the MS-OXCICAL import. Cards: 3,524 from the fetched corpora (ics 3,502, msg 2, olm 8 appointments; Add 96, Cancel 161, Counter 65,
+DeclineCounter 32, Publish 171, Refresh 64, Reply 309, Request 790, none 1,816, other 10), 0 exceptions, 0 OneHtml parse errors over 7,048 documents.
+Recurrence sentences: 336 of 337 real rules described, the other "Repeats (custom rule)"; every described rule of the corpora (1,070) and of 2,700
+generated shapes parses back to the same frequency, interval, weekdays, days, month, count and until date. Occurrence lists (50 per series) against the
+expansion they are built on and against `recurring-ical-events` 3.8.2 over 2,384 recurring components: 2,357 equal, 14 stopped early by the card's own scan
+limit with a typed defect, 13 outside the naive case window, 0 unexplained; against the oracle 2,248 equal, 98 where the expansion itself differs
+from the oracle (explained in `recurrence.md`), 0 unexplained. XSS: the 233 sanitiser vectors in every text field (summary, location, description,
+URL, conference, attachment and its name, organizer and attendee names and addresses, role, status), rendered in headless Chromium without a sanitiser:
+0 scripts run, 0 requests (the raw vectors as control: 42 scripts, 58 requests). The Outlook meeting items in the corpora are few (two appointments in
+MSG); the Outlook-item path is checked on generated items only, and Outlook-produced meeting items wait for Outlook.
+
 ## 0.3.0-preview.1
 
 Calendar and contacts, the other stores and the Outlook item semantics on read are complete for this stage; the sections below
