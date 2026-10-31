@@ -238,10 +238,15 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
                 bag.Add(MapiProps.Str(MapiPid.ReplyRecipientNames, string.Join("; ", names)));
             }
 
-            if (e.GetDate() is { } date)
+            if (e.GetDate() is { } date && !MapiProps.FitsFileTime(date.Utc))
             {
-                bag.Add(MapiProps.Time(MapiPid.ClientSubmitTime, date.Utc));
-                if (date.ZoneKnown && date.OffsetMinutes != 0)
+                // A Date field before 1601 cannot be a FILETIME.
+                report.Add("mime", "Date", LossKind.Dropped, "DateBeforeFileTimeEpoch", "The Date field is before 1601-01-01, which a time property cannot hold.", path);
+            }
+            else if (e.GetDate() is { } date2)
+            {
+                bag.Add(MapiProps.Time(MapiPid.ClientSubmitTime, date2.Utc));
+                if (date2.ZoneKnown && date2.OffsetMinutes != 0)
                 {
                     report.Add("mime", "Date", LossKind.Approximated, "DateZoneNotStored", "The property holds UTC; the sender's zone offset survives only in the transport headers.", path);
                 }
@@ -252,7 +257,7 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
             {
                 string v = rec.Value;
                 int semi = v.LastIndexOf(';');
-                if (semi >= 0 && DateParser.TryParse(Encoding.UTF8.GetBytes(v[(semi + 1)..]), out MimeDate rd))
+                if (semi >= 0 && DateParser.TryParse(Encoding.UTF8.GetBytes(v[(semi + 1)..]), out MimeDate rd) && MapiProps.FitsFileTime(rd.Utc))
                 {
                     bag.Add(MapiProps.Time(MapiPid.MessageDeliveryTime, rd.Utc));
                 }

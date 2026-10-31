@@ -22,10 +22,15 @@ internal static class MapiProps
     public static MapiProperty Bool(ushort id, bool value) =>
         MapiProperty.CreateOwned(new MapiTag(id, MapiType.Boolean), [value ? (byte)1 : (byte)0]);
 
+    // MS-DTYP FILETIME counts 100 ns ticks from 1601-01-01 UTC, so earlier instants have no value.
+    private const long FileTimeEpochTicks = 504911232000000000L;
+
+    public static bool FitsFileTime(DateTimeOffset value) => value.UtcTicks >= FileTimeEpochTicks;
+
     public static MapiProperty Time(ushort id, DateTimeOffset value)
     {
         byte[] b = new byte[8];
-        BinaryPrimitives.WriteInt64LittleEndian(b, value.UtcDateTime.ToFileTimeUtc());
+        BinaryPrimitives.WriteInt64LittleEndian(b, Math.Max(0, value.UtcTicks - FileTimeEpochTicks));
         return MapiProperty.CreateOwned(new MapiTag(id, MapiType.Time), b);
     }
 

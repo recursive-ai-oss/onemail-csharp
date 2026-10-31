@@ -132,7 +132,7 @@ Options (`OxcMailImportOptions`): `PartHandler`, `MaxEmbeddedDepth` (16), `MaxPa
 ## Loss codes
 
 `AddressSpellingFromTransportHeader`, `AddressUnresolved`, `AttachmentByReference`, `AttachmentWithoutData`, `BccNotWritten`,
-`BodyLineBreaksNormalized`, `CompositeTypeOnFlatData`, `DateFromDeliveryTime`, `DateSubSecondDropped`, `DateZoneNotStored`,
+`BodyLineBreaksNormalized`, `CompositeTypeOnFlatData`, `DateBeforeFileTimeEpoch`, `DateFromDeliveryTime`, `DateSubSecondDropped`, `DateZoneNotStored`,
 `DefaultValueNotWritten`, `EmbeddedMessageTooDeep`, `EmptyValueNotWritten`, `ExchangeAddressWrittenAsSmtp`, `ExtraAuthorsNotMapped`,
 `GroupFlattened`, `HtmlFromRtf`, `InReplyToFirstOnly`, `InvalidMediaType`, `MessageClassNotCarried`, `NamedPropertyValueSetAside`,
 `NoInternetMapping`, `PartHeaderNotMapped`, `PartsTooDeep`, `RepeatedHeaderNotMapped`, `ReplyToUnresolved`, `RtfCarriedAsTextRtf`,

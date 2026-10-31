@@ -353,6 +353,16 @@ public class OxcMailTests
     }
 
     [Fact]
+    public void DatesBefore1601AreReportedNotThrown()
+    {
+        // Found by fuzzing: a year-998 Date field made DateTime.ToFileTimeUtc throw.
+        string text = "Date: Thu, 12 Apr 0998 01:10:30 -0500\r\nReceived: from a by b; Thu, 12 Apr 0998 01:10:30 -0500\r\n\r\nx";
+        ConversionResult<MapiMessage> r = new MimeToMapiConverter().Convert(MimeEntity.Parse(Encoding.Latin1.GetBytes(text)));
+        Assert.Null(r.Value.Properties.Get(MapiPid.ClientSubmitTime));
+        Assert.Contains(r.Report, x => x.Code == "DateBeforeFileTimeEpoch");
+    }
+
+    [Fact]
     public void PartHandlerSeesLeavesFirstAndCanClaimThem()
     {
         var seen = new List<string>();
