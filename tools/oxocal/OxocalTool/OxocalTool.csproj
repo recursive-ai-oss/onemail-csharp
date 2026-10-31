@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads the calendar and task items of Outlook files and converts them to iCalendar and back, for the checks in docs/calendar-items.md.
+       A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>OxocalTool</AssemblyName>
+    <RootNamespace>OxocalTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>
