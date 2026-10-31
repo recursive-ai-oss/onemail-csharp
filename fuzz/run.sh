@@ -41,6 +41,7 @@ case "$target" in
   mime-reader|mime-tree) maxlen=65536 ;;
   contentlines) maxlen=65536 ;;
   calendar) maxlen=65536 ;;
+  ndb) maxlen=8192 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

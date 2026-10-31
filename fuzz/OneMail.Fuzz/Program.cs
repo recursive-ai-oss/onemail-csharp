@@ -22,6 +22,7 @@ internal static class Program
             ["text"] = TextTarget.Run,
             ["mime-reader"] = MimeTargets.Reader,
             ["mime-tree"] = MimeTargets.Tree,
+            ["ndb"] = NdbTarget.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> calendar = CalendarTargets.Register(new(StringComparer.Ordinal));
         foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in calendar)
