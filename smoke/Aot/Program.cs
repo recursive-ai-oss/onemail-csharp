@@ -294,6 +294,9 @@ internal static class Program
         bool contactsOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Contacts();
         Console.WriteLine("contacts: " + (contactsOk ? "ok" : "FAILED"));
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        bool olmOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Olm();
+        Console.WriteLine("olm: " + (olmOk ? "ok" : "FAILED"));
+
+        return olmOk && contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

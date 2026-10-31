@@ -49,6 +49,9 @@ public enum MailFormat
 
     /// <summary>A vCard (<c>BEGIN:VCARD</c>). Recognised; not readable yet.</summary>
     VCard,
+
+    /// <summary>An Outlook for Mac archive: a zip holding the <c>Local/</c> message, address book, calendar, task and note folders.</summary>
+    Olm,
 }
 
 /// <summary>
@@ -92,6 +95,12 @@ public static class MailFormatSniffer
         if (h.Length >= 4 && BinaryPrimitives.ReadUInt32LittleEndian(h) == 0x223E9F78)
         {
             return MailFormat.Tnef;
+        }
+
+        // An OLM archive is a zip (PKWARE APPNOTE 4.3.7 local header signature) whose directory holds the Outlook for Mac folders.
+        if (h.StartsWith("PK\x03\x04"u8) && Stores.Olm.OlmArchive.IsOlm(source))
+        {
+            return MailFormat.Olm;
         }
 
         StoreFormat store = StoreSniffer.Sniff(source);

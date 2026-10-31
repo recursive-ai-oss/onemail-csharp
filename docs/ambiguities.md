@@ -449,3 +449,21 @@ resolution is provisional until Outlook can be run.
 | OX20 | A TNEF stream ending in CR LF | 2.2.3.8 step 3: SHOULD ignore the stream (a SHOULD, no client observed) | Unpacked, as tnef 1.4.18, ytnef 2.1.2, tnefparse 1.4.0 and MimeKit 4.18.2 all do (4 of 4 oracles on both `bug52400` files); reported, not hidden. Prov. until a client is observed | `AmbiguousTnefTrailingCrLf` (view defect), `TnefTrailingCrLfIgnored` (`Internal` loss entry) | 2.2.3.8 step 3; the two `bug52400` corpus files; the earlier choice (keep as attachment) was reversed on the oracle evidence |
 | OX21 | Correlation key vs `X-MS-TNEF-Correlator` | 2.2.3.8 step 4: a mismatch means pure MIME; the field is spelled `X-MS-TNEF-Correlator` (2.1.3.2.26) and `X-MS-Tnef-Correlation` (2.2.3.8) | Both spellings are read; the binary key matches when its bytes (trailing NULs and blanks removed) equal the field as ASCII text or as hexadecimal digits; either one missing is a match | `TnefNotUsed` | 2.1.3.2.26, 2.2.3.8; none of the corpus files has a key; prov. |
 | OX22 | Writing a TNEF message | 2.1.3.7; the key is "unique" | The key of the message's own `PidTagTnefCorrelationKey` when it has one, else the first 16 bytes of SHA-256 of Message-ID (or subject) and submit time in hex; no top-level recipient table in the TNEF; an empty `text/plain` when there is no text body | `TnefWriterLimit`, `TnefPlainTextNotRendered` | 2.1.3.7, 2.1.3.1.1; 45 MSG and 25 PST/OST corpus items through `OxcMailTool rt-tnef`: 10,496 of 11,142 properties exact, 227 the same text under another string type, the rest in the loss report, 0 silent (pure MIME: 6,453 exact, 4,290 reported) |
+
+
+## OLM (Outlook for Mac)
+
+Observed on the two public sample archives (Outlook 16 layout) and our generated ones, against the released olmreader 1.9.0 jar and the
+olm-reader 1.0.0 npm package as black-box oracles. No Outlook for Mac has been observed, so each resolution is provisional. Details: [`olm.md`](olm.md).
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| O1 | Dates have no zone (`2018-06-20T23:49:52`) | the jar returns the text and leaves the reading to the caller; the npm package reads it in the machine's zone (UTC when `TZ=UTC`, and then writes it as GMT) | UTC, `ZoneKnown` false | `AmbiguousDateZone` | prov.; the npm package agrees under `TZ=UTC` on 478 + 7 messages |
+| O2 | `OPFMessageCopyBody` and `OPFMessageCopyHTMLBody` hold the same text | the npm package writes text and strips tags | `OPFMessageGetHasHTML` decides: true gives an HTML body, false a plain one; with no flag, a body that differs from the HTML element or looks like HTML is HTML | `AmbiguousBodyKind` (flag absent only) | prov.; 470 of 483 and 7 of 7 sample messages have the two elements equal |
+| O3 | Two attachments of one message share a name | the jar keys bytes by name and keeps one | Both are listed, each with its own bytes | none | oracle limit (1 message in the Enron sample) |
+| O4 | The declared attachment size (`OPFAttachmentContentFileSize`, written as `5.0614E4`) differs from the entry's size | not used by either oracle | The entry's size is the size; the declared one stays in the XML | none | every attachment in the Outlook-example sample differs |
+| O5 | An address element has a name and no address | the npm package writes `unknown@unknown.com` for a missing sender | Name kept, address empty | `AddressMissing` | 12 recipients in the Enron sample |
+| O6 | A date of year 4501 or later | n/a | No date (Outlook's "none" value) | none | MS-OXOCAL; prov. |
+| O7 | Contact e-mail slot type 0, 1, 2 | n/a | work, home, other | none | prov.; the sample's addresses are named after their slot |
+| O8 | Recurrence with both a count and an end date | n/a | The count (`COUNT`) when the record says it is numbered, else the end date as a UTC `UNTIL` | `RecurrenceEnd` (loss entry) | prov.; all four sample patterns are numbered |
+| O9 | An attachment URL that matches no entry | the jar returns no bytes | Listed with no content | `AttachmentMissing` | prov. |

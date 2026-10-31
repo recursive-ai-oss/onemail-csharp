@@ -50,9 +50,9 @@ store). Details in [`benchmarks.md`](benchmarks.md).
 | Maildir (Courier and Dovecot flags and keywords) | yes | yes | 0 against Python `mailbox` | 48 / 48 | via store tests | Courier keyword file line format unverified against a real store; one directory listing held in memory |
 | EMLX and Apple Mail `.mbox` bundles | yes | yes | ground truth 14 / 14 | 14 / 14 | yes | flag bits unverified against a real Apple Mail store |
 | ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines, component trees, typed views; contacts below) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
-| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | MSG, PST, DBX and OLM items not in the view yet |
+| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | DBX items not in the view yet |
 | PST / OST node database (MS-PST NDB) | yes (lower layer only) | no | NIST CFReDS OST: every node and block enumerates, header agrees with libpff | n/a | yes | no messages from PST yet; ANSI and 512-byte-page Unicode PSTs untested on real files (no public sample) |
-| MSG/OFT, TNEF, OLM, DBX, compressed RTF | not yet | not yet | | | | planned |
+| DBX | not yet | not yet | | | | planned |
 
 ## Contacts (vCard typed view, Outlook contacts, MS-OXVCARD)
 
@@ -86,6 +86,16 @@ direction. Method and rules: [`conversion.md`](conversion.md). No Outlook has be
 | MAPI to MIME to MAPI | every property of the source: exact, same text under another string type, or in the loss report | 11,142 properties: 6,406 exact, 446 same text, 4,290 reported, **0 silent** | `PidTagTransportMessageHeaders` is rewritten (reported) |
 | MIME to MAPI to MIME | ten fields before and after (subject, From, To, Cc, Date, ids, bodies, attachments) on Mime4j 80, Dovecot 1,430, Enron sample 5,032 messages | 65,420 fields: 65,392 equal, 28 differ and each has a loss entry, **0 silent** | Bcc dropped on the way out (reported); display-name spelling of a kept received header |
 | The view | `MapiMailItem` senders and recipients | all 50 EX recipients and 16 of 28 EX senders resolve to SMTP with the X.500 address kept; the other 12 senders (all in the MSG set) have no SMTP form; a further 9 PST senders have no address at all | no directory lookup |
+
+## OLM (Outlook for Mac) read
+
+Added after 0.2.0-preview.1. Oracles, run as released programs and never linked: the olmreader 1.9.0 jar (Maven Central, BSD-2-Clause) and
+the olm-reader 1.0.0 npm package (Apache-2.0). Corpus, fetched and never committed: the two sample archives of the OLMReader project
+(BSD-2-Clause; [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)). No Outlook for Mac has been run.
+
+| Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
+|---|---|---|---|---|---|---|
+| OLM (Outlook for Mac archive) | yes: mail, appointments, contacts, groups, tasks, notes, categories; attachments as lazy streams | no, by design | jar: 0 on both samples and on two generated archives (outlook_example 38 records, bill_rapp 492, generated 54); npm package: 0 on 485 messages, 12 documented tool differences | records keep every element (`OlmElement` tree); raw MIME source kept as text | yes | no Outlook 2011 layout sample; no archive with a raw MIME source, attendees or exceptions seen; a damaged zip is refused (recovery comes later); the zip directory is held in memory (names only) |
 
 ## Speed
 

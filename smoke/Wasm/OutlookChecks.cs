@@ -47,7 +47,7 @@ internal static class OutlookChecks
 
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
-        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts);
+        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts) & Guard("olm", Olm);
 
     public static bool Msg()
     {
@@ -188,6 +188,51 @@ internal static class OutlookChecks
         return view.FormattedName == "Dan Fennell" && view.Phones.Single().Value == "+1-206-555-0102" && view.Organization[0] == "Contoso, Ltd."
             && contact.Surname == "Fennell" && contact.Phone(RecursiveAI.OneMail.Contacts.ContactPhoneKind.Business) == "+1-206-555-0102" && contact.CompanyName == "Contoso, Ltd."
             && new MapiMailItem(msg, default).Contact?.DisplayName == "Dan Fennell";
+    }
+
+    // An Outlook for Mac archive: a small zip built here, sniffed by content, read through Mail.Open with an attachment, converted to a calendar object.
+    public static bool Olm()
+    {
+        const string x = " xml:space=\"preserve\"";
+        const string att = "Local/com.microsoft.__Messages/Inbox/com.microsoft.__Attachments/id_0000";
+        string mail = $"<emails{x} elementCount=\"1\"><email{x}><OPFMessageCopyBody{x}>hi</OPFMessageCopyBody><OPFMessageCopySubject{x}>Caf\u00e9 \u2713</OPFMessageCopySubject>"
+            + $"<OPFMessageCopySentTime{x}>2020-02-03T04:05:06</OPFMessageCopySentTime><OPFMessageGetHasHTML{x}>0E0</OPFMessageGetHasHTML>"
+            + $"<OPFMessageCopyAttachmentList{x}><messageAttachment{x} OPFAttachmentName=\"a.bin\" OPFAttachmentURL=\"{att}\"/></OPFMessageCopyAttachmentList></email></emails>";
+        string cal = $"<appointments{x} elementCount=\"1\"><appointment{x}><OPFCalendarEventCopySummary{x}>Lunch</OPFCalendarEventCopySummary>"
+            + $"<OPFCalendarEventCopyStartTime{x}>2020-03-04T12:00:00</OPFCalendarEventCopyStartTime><OPFCalendarEventCopyUUID{x}>u1</OPFCalendarEventCopyUUID></appointment></appointments>";
+        var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach ((string name, byte[] data) in new[]
+            {
+                ("Local/com.microsoft.__Messages/Inbox/message_00000.xml", Encoding.UTF8.GetBytes(mail)), (att, new byte[] { 1, 2, 3 }),
+                ("Local/Calendar/Calendar.xml", Encoding.UTF8.GetBytes(cal)),
+            })
+            {
+                using Stream e = zip.CreateEntry(name, System.IO.Compression.CompressionLevel.NoCompression).Open();
+                e.Write(data);
+            }
+        }
+
+        byte[] bytes = ms.ToArray();
+        if (MailFormatSniffer.Sniff(new MemorySource(bytes)) != MailFormat.Olm)
+        {
+            return false;
+        }
+
+        using MailContainer opened = Mail.Open(new MemorySource(bytes));
+        IMailItem[] items = opened.Enumerate().ToArray();
+        if (items.Length != 2 || items[0].Subject != "Caf\u00e9 \u2713" || items[0].TextBody?.ReadText() != "hi" || items[0].Attachments.Count != 1)
+        {
+            return false;
+        }
+
+        using Stream a = items[0].Attachments[0].Open();
+        var got = new MemoryStream();
+        a.CopyTo(got);
+        var ical = new ContentDocument();
+        ical.Root.Add(new RecursiveAI.OneMail.Stores.Olm.OlmToCalendarConverter().Convert((RecursiveAI.OneMail.Stores.Olm.OlmItem)items[1]).Value);
+        return got.ToArray().SequenceEqual(new byte[] { 1, 2, 3 }) && Encoding.UTF8.GetString(ical.ToArray()).Contains("DTSTART:20200304T120000", StringComparison.Ordinal);
     }
 
     public static bool TnefInMime()
