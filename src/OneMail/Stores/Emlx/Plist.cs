@@ -152,9 +152,13 @@ public static class Plist
             case "string":
                 return r.ReadElementContentAsString();
             case "integer":
-                return long.Parse(r.ReadElementContentAsString().Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+                return long.TryParse(r.ReadElementContentAsString().Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long integer)
+                    ? integer
+                    : throw new FormatException("An integer is not a 64-bit number.");
             case "real":
-                return double.Parse(r.ReadElementContentAsString().Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+                return double.TryParse(r.ReadElementContentAsString().Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double real)
+                    ? real
+                    : throw new FormatException("A real is not a number.");
             case "true":
                 r.Read();
                 return true;
@@ -162,7 +166,9 @@ public static class Plist
                 r.Read();
                 return false;
             case "date":
-                return DateTimeOffset.Parse(r.ReadElementContentAsString().Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+                return DateTimeOffset.TryParse(r.ReadElementContentAsString().Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset when)
+                    ? when
+                    : throw new FormatException("A date is not a date.");
             case "data":
                 return Convert.FromBase64String(r.ReadElementContentAsString());
             default:

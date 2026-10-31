@@ -290,6 +290,18 @@ public class EmlxTests
         Assert.False(PlistFormat.TryParse(repro, out _));
     }
 
+    [Theory]
+    [InlineData("<integer>99999999999999999999</integer>")]
+    [InlineData("<integer>x</integer>")]
+    [InlineData("<real>nope</real>")]
+    [InlineData("<date>not a date</date>")]
+    [InlineData("<data>!!!</data>")]
+    public void FuzzReproBadScalarValuesGiveFalse(string value)
+    {
+        // Found by the emlx fuzz target: an integer too large for 64 bits escaped as OverflowException.
+        Assert.False(PlistFormat.TryParse(B("<plist><dict><key>k</key>" + value + "</dict></plist>"), out _));
+    }
+
     [Fact]
     public void BundleFindsMessagesInOldAndNewLayoutsAndPartialFiles()
     {
