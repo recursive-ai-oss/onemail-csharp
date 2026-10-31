@@ -338,14 +338,14 @@ internal static class TnefMessageBuilder
             msg.Properties.Add(p.Property);
         }
 
-        if (msg.OemCodePage is int cp && msg.Properties.Get(MapiPid.MessageCodepage) is null && oemEncoding is not null)
+        if (oemEncoding is not null)
         {
-            // The shared model resolves 8-bit strings from PidTagMessageCodepage first, and MS-OXTNEF 2.3.3.2 makes attOemCodepage the writer's code page.
-            msg.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.MessageCodepage, MapiType.Integer32), BitConverter.GetBytes(cp)));
-        }
-        else if (msg.OemCodePage is int cp2 && msg.Properties.Get(MapiPid.MessageCodepage)?.AsInt32() is int pcp && pcp != cp2)
-        {
-            cx.Add(TnefDefectKind.AmbiguousCodePage, 0, "attOemCodepage " + cp2 + " but PidTagMessageCodepage " + pcp + "; the property decides how 8-bit strings are read");
+            // MS-OXTNEF 2.3.3.2: attOemCodepage is the reader's code page for ANSI strings, ahead of anything the encapsulated properties say.
+            msg.DeclaredString8Encoding = oemEncoding;
+            if (msg.OemCodePage is int cp2 && msg.Properties.Get(MapiPid.MessageCodepage)?.AsInt32() is int pcp && pcp != cp2)
+            {
+                cx.Add(TnefDefectKind.AmbiguousCodePage, 0, "attOemCodepage " + cp2 + " but PidTagMessageCodepage " + pcp + "; attOemCodepage decides how 8-bit strings are read");
+            }
         }
 
         MessageLegacy.Apply(cx, legacy, oemEncoding);

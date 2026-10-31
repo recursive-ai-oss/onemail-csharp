@@ -15,7 +15,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # kind -> reason. A difference whose kind is here is explained; the kind is the text before the first colon.
 EXPLAINED = {
-    "ours-only-prop-synth": "PidTagMessageCodepage is added by OneMail from attOemCodepage when the shared model would not resolve that code page otherwise",
     "ours-only-prop-legacy": "a property built from a legacy attribute (MS-OXTNEF 2.1.3.3) that the encapsulated list does not carry; tnefparse keeps those as attributes, not properties",
     "ours-only-prop-body": "tnefparse moves the body properties (text, HTML, compressed RTF) into its body fields instead of its property list; they are compared there",
     "ours-only-prop-after-mv": "tnefparse stops reading the property list at the first multi-valued property of the fixture",
@@ -179,7 +178,6 @@ def main():
                     elif mv_fixture:
                         diffs.append(("ours-only-prop-after-mv", f"0x{key[0]:04X}/0x{key[1]:04X}"))
                     elif key[0] == 0x3FFD:
-                        diffs.append(("ours-only-prop-synth", f"0x{key[0]:04X}"))
                     elif m["type"] == "001F" or key[0] in LEGACY_IDS:
                         diffs.append(("ours-only-prop-legacy", f"0x{key[0]:04X}"))
                     else:

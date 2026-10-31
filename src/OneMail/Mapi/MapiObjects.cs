@@ -13,12 +13,27 @@ public abstract class MapiObject
     private int _ownVersion = -1;
     private MailEncoding? _ownEncoding;
     private MapiCodePageSource _ownSource;
+    private MailEncoding? _declared;
 
     /// <summary>Creates an object.</summary>
     /// <param name="parent">The enclosing object (an attachment for an embedded message, a message for its attachments and recipients), used for the code page; or null.</param>
     protected MapiObject(MapiObject? parent)
     {
         Parent = parent;
+    }
+
+    /// <summary>
+    /// A code page the file format itself declared for this object's 8-bit strings (TNEF's attOemCodepage). It is consulted before the object's
+    /// properties, because the format's rules put it first.
+    /// </summary>
+    internal MailEncoding? DeclaredString8Encoding
+    {
+        get => _declared;
+        set
+        {
+            _declared = value;
+            _ownVersion = -1;
+        }
     }
 
     /// <summary>The enclosing object, or null for a top-level message.</summary>
@@ -36,7 +51,7 @@ public abstract class MapiObject
 
     /// <summary>
     /// The encoding for this object's PtypString8 values, from the first of these that gives one the library has:
-    /// the object's own PidTagMessageCodepage; the Windows ANSI code page of the language in its PidTagMessageLocaleId; its own
+    /// a code page the file format declared (TNEF's attOemCodepage); the object's own PidTagMessageCodepage; the Windows ANSI code page of the language in its PidTagMessageLocaleId; its own
     /// PidTagInternetCodepage unless that is a Unicode transformation format; the enclosing object's encoding; windows-1252.
     /// <see cref="String8EncodingSource"/> says which applied.
     /// </summary>
@@ -80,6 +95,12 @@ public abstract class MapiObject
 
     private MailEncoding? ResolveOwn(out MapiCodePageSource source)
     {
+        if (_declared is { } declared)
+        {
+            source = MapiCodePageSource.Declared;
+            return declared;
+        }
+
         if (Properties.Get(MapiPid.MessageCodepage, MapiType.Integer32)?.AsInt32() is int mcp && mcp > 0 && MailEncoding.ForCodePage(mcp) is { } m)
         {
             source = MapiCodePageSource.MessageCodepage;

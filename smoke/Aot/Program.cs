@@ -225,6 +225,19 @@ internal static class Program
             msgOk &= openMsgOk;
         }
 
-        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        byte[] tnefBytes = RecursiveAI.OneMail.Tests.Tnef.TnefTestBuilder.Rich();
+        RecursiveAI.OneMail.Tnef.TnefMessage tnefMsg = RecursiveAI.OneMail.Tnef.TnefMessage.Read(tnefBytes);
+        using var tnefOut = new MemoryStream();
+        RecursiveAI.OneMail.Tnef.TnefMessageWriter.Write(tnefMsg, tnefOut);
+        RecursiveAI.OneMail.Tnef.TnefMessage tnefAgain = RecursiveAI.OneMail.Tnef.TnefMessage.Read(tnefOut.ToArray());
+        using var tnefDocOut = new MemoryStream();
+        RecursiveAI.OneMail.Tnef.TnefDocument.Read(tnefBytes).WriteTo(tnefDocOut);
+        bool tnefOk = tnefMsg.Subject == "Caf\u00e9 menu \u2713" && tnefMsg.Attachments.Count == 3 && tnefMsg.Recipients.Count == 2
+            && tnefAgain.Subject == tnefMsg.Subject && tnefAgain.Attachments.Count == 3 && tnefAgain.Properties.Count == tnefMsg.Properties.Count
+            && tnefDocOut.ToArray().AsSpan().SequenceEqual(tnefBytes)
+            && Mail.Open(new MemorySource(tnefBytes)).Format == MailFormat.Tnef;
+        Console.WriteLine("tnef: " + (tnefOk ? "ok" : "FAILED"));
+
+        return pstOk && tnefOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

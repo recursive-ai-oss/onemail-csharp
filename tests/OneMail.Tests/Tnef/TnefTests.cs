@@ -292,7 +292,7 @@ public class TnefMessageTests
         Assert.Equal(new DateTimeOffset(2004, 2, 17, 12, 26, 9, TimeSpan.Zero), m.GetTime(MapiPid.LastModificationTime));
         Assert.Equal(Convert.FromHexString("757BB19CDE936A4087D90BB784C58E3B"), m.Properties.Get(MapiPid.SearchKey)!.GetBytes().ToArray());
         Assert.Equal(1252, m.OemCodePage);
-        Assert.Equal(1252, m.GetInt32(MapiPid.MessageCodepage));
+        Assert.Equal(1252, m.String8Encoding.CodePage);
         Assert.Equal([TnefDefectKind.AmbiguousMessageClass], m.TnefDefects.Select(d => d.Kind).ToArray());
     }
 
@@ -459,7 +459,7 @@ public class TnefMessageTests
         byte[] bytes = new StreamBuilder().Header(1251).Msg(TnefAttributeIds.MsgProps, List(String8(0x0037, "\u041f\u0440\u0438\u0432\u0435\u0442", 1251))).ToArray();
         TnefMessage m = TnefMessage.Read(bytes);
         Assert.Equal("\u041f\u0440\u0438\u0432\u0435\u0442", m.Subject);
-        Assert.Equal(MapiCodePageSource.MessageCodepage, m.String8EncodingSource);
+        Assert.Equal(MapiCodePageSource.Declared, m.String8EncodingSource);
     }
 
     [Fact]
@@ -468,7 +468,8 @@ public class TnefMessageTests
         byte[] bytes = new StreamBuilder().Header(1252).Msg(TnefAttributeIds.MsgProps, List(Int32(0x3FFD, 1251), String8(0x0037, "\u041f", 1251))).ToArray();
         TnefMessage m = TnefMessage.Read(bytes);
         Assert.Contains(m.TnefDefects, d => d.Kind == TnefDefectKind.AmbiguousCodePage);
-        Assert.Equal("\u041f", m.Subject);
+        // attOemCodepage (1252) outranks the property (1251): byte 0xCF is U+00CF
+        Assert.Equal("\u00cf", m.Subject);
     }
 
     [Fact]
@@ -745,8 +746,8 @@ public class TnefRoundTripTests
         m.Properties.Add(MapiProperty.Create(new MapiTag(0x8000, MapiType.Integer32), BitConverter.GetBytes(5)));
         byte[] bytes = TnefTestHelpers.Write(m, out IReadOnlyList<string> warnings);
         Assert.Equal(2, warnings.Count);
-        // only the code page the reader adds from attOemCodepage is there
-        Assert.Equal([MapiPid.MessageCodepage], TnefMessage.Read(bytes).Properties.Select(p => p.Id).ToArray());
+        // attOemCodepage repeats the default, so the reader adds nothing
+        Assert.Empty(TnefMessage.Read(bytes).Properties);
     }
 
     [Fact]

@@ -3,6 +3,9 @@ namespace RecursiveAI.OneMail.Mapi;
 /// <summary>Where the code page of an object's 8-bit strings came from, strongest first.</summary>
 public enum MapiCodePageSource
 {
+    /// <summary>The file format declared it for the whole object (TNEF's attOemCodepage), which that format ranks above the object's properties.</summary>
+    Declared,
+
     /// <summary>The object's own PidTagMessageCodepage.</summary>
     MessageCodepage,
 

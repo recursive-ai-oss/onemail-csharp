@@ -92,7 +92,7 @@ public enum TnefDefectKind
     /// <summary>The attachment is an embedded message or OLE object and also carries attAttachData; the attribute is ignored (MS-OXTNEF 2.3.3.7).</summary>
     AmbiguousAttachDataIgnored,
 
-    /// <summary>attOemCodepage and the encapsulated PidTagMessageCodepage differ; the property is what the shared model resolves 8-bit strings with.</summary>
+    /// <summary>attOemCodepage and the encapsulated PidTagMessageCodepage differ; attOemCodepage is what 8-bit strings are read with (MS-OXTNEF 2.3.3.2).</summary>
     AmbiguousCodePage,
 
     /// <summary>attOwner has no meeting class to say which property group it maps to; PidTagSentRepresenting is used.</summary>
