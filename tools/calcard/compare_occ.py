@@ -53,6 +53,6 @@ for case, c in card.items():
     else:
         unexplained_rec += 1
         print('CARD != RECURRING-ICAL-EVENTS', case, mine[:3], rs[:3])
-print(f'cases {total} (series with a second master skipped: {skipped_n}; empty in both: {empty}); card == library expansion {same_ours}, stopped early by the card's own scan limit (defect ExpansionLimited, a prefix of the library's list) {bounded}, differ {unexplained_ours}; '
+print(f'cases {total} (series with a second master skipped: {skipped_n}; empty in both: {empty}); card == library expansion {same_ours}, stopped early by the card own scan limit (defect ExpansionLimited, a prefix of the library list) {bounded}, differ {unexplained_ours}; '
       f'oracle could not expand {rec_err}; card == recurring-ical-events {same_rec}, differ where the library also differs (inherited, explained in docs/recurrence.md) {inherited}, unexplained {unexplained_rec}')
 sys.exit(1 if unexplained_ours or unexplained_rec else 0)
