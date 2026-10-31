@@ -14,14 +14,45 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
+        // MimeKit's TNEF reader decodes 8-bit strings with legacy code pages, which .NET only has once this provider is registered
+        // (MimeKit's documentation asks .NET Core applications to do so). OneMail needs no registration.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
         if (args.Length == 4 && args[0] == "peak")
         {
             return Peak(args[1], args[2], args[3]);
         }
 
-        if (args.Length == 2 && args[0] == "report")
+        if (args.Length >= 2 && args[0] == "report")
         {
-            return Report(args[1]);
+            return Report(args[1], args.Length > 2 ? args[2] : null);
+        }
+
+        if (args.Length >= 1 && args[0] == "gen")
+        {
+            StoreGenerator.Generate(args.Length > 1 ? args[1] : OutlookInputs.Stores, args[2..]);
+            return 0;
+        }
+
+        if (args.Length == 3 && args[0] == "path" && args[1] == "pst")
+        {
+            Console.WriteLine(OutlookInputs.PstPath(args[2]));
+            return 0;
+        }
+
+        if (args.Length == 1 && args[0] == "verify")
+        {
+            return OutlookCommands.Verify();
+        }
+
+        if (args.Length == 1 && args[0] == "counts")
+        {
+            return OutlookCommands.Counts();
+        }
+
+        if (args.Length == 4 && args[0] == "curve")
+        {
+            return OutlookCommands.Curve(args[1], args[2], args[3]);
         }
 
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
@@ -33,6 +64,11 @@ internal static class Program
     private static int Peak(string row, string side, string input)
     {
         bool ours = side == "ours";
+        if (row is "pst" or "msg" or "tnef")
+        {
+            return OutlookCommands.Peak(row, side == "ours", input);
+        }
+
         byte[] data = row == "mbox" ? Inputs.DovecotMbox() : row == "build" ? MakeAttachment() : Inputs.Get(input);
         Func<long> op = (row, ours) switch
         {
@@ -81,17 +117,32 @@ internal static class Program
         return () => write(t);
     }
 
-    // Reads the *-report-full-compressed.json files; prints per row: medians, ratio (ours / MimeKit), bytes per operation.
-    private static int Report(string dir)
+    // Reads the *-report-full-compressed.json files; prints per row: medians, ratio (ours / comparator), bytes per operation, and, when a
+    // counts file (from the counts command) names the input, bytes per message. Then the geometric mean and worst ratio per area.
+    private static int Report(string dir, string? countsFile)
     {
-        var ratios = new List<double>();
-        Console.WriteLine("row\tinput\tours_ns\tmimekit_ns\tratio\tours_B/op\tmimekit_B/op");
+        var counts = new Dictionary<string, long>();
+        if (countsFile is not null && File.Exists(countsFile))
+        {
+            foreach (string line in File.ReadLines(countsFile))
+            {
+                string[] p = line.Split('	');
+                if (p.Length == 2)
+                {
+                    counts[p[0]] = long.Parse(p[1], CultureInfo.InvariantCulture);
+                }
+            }
+        }
+
+        var byArea = new SortedDictionary<string, List<double>>(StringComparer.Ordinal);
+        Console.WriteLine("area	row	input	ours_ns	other_ns	ratio	ours_B/op	other_B/op	msgs/op	ours_B/msg	other_B/msg");
         foreach (string f in Directory.EnumerateFiles(dir, "*-report-full-compressed.json").Order(StringComparer.Ordinal))
         {
             using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(f));
             string row = Path.GetFileName(f);
             int dash = row.IndexOf("-report", StringComparison.Ordinal);
             row = row[(row.LastIndexOf('.', dash) + 1)..dash];
+            string area = row switch { "PstRow" or "PstLargeRow" or "PstFourKiBRow" => "PST", "MsgRow" => "MSG", "TnefRow" => "TNEF", _ => "MIME" };
             var ours = new Dictionary<string, (double Median, long Alloc)>();
             var theirs = new Dictionary<string, (double Median, long Alloc)>();
             foreach (JsonElement b in doc.RootElement.GetProperty("Benchmarks").EnumerateArray())
@@ -105,16 +156,34 @@ internal static class Program
 
             foreach ((string parms, (double Median, long Alloc) o) in ours)
             {
-                (double Median, long Alloc) t = theirs[parms];
+                if (!theirs.TryGetValue(parms, out (double Median, long Alloc) t))
+                {
+                    // No comparator row (it cannot read this input): print ours alone, outside every ratio.
+                    Console.WriteLine(string.Join('\t', area + "-ours-only", row, parms, o.Median.ToString("F0", CultureInfo.InvariantCulture), "", "", o.Alloc, ""));
+                    continue;
+                }
+
                 double r = o.Median / t.Median;
-                ratios.Add(r);
-                Console.WriteLine(string.Join('\t', row, parms, o.Median.ToString("F0", CultureInfo.InvariantCulture), t.Median.ToString("F0", CultureInfo.InvariantCulture), r.ToString("F3", CultureInfo.InvariantCulture), o.Alloc, t.Alloc));
+                if (!byArea.TryGetValue(area, out List<double>? list))
+                {
+                    byArea[area] = list = [];
+                }
+
+                list.Add(r);
+                string input = parms.Replace("Input=", "", StringComparison.Ordinal);
+                string perMsg = "			";
+                if (counts.TryGetValue(input, out long msgs) && msgs > 0)
+                {
+                    perMsg = string.Join('	', msgs, (o.Alloc / msgs).ToString(CultureInfo.InvariantCulture), (t.Alloc / msgs).ToString(CultureInfo.InvariantCulture));
+                }
+
+                Console.WriteLine(string.Join('	', area, row, parms, o.Median.ToString("F0", CultureInfo.InvariantCulture), t.Median.ToString("F0", CultureInfo.InvariantCulture), r.ToString("F3", CultureInfo.InvariantCulture), o.Alloc, t.Alloc, perMsg));
             }
         }
 
-        if (ratios.Count > 0)
+        foreach ((string area, List<double> ratios) in byArea)
         {
-            Console.WriteLine("geomean\t{0:F3}\tworst\t{1:F3}\trows\t{2}", Math.Exp(ratios.Average(Math.Log)), ratios.Max(), ratios.Count);
+            Console.WriteLine("geomean	{0}	{1:F3}	worst	{2:F3}	rows	{3}", area, Math.Exp(ratios.Average(Math.Log)), ratios.Max(), ratios.Count);
         }
 
         return 0;

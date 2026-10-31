@@ -26,6 +26,31 @@ public class PstMessagingTests
     internal static byte[] Build(NdbFormat format, FxFolder? tree = null, byte crypt = 0) =>
         new PstFixtureBuilder(format).Build(tree ?? SampleTree(), compress: format == NdbFormat.Unicode4K, crypt: crypt).Bytes;
 
+    // The test writer leaves a free slot for every AMap page a larger file needs (MS-PST 2.2.2.7.2), so stores of any size can be read back.
+    [Theory, MemberData(nameof(Formats))]
+    public void StoreLargerThanOneAMapReadsBack(NdbFormat format)
+    {
+        var inbox = new FxFolder { Name = "Inbox" };
+        for (int i = 0; i < 50; i++)
+        {
+            inbox.Messages.Add(new FxMessage { Subject = "m" + i, Body = "b" + i, Attachments = [new FxAttachment { Name = "a" + i, Data = Data(400_000, i) }] });
+        }
+
+        byte[] bytes = Build(format, new FxFolder { Name = "Top", Children = [inbox] });
+        Assert.True(bytes.Length > 17_000_000);  // past the first AMap of every layout (the 4 KiB one covers about 16.7 MB)
+        using PstStore s = Open(bytes);
+        PstWalkCounts counts = s.ReadEverything(Ct);
+        Assert.Equal(50, counts.Messages);
+        Assert.Equal(50, counts.Attachments);
+        Assert.Empty(s.Defects);
+        Assert.Empty(s.DatabaseDefects);
+        PstMessage last = s.EnumerateMessages(cancellationToken: Ct).Last();
+        using Stream data = last.Attachments[0].OpenData()!;
+        var ms = new MemoryStream();
+        data.CopyTo(ms);
+        Assert.Equal(Data(400_000, 49), ms.ToArray());
+    }
+
     [Theory, MemberData(nameof(Formats))]
     public void FolderTreeAndMessagesRead(NdbFormat format)
     {
