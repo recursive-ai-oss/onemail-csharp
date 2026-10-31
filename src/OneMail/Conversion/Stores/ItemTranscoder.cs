@@ -83,7 +83,11 @@ internal static class ItemTranscoder
                 MimeEntity e;
                 if (oi.MimeSource is { Length: > 0 } src)
                 {
-                    e = MimeEntity.Parse(System.Text.Encoding.UTF8.GetBytes(src), o.Mime);
+                    // The record kept the original message: it is the message. The record's own fields are Outlook's view of it and
+                    // normally agree; where they do not, the source wins and the field is reported.
+                    byte[] bytes = System.Text.Encoding.UTF8.GetBytes(src);
+                    e = MimeEntity.Parse(bytes, o.Mime);
+                    ViewMimeBuilder.ReportDisagreements(oi, MimeMailItem.Parse(bytes, o.Mime), report);
                 }
                 else
                 {

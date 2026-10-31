@@ -158,6 +158,7 @@ public sealed class StoreConverter
 
         var entry = new StoreEntry
         {
+            Item = item,
             Kind = payload.Kind,
             Folder = u.Folder,
             Content = payload.Content,

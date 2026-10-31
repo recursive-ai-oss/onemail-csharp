@@ -11,6 +11,9 @@ namespace RecursiveAI.OneMail.Conversion.Stores;
 /// <summary>One converted item on its way into a destination.</summary>
 public sealed class StoreEntry
 {
+    /// <summary>The source item, for a sink that writes from the item rather than from <see cref="Content"/> (an MSG or PST writer reads the property bag of a <see cref="MapiMailItem"/>). Null for a calendar or card file.</summary>
+    public IMailItem? Item { get; init; }
+
     /// <summary>What the content is.</summary>
     public PayloadKind Kind { get; init; }
 
@@ -82,6 +85,7 @@ public static class StoreSinks
             ConvertFormat.Mbox => new MboxSink(destination, options),
             ConvertFormat.Maildir => new MaildirSink(destination, options),
             ConvertFormat.AppleMail => new AppleMailSink(destination, options),
+            ConvertFormat.Eml => new EmlSink(destination),
             _ => new DirectorySink(destination, requireEmpty: true),
         };
     }
@@ -261,6 +265,21 @@ internal abstract class MailSinkBase : IStoreSink
     public abstract ValueTask CompleteAsync(CancellationToken cancellationToken);
 
     public abstract ValueTask DisposeAsync();
+}
+
+/// <summary>One <c>.eml</c> file per message; calendar and contact items go to <c>_items</c>.</summary>
+internal sealed class EmlSink : MailSinkBase
+{
+    private readonly DirectorySink _messages;
+
+    public EmlSink(string root)
+        : base(Path.Combine(root, "_items")) => _messages = new DirectorySink(root, requireEmpty: true);
+
+    protected override ValueTask<string?> WriteMessageAsync(StoreEntry entry, CancellationToken cancellationToken) => _messages.WriteAsync(entry, cancellationToken);
+
+    public override ValueTask CompleteAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+    public override ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
 /// <summary>mbox: one file per folder, or one file for everything.</summary>

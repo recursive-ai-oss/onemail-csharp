@@ -222,6 +222,30 @@ internal static class ViewMimeBuilder
         return h;
     }
 
+    /// <summary>Names the fields of an OLM record that differ from the message source it holds.</summary>
+    public static void ReportDisagreements(OlmItem record, IMailItem source, LossReport report)
+    {
+        static string Addr(IEnumerable<MailAddress> l) => string.Join(",", l.Select(a => a.Address.ToLowerInvariant()));
+        static string Norm(string? s) => (s ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').TrimEnd('\n');
+        void Differs(bool same, string element)
+        {
+            if (!same)
+            {
+                report.Add("olm", element, LossKind.Overridden, "OlmFieldDiffersFromSource", "The record's field differs from the message source it holds; the source is written.");
+            }
+        }
+
+        Differs((record.Subject ?? string.Empty) == (source.Subject ?? string.Empty), "OPFMessageCopySubject");
+        Differs(Addr(record.From) == Addr(source.From), "OPFMessageCopyFromAddresses");
+        Differs(Addr(record.ToRecipients) == Addr(source.ToRecipients), "OPFMessageCopyToAddresses");
+        Differs(Addr(record.Cc) == Addr(source.Cc), "OPFMessageCopyCCAddresses");
+        Differs(record.MessageId == source.MessageId, "OPFMessageCopyMessageID");
+        Differs(record.Sent?.Value.ToUnixTimeSeconds() == source.Sent?.Value.ToUnixTimeSeconds(), "OPFMessageCopySentTime");
+        Differs(record.ConversationTopic == source.ConversationTopic, "OPFMessageCopyThreadTopic");
+        Differs(Norm(record.TextBody?.ReadText()) == Norm(source.TextBody?.ReadText()), "OPFMessageCopyBody");
+        Differs(Norm(record.HtmlBody?.ReadText()) == Norm(source.HtmlBody?.ReadText()), "OPFMessageCopyHTMLBody");
+    }
+
     /// <summary>The OLM elements neither the view nor a conversion reads, as loss entries.</summary>
     public static void ReportUnmapped(OlmItem item, LossReport report, params string[] carriedElsewhere)
     {

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runs the store-to-store conversions over corpora and checks the result by reading it back, for docs/fidelity.md.
+       A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>ConvertTool</AssemblyName>
+    <RootNamespace>ConvertTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>
