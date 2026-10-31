@@ -191,27 +191,12 @@ internal static class OutlookWorkloads
     {
         var t = new Totals();
         var sink = new CountingStream();
+        // Not disposed: XstFile.Dispose starts a background release of the file's caches that reopens the file after it was closed, and
+        // in a loop that thread throws on its own and ends the process (seen on a 2 MB store and on macOS). The file is left to the
+        // garbage collector, which closes its handle; that costs the comparator nothing in time.
         var xst = new XstFile(path);
         WalkXst(xst.RootFolder, ref t, sink);
-        DisposeLater(xst);
         return t;
-    }
-
-    // XstFile.Dispose starts a background release of the file's caches that reopens the file; on a short walk that thread can still be
-    // running when Dispose returns, and then it throws on its own thread and ends the process (seen in a loop over a 2 MB store). So files
-    // are disposed a few dozen walks later, which costs the comparator nothing in time and keeps at most that many handles open.
-    private static readonly Queue<XstFile> s_openFiles = new();
-
-    private static void DisposeLater(XstFile file)
-    {
-        lock (s_openFiles)
-        {
-            s_openFiles.Enqueue(file);
-            while (s_openFiles.Count > 32)
-            {
-                s_openFiles.Dequeue().Dispose();
-            }
-        }
     }
 
     private static void WalkXst(XstFolder folder, ref Totals t, CountingStream sink)

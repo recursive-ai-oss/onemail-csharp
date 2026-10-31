@@ -101,6 +101,7 @@ internal static class OutlookCommands
         long a0 = GC.GetAllocatedBytesForCurrentThread();
         int n = 0;
         var sw = Stopwatch.StartNew();
+        using var sampler = new PeakSampler();
         do
         {
             Run(row, ours, input);
@@ -109,7 +110,7 @@ internal static class OutlookCommands
         while (sw.ElapsedMilliseconds < 4000);
 
         long perOp = (GC.GetAllocatedBytesForCurrentThread() - a0) / n;
-        long peak = Process.GetCurrentProcess().PeakWorkingSet64;
+        long peak = sampler.Peak;
         Console.WriteLine(string.Join('\t', "PEAK", row, ours ? "ours" : "theirs", input, (peak >> 10).ToString(CultureInfo.InvariantCulture), ((peak - start) >> 10).ToString(CultureInfo.InvariantCulture), perOp.ToString(CultureInfo.InvariantCulture), n.ToString(CultureInfo.InvariantCulture)));
         return 0;
     }
@@ -124,11 +125,13 @@ internal static class OutlookCommands
         using var done = new ManualResetEventSlim();
         Process self = Process.GetCurrentProcess();
         var clock = Stopwatch.StartNew();
+        long peakWs = 0;
         var sampler = new Thread(() =>
         {
             while (!done.Wait(100))
             {
                 self.Refresh();
+                peakWs = Math.Max(peakWs, self.WorkingSet64);
                 Console.WriteLine(string.Join('\t', "CURVE", side, input, clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture), Volatile.Read(ref OutlookWorkloads.Progress).ToString(CultureInfo.InvariantCulture), (self.WorkingSet64 >> 20).ToString(CultureInfo.InvariantCulture), (GC.GetTotalMemory(false) >> 20).ToString(CultureInfo.InvariantCulture)));
             }
         })
@@ -137,7 +140,49 @@ internal static class OutlookCommands
         Totals t = Run(row, ours, input);
         done.Set();
         sampler.Join();
-        Console.WriteLine($"CURVE-END\t{side}\t{input}\t{t}\tseconds={clock.Elapsed.TotalSeconds:F1}\tpeak_ws_MiB={self.PeakWorkingSet64 >> 20}");
+        Console.WriteLine($"CURVE-END\t{side}\t{input}\t{t}\tseconds={clock.Elapsed.TotalSeconds:F1}\tpeak_ws_MiB={Math.Max(peakWs, self.PeakWorkingSet64) >> 20}");
         return 0;
+    }
+
+    /// <summary>
+    /// Polls the working set every 10 ms and keeps the largest value. <c>Process.PeakWorkingSet64</c> is not filled in on every
+    /// platform (it reads 0 on macOS), so the peak is the larger of the two.
+    /// </summary>
+    private sealed class PeakSampler : IDisposable
+    {
+        private readonly Process _self = Process.GetCurrentProcess();
+        private readonly ManualResetEventSlim _stop = new();
+        private readonly Thread _thread;
+        private long _max;
+
+        public PeakSampler()
+        {
+            _thread = new Thread(() =>
+            {
+                while (!_stop.Wait(10))
+                {
+                    _self.Refresh();
+                    _max = Math.Max(_max, _self.WorkingSet64);
+                }
+            })
+            { IsBackground = true };
+            _thread.Start();
+        }
+
+        public long Peak
+        {
+            get
+            {
+                _self.Refresh();
+                return Math.Max(Math.Max(_max, _self.WorkingSet64), _self.PeakWorkingSet64);
+            }
+        }
+
+        public void Dispose()
+        {
+            _stop.Set();
+            _thread.Join();
+            _stop.Dispose();
+        }
     }
 }

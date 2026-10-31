@@ -49,7 +49,10 @@ if [ "$full" = 1 ]; then
       msg-*) row=msg ;;
       *) row=tnef ;;
     esac
-    for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" peak $row $side "$input" | grep '^PEAK' >> "$out/peak.tsv" || true; done
+    for side in ours theirs; do
+      # XstReader.Api cannot read the 4 KiB layout; there is nothing to measure on that side.
+      case "$input" in gen-k4-*) [ "$side" = theirs ] && continue ;; esac
+      DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" peak $row $side "$input" | grep '^PEAK' >> "$out/peak.tsv" || true; done
   done < "$out/counts.tsv"
   for input in gen-u10k gen-u50k; do
     for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" curve pst $side "$input" | grep '^CURVE' >> "$out/curve.tsv" || true; done
