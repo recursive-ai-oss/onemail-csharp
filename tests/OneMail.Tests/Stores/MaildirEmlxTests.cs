@@ -11,10 +11,63 @@ public class MaildirTests
 {
     private static byte[] B(string s) => Encoding.Latin1.GetBytes(s);
 
-    private static MaildirStore NewStore(MemoryStoreFileSystem fs, string root = "")
+    private static MaildirStore NewStore(MemoryStoreFileSystem fs, string root = "", char separator = ':')
     {
         int n = 0;
-        return new MaildirStore(fs, root, new MaildirStoreOptions { UniqueNameFactory = () => $"170000000{n++}.M1P2.host" });
+        return new MaildirStore(fs, root, new MaildirStoreOptions { InfoSeparator = separator, UniqueNameFactory = () => $"170000000{n++}.M1P2.host" });
+    }
+
+    [Theory]
+    [InlineData("1.M1P2.host;2,", "1.M1P2.host", MessageMarks.None, "")]
+    [InlineData("1.M1P2.host;2,FRS", "1.M1P2.host", MessageMarks.Flagged | MessageMarks.Answered | MessageMarks.Seen, "")]
+    [InlineData("1.M1P2.host,S=10,W=12;2,STab", "1.M1P2.host,S=10,W=12", MessageMarks.Seen | MessageMarks.Deleted, "ab")]
+    public void SemicolonIsReadAsTheInfoSeparatorAndWrittenBack(string name, string unique, MessageMarks marks, string letters)
+    {
+        MaildirName n = MaildirName.Parse(name);
+        Assert.Equal(unique, n.Unique);
+        Assert.Equal(marks, n.Marks);
+        Assert.Equal(letters, n.KeywordLetters);
+        Assert.Equal(StoreDefects.None, n.Defects & StoreDefects.UnrecognisedFileName);
+        if (!name.EndsWith(";2,", StringComparison.Ordinal)) // a name without flags is written without an info section
+        {
+            Assert.Equal(name, MaildirName.Build(n.Unique, n.Marks, n.KeywordLetters, n.Extra, ';'));
+            Assert.Equal(name.Replace(';', ':'), MaildirName.Build(n.Unique, n.Marks, n.KeywordLetters, n.Extra));
+        }
+    }
+
+    [Fact]
+    public void ASemicolonThatIsNotFollowedByTheInfoVersionStaysInTheUniquePart()
+    {
+        Assert.Equal("a;b", MaildirName.Parse("a;b").Unique);
+        Assert.Equal("a;b", MaildirName.Parse("a;b:2,S").Unique);
+        Assert.Equal("a", MaildirName.Parse("a:2,S;2,F").Unique);
+        Assert.Throws<ArgumentException>(() => MaildirName.Build("a", MessageMarks.Seen, "", null, '!'));
+        Assert.Throws<ArgumentException>(() => new MaildirStore(new MemoryStoreFileSystem(), "", new MaildirStoreOptions { InfoSeparator = '!' }));
+        Assert.Equal(OperatingSystem.IsWindows() ? ';' : ':', new MaildirStoreOptions().InfoSeparator);
+    }
+
+    [Theory]
+    [InlineData(':')]
+    [InlineData(';')]
+    public void TheStoreWritesItsSeparatorAndReadsBoth(char separator)
+    {
+        char other = separator == ':' ? ';' : ':';
+        MemoryStoreFileSystem fs = new();
+        MaildirStore store = NewStore(fs, "", separator);
+        MaildirEntry a = store.Deliver(B("Subject: a\n\nx\n"), marks: MessageMarks.Seen | MessageMarks.Flagged);
+        Assert.EndsWith(separator + "2,FS", a.FileName, StringComparison.Ordinal);
+        Assert.Equal(MessageMarks.Seen | MessageMarks.Flagged, a.Marks);
+
+        // A file the other convention wrote is read the same, and a flag change writes this store's separator.
+        fs.SetFile("cur/9.M1P1.h" + other + "2,S", B("x"));
+        MaildirEntry foreign = store.Enumerate().Single(e => e.Name.Unique == "9.M1P1.h");
+        Assert.Equal(MessageMarks.Seen, foreign.Marks);
+        MaildirEntry changed = store.SetFlags(foreign, MessageMarks.Seen | MessageMarks.Answered);
+        Assert.Equal("9.M1P1.h" + separator + "2,RS", changed.FileName);
+
+        // Dovecot's uidlist names the file with either separator; the UID attaches to the unique part.
+        fs.SetFile("dovecot-uidlist", B($"3 V1 N4\n42 :{a.Name.Unique}{other}2,FS\n"));
+        Assert.Equal(42, store.Enumerate().Single(e => e.Name.Unique == a.Name.Unique).Uid);
     }
 
     [Theory]

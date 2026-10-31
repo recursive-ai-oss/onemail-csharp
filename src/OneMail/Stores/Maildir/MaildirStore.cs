@@ -56,6 +56,13 @@ public sealed class MaildirStoreOptions
     /// <summary>The host name written into default unique names. Default: this machine's name.</summary>
     public string? HostName { get; init; }
 
+    /// <summary>
+    /// The character written between the unique part and the flags: <c>:</c> or <c>;</c>. Default
+    /// <see cref="MaildirName.DefaultInfoSeparator"/>: <c>;</c> on Windows, whose file names cannot hold a colon (isync's
+    /// <c>InfoDelimiter</c> makes the same choice), <c>:</c> everywhere else. Reading accepts both on every platform.
+    /// </summary>
+    public char InfoSeparator { get; init; } = MaildirName.DefaultInfoSeparator;
+
     /// <summary>Called for every defect found while reading. Default none.</summary>
     public Action<StoreDefect>? DefectHandler { get; init; }
 }
@@ -91,6 +98,10 @@ public sealed class MaildirStore
         _fs = fileSystem;
         _root = rootPath.Trim('/');
         _options = options ?? new MaildirStoreOptions();
+        if (_options.InfoSeparator is not (':' or ';'))
+        {
+            throw new ArgumentException("MaildirStoreOptions.InfoSeparator must be ':' or ';'.", nameof(options));
+        }
     }
 
     /// <summary>The file system the store reads and writes.</summary>
@@ -261,7 +272,7 @@ public sealed class MaildirStore
     {
         string dir = FolderPath(entry.Folder);
         string letters = KeywordLetters(entry.Folder, dir, keywords);
-        string name = MaildirName.Build(entry.Name.Unique, marks, letters, entry.Name.Extra);
+        string name = MaildirName.Build(entry.Name.Unique, marks, letters, entry.Name.Extra, _options.InfoSeparator);
         string target = Join(Join(dir, "cur"), name);
         if (target != entry.Path)
         {
@@ -415,7 +426,7 @@ public sealed class MaildirStore
             }
 
             string file = l[(at + 2)..];
-            int colon = file.IndexOf(':', StringComparison.Ordinal);
+            int colon = MaildirName.FindInfoSeparator(file);
             uids[colon < 0 ? file : file[..colon]] = uid;
         }
     }
@@ -536,7 +547,7 @@ public sealed class MaildirStore
         marks &= ~MessageMarks.Recent;
         string letters = KeywordLetters(folder, dir, keywords);
         bool flagged = marks != MessageMarks.None || letters.Length > 0;
-        string name = flagged ? MaildirName.Build(unique, marks, letters) : unique;
+        string name = flagged ? MaildirName.Build(unique, marks, letters, null, _options.InfoSeparator) : unique;
         string target = Join(Join(dir, flagged ? "cur" : "new"), name);
         _fs.Rename(tmp, target);
         return Enumerate(folder).First(e => e.Path == target);

@@ -92,7 +92,20 @@ A rule that can never match still yields DTSTART (R3) and then ends at a limit.
    found in the runtime database. Defect `AmbiguousZoneName`.
 5. **A Windows zone name** (`Eastern Standard Time`), through the committed CLDR table to the default-territory IANA zone
    (`ZoneSource.WindowsName`). Defect `AmbiguousWindowsZone`: the same name can mean different IANA zones by region, and the
-   table keeps one. Off with `UseWindowsNames = false`.
+   table keeps one. Off with `UseWindowsNames = false`. This step runs *before* step 3 for any name in the table, so the result
+   is the same whether the runtime knows Windows ids (Windows) or not (Linux, macOS).
+
+Every runtime lookup (steps 3 to 5) asks `TimeZoneInfo` for the name first. If the runtime does not know an IANA name, as on
+Windows without ICU (and `InvariantGlobalization` removes ICU), it asks again under the Windows zone id CLDR assigns that IANA name
+(the default-territory row first, then a territory row; 444 IANA names). The zone keeps its IANA `Id` and `ZoneSource.Iana`, with no
+defect. A name known to neither side is `UnknownTimeZone` (Z4), never an exception. Names that are IANA aliases CLDR does not list
+(`US/Eastern`) resolve on Windows only if the runtime itself knows them.
+
+**Windows zone data is thinner than IANA's.** The Windows registry carries the current rules and a few years of history, not IANA's
+full past: US dates before 2007 use today's rules (1997's changes fall on the wrong days), and zones that changed rules long ago
+differ similarly. Expansion of a recurring event over such dates on Windows can therefore differ in UTC instants (never in wall-clock
+values) from the same file on Linux or macOS. A VTIMEZONE in the file always wins and gives the file's own history; use it, or run
+without the runtime database (`UseRuntimeDatabase = false`), where results must not depend on the host.
 
 An unresolvable TZID leaves the series floating (no instants are claimed). Names that would reach the machine's own settings
 (`localtime`, `posixrules`, `posix/…`, `right/…`), paths and names with other characters than real zone names use are refused

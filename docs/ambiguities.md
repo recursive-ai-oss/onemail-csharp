@@ -278,6 +278,7 @@ Ours against `recurring-ical-events` 3.8.2 on `icalendar` 7.3.0 (**rec**), `pyth
 | Z2 | A vendor-prefixed `TZID` (`/softwarestudio.org/Olson_20011030_5/America/New_York`) | not compared | The longest tail of up to three segments that names a zone. | `AmbiguousZoneName` | n/a | prov. |
 | Z3 | A Windows zone name with no VTIMEZONE | not compared; instants checked for 5 names (`W. Europe`, `Eastern`, `AUS Eastern`, `New Zealand`, `Pacific`) | The CLDR default-territory IANA zone. | `AmbiguousWindowsZone` | n/a | prov. (CLDR) |
 | Z4 | A `TZID` that resolves nowhere | not compared | The values stay floating; no instant is claimed. | `UnknownTimeZone` | n/a | prov. |
+| Z5 | An IANA `TZID` on a host whose runtime knows only Windows zone ids (Windows without ICU, or with `InvariantGlobalization`) | not compared | The runtime lookup is repeated under the Windows zone CLDR assigns the IANA name (default-territory row first, then any territory). The zone keeps its IANA `Id` and `ZoneSource.Iana`. Windows zone data has fewer historic rules than IANA (US dates before 2007 follow the current rules), so such instants can differ from the same file read on Linux or macOS | none | n/a | our default (CLDR) |
 
 Limits of one oracle (not ambiguities; no entry in the resolution column):
 
@@ -314,6 +315,7 @@ The reader's behaviour is in [`mailboxes.md`](mailboxes.md). MK = MimeKit, Py = 
 | S11 | Maildir file in `new` | subdir `new`, no flags | n/a | Flags from the name, plus `Recent` | none | all agree |
 | S12 | Mail's `flags` word and `date-sent`/`date-received` reals in EMLX plists | n/a | n/a | Bits 0, 1, 2, 4, 6, 8 map to seen, deleted, answered, flagged, draft, forwarded; the raw word is always kept. A real is Unix seconds from 1e9, otherwise seconds since 2001-01-01. **No real Mail store has been inspected**, so this is a default to check against one | none | our default |
 | S13 | Courier `courierimapkeywords/:list` | n/a | n/a | Keyword names, an empty line, then `unique:n n` rows with zero-based positions. Written from Courier's published description of the directory; the line format inside the files is not in that document, so this is unchecked against Courier | `MalformedControlFile` | our default |
+| S14 | The character before the Maildir info section (`unique:2,FS` or `unique;2,FS`) | Py `mailbox` writes and reads `:` only | n/a | Read: the first `:`, else the first `;` that is followed by `2,`. Written: `MaildirStoreOptions.InfoSeparator`, default `;` on Windows (where a file name cannot hold `:`) and `:` elsewhere; isync's `InfoDelimiter` documents the same default. No Windows mail client has been observed | none | our default (isync documentation) |
 
 ## Reports, authentication results and MHTML
 

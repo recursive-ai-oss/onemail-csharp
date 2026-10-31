@@ -96,7 +96,11 @@ line. `AppendRecord` and `WritePreamble` copy bytes of another file verbatim, so
 A Maildir folder holds `cur`, `new` and `tmp`. `MaildirStore` reads `cur` then `new`, each by file name (ordinal); `tmp` is
 never listed; names starting with `.` inside `cur` and `new` are ignored.
 
-- **Names.** `unique[:2,flags[,extra]]`. Standard flags `D F P R S T` map to draft, flagged, forwarded ("passed"), answered, seen,
+- **Names.** `unique[:2,flags[,extra]]`. The separator before `2,` is `:` in the Maildir specification, which Windows file names cannot
+  hold; Windows tools use `;` (isync's `InfoDelimiter` defaults to `;` on Windows and `:` elsewhere). **Reading accepts both on every
+  platform** (a `;` counts only when `2,` follows it, so other semicolons stay in the unique part; a colon wins when both occur). **Writing**
+  uses `MaildirStoreOptions.InfoSeparator`, default `;` on Windows and `:` elsewhere; only those two are allowed (S14). `dovecot-uidlist`
+  file names are matched with either separator. Standard flags `D F P R S T` map to draft, flagged, forwarded ("passed"), answered, seen,
   trashed (`Deleted`). Lowercase `a`–`z` are Dovecot keyword slots. A file in `new` also carries `Recent`. `,S=<size>` and `,W=<vsize>` in the
   unique part are read as sizes. Any other info version (`:1,…`) is kept in `RawInfo` and not interpreted. Names are built with
   flags in ASCII order (S10).
@@ -106,7 +110,7 @@ never listed; names starting with `.` inside `cur` and `new` are ignored.
 - **Folders.** Maildir++: the root is the inbox (folder name `""`); a subfolder is a directory `.Name` holding `cur`/`new`, and
   the dot is the hierarchy separator (`.Archive.2024` is folder `Archive.2024`). Nested layouts (a folder inside a folder
   directory, as Python's `add_folder` makes on a subfolder) are not Maildir++ and are not read.
-- **Delivery** writes the message under `tmp` with a unique name, then renames it into `new`, or into `cur` with `:2,flags` when it has
+- **Delivery** writes the message under `tmp` with a unique name, then renames it into `new`, or into `cur` with `<separator>2,flags` when it has
   flags or keywords. Default unique names are `seconds.M<microseconds>P<pid>Q<counter>.<host>` with `/` and `:` in the host escaped; supply a
   factory for reproducible names. The message bytes are written unchanged.
 - **`SetFlags`** renames into `cur` with the new info section; the unique part and the content do not change.

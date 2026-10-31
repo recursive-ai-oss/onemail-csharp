@@ -36,6 +36,13 @@ Speed: PST/OST against XstReader.Api, MSG against MsgReader and TNEF against Mim
 0.197 / 0.320, 0.096 / 0.101, 0.312 / 0.287; worst row 0.569). Working set stays near 100 MB (x64) from 1,000 to 50,000 messages (826 MB
 store). Details in [`benchmarks.md`](benchmarks.md).
 
+## Windows
+
+The suite also runs on win-x64. Two things behave differently there, both documented: IANA time zone names resolve through the Windows
+zone each maps to (CLDR), so instants before the last rule change (US dates before 2007) follow today's rules rather than IANA's
+([`recurrence.md`](recurrence.md), Z5); and Maildir files are written with `;` before the info section instead of `:`, which
+Windows file names cannot hold, while both are read everywhere ([`mailboxes.md`](mailboxes.md), S14).
+
 ## 0.1.0-preview.1
 
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip of untouched input | Fuzzed | Known gaps |
