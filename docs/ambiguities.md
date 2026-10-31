@@ -301,3 +301,31 @@ chooses between readings of a valid tree. The tree always keeps every part (`doc
 | V6 | Text body without a usable charset | `us-ascii`, bytes above 127 replaced | UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252 (N5's rule). |
 | V7 | Address groups in `From`/`To`/… | Group name kept | Flattened to the members, the group name dropped (A1). The tree keeps the group. |
 | V8 | Attachment file name | `get_filename()`: disposition `filename`, else type `name`, with the parameter rules of N1–N8 | The same order (N9). Names are kept as written, not made safe for a file system (N10); no name is `null`, never an empty string. |
+
+## RTF bodies (compressed RTF, de-encapsulation)
+
+Probes are the 45 RTF bodies of the public Tika and POI `.msg` files, the specification examples (`testdata/rtf`), and 3,000
+damaged streams. Oracles: compressed-rtf 1.0.7 (decompress, compress) and RTFDE 0.1.2.2 (de-encapsulation), run as released
+packages; the message's own `PidTagHtml`/`PidTagBody` is a third reference. Where the specification is explicit the entry says so.
+Entries without an observed Outlook-side result are provisional. Method: [rtf.md](rtf.md).
+
+| ID | Case | Oracle / own body | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| RT1 | `\par` and `\line` in the extracted text | RTFDE writes LF; own plain-text bodies use CRLF (4 of 4) | CRLF (MS-OXRTFEX 2.2.3.2 and 2.2.3.3) | none | spec; seen in 31 HTML and 4 text results vs RTFDE |
+| RT2 | A literal no-break space (`\'a0`) in visible text | RTFDE writes `&nbsp;` | The character U+00A0. A string has no code page to lose it in | none | prov.; 4 files vs RTFDE |
+| RT3 | The message's own `PidTagHtml` carries `<meta http-equiv=Content-Type …>` that the RTF's HTML lacks | own body | Not part of the encapsulated HTML; nothing to resolve. Callers who want the stored body read `PidTagHtml` | none | 5 of 6 own HTML bodies |
+| RT4 | Own `PidTagHtml` is a re-serialised copy of the RTF's HTML (tag case, dropped `</tbody>`) | own body | The encapsulated HTML is returned as written; same text (checked by words) | none | 1 of 6 (`bug66335`); RTFDE agrees with OneMail on it |
+| RT5 | `\_` | spec table: soft hyphen in `\htmltag`; RTF 1.9.1: non-breaking hyphen | U+00AD inside `\htmltag`, U+2011 elsewhere | none | spec |
+| RT6 | `\htmlrtf` active when an `\htmltag` group starts; code page of `\htmltag` text | spec: content MUST be copied; default code page MUST be used | Copied whatever the state; decoded with the document's default code page, not the font's | none | spec |
+| RT7 | `\uN` and `\lquote`, `\~`… inside `\htmltag` | spec table gives HTML text (`&#x20AC;`, `&lsquo;`); 2.2.3.2 says "Unicode characters" | The characters. A .NET string needs no entities, and both denote the same text | none | prov. |
+| RT8 | How many characters `\ucN` skips | RTF 1.9.1 says "characters", with `\'hh` as one | Text bytes and `\'hh` escapes count; control words do not; `{` or `}` cancels the rest; `\uc` is group-scoped | none | prov. |
+| RT9 | Code page of text bytes | spec: "the code page of the current font" | Font `\cpgN`, else `\fcharsetN` (0 = 1252 even under another `\ansicpg`; 1 = document), else `\ansicpg`/`\ansi`/`\mac`/`\pc`/`\pca`, else 1252; before any `\f` the `\deff` font | none | spec example uses `\fcharset0` under `\ansicpg1251` for exactly this; the corpus Cyrillic body decodes to its own body |
+| RT10 | `\htmlrtf` in a `\fromtext` document | spec defines it for HTML only | Ignored | `AmbiguousHtmlRtfInPlainText` | prov. |
+| RT11 | A code page with no decoder (symbol, platform gap) | spec silent | The document's default code page | `AmbiguousUnknownCodePage` | prov. |
+| RT12 | Detection: `\fromhtml`/`\fromhtml0`, text before the control word, an eleventh token, CR/LF before the first token | spec 2.2.3.1 (SHOULD) | Only `\fromhtml1` or `\fromtext` within ten group-start/control-word tokens after `{\rtf`; line breaks are skipped as in RTF | `NotEncapsulated`, `NotRtf` | spec |
+| RT13 | Destinations | spec: skip standard destinations without visible text, keep `\fonttbl`; ignorable `\*` groups other than `\htmltag` skipped | A fixed list of body-less destinations is skipped; an unknown destination that is not ignorable is read as text (it cannot be told from a formatting group) | none | prov. |
+| RT14 | RAWSIZE far above the data (a decompression bomb) | compressed-rtf decodes the data and ignores the claim | Refused before allocating: above 256 MiB, or above 20 × the input length | `OutputLimitExceeded`, `ExpansionRatioExceeded` | 123 of 3,000 damaged streams differ for this reason only |
+| RT15 | COMPSIZE disagrees with the bytes present | compressed-rtf ignores it | Contents are bytes 16 to COMPSIZE + 4 when that is within the input, else to the end; the CRC covers exactly those | `CompressedSizeMismatch` | spec 2.1.3.1.1; prov. for the extra bytes |
+| RT16 | Data ends before the end marker | compressed-rtf returns what it decoded | The decoded bytes, with a defect | `MissingEndMarker` | prov. |
+| RT17 | RAWSIZE disagrees with the output; `MELA` contents | spec: MELA CRC not validated, size may be read either way | Output is what the data holds (growing up to the limit), with a defect; MELA is the contents as stored | `RawSizeMismatch` | spec 2.2.3.1 |
+| RT18 | Compressing nothing | spec note: Outlook writes `02 00 0D 00` | `01 0C F0` (end marker only) is written; `02 00 0D 00` is read as one NUL byte | none | spec |

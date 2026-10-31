@@ -11,6 +11,8 @@ using RecursiveAI.OneMail.Mime.Authentication;
 using RecursiveAI.OneMail.Mime.Mhtml;
 using RecursiveAI.OneMail.Mime.Reports;
 using RecursiveAI.OneMail.Render;
+using RecursiveAI.OneMail.Rtf;
+using RecursiveAI.OneMail.Rtf.Compression;
 using RecursiveAI.OneMail.Pst.Ndb;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores;
@@ -144,6 +146,18 @@ internal static class Program
             && MailFormatSniffer.Sniff(new MemorySource("BEGIN:VCALENDAR\r\n"u8.ToArray())) == MailFormat.Ics;
         Console.WriteLine("view: " + (viewOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Compressed RTF and de-encapsulation: compress, decompress, wrap HTML and text in RTF and take them back out, with a
+        // code-page byte (needs the platform's code-page provider under trimming and AOT).
+        string rtfHtml = "<p>caf\u00e9 \u65e5 &amp; x</p>\r\n";
+        byte[] rtfBody = RtfEncapsulator.EncapsulateHtml(rtfHtml);
+        RtfDecompressionResult rtfBack = RtfDecompressor.Decompress(RtfCompressor.Compress(rtfBody));
+        RtfDeencapsulationResult rtfOut = RtfDeencapsulator.Deencapsulate(rtfBack.Data);
+        RtfDeencapsulationResult rtfText = RtfDeencapsulator.Deencapsulate(RtfEncapsulator.EncapsulateText("a\tb\r\n"));
+        RtfDeencapsulationResult rtfCp = RtfDeencapsulator.Deencapsulate("{\\rtf1\\ansi\\ansicpg1251\\fromtext\\'cf}"u8);
+        bool rtfOk = rtfBack.IsClean && rtfBack.CrcVerified && rtfOut.Kind == RtfEncapsulation.Html && rtfOut.Text == rtfHtml
+            && rtfText.Text == "a\tb\r\n" && rtfCp.Text == "\u041f";
+        Console.WriteLine("rtf: " + (rtfOk ? "ok" : "FAILED"));
+
+        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && rtfOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

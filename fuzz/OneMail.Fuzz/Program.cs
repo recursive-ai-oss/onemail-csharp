@@ -24,6 +24,8 @@ internal static class Program
             ["mime-tree"] = MimeTargets.Tree,
             ["ndb"] = NdbTarget.Run,
             ["mail-open"] = MailTarget.Run,
+            ["rtf-decompress"] = RtfTargets.Decompress,
+            ["rtf-deencap"] = RtfTargets.Deencapsulate,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

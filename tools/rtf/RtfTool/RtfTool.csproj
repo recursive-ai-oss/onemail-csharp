@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool for the RTF body checks (tools/rtf/README.md): pulls the RTF, HTML and text body streams out of MSG
+       files, and runs OneMail's decompressor, compressor and de-encapsulation over them so other programs can compare.
+       Nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>RtfTool</AssemblyName>
+    <RootNamespace>RtfTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OneArchive" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -19,3 +19,9 @@ Redistribution and use in source and binary forms, with or without modification,
 - **CMU Enron Email Dataset** (May 7 2015 version, maildir; Carnegie Mellon University CALO project, https://www.cs.cmu.edu/~enron/): no licence is stated; it is distributed as a research resource and asks users to be sensitive to the privacy of the people involved. The messages are real people's mail: results cite counts only, never content, and nothing from it is committed, quoted or uploaded.
 - **Dovecot imaptest mailbox** (`dovecot-crlf`, published by the Dovecot project as test input): used as an input file only.
 - **Apache James Mime4j test messages** (`core/src/test/resources/testmsgs` and `mimetools-testmsgs`, message files only, at a pinned commit): Apache License 2.0, (c) The Apache Software Foundation.
+
+## RTF test data and oracles
+
+- `testdata/rtf` holds the worked RTF example of MS-OXRTFEX section 3.1 (the source HTML and the encapsulated RTF, with the page-wrap damage of the published text repaired), and `tests/OneMail.Tests/Rtf` holds the two compressed-RTF examples of MS-OXRTFCP section 3.1 as hex. Both documents are Microsoft Open Specifications, covered by the Microsoft Open Specification Promise; the examples are quoted to test conformance.
+- The RTF, HTML and text bodies that `tools/rtf` extracts from the Apache Tika and Apache POI test `.msg` files (Apache License 2.0, (c) The Apache Software Foundation; data files only, fetched by `tools/corpus/fetch-msg.sh`) are used for comparison runs and are never committed.
+- `tools/rtf` runs two released Python packages as black-box programs, never linked, copied or shipped: `compressed-rtf` 1.0.7 (MIT) and `RTFDE` 0.1.2.2 (LGPL-3.0-or-later).
