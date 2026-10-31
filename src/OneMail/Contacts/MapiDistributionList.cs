@@ -65,6 +65,143 @@ public sealed class MapiDistributionList
     /// <summary>The message behind the view.</summary>
     public MapiMessage Message => _m;
 
+    // MS-OXOCNTC 2.2.2.2.1: the two member properties must stay under 15,000 bytes; a larger list goes in the stream.
+    private const int MaxMemberPropertyBytes = 15_000;
+
+    /// <summary>
+    /// Builds a personal distribution list item (MS-OXOCNTC 2.2.2) from its members: <c>IPM.DistList</c> with the name in PidTagDisplayName,
+    /// PidLidDistributionListName and PidLidFileUnder, and the members in PidLidDistributionListMembers, PidLidDistributionListOneOffMembers and
+    /// PidLidDistributionListChecksum (section 3.1.5.11). A list whose member properties would pass 15,000 bytes, or that has a member without a one-off
+    /// entry ID, is written in PidLidDistributionListStream instead (section 2.2.2.2.4), which the reader above then prefers.
+    /// </summary>
+    /// <param name="name">The list's name.</param>
+    /// <param name="members">The members. A <see cref="DistributionListMemberKind.OneOff"/> member needs <see cref="DistributionListMember.Address"/> (its name and type default to the address and <c>SMTP</c>) and gets a one-off entry ID made for it; any other kind must carry its <see cref="DistributionListMember.EntryId"/>, which is kept as it is.</param>
+    /// <returns>The item, with no recipients or attachments. Reading it with <see cref="MapiDistributionList"/> gives the members back.</returns>
+    /// <exception cref="ArgumentException">A member of another kind than one-off has no entry ID, or a one-off member has no address.</exception>
+    public static MapiMessage Create(string name, IEnumerable<DistributionListMember> members)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(members);
+        var ids = new List<byte[]>();
+        var oneOffs = new List<byte[]>();
+        bool everyOneHasOneOff = true;
+        foreach (DistributionListMember m in members)
+        {
+            if (m.Kind == DistributionListMemberKind.OneOff && m.EntryId.Length == 0)
+            {
+                if (string.IsNullOrEmpty(m.Address))
+                {
+                    throw new ArgumentException("A one-off member needs an address.", nameof(members));
+                }
+
+                byte[] oneOff = OneOffEntryId.Build(m.DisplayName ?? m.Address, m.AddressType ?? "SMTP", m.Address);
+                ids.Add(Wrap(0, oneOff));
+                oneOffs.Add(oneOff);
+            }
+            else
+            {
+                if (m.EntryId.Length == 0)
+                {
+                    throw new ArgumentException("A member that is not a one-off address needs its entry ID.", nameof(members));
+                }
+
+                ids.Add(m.EntryId);
+                if (m.DisplayName is not null && m.Address is not null)
+                {
+                    oneOffs.Add(OneOffEntryId.Build(m.DisplayName, m.AddressType ?? "SMTP", m.Address));
+                }
+                else
+                {
+                    everyOneHasOneOff = false;
+                    oneOffs.Add([]);
+                }
+            }
+        }
+
+        var msg = new MapiMessage();
+        msg.Properties.Add(UnicodeProperty(MapiPid.MessageClass, "IPM.DistList", null));
+        msg.Properties.Add(UnicodeProperty(MapiPid.DisplayName, name, null));
+        msg.Properties.Add(UnicodeProperty(0x8000, name, new MapiNamedProperty(MapiPropertySets.Address, 0x8053u)));
+        msg.Properties.Add(UnicodeProperty(0x8000, name, new MapiNamedProperty(MapiPropertySets.Address, 0x8005u)));
+        bool tooBig = ids.Sum(i => i.Length) >= MaxMemberPropertyBytes || oneOffs.Sum(i => i.Length) >= MaxMemberPropertyBytes;
+        if (tooBig || !everyOneHasOneOff)
+        {
+            msg.Properties.Add(MapiProperty.CreateOwned(new MapiTag(0x8000, MapiType.Binary), BuildStream(ids, oneOffs), new MapiNamedProperty(MapiPropertySets.Address, 0x8064u)));
+        }
+        else
+        {
+            msg.Properties.Add(MapiProperty.CreateMulti(new MapiTag(0x8000, MapiType.MultipleBinary), ids, new MapiNamedProperty(MapiPropertySets.Address, 0x8055u)));
+            msg.Properties.Add(MapiProperty.CreateMulti(new MapiTag(0x8000, MapiType.MultipleBinary), oneOffs, new MapiNamedProperty(MapiPropertySets.Address, 0x8054u)));
+            msg.Properties.Add(MapiProperty.CreateOwned(new MapiTag(0x8000, MapiType.Integer32), BitConverter.GetBytes(Checksum(ids)), new MapiNamedProperty(MapiPropertySets.Address, 0x804Cu)));
+        }
+
+        return msg;
+    }
+
+    private static MapiProperty UnicodeProperty(ushort id, string value, MapiNamedProperty? name) =>
+        MapiProperty.CreateOwned(new MapiTag(id, MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes(value), name);
+
+    // MS-OXOCNTC 2.2.2.2.4.1.1: Flags (4 bytes, zero), ProviderUID, Type (one byte; 0 for a one-off address) and the embedded entry ID.
+    private static byte[] Wrap(byte type, byte[] embedded)
+    {
+        byte[] id = new byte[4 + 16 + 1 + embedded.Length];
+        WrappedProviderUid.CopyTo(id, 4);
+        id[20] = type;
+        embedded.CopyTo(id, 21);
+        return id;
+    }
+
+    // MS-OXOCNTC 3.1.5.11: CRC with the IEEE 802.3 polynomial 0xEDB88320 and a start value of 0, over every byte of every member entry ID, in order.
+    private static int Checksum(List<byte[]> ids)
+    {
+        uint crc = 0;
+        foreach (byte[] id in ids)
+        {
+            foreach (byte b in id)
+            {
+                crc ^= b;
+                for (int k = 0; k < 8; k++)
+                {
+                    crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1;
+                }
+            }
+        }
+
+        return unchecked((int)crc);
+    }
+
+    // MS-OXOCNTC 2.2.2.2.4: version 1, build version, flags (1 = always use the stream), the counts and totals, the members, two terminators.
+    private static byte[] BuildStream(List<byte[]> ids, List<byte[]> oneOffs)
+    {
+        using var ms = new MemoryStream();
+        byte[] w = new byte[4];
+        void U32(uint v)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(w, v);
+            ms.Write(w);
+        }
+
+        U32(1);
+        U32(0);
+        U32(1);
+        U32((uint)ids.Count);
+        U32((uint)ids.Sum(i => i.Length));
+        U32((uint)oneOffs.Sum(i => i.Length));
+        U32(0);
+        for (int i = 0; i < ids.Count; i++)
+        {
+            U32((uint)ids[i].Length);
+            ms.Write(ids[i]);
+            U32((uint)oneOffs[i].Length);
+            ms.Write(oneOffs[i]);
+            U32(0);
+        }
+
+        U32(0);
+        U32(0);
+        return ms.ToArray();
+    }
+
     /// <summary>The list's name: <c>PidLidDistributionListName</c>, else <c>PidTagDisplayName</c>.</summary>
     public string? Name =>
         NonEmpty(_m.Properties.Get(new MapiNamedProperty(MapiPropertySets.Address, 0x8053u))?.AsString(_m.String8Encoding)) ?? NonEmpty(_m.GetString(MapiPid.DisplayName));

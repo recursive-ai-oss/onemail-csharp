@@ -12,7 +12,7 @@ namespace RecursiveAI.OneMail.Cli;
 /// </summary>
 internal static class ConvertCommand
 {
-    public const string ConvertUsage = "usage: onemail convert [--to eml|mbox|maildir|emlx|ics|vcf|jcal|jcard|xcal|xcard|tnef] [--folder <path>] [--no-other-items] [--json] <input> <output>";
+    public const string ConvertUsage = "usage: onemail convert [--to eml|mbox|maildir|emlx|ics|vcf|jcal|jcard|xcal|xcard|tnef|msg] [--folder <path>] [--no-other-items] [--json] <input> <output>";
 
     public const string ExportUsage = "usage: onemail export [--format eml|mbox|maildir|ics|vcf] [--folder <path>] [--no-other-items] [--json] <store> <directory>";
 
@@ -151,6 +151,9 @@ internal static class ConvertCommand
                 return true;
             case "tnef":
                 format = ConvertFormat.Tnef;
+                return true;
+            case "msg":
+                format = ConvertFormat.Msg;
                 return true;
             default:
                 format = default;
