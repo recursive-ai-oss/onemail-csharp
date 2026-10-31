@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:3.0
+N:李雷;Fennell;Fennell;;
+FN:Fennell 李雷
+NICKNAME:Ünal,Zoë
+ORG:Acme\\Corp;Dept 58
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=voice:+1-555-1212
+TEL;TYPE=home:+1-555-9224
+ADR;TYPE=work:;;31 Main St\nSuite 58;Town\, Hills;ST;46301;Country
+ADR;TYPE=postal:;;263 Main St\nSuite 58;Town\, Hills;ST;44443;Country
+item1.EMAIL;TYPE=internet;TYPE=pref:fennell58.0@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 58
+X-MS-IMADDRESS:fennell@im.example
+CATEGORIES:Ünal,Dan
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/58
+REV:20240123T101010Z
+UID:urn:uuid:d8c2c99d-1111-4222-8333-444444444444
+X-CUSTOM-58:value
+END:VCARD

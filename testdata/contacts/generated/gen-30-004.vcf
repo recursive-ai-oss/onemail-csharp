@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Ünal;Åsa;Fennell;Dr.;
+FN:Åsa Ünal
+ORG:R&D\;Labs;Dept 4
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=voice:+1-555-2018
+TEL;TYPE=cell:+1-555-5840
+TEL;TYPE=work:+1-555-3985
+item1.EMAIL;TYPE=internet;TYPE=pref:åsa4.0@example.com
+item1.EMAIL;TYPE=internet:åsa4.1@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 4
+X-MS-IMADDRESS:åsa@im.example
+CATEGORIES:Fennell,李雷
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/4
+PHOTO;ENCODING=b;TYPE=JPEG:OEyfP7eLO4Lk8C79AZB0zXaP27VasGlSMh+/kRqdqyPOy4VB
+ wFQ42MEDDvyIKrqyH3wLcAMLY1xNQ90z
+REV:20241205T101010Z
+UID:urn:uuid:716aac82-1111-4222-8333-444444444444
+X-CUSTOM-4:value
+END:VCARD

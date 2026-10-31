@@ -1,0 +1,27 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Smith;Zoë;Ünal;;
+FN:Zoë Smith
+ORG:R&D\;Labs;Dept 44
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-1617
+ADR;TYPE=postal:;;331 Main St\nSuite 44;Town\, Hills;ST;42526;Country
+ADR;TYPE=work:;;365 Main St\nSuite 44;Town\, Hills;ST;40418;Country
+EMAIL;TYPE=internet;PREF=1:zoë44.0@example.com
+EMAIL;TYPE=internet:zoë44.1@example.com
+EMAIL;TYPE=internet:zoë44.2@example.com
+BDAY:1980-03
+ANNIVERSARY:20100605
+GENDER:M
+LANG;PREF=1:fr
+GEO:geo:17.52902,7.69455
+IMPP:xmpp:zoë@example.com
+CATEGORIES:Anna,李雷
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/44
+PHOTO:data:image/jpeg;base64,dPfR5usXPvoeB6A9AgrLy6ng20qOZHq49sNy8QtVFOGlQG
+ WYKO7jgM8bVn/CkS7xWbsttgxjps/J26n/
+REV:20240226T101010Z
+UID:urn:uuid:6c5b2621-1111-4222-8333-444444444444
+X-CUSTOM-44:value
+END:VCARD

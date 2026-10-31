@@ -47,6 +47,12 @@ internal static class Program
             targets[kv.Key] = d => a(d);
         }
 
+        foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in ContactTargets.Register(new(StringComparer.Ordinal)))
+        {
+            Action<ReadOnlySpan<byte>> a = kv.Value;
+            targets[kv.Key] = d => a(d);
+        }
+
         foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in StoreTargets.Register(new(StringComparer.Ordinal)))
         {
             Action<ReadOnlySpan<byte>> a = kv.Value;

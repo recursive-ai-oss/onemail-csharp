@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads the contact and distribution list items of MSG, PST and OST files, converts them to vCards and back, and checks what carried
+       over, for the checks in docs/contacts.md. A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>ContactTool</AssemblyName>
+    <RootNamespace>ContactTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The test-side MSG builder writes the generated contacts (the gen command). -->
+    <Compile Include="../../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

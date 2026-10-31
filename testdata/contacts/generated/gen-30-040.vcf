@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:O'Brien;O'Brien;Zoë;;
+FN:O'Brien O'Brien
+NICKNAME:Smith,Fennell
+ORG:Fabrikam;Dept 40
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=work:+1-555-6390
+TEL;TYPE=fax:+1-555-2139
+TEL;TYPE=pager:+1-555-5957
+ADR;TYPE=work:;;420 Main St\nSuite 40;Town\, Hills;ST;70081;Country
+EMAIL;TYPE=internet;TYPE=pref:o'brien40.0@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 40
+X-MS-IMADDRESS:o'brien@im.example
+CATEGORIES:O'Brien,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/40
+PHOTO;VALUE=uri:https://example.com/p.jpg
+REV:20240503T101010Z
+UID:urn:uuid:b425327f-1111-4222-8333-444444444444
+X-CUSTOM-40:value
+END:VCARD

@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Zoë;Åsa;Ünal;;
+FN:Åsa Zoë
+ORG:R&D\;Labs;Dept 28
+TITLE:Engineer
+TEL;TYPE=voice:+1-555-5376
+ADR;TYPE=work:;;204 Main St\nSuite 28;Town\, Hills;ST;91113;Country
+ADR;TYPE=postal:;;276 Main St\nSuite 28;Town\, Hills;ST;99350;Country
+EMAIL;TYPE=internet;TYPE=pref:åsa28.0@example.com
+EMAIL;TYPE=internet:åsa28.1@example.com
+EMAIL;TYPE=internet:åsa28.2@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 28
+X-MS-IMADDRESS:åsa@im.example
+CATEGORIES:Zoë,Müller
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/28
+REV:20240517T101010Z
+UID:urn:uuid:82254a01-1111-4222-8333-444444444444
+X-CUSTOM-28:value
+END:VCARD

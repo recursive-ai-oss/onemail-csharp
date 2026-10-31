@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:O'Brien;Zoë;Anna;;
+FN:Zoë O'Brien
+ORG:Acme\\Corp;Dept 55
+TITLE:Engineer
+TEL;TYPE=pager:+1-555-6251
+ADR;TYPE=postal:;;977 Main St\nSuite 55;Town\, Hills;ST;52747;Country
+ADR;TYPE=work:;;389 Main St\nSuite 55;Town\, Hills;ST;19690;Country
+EMAIL;TYPE=internet;TYPE=pref:zoë55.0@example.com
+EMAIL;TYPE=internet:zoë55.1@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 55
+X-MS-IMADDRESS:zoë@im.example
+CATEGORIES:Zoë,Dan
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/55
+PHOTO;ENCODING=b;TYPE=JPEG:rathlRFCQdewwAdmvgtwHI+Z0wCDUy4dm5oYu3nmkEc7I5YY
+ 0w87B/MVXdz8d+A/6J00Yj8ijCm3u1F4
+REV:20240618T101010Z
+UID:urn:uuid:33de7264-1111-4222-8333-444444444444
+X-CUSTOM-55:value
+END:VCARD

@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Ünal;Müller;Dan;Dr.;
+FN:Müller Ünal
+ORG:Fabrikam;Dept 8
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-4798
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-9727
+EMAIL;TYPE=internet;PREF=1:müller8.0@example.com
+EMAIL;TYPE=internet:müller8.1@example.com
+EMAIL;TYPE=internet:müller8.2@example.com
+BDAY:1980-03-22T10:20:30Z
+ANNIVERSARY:--0605
+GENDER:F;she
+LANG;PREF=1:fr
+GEO:geo:28.66715,-87.06624
+IMPP:xmpp:müller@example.com
+CATEGORIES:Smith,李雷
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/8
+REV:20241016T101010Z
+UID:urn:uuid:96825f05-1111-4222-8333-444444444444
+X-CUSTOM-8:value
+END:VCARD

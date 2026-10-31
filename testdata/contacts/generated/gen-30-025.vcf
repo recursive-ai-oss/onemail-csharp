@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Anna;Fennell;Åsa;;
+FN:Fennell Anna
+NICKNAME:Smith,O'Brien
+ORG:R&D\;Labs;Dept 25
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=pager:+1-555-8780
+TEL;TYPE=home:+1-555-8694
+TEL;TYPE=fax:+1-555-1349
+ADR;TYPE=home:;;710 Main St\nSuite 25;Town\, Hills;ST;16576;Country
+EMAIL;TYPE=internet;TYPE=pref:fennell25.0@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 25
+X-MS-IMADDRESS:fennell@im.example
+CATEGORIES:Ünal,Smith
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/25
+REV:20241221T101010Z
+UID:urn:uuid:36082b12-1111-4222-8333-444444444444
+X-CUSTOM-25:value
+END:VCARD

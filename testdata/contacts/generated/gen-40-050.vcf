@@ -1,0 +1,28 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Anna;Smith;Zoë;;
+FN:Smith Anna
+NICKNAME:Åsa,Fennell
+ORG:Contoso\, Ltd.;Dept 50
+TITLE:Dr
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-1567
+TEL;TYPE=work;VALUE=uri:tel:+1-555-9746
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-7744
+ADR;TYPE=home:;;632 Main St\nSuite 50;Town\, Hills;ST;63011;Country
+ADR;TYPE=postal:;;333 Main St\nSuite 50;Town\, Hills;ST;26765;Country
+EMAIL;TYPE=internet;PREF=1:smith50.0@example.com
+EMAIL;TYPE=internet:smith50.1@example.com
+EMAIL;TYPE=internet:smith50.2@example.com
+BDAY:--0322
+ANNIVERSARY:20100605
+GENDER:F
+LANG;PREF=1:fr
+GEO:geo:-53.18084,-116.42105
+IMPP:xmpp:smith@example.com
+CATEGORIES:Fennell,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/50
+REV:20240608T101010Z
+UID:urn:uuid:3153c6c8-1111-4222-8333-444444444444
+X-CUSTOM-50:value
+END:VCARD

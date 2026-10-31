@@ -291,6 +291,9 @@ internal static class Program
         bool tnefMimeOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.TnefInMime();
         Console.WriteLine("tnef-in-mime: " + (tnefMimeOk ? "ok" : "FAILED"));
 
-        return tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        bool contactsOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Contacts();
+        Console.WriteLine("contacts: " + (contactsOk ? "ok" : "FAILED"));
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

@@ -11,6 +11,11 @@ using Ical.Net.DataTypes;
 // Facts follow the schema in tools/calendar/README.md, restricted to what each library's public model exposes:
 // Ical.Net: component tree, text properties and date-time properties. FolkerKinzel.VCards: FN, EMAIL, TEL, NOTE.
 string mode = args[0], root = args[1];
+if (mode == "vtyped")
+{
+    return VTyped.Run(root, args[2]);
+}
+
 using StreamWriter w = new(args[2], false, new UTF8Encoding(false));
 foreach (string f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
 {
@@ -55,6 +60,8 @@ foreach (string f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirecto
         w.WriteLine(JsonSerializer.Serialize(new Dictionary<string, object> { ["file"] = rel, ["error"] = e.GetType().Name, ["detail"] = e.StackTrace?.Split((char)10)[0] }));
     }
 }
+
+return 0;
 
 static void Add(List<object[]> facts, string name, IEnumerable<TextProperty> props)
 {

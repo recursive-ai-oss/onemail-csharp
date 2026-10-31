@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Anna;Zoë;Dan;;
+FN:Zoë Anna
+ORG:Contoso\, Ltd.;Dept 31
+TITLE:Dr
+TEL;TYPE=voice:+1-555-2885
+TEL;TYPE=cell:+1-555-9096
+TEL;TYPE=pager:+1-555-3482
+ADR;TYPE=postal:;;104 Main St\nSuite 31;Town\, Hills;ST;25144;Country
+ADR;TYPE=work:;;733 Main St\nSuite 31;Town\, Hills;ST;29077;Country
+EMAIL;TYPE=internet;TYPE=pref:zoë31.0@example.com
+EMAIL;TYPE=internet:zoë31.1@example.com
+EMAIL;TYPE=internet:zoë31.2@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 31
+X-MS-IMADDRESS:zoë@im.example
+CATEGORIES:Anna,Ünal
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/31
+REV:20240417T101010Z
+UID:urn:uuid:1647fd92-1111-4222-8333-444444444444
+X-CUSTOM-31:value
+END:VCARD

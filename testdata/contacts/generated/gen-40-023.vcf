@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Müller;O'Brien;Fennell;Dr.;
+FN:O'Brien Müller
+ORG:Fabrikam;Dept 23
+TITLE:Engineer
+TEL;TYPE=voice;VALUE=uri:tel:+1-555-7176
+TEL;TYPE=home;VALUE=uri:tel:+1-555-7506
+ADR;TYPE=postal:;;628 Main St\nSuite 23;Town\, Hills;ST;26472;Country
+EMAIL;TYPE=internet;PREF=1:o'brien23.0@example.com
+EMAIL;TYPE=internet:o'brien23.1@example.com
+BDAY:19800322
+ANNIVERSARY:--0605
+GENDER:M
+LANG;PREF=1:de
+GEO:geo:60.94847,114.26293
+IMPP:xmpp:o'brien@example.com
+CATEGORIES:Ünal,Smith
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/23
+PHOTO:https://example.com/p.jpg
+REV:20241124T101010Z
+UID:urn:uuid:2660611a-1111-4222-8333-444444444444
+X-CUSTOM-23:value
+END:VCARD

@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Smith;Åsa;Ünal;Dr.;
+FN:Åsa Smith
+NICKNAME:O'Brien,Müller
+ORG:Acme\\Corp;Dept 22
+TITLE:Dr
+TEL;TYPE=home:+1-555-8608
+TEL;TYPE=voice:+1-555-4019
+TEL;TYPE=pager:+1-555-5366
+item1.EMAIL;TYPE=internet;TYPE=pref:åsa22.0@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 22
+X-MS-IMADDRESS:åsa@im.example
+CATEGORIES:O'Brien,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/22
+PHOTO;ENCODING=b;TYPE=JPEG:D025zTKeA+kQgeiGael0wCOsdeMDD+0s4qJlWAN6+ymInnpK
+ zT+TY3mX/0Fl99SUlO2N7kvN00tFB9xT
+REV:20240114T101010Z
+UID:urn:uuid:0d030fda-1111-4222-8333-444444444444
+X-CUSTOM-22:value
+END:VCARD

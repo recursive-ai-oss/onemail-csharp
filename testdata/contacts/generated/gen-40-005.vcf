@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Ünal;Dan;Anna;Dr.;
+FN:Dan Ünal
+ORG:Contoso\, Ltd.;Dept 5
+TITLE:Dr
+TEL;TYPE=work;VALUE=uri:tel:+1-555-9679
+ADR;TYPE=work:;;960 Main St\nSuite 5;Town\, Hills;ST;64688;Country
+ADR;TYPE=home:;;598 Main St\nSuite 5;Town\, Hills;ST;95567;Country
+EMAIL;TYPE=internet;PREF=1:dan5.0@example.com
+EMAIL;TYPE=internet:dan5.1@example.com
+BDAY:--0322
+ANNIVERSARY:--0605
+GENDER:F;she
+LANG;PREF=1:de
+GEO:geo:64.49281,33.03800
+IMPP:xmpp:dan@example.com
+CATEGORIES:李雷,O'Brien
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/5
+PHOTO:data:image/jpeg;base64,6077FharcRj3nIE7Q3wzkURuGusH6W5WulNSEA8irnvlJf
+ vCzr/FjtAwFgTnnYfI7eiTTG/a8nGLOsV/
+REV:20241018T101010Z
+UID:urn:uuid:3a9f5acf-1111-4222-8333-444444444444
+X-CUSTOM-5:value
+END:VCARD

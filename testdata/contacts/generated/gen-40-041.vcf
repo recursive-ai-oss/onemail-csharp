@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:4.0
+N:李雷;Müller;O'Brien;Dr.;
+FN:Müller 李雷
+NICKNAME:O'Brien,Ünal
+ORG:Contoso\, Ltd.;Dept 41
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-1319
+TEL;TYPE=work;VALUE=uri:tel:+1-555-4942
+EMAIL;TYPE=internet;PREF=1:müller41.0@example.com
+EMAIL;TYPE=internet:müller41.1@example.com
+EMAIL;TYPE=internet:müller41.2@example.com
+BDAY:1980-03-22T10:20:30Z
+ANNIVERSARY:20100605
+GENDER:M
+LANG;PREF=1:de
+GEO:geo:78.82360,-150.08457
+IMPP:xmpp:müller@example.com
+CATEGORIES:O'Brien,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/41
+REV:20240622T101010Z
+UID:urn:uuid:8cb245d7-1111-4222-8333-444444444444
+X-CUSTOM-41:value
+END:VCARD

@@ -223,6 +223,13 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K18 | Properties inside `VCALENDAR` after `BEGIN:VCARD` junk, stray lines around components | n/a | n/a | Kept as items of the document root, in order. | `MissingColon`, `UnmatchedEnd` | lossless |
 | K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
 | K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |
+| CV1 | Unknown escape in a typed vCard 3.0/4.0 value (`\:`, `\"`, `\q`) | vobject drops the backslash of `\"` only; FolkerKinzel drops that of `\:` only | | The typed view (not the raw value) drops the backslash and keeps the character, for every character after `\\ \; \, \n \N`. vCard 2.1 unescapes `\\` and `\;` only. | none | prov. (oracles disagree) |
+| CV2 | `TEL;TYPE=VOICE,MSG,WORK` imported to a contact | n/a | n/a | Every matching rule fires: Business and Other (MS-OXVCARD 2.1.3.4.1 example, literally). A fax alone fills Primary Fax, `pref` fills Primary, no type fills Other. | none | spec example; no client observed |
+| CV3 | `ADR` with no recognised type | n/a | n/a | Business and Other; `postal`, `dom`, `intl`, `parcel` fill Other; a fourth address is dropped. | `AdditionalValueNotMapped` | spec example; prov. |
+| CV4 | A second or later `TEL`/`EMAIL` of a kind with one slot | n/a | n/a | The second work (home) number goes to Business2 (Home2); later ones are reported, not stored. The first three emails fill the slots in card order. | `AdditionalValueNotMapped`, and on export `PhoneSlotChanged`, `EmailSlotChanged` | spec; prov. |
+| CV5 | `BDAY` as a partial date or with a time | n/a | n/a | `PidTagBirthday` is the date at 11:59 UTC, `PidLidBirthdayLocal` the date at 0:00 (Outlook's own pair); the time of day is dropped; a date without a year is not stored. | `TimeOfDayDropped`, `PartialDate` | spec 2.1.3.2.5; prov. |
+| CV6 | An empty text property in a contact (`PidTagDepartmentName` = "") | n/a | n/a | Treated as absent: no vCard property is written and the report says so. | `EmptyValueNotWritten` | agent default |
+| CV7 | CR CR LF in a vCard | tolerated by vobject | n/a | Two line ends (K1); a folded value that contains it is cut, as the reader does for any line end. A reader-level decision is open. | none | prov. |
 
 ## Recurrence and time zones
 
