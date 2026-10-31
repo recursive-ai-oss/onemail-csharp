@@ -268,7 +268,20 @@ Native reference (libical 3.0.17 from the distribution package, parse only): inv
 | Recurrence yearly Berlin | 1.284 | 0.470 | a yearly rule with `BYMONTH` scans the selected months, not 365 days |
 | ICS parse (all) | 0.133 geomean | 0.087 | same parse changes |
 
-## arm64 (Apple M2, 8 cores), before tuning only so far
+## Results, arm64 (Apple M2, 8 cores, .NET 10.0.400, load 1.7-2.1 before, 3.0-4.3 shortly after start, 1.9-2.4 at the end of each group)
 
-ICS parse 0.132 geomean (worst 0.180), build-write 0.132 (0.171), edit-write 0.059 (0.107), vCard parse 1.530 (1.707), vCard
-build-write 0.442 (0.461), vCard edit-write 0.121 (0.175), recurrence 0.412 (1.527, yearly Berlin). The tuned arm64 run is pending.
+Three filtered groups, each its own queued bench job of at most 20 minutes (ICS parse and edit; ICS build and vCard; recurrence and
+jCal), run after the tuning above. The first column is before tuning (one 43-minute matrix), the second after.
+
+| Area | geomean before | geomean after | worst after | status |
+|---|---:|---:|---:|---|
+| ICS parse | 0.132 | 0.104 | 0.151 | pass |
+| ICS build-write | 0.132 | 0.153 | 0.248 | pass |
+| ICS edit-write | 0.059 | 0.040 | 0.074 | pass |
+| vCard parse | 1.530 (worst 1.707) | **1.093** | **1.181** (10k cards; 1 card 1.011) | **misses the bar** |
+| vCard build-write | 0.442 | 0.558 | 0.674 | pass |
+| vCard edit-write | 0.121 | 0.111 | 0.146 | pass |
+| Recurrence | 0.412 (worst 1.527) | 0.334 | 0.589 (daily NY; yearly Berlin 0.551) | pass |
+
+vCard parse, 10k cards: 79.4 ms against 67.2 ms, 5,500 B per card against 7,770. The M2 runs the comparator's parser relatively
+faster than the x64 machine does (x64 ratio 1.046 on the same rows); a further cut needs fewer objects per property in the tree.
