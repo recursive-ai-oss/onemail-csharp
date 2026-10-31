@@ -368,8 +368,7 @@ public sealed partial class CalendarCard
             }
 
             List<RecurrenceRule> rules = [.. master.RecurrenceRules];
-            IReadOnlyList<IcsTime> rdates = master.RecurrenceDates;
-            if (rules.Count == 0 && rdates.Count == 0)
+            if (rules.Count == 0 && master.Component.FindProperty("RDATE") is null)
             {
                 return;
             }

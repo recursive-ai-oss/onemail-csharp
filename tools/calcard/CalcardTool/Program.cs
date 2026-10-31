@@ -155,9 +155,23 @@ static int Sweep(string[] roots)
                     Diff("Location", o.Location, m.Location);
                     Diff("Status", o.Status, m.Status);
                     Diff("AttendeeCount", o.AttendeeCount, m.AttendeeCount);
-                    Diff("Recurrence", o.Recurrence, m.Recurrence);
-                    Diff("When", o.When, m.When);
-                    if ((o.When != m.When || o.Recurrence != m.Recurrence) && mapiDiff.GetValueOrDefault("When") + mapiDiff.GetValueOrDefault("Recurrence") <= 3)
+                    // The zone label is not compared (a Windows name for an IANA one, UTC for a floating time); the wall-clock text is.
+                    static string NoZone(string t) => t.Contains(" (", StringComparison.Ordinal) ? t[..t.LastIndexOf(" (", StringComparison.Ordinal)] : t;
+                    if (o.Recurrence != m.Recurrence)
+                    {
+                        string kind = (o.RecurrenceDescribed, m.RecurrenceDescribed, o.Recurrence is null, m.Recurrence is null) switch
+                        {
+                            (_, _, true, false) => "item-has-recurrence-ics-has-none",
+                            (_, _, false, true) => "ics-has-recurrence-item-has-none",
+                            (true, false, _, _) => "ics-described-item-custom",
+                            (false, true, _, _) => "ics-custom-item-described",
+                            _ => "both-described-differ",
+                        };
+                        Diff("Recurrence/" + kind, o.Recurrence, m.Recurrence);
+                    }
+
+                    Diff("When", NoZone(o.When), NoZone(m.When));
+                    if (NoZone(o.When) != NoZone(m.When) && mapiDiff.GetValueOrDefault("When") <= 3)
                     {
                         Console.WriteLine(string.Join(" | ", System.Text.Encoding.UTF8.GetString(new MapiToIcsConverter().Convert(r.Value).Value.ToArray()).Split("\r\n").Where(l => l.StartsWith("DTSTART") || l.StartsWith("DTEND") || l.StartsWith("RRULE") || l.StartsWith("EXDATE"))));
                     }
@@ -317,6 +331,7 @@ static int Occ(string casesFile, string output)
             ["kind"] = kind,
             ["starts"] = starts,
             ["n"] = c.GetProperty("n").GetInt32(),
+            ["defects"] = (card?.Defects ?? []).Select(d => d.Kind.ToString()).ToList(),
         }));
         n++;
     }
