@@ -52,8 +52,9 @@ public readonly record struct MailDate(DateTimeOffset Value, MailDateSource Sour
 
 /// <summary>An email address with its display name. The view flattens groups to their members.</summary>
 /// <param name="Name">The decoded display name, or null when there is none.</param>
-/// <param name="Address">The address as written (<c>local@domain</c>); possibly not valid, since the reader is lenient.</param>
-public readonly record struct MailAddress(string? Name, string Address)
+/// <param name="Address">The address as written (<c>local@domain</c>); possibly not valid, since the reader is lenient. For an Outlook item whose address could only be found as an Exchange distinguished name this is that name.</param>
+/// <param name="X500Address">The Exchange (X.500) distinguished name an Outlook item stores the address under, kept beside the SMTP form; null for every other source and for addresses that have none.</param>
+public readonly record struct MailAddress(string? Name, string Address, string? X500Address = null)
 {
     /// <summary>The address in the form <c>Name &lt;address&gt;</c>, or just the address when there is no name. Not quoted for use in a header.</summary>
     /// <returns>The text.</returns>

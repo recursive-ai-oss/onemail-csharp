@@ -1,4 +1,5 @@
 using System.Text;
+using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Text;
 
@@ -14,6 +15,8 @@ public sealed class MapiMailItem : IMailItem
     private readonly MapiMessage _message;
     private readonly MailProvenance _provenance;
     private IReadOnlyList<IMailAttachment>? _attachments;
+    private MapiAddressResolver? _resolver;
+    private RtfBodies? _rtf;
 
     /// <summary>Wraps a MAPI message in the shared view.</summary>
     /// <param name="message">The message; it stays the truth, the view only reads it.</param>
@@ -108,17 +111,22 @@ public sealed class MapiMailItem : IMailItem
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Addresses show the SMTP form. An Exchange (<c>EX</c>) address is resolved through the <c>PidTagSenderSmtpAddress</c> family of
+    /// properties, the recipient table and the transport headers (<c>docs/shared-view.md</c>); the distinguished name stays in
+    /// <see cref="MailAddress.X500Address"/>. When nothing resolves, <see cref="MailAddress.Address"/> is that distinguished name.
+    /// </remarks>
     public MailAddress? Sender
     {
         get
         {
             // The sender is "the actual sender when it differs from From": a message sent on behalf of someone has both.
-            if (Address(_message, MapiPid.SentRepresentingName, MapiPid.SentRepresentingEmailAddress, MapiPid.SentRepresentingSmtpAddress) is null)
+            if (Resolver.SentRepresenting().IsEmpty)
             {
                 return null;
             }
 
-            MailAddress? sender = Address(_message, MapiPid.SenderName, MapiPid.SenderEmailAddress, MapiPid.SenderSmtpAddress);
+            MailAddress? sender = ToMail(Resolver.Sender());
             IReadOnlyList<MailAddress> from = From;
             return sender is { } s && !(from.Count > 0 && string.Equals(from[0].Address, s.Address, StringComparison.OrdinalIgnoreCase)) ? s : null;
         }
@@ -129,9 +137,9 @@ public sealed class MapiMailItem : IMailItem
     {
         get
         {
-            // MS-OXCMAIL 2.1.3.1: From comes from PidTagSentRepresenting*, falling back to PidTagSender*.
-            MailAddress? a = Address(_message, MapiPid.SentRepresentingName, MapiPid.SentRepresentingEmailAddress, MapiPid.SentRepresentingSmtpAddress)
-                ?? Address(_message, MapiPid.SenderName, MapiPid.SenderEmailAddress, MapiPid.SenderSmtpAddress);
+            // MS-OXCMAIL 2.1.3.1.3: From comes from PidTagSentRepresenting*, falling back to PidTagSender*.
+            ResolvedAddress r = Resolver.SentRepresenting();
+            MailAddress? a = ToMail(r.IsEmpty ? Resolver.Sender() : r);
             return a is { } x ? [x] : [];
         }
     }
@@ -146,39 +154,45 @@ public sealed class MapiMailItem : IMailItem
     public IReadOnlyList<MailAddress> Bcc => Recipients(MapiRecipientType.Bcc);
 
     /// <inheritdoc/>
-    public IReadOnlyList<MailAddress> ReplyTo => [];
+    /// <remarks>Read from <c>PidTagReplyRecipientEntries</c> (one-off EntryIDs, MS-OXCDATA 2.2.5.1); entries of another kind cannot be resolved without a directory and are left out.</remarks>
+    public IReadOnlyList<MailAddress> ReplyTo
+    {
+        get
+        {
+            var list = new List<MailAddress>();
+            if (_message.Properties.Get(MapiPid.ReplyRecipientEntries, MapiType.Binary) is { } p)
+            {
+                foreach (byte[] entry in OneOffEntryId.ParseList(p.GetBytes().Span))
+                {
+                    if (OneOffEntryId.TryParse(entry, out string name, out string type, out string address) && address.Length > 0)
+                    {
+                        bool ex = string.Equals(type, "EX", StringComparison.OrdinalIgnoreCase);
+                        list.Add(new MailAddress(name.Length == 0 ? null : name, address, ex ? address : null));
+                    }
+                }
+            }
+
+            return list;
+        }
+    }
+
+    private MapiAddressResolver Resolver => _resolver ??= new MapiAddressResolver(_message);
+
+    private static MailAddress? ToMail(ResolvedAddress r) =>
+        r.IsEmpty ? null : new MailAddress(r.Name, r.Smtp ?? r.X500 ?? r.Other ?? string.Empty, r.X500);
 
     private List<MailAddress> Recipients(MapiRecipientType type)
     {
         var list = new List<MailAddress>();
         foreach (MapiRecipient r in _message.Recipients)
         {
-            if (r.RecipientType == type && Address(r, MapiPid.DisplayName, MapiPid.EmailAddress, MapiPid.SmtpAddress) is { } a)
+            if (r.RecipientType == type && ToMail(Resolver.Recipient(r)) is { } a)
             {
                 list.Add(a);
             }
         }
 
         return list;
-    }
-
-    // The address is the SMTP address when the object has one, else the address it is stored under (an SMTP address, or an Exchange
-    // distinguished name when the object is an internal user and has no SMTP address property). Nothing is looked up.
-    private static MailAddress? Address(MapiObject o, ushort name, ushort email, ushort smtp)
-    {
-        string? n = o.GetString(name);
-        string? a = o.GetString(smtp);
-        if (string.IsNullOrEmpty(a))
-        {
-            a = o.GetString(email);
-        }
-
-        if (string.IsNullOrEmpty(a) && string.IsNullOrEmpty(n))
-        {
-            return null;
-        }
-
-        return new MailAddress(string.IsNullOrEmpty(n) ? null : n, a ?? string.Empty);
     }
 
     /// <inheritdoc/>
@@ -203,13 +217,31 @@ public sealed class MapiMailItem : IMailItem
         _message.GetTime(id) is { } t ? new MailDate(t, source, ZoneKnown: false) : null;
 
     /// <inheritdoc/>
-    public string? MessageId => Ids(_message.GetString(MapiPid.InternetMessageId)) is { Count: > 0 } l ? l[0] : null;
+    /// <remarks>Message-ID, In-Reply-To and References fall back to the transport headers when their properties are absent.</remarks>
+    public string? MessageId => Ids(_message.GetString(MapiPid.InternetMessageId), "Message-ID") is { Count: > 0 } l ? l[0] : null;
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> InReplyTo => Ids(_message.GetString(MapiPid.InReplyToId));
+    public IReadOnlyList<string> InReplyTo => Ids(_message.GetString(MapiPid.InReplyToId), "In-Reply-To");
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> References => Ids(_message.GetString(MapiPid.InternetReferences));
+    public IReadOnlyList<string> References => Ids(_message.GetString(MapiPid.InternetReferences), "References");
+
+    private List<string> Ids(string? text, string headerName)
+    {
+        List<string> ids = Ids(text);
+        if (ids.Count == 0)
+        {
+            foreach (HeaderField f in Resolver.Transport)
+            {
+                if (f.Name.Equals(headerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Ids(f.Value);
+                }
+            }
+        }
+
+        return ids;
+    }
 
     // Message IDs are written <id>; a value without angle brackets is read as whitespace-separated IDs.
     private static List<string> Ids(string? text)
@@ -253,16 +285,21 @@ public sealed class MapiMailItem : IMailItem
     public string? ConversationTopic => _message.GetString(MapiPid.ConversationTopic);
 
     /// <inheritdoc/>
-    public MailBody? TextBody => _message.Properties.Get(MapiPid.Body, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/plain") : null;
+    /// <remarks>When the message has no plain-text body of its own and its RTF body is a plain-text encapsulation (MS-OXRTFEX), the text is taken from the RTF; the body is then UTF-8.</remarks>
+    public MailBody? TextBody =>
+        _message.Properties.Get(MapiPid.Body, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/plain")
+        : Rtf.Text is { } t ? new MemoryMailBody("text/plain", "utf-8", Encoding.UTF8.GetBytes(t)) : null;
 
     /// <inheritdoc/>
-    public MailBody? HtmlBody => _message.Properties.Get(MapiPid.Html, MapiType.Binary, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/html") : null;
+    /// <remarks>When the message has no HTML body of its own and its RTF body is an HTML encapsulation (MS-OXRTFEX), the HTML is taken from the RTF; the body is then UTF-8.</remarks>
+    public MailBody? HtmlBody =>
+        _message.Properties.Get(MapiPid.Html, MapiType.Binary, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/html")
+        : Rtf.Html is { } h ? new MemoryMailBody("text/html", "utf-8", Encoding.UTF8.GetBytes(h)) : null;
 
-    /// <summary>
-    /// The compressed RTF (PidTagRtfCompressed) as stored. Until the RTF layer is wired in, <see cref="MailBody.Open"/> returns the
-    /// compressed stream (MS-OXRTFCP) and <see cref="MailBody.ReadText"/> decodes those bytes as text, which is not readable RTF.
-    /// </summary>
-    public MailBody? RtfBody => _message.Properties.Get(MapiPid.RtfCompressed, MapiType.Binary) is { } p ? new MapiMailBody(_message, p, "application/rtf") : null;
+    /// <summary>The RTF body (PidTagRtfCompressed) decompressed (MS-OXRTFCP), or null when the message has none or it does not decompress.</summary>
+    public MailBody? RtfBody => Rtf.Data is { } d ? new MemoryMailBody("application/rtf", null, d) : null;
+
+    private RtfBodies Rtf => _rtf ??= RtfBodies.Read(_message);
 
     /// <inheritdoc/>
     public IReadOnlyList<IMailAttachment> Attachments => _attachments ??= BuildAttachments();
@@ -446,4 +483,16 @@ internal sealed class MapiMailAttachment(MapiAttachment attachment, MailProvenan
             return _embedded;
         }
     }
+}
+
+/// <summary>A body held as bytes in memory: the RTF the message stores, or text or HTML taken out of an encapsulating RTF.</summary>
+internal sealed class MemoryMailBody(string contentType, string? charset, byte[] bytes) : MailBody
+{
+    public override string ContentType => contentType;
+
+    public override string? Charset => charset;
+
+    public override Stream Open() => new MemoryStream(bytes, writable: false);
+
+    public override string ReadText() => charset is null ? Encoding.Latin1.GetString(bytes) : Encoding.UTF8.GetString(bytes);
 }

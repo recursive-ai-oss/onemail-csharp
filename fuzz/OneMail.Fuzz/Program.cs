@@ -30,6 +30,7 @@ internal static class Program
             ["pst-messaging"] = PstMessagingTarget.Run,
             ["rtf-decompress"] = RtfTargets.Decompress,
             ["rtf-deencap"] = RtfTargets.Deencapsulate,
+            ["oxcmail"] = OxcMailTarget.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);
