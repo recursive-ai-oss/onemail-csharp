@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using RecursiveAI.OneMail.Bodies;
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.Ics;
 using RecursiveAI.OneMail.Calendar.Recurrence;
@@ -50,7 +51,7 @@ internal static class OutlookChecks
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard);
+        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText);
 
     public static bool Msg()
     {
@@ -154,6 +155,19 @@ internal static class OutlookChecks
         // No VTIMEZONE: the name has to come from the runtime's own time zone database, which the browser runtime must carry.
         var report = new ExpansionReport();
         return SpringForward(Expand(string.Empty, "America/New_York", runtimeDatabase: true, report), report);
+    }
+
+    // HTML to text on OneHtml's DOM and cascade (a style rule hides a paragraph), text to HTML, format=flowed both ways, and the best body of a message.
+    public static bool HtmlText()
+    {
+        BodyConversion t = HtmlToText.Convert("<h1>T</h1><ul><li>a<li>b</ul><p>x <a href='http://e.example/'>y</a></p><style>.h{display:none}</style><p class=h>no</p>");
+        BodyConversion h = TextToHtml.Convert("a & b\n> q", new TextToHtmlOptions { FullDocument = false });
+        string flowed = FormatFlowed.Encode("one two three four five six seven eight nine ten eleven twelve", 24);
+        IMailItem m = Mail.Parse(Encoding.ASCII.GetBytes("Subject: s\r\nContent-Type: text/plain; format=flowed\r\n\r\nHello \r\nworld\r\n"));
+        return t.Text == "T\n\n* a\n* b\n\nx y <http://e.example/>" && t.Issues.Count == 0
+            && h.Text == "<p>a &amp; b</p>\n<blockquote type=\"cite\">\n<p>q</p>\n</blockquote>\n"
+            && FormatFlowed.Parse(flowed)[0].Text == "one two three four five six seven eight nine ten eleven twelve"
+            && BodySelector.Select(m).Body?.ReadText() == "Hello world";
     }
 
     // MS-OXOCAL / MS-OXCICAL: a weekly series with a time zone becomes an Outlook item, reads through the typed view, and converts back to an RRULE.

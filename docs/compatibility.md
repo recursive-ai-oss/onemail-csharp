@@ -194,3 +194,15 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio
 0.091 on x64 and 0.093 on arm64; worst row 0.584).
+
+## Bodies
+
+HTML to text, text to HTML, `format=flowed` (RFC 3676) and best-body selection (`RecursiveAI.OneMail.Bodies`, [`bodies.md`](bodies.md)). Oracles, run as released
+programs: `w3m` 0.5.3, `lynx` 2.9.0 (distribution packages) and Python `html2text` 2025.4.15.
+
+| Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
+|---|---|---|---|---|---|---|
+| HTML to text | yes | n/a | 0 / 461 against each of w3m, lynx and html2text (118 corpus bodies, 43 constructs, 300 generated); every difference classed | n/a | yes (`htmltext`) | rules from linked style sheets are not applied; no column alignment in tables |
+| Text to HTML | n/a | yes | output of 1,715 inputs parses with 0 errors in OneHtml | quote levels kept | yes | link detection is conservative by design |
+| `format=flowed` | yes | yes | no oracle (Python `email` has none); RFC 3676 cases | encode then decode returns the paragraphs, 600 generated cases | yes | trailing spaces of a paragraph are dropped on encode |
+| Best body (MIME, MAPI, TNEF, OLM, DBX items) | yes | n/a | n/a | n/a | yes | no mail client observed for the selection rules (BD1 to BD5) |

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool for the body checks (tools/bodies/README.md): pulls HTML bodies out of stores
+       and runs OneMail's HTML-to-text conversion and best-body selection over them so other programs can compare.
+       Nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>BodiesTool</AssemblyName>
+    <RootNamespace>BodiesTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OneArchive" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

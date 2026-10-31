@@ -165,7 +165,11 @@ public class CompositionTests
         const string eml = "From: a@x.example\nMessage-ID: <h@x>\nSubject: pics\nContent-Type: multipart/related; boundary=r\n\n--r\nContent-Type: text/html; charset=utf-8\n\n<html><body><p>hi <img src=\"cid:img1\"></p></body></html>\n--r\nContent-Type: image/png\nContent-ID: <img1>\nContent-Disposition: inline\nContent-Transfer-Encoding: base64\n\niVBORw0K\n--r--\n";
         MimeMailItem p = MimeMailItem.Parse(Encoding.UTF8.GetBytes(eml.Replace("\n", "\r\n", StringComparison.Ordinal)));
         ComposedMessage c = p.CreateReply(Options());
-        var rel = Assert.IsType<MimeMultipart>(Reparse(c));
+        // The parent has only HTML; the reply still carries a text alternative made from it.
+        var alt = Assert.IsType<MimeMultipart>(Reparse(c));
+        Assert.Equal("multipart/alternative", alt.MediaType);
+        Assert.Contains("> hi", Encoding.UTF8.GetString(((MimePart)alt.Children[0]).GetDecodedContent()), StringComparison.Ordinal);
+        var rel = Assert.IsType<MimeMultipart>(alt.Children[1]);
         Assert.Equal("multipart/related", rel.MediaType);
         string html = Encoding.UTF8.GetString(((MimePart)rel.Children[0]).GetDecodedContent());
         Assert.Contains("<blockquote type=\"cite\"><p>hi <img src=\"cid:img1\"></p></blockquote>", html, StringComparison.Ordinal);

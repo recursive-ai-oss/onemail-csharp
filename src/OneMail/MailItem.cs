@@ -88,6 +88,15 @@ public enum BodyOrigin
 
     /// <summary>The item has only an RTF body written as RTF; the body was made from it by the RTF to HTML converter, so it is an approximation of the author's layout.</summary>
     RtfConverted,
+
+    /// <summary>Plain text made from HTML by <c>Bodies.HtmlToText</c> because the item holds no plain text of its own.</summary>
+    HtmlToText,
+
+    /// <summary>HTML made from plain text by <c>Bodies.TextToHtml</c> because the item holds no HTML of its own.</summary>
+    TextToHtml,
+
+    /// <summary>Plain text with its <c>format=flowed</c> soft breaks joined by <c>Bodies.FormatFlowed</c>.</summary>
+    FlowedDecoded,
 }
 
 /// <summary>
@@ -119,6 +128,11 @@ public abstract class MailBody
     /// <returns>The text.</returns>
     public abstract string ReadText();
 
+    /// <summary>True when the body is <c>text/plain</c> with <c>format=flowed</c> (RFC 3676): its soft line breaks are still in <see cref="ReadText"/>. See <see cref="Bodies.FormatFlowed"/>.</summary>
+    public virtual bool IsFormatFlowed => false;
+
+    /// <summary>True when the flowed body says <c>delsp=yes</c>. Meaningful only when <see cref="IsFormatFlowed"/> is true.</summary>
+    public virtual bool FlowedDelSp => false;
     /// <summary>A parameter of the body's content type (for example <c>format</c> or <c>delsp</c>), or null.</summary>
     internal virtual string? ContentTypeParameter(string name) => null;
 }
@@ -231,6 +245,13 @@ public interface IMailItem
 
     /// <summary>The RTF body candidate, or null (MIME has none). See <see cref="TextBody"/>.</summary>
     MailBody? RtfBody { get; }
+
+    /// <summary>
+    /// The best body to show, or null when the item has none: HTML, else plain text (with <c>format=flowed</c> joined), else RTF written as RTF. The
+    /// order and the Outlook hints are in <see cref="Bodies.BodySelector"/>; use it directly for the reason and the issues. Evaluated on each call: it
+    /// reads the candidate bodies.
+    /// </summary>
+    MailBody? BestBody => Bodies.BodySelector.Select(this).Body;
 
     /// <summary>
     /// The attachments in document order, built on first use. Inline content (images a body refers to by <c>cid:</c>) is

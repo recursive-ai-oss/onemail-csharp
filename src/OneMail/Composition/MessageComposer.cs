@@ -489,6 +489,16 @@ public static class MessageComposer
                     pHtml = ReadBody(hb);
                 }
 
+                // A parent that has only HTML still gets a text part: the text made from its HTML (Bodies.HtmlToText), so plain-text clients see the quote too.
+                if (pText is null && fmt != QuoteBodyFormat.HtmlOnly && parent.HtmlBody is { } hb2)
+                {
+                    string src = pHtml ?? ReadBody(hb2);
+                    if (src.Length > 0)
+                    {
+                        pText = Bodies.HtmlToText.Convert(src).Text;
+                    }
+                }
+
                 if (pText is null && pHtml is null && (parent.TextBody is not null || parent.HtmlBody is not null))
                 {
                     _defects.Add(new CompositionDefect(CompositionDefectKind.BodyNotAvailable, fmt.ToString()));

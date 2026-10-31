@@ -368,6 +368,9 @@ internal static class Program
         bool oxocalOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Oxocal();
         Console.WriteLine("oxocal: " + (oxocalOk ? "ok" : "FAILED"));
 
+        bool htmltextOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.HtmlText();
+        Console.WriteLine("htmltext: " + (htmltextOk ? "ok" : "FAILED"));
+
         // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
         bool convertOk;
         {
@@ -413,6 +416,6 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

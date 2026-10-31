@@ -36,6 +36,7 @@ internal static class Program
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
             ["calcard"] = CalcardTarget.Run,
+            ["htmltext"] = HtmlTextTarget.Run,
             ["composition"] = CompositionTarget.Run,
             ["sanitizer"] = SanitizerTargets.Run,
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,

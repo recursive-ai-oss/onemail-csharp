@@ -61,6 +61,7 @@ case "$target" in
   composition) maxlen=8192 ;;
   oxocal) maxlen=4096 ;;
   calcard) maxlen=8192 ;;
+  htmltext) maxlen=16384 ;;
   sanitizer|sanitizer-reparse) maxlen=16384 ;;
   olm) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
