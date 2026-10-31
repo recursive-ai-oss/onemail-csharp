@@ -301,16 +301,18 @@ public sealed class MapiMailItem : IMailItem
     public string? ConversationTopic => _message.GetString(MapiPid.ConversationTopic);
 
     /// <inheritdoc/>
-    /// <remarks>When the message has no plain-text body of its own and its RTF body is a plain-text encapsulation (MS-OXRTFEX), the text is taken from the RTF; the body is then UTF-8.</remarks>
+    /// <remarks>When the message has no plain-text body of its own and its RTF body is a plain-text encapsulation (MS-OXRTFEX), the text is taken from the RTF; the body is then UTF-8 and its <see cref="MailBody.Origin"/> is <see cref="BodyOrigin.RtfEncapsulated"/>. When the RTF is written as RTF, the text is derived from it (<see cref="BodyOrigin.RtfConverted"/>).</remarks>
     public MailBody? TextBody =>
         _message.Properties.Get(MapiPid.Body, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/plain")
-        : Rtf.Text is { } t ? new MemoryMailBody("text/plain", "utf-8", Encoding.UTF8.GetBytes(t)) : null;
+        : Rtf.Text is { } t ? new MemoryMailBody("text/plain", "utf-8", Encoding.UTF8.GetBytes(t), BodyOrigin.RtfEncapsulated)
+        : Rtf.Native()?.Text is { Length: > 0 } nt ? new MemoryMailBody("text/plain", "utf-8", Encoding.UTF8.GetBytes(nt), BodyOrigin.RtfConverted) : null;
 
     /// <inheritdoc/>
-    /// <remarks>When the message has no HTML body of its own and its RTF body is an HTML encapsulation (MS-OXRTFEX), the HTML is taken from the RTF; the body is then UTF-8.</remarks>
+    /// <remarks>When the message has no HTML body of its own and its RTF body is an HTML encapsulation (MS-OXRTFEX), the HTML is taken from the RTF; the body is then UTF-8 and its <see cref="MailBody.Origin"/> is <see cref="BodyOrigin.RtfEncapsulated"/>. When the RTF is written as RTF, the HTML is made from it by <see cref="RecursiveAI.OneMail.Rtf.RtfHtmlConverter"/> (<see cref="BodyOrigin.RtfConverted"/>), with pictures as <c>data:</c> URIs.</remarks>
     public MailBody? HtmlBody =>
         _message.Properties.Get(MapiPid.Html, MapiType.Binary, MapiType.String8, MapiType.UnicodeString) is { } p ? new MapiMailBody(_message, p, "text/html")
-        : Rtf.Html is { } h ? new MemoryMailBody("text/html", "utf-8", Encoding.UTF8.GetBytes(h)) : null;
+        : Rtf.Html is { } h ? new MemoryMailBody("text/html", "utf-8", Encoding.UTF8.GetBytes(h), BodyOrigin.RtfEncapsulated)
+        : Rtf.Native()?.Html is { Length: > 0 } nh ? new MemoryMailBody("text/html", "utf-8", Encoding.UTF8.GetBytes(nh), BodyOrigin.RtfConverted) : null;
 
     /// <summary>The RTF body (PidTagRtfCompressed) decompressed (MS-OXRTFCP), or null when the message has none or it does not decompress.</summary>
     public MailBody? RtfBody => Rtf.Data is { } d ? new MemoryMailBody("application/rtf", null, d) : null;
@@ -502,8 +504,10 @@ internal sealed class MapiMailAttachment(MapiAttachment attachment, MailProvenan
 }
 
 /// <summary>A body held as bytes in memory: the RTF the message stores, or text or HTML taken out of an encapsulating RTF.</summary>
-internal sealed class MemoryMailBody(string contentType, string? charset, byte[] bytes) : MailBody
+internal sealed class MemoryMailBody(string contentType, string? charset, byte[] bytes, BodyOrigin origin = BodyOrigin.Stored) : MailBody
 {
+    public override BodyOrigin Origin => origin;
+
     public override string ContentType => contentType;
 
     public override string? Charset => charset;

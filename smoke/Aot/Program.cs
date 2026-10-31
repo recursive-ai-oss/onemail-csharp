@@ -258,6 +258,11 @@ internal static class Program
             && rtfText.Text == "a\tb\r\n" && rtfCp.Text == "\u041f";
         Console.WriteLine("rtf: " + (rtfOk ? "ok" : "FAILED"));
 
+        RtfHtmlResult rtfHtml1 = RtfHtmlConverter.Convert("{\\rtf1\\ansi{\\fonttbl{\\f0\\fswiss Arial;}}\\pard {\\b bold} caf\\'e9 \\u8364? {\\field{\\*\\fldinst HYPERLINK \"http://example.com/\"}{\\fldrslt link}}\\par \\trowd\\cellx1000\\cellx2000\\pard\\intbl a\\cell b\\cell\\row}"u8);
+        bool rtfHtmlOk = rtfHtml1.Html.Contains("<b>bold</b>", StringComparison.Ordinal) && rtfHtml1.Html.Contains("<a href=\"http://example.com/\">link</a>", StringComparison.Ordinal)
+            && rtfHtml1.Html.Contains("<td", StringComparison.Ordinal) && rtfHtml1.Text.StartsWith("bold caf\u00e9 \u20ac link <http://example.com/>\r\na\tb", StringComparison.Ordinal);
+        Console.WriteLine("rtf-html: " + (rtfHtmlOk ? "ok" : "FAILED"));
+
         byte[] tnefBytes = RecursiveAI.OneMail.Tests.Tnef.TnefTestBuilder.Rich();
         RecursiveAI.OneMail.Tnef.TnefMessage tnefMsg = RecursiveAI.OneMail.Tnef.TnefMessage.Read(tnefBytes);
         using var tnefOut = new MemoryStream();
@@ -350,6 +355,8 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && olmOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

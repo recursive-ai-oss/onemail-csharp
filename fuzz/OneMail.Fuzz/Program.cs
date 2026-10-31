@@ -30,6 +30,7 @@ internal static class Program
             ["pst-messaging"] = PstMessagingTarget.Run,
             ["rtf-decompress"] = RtfTargets.Decompress,
             ["rtf-deencap"] = RtfTargets.Deencapsulate,
+            ["rtf-html"] = RtfTargets.Html,
             ["oxcmail"] = OxcMailTarget.Run,
             ["olm"] = OlmTarget.Run,
             ["dbx"] = DbxTarget.Run,

@@ -29,3 +29,20 @@ The RTF bodies come from the public `.msg` files that `tools/corpus/fetch-msg.sh
 | RTFDE | 0.1.2.2 | LGPL-3.0 | de-encapsulation (run only; not linked, not shipped) |
 
 `compare.py` and `mutants.py` import them in a venv of their own; their output goes to `$WORK`, never to the repository.
+
+## RTF to HTML checks
+
+    tools/rtf/fetch-rtf.sh $WORK/rtfdocs                  # the Tika/POI .rtf files (Apache-2.0, pinned commits and hashes in rtf-corpus.tsv)
+    tools/rtf/oracles-html.sh                             # pandoc 3.13, unrtf 0.21.10 (dpkg -x) and the distribution's LibreOffice 24.2.7
+    dotnet run --project tools/rtf/RtfTool -- native $CORPUS $WORK/native   # RTF bodies that are not encapsulated
+    gen_rtf.py $WORK/set                                  # 23 feature documents and 40 seeded mixes
+    RtfTool html $WORK/set                                # <id>.ours.html (and .txt)
+    tools/rtf/run-html-oracles.sh $WORK/set               # oracles, then htmlcompare.py; rules in explained-html.tsv
+    htmldiff.py $WORK/set <oracle> <metric> [id]          # word-level edits behind a difference
+
+| Program | Version | Licence | Use |
+|---|---|---|---|
+| pandoc | 3.13 | GPL-2.0-or-later | run only |
+| unrtf | 0.21.10 | GPL-3.0-or-later | run only |
+| LibreOffice | 24.2.7 | MPL-2.0 | run only |
+
