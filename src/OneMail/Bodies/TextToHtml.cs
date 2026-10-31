@@ -378,7 +378,10 @@ public static class TextToHtml
         return true;
     }
 
-    private static bool IsUrlStop(char c) => c <= ' ' || c is '<' or '>' or '"' or '\u00A0' or '\u007F' || (c >= '\u0080' && c <= '\u009F');
+    // The address ends at anything the plain path would drop or change: controls, noncharacters, surrogates (so no link text or
+    // href can carry a character that makes the HTML invalid).
+    private static bool IsUrlStop(char c) =>
+        c <= ' ' || c is '<' or '>' or '"' or '\u00A0' || (c >= '\u007F' && c <= '\u009F') || (c >= '\uFDD0' && c <= '\uFDEF') || c >= '\uFFFE' || char.IsSurrogate(c);
 
     // A closing bracket at the end belongs to the address only when it closes an opener inside the address.
     private static bool Unbalanced(string s, int from, int to, char closer)

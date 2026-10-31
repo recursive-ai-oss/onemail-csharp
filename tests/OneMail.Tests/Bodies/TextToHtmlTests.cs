@@ -52,6 +52,7 @@ public class TextToHtmlTests
             "a <script>alert(1)</script> & \"q\" 'x'\n\n> quote\n>> deeper\n\n-- \nsig",
             "ctl \u0001\u0007\u007f\u0085 nonchar \uFFFE ok \uD83D\uDE00 lone \uD800 end",
             "http://a.example/\"onmouseover=\"x www.b.example,",
+            "http://a.example/x\uFFFEy www.b.example/\u0001z https://c.example/\uD83D\uDE00\uD83F\uDFFF end",
             string.Join("\n", Enumerable.Range(0, 40).Select(i => new string('>', i % 7) + " line " + i)),
         ];
         foreach (string input in inputs)
