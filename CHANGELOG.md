@@ -4,9 +4,20 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.2.0-preview.2]
+
+The first preview on nuget.org. It has everything in 0.2.0-preview.1 plus the changes below. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
+
 ### Added
 
 - jCal, jCard, xCal and xCard (`RecursiveAI.OneMail.Calendar.Forms`): read and write both directions from ICS and vCard trees with a loss report, typed defects and resource limits; `MailFormatSniffer` names the four forms.
+- Outlook Express 5/6 DBX reading (`RecursiveAI.OneMail.Stores.Dbx`): message databases, the folder tree from `Folders.dbx`, lazy message streams in constant memory, content sniffing, and `Mail.Open` on a `.dbx` file or a store folder.
+- `MaildirStoreOptions.InfoSeparator`: Maildir file names use `;` before the info section on Windows (where `:` is not allowed in file names) and `:` elsewhere; both are read on every platform.
+
+### Fixed
+
+- IANA time-zone names now resolve on Windows when the runtime knows only Windows zone ids (for example with invariant globalization), through the CLDR Windows-zone map; Windows names resolve through the same map on every platform.
+- Maildir delivery no longer fails on Windows.
 
 ## [0.2.0-preview.1]
 
