@@ -46,9 +46,9 @@ public static class MessageRenderer
         sb.Append("<!DOCTYPE html><html lang=\"").Append(Escape(options.Language)).Append("\"><head><meta charset=\"utf-8\"><title>")
             .Append(Escape(title)).Append("</title><style>body{margin:0;font-family:sans-serif;font-size:14px;line-height:1.4;color:#000}"
             // The display layer clips the message to its box so it cannot cover a host page. On a page of its own that clip is not needed, and
-            // a clipped block is cut at the first page break (its later pages come out blank), so it is lifted here. A positioned box is
-            // painted after the in-flow content around it, which would put the body after the attachment list in the PDF's reading order.
-            + ".omx-box{position:static!important;overflow:visible!important;contain:none!important}</style></head><body>")
+            // a clipped block is cut at the first page break (its later pages come out blank), so it is lifted here. A positioned or
+            // isolated box is painted after the in-flow content around it, which put the body after the attachment list in the PDF's content order.
+            + ".omx-box{position:static!important;overflow:visible!important;contain:none!important;isolation:auto!important}</style></head><body>")
             .Append(display.Html).Append("</body></html>");
         return sb.ToString();
     }

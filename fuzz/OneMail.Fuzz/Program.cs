@@ -37,6 +37,8 @@ internal static class Program
             ["oxocal"] = OxocalTarget.Run,
             ["sanitizer"] = SanitizerTargets.Run,
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,
+            ["render"] = RenderTarget.Run,
+            ["render-datauri"] = RenderTarget.DataUri,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

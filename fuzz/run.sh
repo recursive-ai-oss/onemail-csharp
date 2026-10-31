@@ -61,6 +61,8 @@ case "$target" in
   oxocal) maxlen=4096 ;;
   sanitizer|sanitizer-reparse) maxlen=16384 ;;
   olm) maxlen=65536 ;;
+  render) maxlen=8192 ;;
+  render-datauri) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
@@ -96,6 +98,7 @@ mkdir -p "$corpus" "$findings"
 
 "$instrument" "$bin/RecursiveAI.OneMail.dll" >/dev/null
 "$instrument" "$bin/RecursiveAI.OneMail.Calendar.dll" >/dev/null
+"$instrument" "$bin/RecursiveAI.OneMail.Render.dll" >/dev/null
 
 # An extra seed directory is read-only for libFuzzer: new finds go to $corpus.
 dirs=("$corpus")
