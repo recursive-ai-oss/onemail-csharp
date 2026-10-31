@@ -402,7 +402,9 @@ public class MimeMailItem : IMailItem
 
         public string? FileName => entity.FileName;
 
-        public string ContentType => entity.MediaType;
+        public string ContentType => ContentTypeInferred ? AttachmentMediaTypes.Infer(FileName)! : entity.MediaType;
+
+        public bool ContentTypeInferred => entity.MediaType == "application/octet-stream" && AttachmentMediaTypes.Infer(FileName) is not null;
 
         public string? ContentId => entity.GetContentId();
 

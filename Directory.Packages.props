@@ -3,7 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup Label="Family libraries (shipped dependencies)">
-    <PackageVersion Include="RecursiveAI.OneArchive" Version="0.7.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OneArchive" Version="1.1.0" />
     <PackageVersion Include="RecursiveAI.OneHtml" Version="1.5.1" />
     <PackageVersion Include="RecursiveAI.OneRender" Version="1.3.1" />
     <PackageVersion Include="RecursiveAI.OneRender.Pdf" Version="1.3.1" />

@@ -8,7 +8,6 @@
     <AssemblyName>SanitizeTool</AssemblyName>
     <RootNamespace>SanitizeTool</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
-    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

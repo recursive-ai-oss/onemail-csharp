@@ -4,10 +4,22 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0-preview.2]
+
+A fix release for 0.2.0-preview.2, on top of 0.3.0-preview.1.
+
 ### Added
 
 - `RecursiveAI.OneMail.Display.CalendarCard`: the compact card mail clients show for a calendar object, as an HTML fragment and as plain text. It covers iMIP/iTIP methods (invitation, update, cancellation, reply, counter-proposal, ...), the time in a caller-chosen zone with the organizer's time kept, a plain-English recurrence sentence ("Every 2 weeks on Monday and Wednesday, until 30 Nov 2026", or "Repeats (custom rule)" when it cannot be said exactly) with the next occurrences, location and conference URLs, organizer, attendees and a truncated description, from `.ics` files, `text/calendar` parts and Outlook appointment and meeting items (`FromIcs`, `FromMime`, `FromMapi`, `FromItem`). The HTML is built from escaped text and passes the display sanitiser unchanged. See `docs/calendar-card.md`.
 - `OutlookNames.NetShowUrl` (`PidLidNetShowUrl`).
+- `IMailAttachment.ContentTypeInferred` (a default interface member): true when `ContentType` was guessed from the file name's extension because the item stored no specific type.
+
+### Fixed
+
+- `RecursiveAI.OneMail` now depends on `RecursiveAI.OneArchive` 1.1.0 (it was 0.7.0-preview.1), so an app that also uses OneArchive 1.x no longer hits a version conflict. The compound-file and zip readers are no longer preview APIs, so the build opt-outs are gone.
+- Attachments with no stored content type, or the generic `application/octet-stream` (Outlook, TNEF, OLM, and MIME parts), report a type from a built-in table when the file name's extension is known (`.pdf` is `application/pdf`); a stored specific type always wins. See `docs/shared-view.md`.
+- The package page (`PACKAGE.md`) links to the files of the release tag instead of `main`; the link is stamped from the package version when packing.
+- The README lists only the packages that are on nuget.org.
 
 ## [0.3.0-preview.1]
 

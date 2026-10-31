@@ -500,7 +500,11 @@ internal sealed class OlmAttachment(OlmItem owner, OlmElement element, ArchiveEn
 {
     public string? FileName => element.Attribute("OPFAttachmentName");
 
-    public string ContentType => element.Attribute("OPFAttachmentContentType") is { Length: > 0 } t ? t : "application/octet-stream";
+    public string ContentType => ContentTypeInferred ? AttachmentMediaTypes.Infer(FileName)! : StoredType is { Length: > 0 } t ? t : "application/octet-stream";
+
+    public bool ContentTypeInferred => AttachmentMediaTypes.IsGeneric(StoredType) && AttachmentMediaTypes.Infer(FileName) is not null;
+
+    private string? StoredType => element.Attribute("OPFAttachmentContentType");
 
     public string? ContentId => element.Attribute("OPFAttachmentContentID") is { Length: > 0 } c ? c.Trim('<', '>') : null;
 
