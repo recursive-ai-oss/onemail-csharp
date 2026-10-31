@@ -123,6 +123,12 @@ internal static class ViewMimeBuilder
 
         if (item.ConversationTopic is { } topic)
         {
+            // A header value cannot start or end with white space once read back (RFC 5322 §2.2.3), so the topic is trimmed there.
+            if (topic.Length != topic.Trim().Length)
+            {
+                report.Add("view", "Thread-Topic", LossKind.Approximated, "ConversationTopicWhitespaceTrimmed", "Leading or trailing white space of the conversation topic is not kept in the header.");
+            }
+
             h.Add(("Thread-Topic", topic));
         }
 

@@ -112,10 +112,10 @@ destination stops the run; an item that cannot be read or converted is skipped a
 
 | To | Content | Properties | Flags | Folders | Codes it can report | Note |
 |---|---|---|---|---|---|---|
-| Eml | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
-| Mbox | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `EnvelopeDateUnknown`, `FinalLineEndingAdded`, `FlagsNotCarried`, `FlagsWrittenAsHeaders`, `FolderFlattened`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
-| Maildir | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
-| AppleMail | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
+| Eml | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
+| Mbox | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `EnvelopeDateUnknown`, `FinalLineEndingAdded`, `FlagsNotCarried`, `FlagsWrittenAsHeaders`, `FolderFlattened`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
+| Maildir | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
+| AppleMail | Approximated | Lost | Derived | Derived | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `EmbeddedMessageAsData`, `FlagsNotCarried`, `FolderNameChanged`, `KeywordsNormalized`, `KeywordsNotCarried`, `OlmFieldDiffersFromSource`, `Unmapped` | The message is rebuilt from the fields the view reads (addresses, subject, dates, identifiers, bodies, attachments); other OLM elements are listed as Unmapped. The read flag becomes Seen, categories become keywords. |
 | Tnef | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
 | Ics | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
 | JCal | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
@@ -215,6 +215,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | `FlagsNotCarried` | Dropped | the destination keeps no flags, or an mbox message's own Status fields were kept over the source's flags |
 | `KeywordsNotCarried` | Dropped | the destination keeps no keywords (or a Maildir folder is past 26) |
 | `KeywordsNormalized` | Approximated | white space in a keyword or category name became an underscore (Maildir and `X-Keywords` names cannot hold it) |
+| `ConversationTopicWhitespaceTrimmed` | Approximated | OLM record rebuilt from the shared view: leading or trailing white space of the conversation topic cannot survive in a header value |
 | `FlagsWrittenAsHeaders` | Internal | mbox: Status, X-Status and X-Keywords fields were added |
 | `FinalLineEndingAdded` | Approximated | mbox: the message did not end in a line ending and gained one |
 | `EnvelopeDateUnknown` | Approximated | mbox: the message has no date; the envelope line carries the Unix epoch so output is reproducible |
@@ -223,3 +224,32 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | `DateZoneNotStored` | Approximated | a message rebuilt from the shared view is dated in UTC |
 | `EmbeddedMessageAsData` | Approximated | a message rebuilt from the shared view writes an embedded message as an ordinary attachment |
 | `FormFolding`, `FormNameCase`, `FormItemOrder`, `FormLineNotCarried`, `FormRedundantValueParameter`, `FormDuplicateParameterMerged`, `FormCharsetRemoved` | Internal or Approximated | what the JSON or XML form of a calendar or card could not carry exactly (the calendar library's form losses by kind); folding and name case are bookkeeping |
+
+## Command line
+
+```
+onemail convert mail.olm out --to maildir          # a store to a Maildir++ tree, folders kept
+onemail convert inbox.mbox out.mbox                # the format follows the extension (eml, maildir and emlx need --to)
+onemail convert archive.pst out --to eml --folder "Top of Personal Folders/Inbox"
+onemail export archive.pst calendar --format ics --json
+```
+
+`convert` and `export` print the totals (read, written, skipped by reason, per-folder counts, each loss code with its item count and an
+example) and, with `--json`, JSON instead. `--no-other-items` skips calendar and contact items that would go to `_items`. The exit code
+is 0 on success (skips and reported losses are not errors), 1 when an item errored or the run failed, 2 for a usage error, 130 when cancelled.
+
+## What was checked
+
+On the corpora (counts per run, all in `tools/convert/run.sh`):
+
+- MIME to EML, mbox, Maildir and EMLX, read back byte-identical: probes 219/224 (5 have no header block and are skipped as `Unreadable`),
+  Mime4j 78/80, dovecot mbox 3,237/3,237, dovecot messages 2,858/2,859, Enron sample 5,032/5,032, DBX store 2,053/2,053; none changed.
+  An mbox message that lacks a final line ending gains one (`FinalLineEndingAdded`).
+- MAPI to EML and back to MAPI: MSG 45 items, 8,743 properties and PST 25 items, 2,399 properties, 0 silent; OLM mail 530 items,
+  10,070 fields, 0 silent (11 reported).
+- Store to store, items read = written + skipped and folder trees equal on every store (CFReDS OST, Tika PSTs, OLM generated and samples,
+  DBX store in 13 folders, dovecot mbox, a Maildir made from it, Enron sample); Python `mailbox` and `email` read every produced EML tree,
+  mbox and Maildir with the same folders and counts (18 of 18 runs); MimeKit, Python and Go differential on the produced EMLs ran with
+  no unexplained difference.
+- Memory: the CMU Enron maildir (517,401 messages, 3,311 folders) to Maildir 48.7 s, peak working set 119 MB; to mbox 23.1 s, 129 MB.
+  Every message is read back and counted in the destination.

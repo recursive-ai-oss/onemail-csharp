@@ -29,7 +29,7 @@ if fmt == "eml":
         for f in files:
             if f.endswith(".eml"):
                 rel = os.path.relpath(root, dest)
-                folder = "" if rel == "." else rel.replace(".", "")
+                folder = "" if rel == "." else rel
                 with open(os.path.join(root, f), "rb") as fh:
                     check(fh.read())
                 counts[folder] += 1

@@ -326,7 +326,7 @@ internal static class Program
             Check("InReplyTo", string.Join(' ', olm.InReplyTo) == string.Join(' ', back.InReplyTo));
             Check("References", string.Join(' ', olm.References) == string.Join(' ', back.References));
             Check("Sent", olm.Sent?.Value.ToUniversalTime().ToUnixTimeSeconds() == back.Sent?.Value.ToUniversalTime().ToUnixTimeSeconds(), element: "OPFMessageCopySentTime");
-            Check("ConversationTopic", olm.ConversationTopic == back.ConversationTopic, element: "OPFMessageCopyThreadTopic");
+            Check("ConversationTopic", olm.ConversationTopic == back.ConversationTopic, "ConversationTopicWhitespaceTrimmed", element: "OPFMessageCopyThreadTopic");
             Check("ConversationIndex", olm.ConversationIndex.Span.SequenceEqual(back.ConversationIndex.Span));
             Check("TextBody", Norm(olm.TextBody?.ReadText()) == Norm(back.TextBody?.ReadText()), element: "OPFMessageCopyBody");
             Check("HtmlBody", Norm(olm.HtmlBody?.ReadText()) == Norm(back.HtmlBody?.ReadText()), element: "OPFMessageCopyHTMLBody");

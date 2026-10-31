@@ -481,7 +481,9 @@ internal sealed class MaildirSink : MailSinkBase
     {
         _ = options;
         _root = destination;
-        Directory.CreateDirectory(destination);
+        // The root is a Maildir in its own right even when every message lives in a subfolder; readers refuse one without cur/new/tmp.
+        foreach (string d in new[] { "cur", "new", "tmp" })
+            Directory.CreateDirectory(Path.Combine(destination, d));
         _store = new MaildirStore(new PhysicalStoreFileSystem(destination));
     }
 
