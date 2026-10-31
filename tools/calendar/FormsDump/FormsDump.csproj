@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool: converts files to and from jCal, jCard, xCal and xCard, and checks the conversions over a corpus
+       (tools/calendar/README.md). It uses OneMail.Calendar only. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>FormsDump</AssemblyName>
+    <RootNamespace>OneMail.Tools.FormsDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+  </ItemGroup>
+
+</Project>
