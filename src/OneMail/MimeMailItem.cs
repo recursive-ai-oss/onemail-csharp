@@ -149,6 +149,13 @@ public class MimeMailItem : IMailItem
     /// </summary>
     public IReadOnlyList<MimePart> TnefParts => Layout.Tnef.Select(t => t.Part).ToList();
 
+    /// <summary>
+    /// The <c>text/calendar</c> parts of the message (RFC 6047 iMIP), as attachments or as alternatives of the body. A text alternative is not listed in
+    /// <see cref="Attachments"/> (RFC 2046 §5.1.4), so this is the way to an invitation sent that way. Feed a part's decoded content to
+    /// <c>IcsToMapiConverter</c> to get the Outlook item.
+    /// </summary>
+    public IReadOnlyList<MimePart> CalendarParts => Entity.EnumerateCalendarParts().ToList();
+
     /// <summary>The unpacked TNEF messages, in the same order as <see cref="TnefParts"/>, for callers that want their properties.</summary>
     public IReadOnlyList<TnefMessage> TnefMessages => Layout.Tnef.Select(t => t.Message).ToList();
 

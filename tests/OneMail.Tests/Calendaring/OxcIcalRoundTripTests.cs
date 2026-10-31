@@ -263,6 +263,21 @@ public class OxcIcalRoundTripTests
         Assert.Equal(1, todo.Priority);
     }
 
+    // MS-OXOTASK 2.2.2.2.32: the task's global ID is a GUID, so a UID of ours comes back unchanged and a foreign UID is replaced and reported.
+    [Fact]
+    public void ATaskUidIsStableThroughTheGuid()
+    {
+        string Todo(string uid) => "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//x//EN\r\nBEGIN:VTODO\r\nUID:" + uid + "\r\nDTSTAMP:20070101T000000Z\r\nSUMMARY:t\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        const string mine = "4D78A5700F47881147D93C2E7C69B0E4@onemail";
+        ConversionResult<MapiMessage> a = new IcsToMapiConverter().Convert(Parse(Todo(mine)));
+        Assert.DoesNotContain(a.Report, e => e.Code == "UidReplacedByGuid");
+        Assert.Equal(mine, ToIcs(a.Value, out _).Todos.Single().Uid);
+        ConversionResult<MapiMessage> b = new IcsToMapiConverter().Convert(Parse(Todo("t-1@host")));
+        Assert.Contains(b.Report, e => e.Code == "UidReplacedByGuid");
+        string second = ToIcs(b.Value, out _).Todos.Single().Uid!;
+        Assert.Equal(second, ToIcs(new IcsToMapiConverter().Convert(Parse(Todo(second))).Value, out _).Todos.Single().Uid);
+    }
+
     [Fact]
     public void AllDayEventsStayDates()
     {

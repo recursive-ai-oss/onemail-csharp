@@ -20,6 +20,14 @@ public class OutlookCalendarTests
     // MS-OXOCAL 4.1.1.3: every three days from 2011-04-07 to 2011-05-04 08:00-08:30; the 19th and 22nd of April deleted.
     private const string DailyBlob = "0430 0430 0A20 0000 0000 A0050000 E0100000 00000000 21200000 0C000000 00000000 02000000 A0C1DC0C 80D2DC0C 00000000 207EDC0C 0016DD0C 06300000 09300000 E0010000 FE010000 0000 00000000 00000000";
 
+    // MS-OXPROPS 2.19: PidLidAllAttendeesString is LID 0x8238 (0x823A is not a defined property of the set).
+    [Fact]
+    public void AllAttendeesStringUsesTheLidOfMsOxprops()
+    {
+        Assert.Equal(0x8238u, (uint)MapiNames.AllAttendeesString.Lid);
+        Assert.Equal(MapiNames.AllAttendeesString, OutlookNames.AllAttendeesString);
+    }
+
     [Fact]
     public void WeeklyExampleOfTheSpecReadsAndWritesBack()
     {
@@ -243,6 +251,7 @@ public class OutlookCalendarTests
         {
             MapiMessage m = Series(p, s, e, rule, name, id);
             IcsComponent cal = ToIcs(m, out LossReport rep);
+            ExportForOracles(m, id + "-" + name.Replace(' ', '_'));
             DateTime from = new(2007, 1, 1), to = new(2012, 12, 31, 23, 59, 59);
             List<DateTime> got = Occurrences(cal, from.AddDays(-2), to.AddDays(2)).Where(t => t >= from && t <= to).ToList();   // the window is UTC; the local range is cut afterwards
             List<DateTime> want = OutlookRecurrence.Days(p).Select(d => d.AddMinutes(s)).Where(t => t >= from && t <= to).ToList();
@@ -255,6 +264,28 @@ public class OutlookCalendarTests
                 Assert.Equal(name, cal.Events.First().Start!.Value.TzId);
             }
         }
+    }
+
+    // Setting ONEMAIL_OXOCAL_OUT writes each generated series as .ics so the recurrence oracles can expand the same files.
+    private static void ExportForOracles(MapiMessage m, string name)
+    {
+        string? dir = Environment.GetEnvironmentVariable("ONEMAIL_OXOCAL_OUT");
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, name + ".ics"), new MapiToIcsConverter().Convert(m).Value.ToArray());
+        }
+    }
+
+    // Ambiguity OC2: the first instance is not an allowed day, so the first allowed day is the series start.
+    [Fact]
+    public void AFirstInstanceOffThePatternStartsOnTheFirstAllowedDay()
+    {
+        const uint mon = 2;
+        RecurrencePattern p = Weekly(D("2007-03-27T00:00"), 1, mon, 0, RecurrencePattern.EndAfterCount, 3);   // starts on a Tuesday, Mondays only
+        IcsComponent cal = ToIcs(Series(p, 600, 630, UtcRule, "UTC"), out LossReport rep);
+        Assert.Contains(rep, x => x.Code == nameof(CalendaringDefectKind.AmbiguousFirstInstance));
+        Assert.Equal(new DateTime(2007, 4, 2, 10, 0, 0), cal.Events.First().Start!.Value.Value);
     }
 
     [Fact]

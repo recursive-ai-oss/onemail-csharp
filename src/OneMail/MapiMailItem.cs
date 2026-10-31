@@ -1,4 +1,5 @@
 using System.Text;
+using RecursiveAI.OneMail.Calendaring;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Text;
@@ -29,6 +30,15 @@ public sealed class MapiMailItem : IMailItem
 
     /// <summary>The MAPI message behind the view.</summary>
     public MapiMessage Message => _message;
+
+    /// <summary>
+    /// The typed appointment or meeting view (MS-OXOCAL) when the message class is a calendar class, otherwise null. It reads the same
+    /// property bag and is rebuilt on each call; see <see cref="OutlookAppointment.TryCreate"/>.
+    /// </summary>
+    public OutlookAppointment? Appointment => OutlookAppointment.TryCreate(_message);
+
+    /// <summary>The typed task view (MS-OXOTASK) when the message class is <c>IPM.Task</c>, otherwise null.</summary>
+    public OutlookTask? TaskItem => OutlookTask.TryCreate(_message);
 
     /// <inheritdoc/>
     public MailProvenance Provenance => _provenance;

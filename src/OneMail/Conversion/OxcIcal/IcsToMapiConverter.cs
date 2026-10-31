@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.ContentLines;
@@ -957,7 +958,18 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
 
             if (todo.Uid is { } uid)
             {
-                p.NBin(OutlookNames.TaskGlobalId, Encoding.UTF8.GetBytes(uid));
+                // MS-OXOTASK 2.2.2.2.32: the task's global ID is a 16-byte GUID. A UID we wrote ourselves (32 hex digits, "@onemail") maps back to
+                // the same GUID; any other UID has no GUID form, so a GUID is derived from it and the replacement is reported.
+                string hex = uid.EndsWith("@onemail", StringComparison.Ordinal) ? uid[..^8] : uid;
+                if (hex.Length == 32 && hex.All(char.IsAsciiHexDigit))
+                {
+                    p.NBin(OutlookNames.TaskGlobalId, System.Convert.FromHexString(hex));
+                }
+                else
+                {
+                    p.NBin(OutlookNames.TaskGlobalId, SHA256.HashData(Encoding.UTF8.GetBytes(uid)).AsSpan(0, 16).ToArray());
+                    report.Add("ics", "UID", LossKind.Approximated, "UidReplacedByGuid", "A task's UID is a 16-byte GUID in Outlook; the UID text was replaced by a GUID derived from it.");
+                }
             }
 
             if (todo.RecurrenceRules.Count == 1 && todo.Start is { } rs)

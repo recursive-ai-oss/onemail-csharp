@@ -15,6 +15,9 @@ roots=()
 for d in libical icaljs biweekly sabrevobject thunderbird govuk; do [ -d "$corpus/$d" ] && roots+=("$corpus/$d"); done
 roots+=("$repo/testdata/calendar/rfc" "$repo/testdata/calendar/recurrence/generated" "$repo/testdata/calendar/generated/hand")
 
+# EXPAND_ROOTS (space-separated directories) replaces the default roots, e.g. for the Outlook-item conversion output.
+[ -n "${EXPAND_ROOTS:-}" ] && read -r -a roots <<< "$EXPAND_ROOTS"
+
 dotnet build "$repo/tools/calendar/RecurrenceDump" -c Release -v quiet -clp:NoSummary >/dev/null
 dotnet build "$repo/tools/calendar/oracles/OracleExpand" -c Release -v quiet -clp:NoSummary >/dev/null
 dump="$(find "${ONEMAIL_ARTIFACTS:-$repo/artifacts}/bin/RecurrenceDump/release" -name RecurrenceDump -type f | head -1)"

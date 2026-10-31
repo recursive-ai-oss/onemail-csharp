@@ -614,7 +614,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
             IcsComponent e = new(todo);
             MapiMessage m = t.Message;
             byte[] g = m.Properties.Get(OutlookNames.TaskGlobalId, MapiType.Binary)?.GetBytes().ToArray() ?? [];
-            e.SetText("UID", g.Length > 0 ? System.Convert.ToHexString(g) : System.Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(t.Subject ?? "")).AsSpan(0, 16)) + "@onemail");
+            e.SetText("UID", g.Length == 16 ? System.Convert.ToHexString(g) + "@onemail" : g.Length > 0 ? System.Convert.ToHexString(g) : System.Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(t.Subject ?? "")).AsSpan(0, 16)) + "@onemail");
             DateTimeOffset stamp = m.Properties.Get(MapiPid.LastModificationTime, MapiType.Time)?.AsTime() ?? new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
             e.SetTime("DTSTAMP", new IcsTime(DateTime.SpecifyKind(stamp.UtcDateTime, DateTimeKind.Utc), IcsTimeKind.Utc));
             if (t.Subject is { } s)

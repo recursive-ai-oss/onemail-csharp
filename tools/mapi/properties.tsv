@@ -311,7 +311,7 @@ named	Appointment	8233	PidLidTimeZoneStruct
 named	Appointment	8234	PidLidTimeZoneDescription
 named	Appointment	8235	PidLidClipStart
 named	Appointment	8236	PidLidClipEnd
-named	Appointment	823A	PidLidAllAttendeesString
+named	Appointment	8238	PidLidAllAttendeesString
 named	Appointment	823B	PidLidToAttendeesString
 named	Appointment	823C	PidLidCcAttendeesString
 named	Meeting	0003	PidLidGlobalObjectId
