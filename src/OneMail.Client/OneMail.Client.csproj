@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Not packed until it has content: an empty package would only reserve the name. -->
+    <IsPackable>false</IsPackable>
     <Description>SMTP, IMAP and POP3 clients and SASL for .NET, over a public raw protocol layer.</Description>
     <PackageTags>$(PackageTags);smtp;imap;pop3;sasl</PackageTags>
   </PropertyGroup>

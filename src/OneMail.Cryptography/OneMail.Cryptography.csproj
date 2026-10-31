@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Not packed until it has content: an empty package would only reserve the name. -->
+    <IsPackable>false</IsPackable>
     <Description>Signing, verification and encryption of email for .NET: DKIM, ARC, S/MIME and OpenPGP.</Description>
     <PackageTags>$(PackageTags);dkim;arc;smime;openpgp</PackageTags>
   </PropertyGroup>
