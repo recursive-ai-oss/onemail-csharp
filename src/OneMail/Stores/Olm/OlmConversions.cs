@@ -58,13 +58,16 @@ public sealed class OlmToCalendarConverter : IItemConversion<OlmItem, Component>
 
     private static string E(string s) => ContentValues.Escape(s);
 
+    // A URI value is not text-escaped, but a line break in it (hostile input) would break the content line; it becomes a space.
+    private static string OneLine(string s) => s.Replace('\r', ' ').Replace('\n', ' ');
+
     private static string Uid(OlmItem item) => "olm-" + item.OlmKind.ToString().ToLowerInvariant() + "-" + item.Provenance.Index.ToString(CultureInfo.InvariantCulture) + "@onemail.invalid";
 
     private static Component Event(OlmItem it, Component cal, LossReport report)
     {
         var ev = new Component("VEVENT");
         OlmElement r = it.Element;
-        Add(ev, "UID", r.ChildText("OPFCalendarEventCopyUUID") is { Length: > 0 } u ? u : Uid(it));
+        Add(ev, "UID", r.ChildText("OPFCalendarEventCopyUUID") is { Length: > 0 } u ? E(u) : Uid(it));
         Add(ev, "DTSTAMP", OlmValues.Date(r.ChildText("OPFCalendarEventCopyModDate")) is { } m ? OlmValues.Utc(m) : "19700101T000000Z");
         if (it.Subject is { } s)
         {
@@ -138,7 +141,7 @@ public sealed class OlmToCalendarConverter : IItemConversion<OlmItem, Component>
         {
             if (o.Contains('@', StringComparison.Ordinal))
             {
-                Add(ev, "ORGANIZER", "mailto:" + o);
+                Add(ev, "ORGANIZER", "mailto:" + OneLine(o));
             }
             else
             {
@@ -148,7 +151,7 @@ public sealed class OlmToCalendarConverter : IItemConversion<OlmItem, Component>
 
         foreach (MailAddress a in it.ToRecipients)
         {
-            ContentProperty p = Add(ev, "ATTENDEE", a.Address.Length > 0 ? "mailto:" + a.Address : "invalid:nomail");
+            ContentProperty p = Add(ev, "ATTENDEE", a.Address.Length > 0 ? "mailto:" + OneLine(a.Address) : "invalid:nomail");
             if (a.Name is { Length: > 0 } cn)
             {
                 p.Parameters.Add(new ContentParameter("CN", cn));
@@ -427,7 +430,7 @@ public sealed class OlmToVCardConverter : IItemConversion<OlmItem, Component>
                 {
                     if (a.Attribute("OPFContactEmailAddressAddress") is { Length: > 0 } addr)
                     {
-                        ContentProperty p = Add(card, "MEMBER", "mailto:" + addr);
+                        ContentProperty p = Add(card, "MEMBER", "mailto:" + OneLine(addr));
                         if (a.Attribute("OPFContactEmailAddressName") is { Length: > 0 } name)
                         {
                             report.Add(OlmMapping.Family, "OPFContactEmailAddressName", LossKind.Dropped, "MemberName", "A group member is written as an address; the member's display name has no vCard property.", "member");
@@ -470,6 +473,9 @@ public sealed class OlmToVCardConverter : IItemConversion<OlmItem, Component>
     }
 
     private static string E(string s) => ContentValues.Escape(s);
+
+    // A URI value is not text-escaped, but a line break in it (hostile input) would break the content line; it becomes a space.
+    private static string OneLine(string s) => s.Replace('\r', ' ').Replace('\n', ' ');
 
     private static string? Company(OlmElement r) => Get(r, "OPFContactCopyBusinessCompany");
 

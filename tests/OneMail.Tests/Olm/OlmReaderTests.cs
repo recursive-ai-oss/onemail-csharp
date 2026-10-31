@@ -174,6 +174,22 @@ public class OlmReaderTests
     private static readonly string[] DayNames = ["allDays", "friday", "monday", "saturday", "sunday", "thursday", "tuesday", "wednesday", "weekdays", "weekenddays"];
 
     [Fact]
+    public void HostileZoneTextAndAddressesStillWriteAsCalendar()
+    {
+        // Found by fuzzing: an unterminated VTIMEZONE swallows lines that have no colon, and a line break in an address or UID must not reach the writer.
+        const string tz = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:Z\r\nBEGIN:STANDARD\r\nTZOFFSETTO:-0500\r\nEND:STANDARD\r\nEND7VTIM\r\nEEENND:VCALENDAR\r\n";
+        string appt = OlmTestArchive.El("OPFCalendarEventCopySummary", "x") + OlmTestArchive.El("OPFCalendarEventCopyStartTime", "2020-03-02T09:00:00")
+            + OlmTestArchive.El("OPFCalendarEventCopyUUID", "u\r\n1") + OlmTestArchive.El("OPFCalendarEventCopyOrganizer", "a@b\r\nc")
+            + OlmTestArchive.El("OPFCalendarEventGetStartTimeZoneICSData", tz);
+        byte[] zip = new OlmTestArchive().Add("Local/Calendar/Calendar.xml", $"<appointments{OlmTestArchive.X} elementCount=\"1\"><appointment{OlmTestArchive.X}>{appt}</appointment></appointments>").Build();
+        using OlmArchive olm = Open(zip);
+        ConversionResult<Component> r = new OlmToCalendarConverter().Convert(olm.Enumerate().Single());
+        var doc = new ContentDocument();
+        doc.Root.Add(r.Value);
+        Assert.NotEmpty(doc.ToArray());
+    }
+
+    [Fact]
     public void AppointmentConvertsToCalendarWithZoneRecurrenceAndReminder()
     {
         const string tz = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Mountain Standard Time\r\nBEGIN:STANDARD\r\nDTSTART:16010101T000000\r\nTZOFFSETFROM:-0600\r\nTZOFFSETTO:-0700\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nEND:VCALENDAR\r\n";
