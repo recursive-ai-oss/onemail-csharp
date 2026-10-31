@@ -27,6 +27,8 @@ internal static class Program
             ["mail-open"] = MailTarget.Run,
             ["ltp"] = LtpTarget.Run,
             ["pst-messaging"] = PstMessagingTarget.Run,
+            ["rtf-decompress"] = RtfTargets.Decompress,
+            ["rtf-deencap"] = RtfTargets.Deencapsulate,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

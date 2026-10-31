@@ -23,3 +23,10 @@ Redistribution and use in source and binary forms, with or without modification,
 - **Apache Tika test documents** (`tika-parser-microsoft-module` and `tika-parser-mail-module`, `.msg`, `.pst` and `winmail.dat` data files, at a pinned commit; `tools/corpus/msg-corpus.tsv`): Apache License 2.0, (c) The Apache Software Foundation. Data files only; none is stored in this repository.
 - **Apache POI test data** (`test-data/hsmf`, `.msg` files including minimised fuzzer cases, at a pinned commit): Apache License 2.0, (c) The Apache Software Foundation. Data files only; none is stored in this repository.
 - **extract-msg 0.55.0** (Python package, GPL-3.0): run as an installed package by `tools/msg/compare_extract_msg.py` to compare results. It is not linked, copied or shipped with any OneMail package.
+
+
+## RTF test data and oracles
+
+- `testdata/rtf` holds the worked RTF example of MS-OXRTFEX section 3.1 (the source HTML and the encapsulated RTF, with the page-wrap damage of the published text repaired), and `tests/OneMail.Tests/Rtf` holds the two compressed-RTF examples of MS-OXRTFCP section 3.1 as hex. Both documents are Microsoft Open Specifications, covered by the Microsoft Open Specification Promise; the examples are quoted to test conformance.
+- The RTF, HTML and text bodies that `tools/rtf` extracts from the Apache Tika and Apache POI test `.msg` files (Apache License 2.0, (c) The Apache Software Foundation; data files only, fetched by `tools/corpus/fetch-msg.sh`) are used for comparison runs and are never committed.
+- `tools/rtf` runs two released Python packages as black-box programs, never linked, copied or shipped: `compressed-rtf` 1.0.7 (MIT) and `RTFDE` 0.1.2.2 (LGPL-3.0-or-later).

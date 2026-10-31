@@ -49,6 +49,8 @@ case "$target" in
   emlx) maxlen=16384 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;
   mail-open) maxlen=65536 ;;
+  rtf-decompress) maxlen=65536 ;;
+  rtf-deencap) maxlen=16384 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
