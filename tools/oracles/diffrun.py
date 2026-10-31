@@ -177,6 +177,23 @@ def obsolete_local(addr):
     return unquoted_at > 1
 
 
+def omitted_by_mimekit(mine, theirs):
+    """True when `theirs` is `mine` with some of the addresses that obsolete_local() flags either left out or cut at their second '@'
+    (MimeKit does either). Every other address must be equal, in order, and nothing may be left over."""
+    j = 0
+    for addr in mine:
+        if j < len(theirs) and addr == theirs[j]:
+            j += 1
+        elif obsolete_local(addr):
+            first = addr.find("@", addr.find('"', addr.find('"') + 1) if addr.startswith('"') else 0)
+            second = addr.find("@", first + 1) if first >= 0 else -1
+            if second > 0 and j < len(theirs) and addr[:second] == theirs[j]:
+                j += 1
+        else:
+            return False
+    return j == len(theirs) and mine != theirs
+
+
 def first_diff(x, y):
     """The first address that differs between two lists, as ' (ours vs theirs)'; both lists are shown only by that element."""
     for i, (p, q) in enumerate(zip(x, y)):
@@ -208,9 +225,8 @@ def compare_records(a, b):
                 # NORM-A15: MimeKit leaves out an address whose local part has a leading, trailing or doubled dot; OneMail keeps it
                 # (docs/ambiguities.md A15). After leaving those out of OneMail's list, the lists are compared as usual.
                 mine, theirs = (x, y) if na == OURS else (y, x)
-                kept = [i for i in mine if not obsolete_local(i["addr"])]
-                if len(kept) != len(mine) and [i["addr"] for i in kept] == [i["addr"] for i in theirs] and (na if nb == OURS else nb) == "mimekit":
-                    out.append(("address.obsolete-local", k, "%s: %d dropped" % (k, len(mine) - len(kept))))
+                if (na if nb == OURS else nb) == "mimekit" and omitted_by_mimekit([i["addr"] for i in mine], [i["addr"] for i in theirs]):
+                    out.append(("address.obsolete-local", k, "%s: addresses MimeKit omits or cuts" % k))
                     continue
             # NORM-H2: MimeKit joins the lists of repeated address fields; OneMail reads the first (docs/ambiguities.md H2).
             ours_rec, other_rec = (a, b) if na == OURS else (b, a)
