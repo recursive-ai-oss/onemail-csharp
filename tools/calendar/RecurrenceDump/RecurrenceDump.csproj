@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool: lists the recurring components of a calendar corpus, expands them with OneMail.Calendar in a fixed
+       window and reports how every TZID resolves (tools/calendar/README.md). It uses OneMail.Calendar only. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>RecurrenceDump</AssemblyName>
+    <RootNamespace>OneMail.Tools.RecurrenceDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+  </ItemGroup>
+
+</Project>
