@@ -52,6 +52,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     private MboxReader? _messageReader;
     private PstStore? _pst;
     private MsgFile? _msg;
+    private Tnef.TnefMessage? _tnef;
     private bool _disposed;
 
     private MailContainer(MailFormat format, string? location, IRandomAccessSource? source, bool ownsSource, string? directory, MimeReaderOptions? mime, MboxReaderOptions? mbox)
@@ -71,15 +72,15 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     /// <summary>The path that was opened, or null when opened from memory or a stream.</summary>
     public string? Location { get; }
 
-    /// <summary>True when the container holds many messages (everything but <see cref="MailFormat.Eml"/>, <see cref="MailFormat.Emlx"/> and <see cref="MailFormat.Msg"/>).</summary>
-    public bool IsStore => Format is not (MailFormat.Eml or MailFormat.Emlx or MailFormat.Msg);
+    /// <summary>True when the container holds many messages (everything but <see cref="MailFormat.Eml"/>, <see cref="MailFormat.Emlx"/>, <see cref="MailFormat.Msg"/> and <see cref="MailFormat.Tnef"/>).</summary>
+    public bool IsStore => Format is not (MailFormat.Eml or MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef);
 
     /// <summary>Opens a file or a directory, deciding what it is from its content.</summary>
     /// <param name="path">A file, or a Maildir / Maildir++ / Apple Mail bundle directory.</param>
     /// <param name="mime">The MIME reader's own options (limits and so on), or null for the defaults.</param>
     /// <param name="mbox">The mbox reader's own options, or null. Used only for mbox files.</param>
     /// <returns>The collection. Dispose it to close the file.</returns>
-    /// <exception cref="UnsupportedMailFormatException">The content is not recognised, or is recognised but not readable yet (TNEF, ICS, vCard, other compound files).</exception>
+    /// <exception cref="UnsupportedMailFormatException">The content is not recognised, or is recognised but not readable yet (ICS, vCard, other compound files).</exception>
     /// <exception cref="InvalidDataException">The file is a PST, OST or MSG by its content but nothing in it can be read (a damaged header or container).</exception>
     /// <exception cref="FileNotFoundException">There is no file or directory at <paramref name="path"/>.</exception>
     public static MailContainer Open(string path, MimeReaderOptions? mime = null, MboxReaderOptions? mbox = null)
@@ -130,7 +131,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
     {
         ArgumentNullException.ThrowIfNull(source);
         MailFormat f = MailFormatSniffer.Sniff(source);
-        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg))
+        if (f is not (MailFormat.Eml or MailFormat.Mbox or MailFormat.Emlx or MailFormat.Pst or MailFormat.Ost or MailFormat.Msg or MailFormat.Tnef))
         {
             throw new UnsupportedMailFormatException(f, path);
         }
@@ -155,6 +156,11 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
 
             c._msg = msg;
         }
+        else if (f == MailFormat.Tnef)
+        {
+            // Nothing in a TNEF stream is unreadable: damage becomes defects on the message.
+            c._tnef = Tnef.TnefMessage.Read(source);
+        }
 
         return c;
     }
@@ -174,6 +180,9 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 break;
             case MailFormat.Msg:
                 yield return new MapiMailItem(_msg!.Message, new MailProvenance(MailFormat.Msg, Location, null, 0, _source!.Length, 0));
+                break;
+            case MailFormat.Tnef:
+                yield return new MapiMailItem(_tnef!, new MailProvenance(MailFormat.Tnef, Location, null, 0, _source!.Length, 0));
                 break;
             case MailFormat.Pst or MailFormat.Ost:
                 // Normal messages of every folder, depth-first. Folder-associated messages (rules, views, settings) are not mail and are
@@ -254,7 +263,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 }
 
                 break;
-            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Pst or MailFormat.Ost or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle:
+            case MailFormat.Emlx or MailFormat.Msg or MailFormat.Tnef or MailFormat.Pst or MailFormat.Ost or MailFormat.MaildirFolder or MailFormat.MaildirRoot or MailFormat.AppleMailBundle:
                 // Directory stores and single files do their I/O one small file at a time; the sync enumeration is already cheap per item.
                 foreach (IMailItem item in Enumerate())
                 {

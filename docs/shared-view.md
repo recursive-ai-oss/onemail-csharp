@@ -88,7 +88,7 @@ async enumeration (mbox messages are loaded before the item is yielded).
 | directory: `cur` and `new`; dot-prefixed Maildir subfolders; `Messages` directories of `.emlx` | `MaildirFolder`, `MaildirRoot`, `AppleMailBundle` |
 
 A message with no header block (starts with a blank line or with text that is not a header field) cannot be told from any text
-file and is `Unknown`; `Mail.Parse` still reads it. A recognised format whose reader is not in the library yet (`Tnef`, `Ics`, `VCard`,
+file and is `Unknown`; `Mail.Parse` still reads it. A recognised format whose reader is not in the library yet (`Ics`, `VCard`,
 `CompoundFile`) makes `Open` throw `UnsupportedMailFormatException` with its `Format`; `Unknown`
 throws the same exception with `Format == Unknown`. DBX and OLM are not yet recognised.
 

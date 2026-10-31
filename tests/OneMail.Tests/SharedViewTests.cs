@@ -216,7 +216,7 @@ public class SharedViewTests
                     using MailContainer c = Mail.Open(path);
                     Assert.Equal(expected, c.Format);
                 }
-                else if (expected == MailFormat.Msg)
+                else if (expected is MailFormat.Msg or MailFormat.Tnef)
                 {
                     using MailContainer c = Mail.Open(path);
                     Assert.Equal(expected, c.Format);
