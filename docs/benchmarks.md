@@ -66,3 +66,149 @@ Medians in ns per operation (per message for mbox); B/op is bytes allocated per 
 Geometric mean 0.091 (x64, AMD Ryzen 9 7950X3D, 32 logical cores) and 0.093 (arm64, Apple M2, 8 cores); worst row 0.584 and 0.351.
 The one row where OneMail allocates more is `build`: it base64-encodes the attachment when the content is set, where MimeKit
 encodes while writing.
+
+# Benchmarks: Outlook-format rows (PST/OST, MSG, TNEF)
+
+`bench/run-outlook-rows.sh OUTDIR` runs these rows. They use the same harness as the MIME rows (BenchmarkDotNet 0.15.8, 3
+launches, 3 warm-up and 10 measured iterations; the 10k and 50k stores use 3 launches of 1 warm-up and 3 iterations because one
+walk takes seconds), the same ratio (OneMail median / comparator median, below 1 is faster) and the same bar: geometric mean ≤ 1.0
+per area, no row above 1.25. Arguments after `OUTDIR` replace the default BenchmarkDotNet filter and skip the extra steps.
+
+## Comparators
+
+Each is the released NuGet package, referenced only from `bench/` and used through its public API. Versions are pinned in
+`Directory.Packages.props`.
+
+| Area | Comparator | Version | Licence | Benchmarking permitted |
+|---|---|---|---|---|
+| PST/OST | `XstReader.Api` | 1.0.6 (2022-12) | Microsoft Public License (MS-PL): "Copyright (c) 2016, Dijji; 2021, iluvadev, and released under Ms-PL License" | Yes: MS-PL grants the right to use the software; nothing is copied, bundled or redistributed |
+| MSG | `MsgReader` | 6.2.0 | MIT | Yes |
+| TNEF | `MimeKit` (`TnefPart`) | 4.18.2 | MIT | Yes |
+| PST/OST, native reference | libpff `pffexport` | 20180714 (Ubuntu noble `pff-tools`) | LGPL-3.0-or-later | Run as a binary only; reported, not gating |
+
+The comparator packages pull in a `System.Security.Cryptography.Pkcs` build that carries an advisory (NU1902/NU1903). The bench
+project is never shipped, so it suppresses those two audit warnings and nothing else.
+
+## Inputs
+
+| Name | What |
+|---|---|
+| `cfreds-ost` | the NIST CFReDS informant's Outlook 2013 OST (14 messages, 49 folders); x64 only (the fetch needs a 7-Zip and 20 GB) |
+| `tika-pst`, `tika-bodytypes` | Apache Tika's two Unicode PSTs (7 and 4 messages) |
+| `gen-u1k`, `gen-u10k`, `gen-u50k` | generated Unicode stores of 1,000, 10,000 and 50,000 messages (17 MB, 165 MB, 826 MB) over 20 folders; per message a plain body, an HTML body for every second one, one to four recipients, and an attachment on 70 % (2 to 22 KB, one in 500 is 1 MB); 50,000 messages carry 490 MB of attachments |
+| `gen-k4-1k`, `gen-k4-10k` | the same mail in the 4 KiB-page layout (OneMail only, see below) |
+| `msg-smallest`, `msg-median`, `msg-largest`, `msg-corpus` | the 53 Tika and POI MSG files that both libraries open (of 58): the smallest, the median and the largest by size (one has 1,321 recipients), and all 53 per operation |
+| `poi-*`, `tika-testwinmail` | the six TNEF streams of the POI and Tika corpora with content (the 53-byte `oom.tnef` has none) |
+
+The generated stores come from the test-side PST writer (`tests/OneMail.Tests/Pst`), which now leaves a free slot for each AMap
+page a larger file needs (MS-PST 2.2.2.7.2) and sets `MSGFLAG_HASATTACH`. libpff 20180714 opens the stores (`pffinfo`, and
+`pffexport -m items` exports them), OneMail and XstReader read them to the same counts, and a unit test builds a 20 MB store in every
+layout and reads it back with no defects. libpff's recovery scan (`pffexport -m all`) fails on them, so the reference below uses
+`-m items`. The writer holds the file in one array, so the largest store it can make is about 1.5 GB; the 826 MB store is the
+largest measured.
+
+## What each side does
+
+Every message: subject, sender name and address, submit time, every recipient (name and address), the body, and every attachment's
+bytes read to the end into a discarded buffer. A `verify` step runs both sides over every input first and prints what each saw
+(`verify.tsv`); messages, recipients, attachments and attachment bytes agree everywhere except as listed below.
+
+| Row | OneMail | Comparator |
+|---|---|---|
+| PST | `PstStore.TryOpen(path)`, every folder, `EnumerateMessages(Normal)`, best body (stored HTML, else RTF decompressed and de-encapsulated, else text), `OpenData()` per attachment | `new XstFile(path)`, `RootFolder`, `Folders`/`Messages` recursively, `Body.Text`, `SaveToStream` into a counting stream per file attachment; `message.ClearContents()` off |
+| MSG | `MsgFile.TryOpen(path)`, then the same fields and all three bodies (text, HTML from the property or de-encapsulated from RTF, RTF decompressed) | `new Storage.Message(path)`, `Subject`, `Sender`, `Recipients`, `SentOn`, `BodyText`, `BodyHtml`, `BodyRtf`, `Attachment.Data` |
+| TNEF | `TnefMessage.Read(bytes)`, then the PST fields | `TnefPart.ConvertToMessage()` over the bytes, then the message's fields, body and `Attachments` decoded to a counting stream |
+
+Things that make the rows differ in kind or in work:
+
+- **`ClearContents`.** XstReader documents `ClearContents()` as the way to release what a message cached. On the 50,000-message store
+  it made the walk 14 times slower (139 s against 9.9 s) and its peak working set no lower (157 MiB against 150), so the timed rows
+  leave it off: the comparator's fastest correct use. The memory section shows both.
+- **`XstFile.Dispose`.** It starts a background release that reopens the file; in a loop over a short walk that thread threw after
+  the file was closed and ended the process, on Linux and on macOS. The rows leave the file to the garbage collector instead.
+- **4 KiB layout.** XstReader.Api 1.0.6 throws `XstException: Unexpected header in compressed data stream` on every 4 KiB-page store
+  this writer makes, so those rows have no comparator and no ratio (OneMail alone: 1,000 messages in 92 ms on x64 and 100 ms on
+  arm64, 10,000 in 1.19 s and 1.35 s). No real 4 KiB store was available to tell a writer fault from a reader gap
+  (libpff 20180714 opens the layout but cannot read tables stored in data trees, which these stores use).
+- **MSG corpus.** MsgReader read 40 attachments (268,647 bytes) where OneMail read 41 (274,743 bytes) across the 53 files: one
+  6,096-byte attachment is not handed out by MsgReader. The ratio is on slightly unequal work, in the comparator's favour.
+- **Folders.** The folder counts differ (OneMail also counts search folders, 49 against 41 in the OST); messages agree.
+- **PST bodies.** XstReader hands out one body (`Body.Text`); OneMail's PST row reads the best one, so the work is matched. MSG
+  reads all three on both sides because MsgReader computes all three on request.
+- **Memory.** Peak working set is measured in a separate process that repeats one row's work for at least four seconds, with
+  `DOTNET_GCgen0MaxBudget` set to 32 MiB so the first-generation budget of a large-cache machine does not hide the live set. A
+  background thread samples the working set every 10 ms (the runtime's own peak counter reads 0 on macOS). Single-message
+  rows (MSG, TNEF) sit on the runtime's baseline and say nothing; the PST rows and the curves are the memory evidence.
+
+## Results
+
+Medians; B/msg is bytes allocated per message (for `msg-corpus`, per file). Ratios are OneMail / comparator.
+
+| Area | Input | Msgs | OneMail x64 | Comparator x64 | ratio x64 | ratio arm64 | OneMail B/msg | Comparator B/msg |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| PST | cfreds-ost | 14 | 3.71 ms | 194.15 ms | 0.019 | n/a | 95,386 | 605,609 |
+| PST | tika-pst | 7 | 596.4 µs | 2.29 ms | 0.261 | 0.252 | 84,463 | 437,083 |
+| PST | tika-bodytypes | 4 | 490.6 µs | 3.00 ms | 0.164 | 0.169 | 84,298 | 767,458 |
+| PST | gen-u1k | 1,000 | 71.63 ms | 176.79 ms | 0.405 | 0.409 | 19,485 | 220,845 |
+| PST | gen-u10k | 10,000 | 714.7 ms | 1,800.5 ms | 0.397 | 0.408 | 19,374 | 219,661 |
+| PST | gen-u50k | 50,000 | 4,117 ms | 9,205 ms | 0.447 | 0.475 | 19,371 | 220,179 |
+| MSG | msg-smallest | 1 | 21.4 µs | 46.5 µs | 0.460 | 0.569 | 107,362 | 80,801 |
+| MSG | msg-median | 1 | 137.9 µs | 876.0 µs | 0.157 | 0.180 | 293,905 | 1,272,393 |
+| MSG | msg-largest | 1 | 11.71 ms | 440.99 ms | 0.027 | 0.023 | 17,491,388 | 53,247,584 |
+| MSG | msg-corpus | 53 | 21.75 ms | 484.67 ms | 0.045 | 0.043 | 656,360 | 1,925,639 |
+| TNEF | poi-simple | 1 | 9.1 µs | 38.7 µs | 0.234 | 0.243 | 110,069 | 62,446 |
+| TNEF | poi-sample1 | 1 | 35.7 µs | 140.2 µs | 0.255 | 0.281 | 119,754 | 427,807 |
+| TNEF | tika-testwinmail | 1 | 72.0 µs | 224.7 µs | 0.320 | 0.370 | 181,977 | 276,927 |
+| TNEF | poi-quick | 1 | 84.1 µs | 230.6 µs | 0.365 | 0.372 | 181,982 | 276,930 |
+| TNEF | poi-attachments | 1 | 93.7 µs | 260.7 µs | 0.360 | 0.239 | 124,163 | 1,204,040 |
+| TNEF | poi-bug63955 | 1 | 146.1 µs | 397.1 µs | 0.368 | 0.248 | 173,098 | 1,880,228 |
+
+| Area | Geomean x64 | Worst x64 | Geomean arm64 | Worst arm64 | Bar |
+|---|---:|---:|---:|---:|---|
+| PST/OST vs XstReader.Api | 0.197 (6 rows; 0.314 without the OST) | 0.447 | 0.320 (5 rows, no OST) | 0.475 | met |
+| MSG vs MsgReader | 0.096 | 0.460 | 0.101 | 0.569 | met |
+| TNEF vs MimeKit | 0.312 | 0.368 | 0.287 | 0.372 | met |
+
+Both machines pass every area and every row with room to spare, so no tuning was done. Two rows allocate more than the comparator: the
+smallest MSG (107 KB against 81 KB) and the smallest TNEF stream (110 KB against 62 KB). Both are fixed per-message costs that
+vanish into the time ratio (0.46 and 0.23).
+
+### Memory over the large stores
+
+Peak working set, repeating the walk (KiB, OneMail / XstReader.Api, `ClearContents` off):
+
+| Store | x64 | arm64 |
+|---|---|---|
+| gen-u1k (17 MB) | 102,136 / 116,900 | 66,672 / 90,416 |
+| gen-u10k (165 MB) | 101,304 / 123,296 | 66,240 / 105,632 |
+| gen-u50k (826 MB) | 101,080 / 152,792 | 66,320 / 119,488 |
+
+OneMail's working set does not move between 1,000 and 50,000 messages (a file 50 times larger, 826 MB, in about 100 MB or 66 MB,
+most of it the runtime and its allocation budget). XstReader.Api grows with the store. The `curve` samples agree (working set in
+MiB at 10 %, 25 %, 50 %, 75 % and 95 % of the 50,000-message walk): OneMail x64 88, 95, 98, 98, 99 and arm64 58, 63, 63, 64, 64;
+XstReader.Api x64 102, 118, 129, 142, 146 and arm64 70, 85, 95, 108, 114. With `ClearContents` after every message its working set
+is flat but noisy (x64 75, 86, 135, 129, 119) and the walk takes 139 s on x64 and 144 s on arm64. The generated stores top out at
+826 MB, so the claim is for that size; a 50 GB store needs a streaming test writer.
+
+### Native reference
+
+`pffexport -q -m items -f text` (libpff 20180714, x64, writes every item to disk, so it is not like-for-like), wall seconds, median
+of 3: gen-u1k 0.24 s (OneMail 0.072 s), gen-u10k 2.73 s (0.715 s), gen-u50k 20.09 s (4.12 s), peak RSS 207 MB for 50,000 messages.
+The real files take under 0.03 s. Reported, not gating.
+
+## Machines and runs
+
+| | x64 | arm64 |
+|---|---|---|
+| CPU | AMD Ryzen 9 7950X3D, 32 logical cores, AVX-512 | Apple M2, 8 cores |
+| Runtime, SDK | .NET 10.0.13, SDK 10.0.402 | .NET 10.0.11, SDK 10.0.400 |
+| Job | `wq` bench 000847, 14:32 to 15:01 UTC, 28.5 min of running | `wq` bench on the Mac, 14:01 to 14:26 UTC |
+| Load, 1/5/15 min, before | 6.01 / 8.49 / 10.41 (the previous job's tail) | 2.08 / 3.19 / 3.11 |
+| Load, 1 min, during (every 2 min) | 1.56 to 2.93, almost all of it this job | 2.05 to 2.42 |
+| Load after | 1.65 / 1.89 / 3.45 | 1.77 / 2.00 / 2.26 |
+
+BenchmarkDotNet 0.15.8, MimeKit 4.18.2, MsgReader 6.2.0, XstReader.Api 1.0.6. The raw tables are `report.tsv`, `peak.tsv`,
+`curve.tsv`, `verify.tsv` and `pffexport.tsv` in each run's output directory. Two script faults found after the runs and fixed in
+the script: the TNEF peak row for `tika-testwinmail` was routed to the PST path and has no line (it is the same 66,276 bytes as
+`poi-quick`), and on macOS the `theirs-clear` tag in `curve.tsv` was not applied (the second `theirs` block per store is the
+`ClearContents` run).

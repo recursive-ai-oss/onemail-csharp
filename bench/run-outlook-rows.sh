@@ -45,7 +45,7 @@ if [ "$full" = 1 ]; then
   : > "$out/peak.tsv"; : > "$out/curve.tsv"
   while IFS=$'\t' read -r input _; do
     case "$input" in
-      gen-*|cfreds-ost|tika-*) row=pst ;;
+      gen-*|cfreds-ost|tika-pst|tika-bodytypes) row=pst ;;
       msg-*) row=msg ;;
       *) row=tnef ;;
     esac
@@ -57,7 +57,7 @@ if [ "$full" = 1 ]; then
   for input in gen-u10k gen-u50k; do
     for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" curve pst $side "$input" | grep '^CURVE' >> "$out/curve.tsv" || true; done
     # The comparator's documented cache release, for the memory comparison (it is much slower, so it is not a timed row).
-    DOTNET_GCgen0MaxBudget=2000000 ONEMAIL_XST_CLEAR=1 dotnet "$dll" curve pst theirs "$input" | grep '^CURVE' | sed 's/^CURVE\(-END\)\?\ttheirs/CURVE\1\ttheirs-clear/' >> "$out/curve.tsv" || true
+    DOTNET_GCgen0MaxBudget=2000000 ONEMAIL_XST_CLEAR=1 dotnet "$dll" curve pst theirs "$input" | grep '^CURVE' | awk -F'\t' -v OFS='\t' '$2 == "theirs" { $2 = "theirs-clear" } { print }' >> "$out/curve.tsv" || true
   done
   lp="${ONEMAIL_LIBPFF:-$HOME/onemail/oracles/libpff}"
   if [ -f "$lp"/env.sh ]; then
