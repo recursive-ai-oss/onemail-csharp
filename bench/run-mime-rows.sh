@@ -27,15 +27,20 @@ dll="$ONEMAIL_ARTIFACTS/bin/OneMail.Benchmarks/release/OneMail.Benchmarks.dll"
 mon=$!
 trap 'kill $mon 2>/dev/null || true' EXIT
 
-dotnet "$dll" -f '*' --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
+# Arguments replace the default filter; BenchmarkDotNet rejects a second --filter.
+if [ $# -eq 0 ]; then set -- -f '*'; full=1; else full=0; fi
+dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
+[ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
 
 : > "$out/peak.tsv"
+if [ "$full" = 1 ]; then
 for in in enron-2k enron-20k dovecot-multipart generated-attachment-6m; do
   for row in parse headers bodies write; do
     for side in ours theirs; do dotnet "$dll" peak $row $side $in | grep '^PEAK' >> "$out/peak.tsv"; done
   done
 done
 for side in ours theirs; do dotnet "$dll" peak mbox $side dovecot | grep '^PEAK' >> "$out/peak.tsv"; dotnet "$dll" peak build $side attachment | grep '^PEAK' >> "$out/peak.tsv"; done
+fi
 
 kill $mon 2>/dev/null || true
 { machine after; } | tee -a "$out/machine.txt"
