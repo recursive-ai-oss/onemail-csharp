@@ -36,7 +36,15 @@ public static class Plist
 
         try
         {
-            using MemoryStream ms = new(xml.ToArray(), writable: false);
+            // The text is decoded here, as UTF-8, and read through a TextReader. That way the reader never switches encodings on
+            // the strength of the XML declaration, a path where the framework's reader can throw on hostile bytes.
+            string text = Encoding.UTF8.GetString(xml);
+            if (text.Length > 0 && text[0] == '\uFEFF')
+            {
+                text = text[1..];
+            }
+
+            using StringReader sr = new(text);
             XmlReaderSettings settings = new()
             {
                 DtdProcessing = DtdProcessing.Ignore,
@@ -46,7 +54,7 @@ public static class Plist
                 IgnoreWhitespace = true,
                 MaxCharactersInDocument = MaxBytes,
             };
-            using XmlReader r = XmlReader.Create(ms, settings);
+            using XmlReader r = XmlReader.Create(sr, settings);
             if (!r.ReadToFollowing("plist"))
             {
                 return false;
@@ -69,6 +77,12 @@ public static class Plist
         }
         catch (FormatException)
         {
+            root = null;
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            // Malformed input must give false, never an exception; the framework's reader raises this for some hostile documents.
             root = null;
             return false;
         }

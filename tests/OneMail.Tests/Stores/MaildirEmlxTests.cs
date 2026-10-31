@@ -198,6 +198,8 @@ public class MaildirTests
 
 public class EmlxTests
 {
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     private static byte[] B(string s) => Encoding.Latin1.GetBytes(s);
 
     private static byte[] Emlx(string message, string trailer) => B(message.Length + "\n" + message + trailer);
@@ -278,6 +280,14 @@ public class EmlxTests
         Assert.False(PlistFormat.TryParse(B(xxe), out _));
         Assert.True(PlistFormat.TryParse(B(PlistText), out object? root));
         Assert.IsType<Dictionary<string, object?>>(root);
+    }
+
+    [Fact]
+    public void FuzzReproBadBytesInTheXmlDeclarationGiveFalse()
+    {
+        // Found by the emlx fuzz target: the framework's reader threw ArgumentOutOfRangeException on this input.
+        byte[] repro = File.ReadAllBytes(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", "..", "..", "testdata", "fuzz", "emlx-xml-declaration-bad-bytes.bin")));
+        Assert.False(PlistFormat.TryParse(repro, out _));
     }
 
     [Fact]
