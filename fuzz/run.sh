@@ -4,7 +4,7 @@
 #   fuzz/run.sh <target> <seconds> [corpus dir] [extra libFuzzer flags...]
 #   fuzz/run.sh replay <target> <file>...      # run saved inputs once, without libFuzzer (reproduce a finding)
 #
-# Targets: none yet; each parser adds its own (see fuzz/README.md)
+# Targets: mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
 #
 # Environment (nothing is baked into the script):
 #   ONEMAIL_FUZZ_WORK    required: where builds, corpora and findings go. Keep it outside the checkout.
@@ -37,6 +37,7 @@ shift
 # Maximum input length per target.
 case "$target" in
   # <target>) maxlen=<bytes> ;;   one line per target in the harness
+  mime-reader|mime-tree) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

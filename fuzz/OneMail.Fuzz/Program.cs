@@ -13,7 +13,11 @@ internal static class Program
 {
     private delegate void Target(ReadOnlySpan<byte> data);
 
-    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal)
+    {
+        ["mime-reader"] = MimeTargets.Reader,
+        ["mime-tree"] = MimeTargets.Tree,
+    };
 
     private static int Main(string[] args)
     {
