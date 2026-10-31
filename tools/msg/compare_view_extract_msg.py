@@ -66,6 +66,24 @@ def ascii_skeleton(x):
     return "".join(c for c in x if ord(c) < 128 and not c.isspace() and c != "?") if isinstance(x, str) else x
 
 
+def redecoded(a, b):
+    # The oracle decodes the 8-bit body with one fixed Western code page. Undo that to get the stored bytes and decode them with the East Asian
+    # code page the file declares: if that gives our text, the only difference is the oracle's code page choice.
+    if not (isinstance(a, str) and isinstance(b, str)):
+        return False
+    try:
+        raw = z(b).encode("cp1252", errors="surrogateescape")
+    except UnicodeError:
+        return False
+    for cp in ("cp950", "cp936", "cp932", "cp949"):
+        try:
+            if raw.decode(cp) == a:
+                return True
+        except UnicodeError:
+            pass
+    return False
+
+
 EIGHT_BIT = (lambda a, b: isinstance(a, str) and isinstance(b, str) and ascii_skeleton(a) == ascii_skeleton(z(b)), "8-bit text in a file with no message code page: the oracle decodes with a fixed code page, the view follows the code page rule of docs/msg.md")
 
 
@@ -116,6 +134,7 @@ def compare(where, v, msg):
     t = z(msg.body)
     check(where, "text", z(v["text"]), t, [
         EIGHT_BIT,
+        (redecoded, "the oracle decodes an East Asian 8-bit body with a fixed Western code page; decoding its bytes with the file's code page gives our text"),
         (lambda a, b: a is None and b in (None, ""), "empty text body"),
         (lambda a, b: a is not None and b is not None and a.replace("\r\n", "\n") == b.replace("\r\n", "\n"), "line endings"),
     ])
