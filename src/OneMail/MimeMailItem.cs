@@ -368,8 +368,11 @@ public class MimeMailItem : IMailItem
         }
     }
 
-    private sealed class MimeMailBody(MimePart part) : MailBody
+    internal sealed class MimeMailBody(MimePart part) : MailBody
     {
+        /// <summary>The leaf part the body is read from; composition reads its <c>format</c> parameter.</summary>
+        internal MimePart Part => part;
+
         public override string ContentType => part.MediaType;
 
         public override string? Charset => part.GetContentTypeParameter("charset")?.ToLowerInvariant();

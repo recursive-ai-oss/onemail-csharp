@@ -212,3 +212,76 @@ BenchmarkDotNet 0.15.8, MimeKit 4.18.2, MsgReader 6.2.0, XstReader.Api 1.0.6. Th
 the script: the TNEF peak row for `tika-testwinmail` was routed to the PST path and has no line (it is the same 66,276 bytes as
 `poi-quick`), and on macOS the `theirs-clear` tag in `curve.tsv` was not applied (the second `theirs` block per store is the
 `ClearContents` run).
+
+# Benchmarks: calendar and contact rows
+
+`bench/run-calendar-rows.sh OUTDIR` runs these rows with the same harness, ratio and bar as above (OneMail median / comparator
+median; geometric mean ≤ 1.0 per area, no row above 1.25). The 50k-event rows use 3 launches of 1 warm-up and 3 iterations.
+
+## Comparators and what each side does
+
+Ical.Net 5.2.3 and FolkerKinzel.VCards 8.2.0, released NuGet packages used through their public API, referenced only from `bench/`.
+
+| Area | OneMail.Calendar | comparator |
+|---|---|---|
+| ICS parse | `ContentDocument.Parse` over the bytes, then a typed pass over every event (uid, summary, description, location, start, end, rule count, attendees) | `Calendar.Load` over the text, then the same fields |
+| ICS build-write | create the events from fields (typed setters), `ToArray` | create the events, `CalendarSerializer` |
+| ICS edit-write | parsed calendar, set every SUMMARY, write (unchanged lines go out as read) | parsed calendar, set every Summary, serialise (everything is re-rendered) |
+| vCard parse | `ContentDocument.Parse`, then name, FN, e-mails, phones, addresses | `Vcf.Parse`, then the same |
+| vCard build-write / edit-write | as for ICS | `VCardBuilder` and `Vcf.AsString` (3.0) |
+| Recurrence | `CalendarRecurrence.Expand` over a parsed calendar and a window | `Calendar.GetOccurrences` over a loaded one, stopping at the window end |
+| jCal / jCard | `JsonForms.ToJson` / `FromJson`: OneMail only | none |
+
+`cverify` checks equal work before any timing: the parse and expansion checksums are equal on all 10 rows (events, cards and
+occurrence counts), and the written sizes agree to within 39 bytes (ICS) or 4% (vCard, whose comparator writes extra defaults).
+Inputs: a generated invite (1 event, 833 B), the largest Thunderbird holiday calendar (700 events, 291 KB), a generated 50k-event
+file (32.8 MB), a generated card (430 B) and a 10k-card address book (4.5 MB); recurrence cases daily UTC, weekly floating, monthly
+last-Friday in New York, yearly second Sunday of March in Berlin and daily in New York over 50 years.
+
+## Results, x64 (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, BenchmarkDotNet 0.15.8, load about 2.6 before, during and after)
+
+| Area | Input | OneMail ns | comparator ns | ratio | OneMail B/item | comparator B/item |
+|---|---|---:|---:|---:|---:|---:|
+| ICS parse | invite | 3,917 | 38,967 | 0.101 | 9,328 | 113,264 |
+| ICS parse | holidays | 931,933 | 14,621,595 | 0.064 | 3,177 | 45,284 |
+| ICS parse | 50k events | 420,817,599 | 4,160,494,118 | 0.101 | 6,033 | 66,904 |
+| ICS build-write | 1 / 1k / 50k | 3,044 / 4.39 M / 632.6 M | 23,819 / 49.5 M / 3,876 M | 0.128 / 0.089 / 0.163 | 8,856 (50k) | 65,449 |
+| ICS edit-write | invite (holidays and 50k in the job's report; worst 0.058) | 460 | 18,922 | 0.024 | 3,424 | 53,033 |
+| vCard parse | 1 card | 2,242 | 2,548 | 0.880 | 6,256 | 8,856 |
+| vCard parse | 10k cards | 64,428,106 | 61,611,407 | 1.046 | 5,500 | 7,770 |
+| vCard build-write | 1 / 10k | 2,059 / 79.2 M | 5,296 / 127.8 M | 0.389 / 0.620 | 7,466 | 12,171 |
+| vCard edit-write | 1 / 10k | 248 / 6.79 M | 3,263 / 47.6 M | 0.076 / 0.143 | 2,278 | 6,283 |
+| Recurrence | daily UTC 3,653 / weekly 1,566 / monthly NY 240 / yearly Berlin 50 / daily NY 18,263 occurrences | 515 µs / 230 µs / 168 µs / 41 µs / 9.97 ms | 4.31 ms / 1.67 ms / 371 µs / 88 µs / 22.5 ms | 0.119 / 0.138 / 0.452 / 0.470 / 0.443 | 2–200 B/occurrence | 3.3–4.6 KB |
+
+Geometric mean / worst: ICS parse 0.087 / 0.101, ICS build-write 0.123 / 0.163, ICS edit-write 0.040 / 0.058, vCard parse **0.959 / 1.046**,
+vCard build-write 0.491 / 0.620, vCard edit-write 0.104 / 0.143, recurrence 0.274 / 0.470. Every area is inside the bar.
+jCal/jCard (OneMail only): write 6.8 µs for the invite, 3.8 ms for the holidays, 1.30 s for 50k events; read 10.8 µs, 4.6 ms, 2.77 s.
+Native reference (libical 3.0.17 from the distribution package, parse only): invite 14.1 µs, holidays 3.88 ms, 50k events 526 ms
+(OneMail's parse to the tree and typed pass: 3.9 µs, 0.93 ms, 421 ms).
+
+## Tuning (before / after, same machine)
+
+| Row | before | after | change |
+|---|---:|---:|---|
+| vCard parse 10k | ratio 1.882, 11,484 B/card | 1.046, 5,500 B/card | shared strings for known names, no per-line parameter list or object until asked, parameter values read straight into their array, a card's item list allocated once, typed views without LINQ |
+| vCard parse 1 card | 1.516 | 0.880 | same |
+| Recurrence yearly Berlin | 1.284 | 0.470 | a yearly rule with `BYMONTH` scans the selected months, not 365 days |
+| ICS parse (all) | 0.133 geomean | 0.087 | same parse changes |
+
+## Results, arm64 (Apple M2, 8 cores, .NET 10.0.400, load 1.7-2.1 before, 3.0-4.3 shortly after start, 1.9-2.4 at the end of each group)
+
+Three filtered groups, each its own queued bench job of at most 20 minutes (ICS parse and edit; ICS build and vCard; recurrence and
+jCal), run after the tuning above. The first column is before tuning (one 43-minute matrix), the second after.
+
+| Area | geomean before | geomean after | worst after | status |
+|---|---:|---:|---:|---|
+| ICS parse | 0.132 | 0.104 | 0.151 | pass |
+| ICS build-write | 0.132 | 0.153 | 0.248 | pass |
+| ICS edit-write | 0.059 | 0.040 | 0.074 | pass |
+| vCard parse | 1.530 (worst 1.707) | **1.093** | **1.181** (10k cards; 1 card 1.011) | **misses the bar** |
+| vCard build-write | 0.442 | 0.558 | 0.674 | pass |
+| vCard edit-write | 0.121 | 0.111 | 0.146 | pass |
+| Recurrence | 0.412 (worst 1.527) | 0.334 | 0.589 (daily NY; yearly Berlin 0.551) | pass |
+
+vCard parse, 10k cards: 79.4 ms against 67.2 ms, 5,500 B per card against 7,770. The M2 runs the comparator's parser relatively
+faster than the x64 machine does (x64 ratio 1.046 on the same rows); a further cut needs fewer objects per property in the tree.
