@@ -23,6 +23,7 @@ internal static class Program
             ["mime-reader"] = MimeTargets.Reader,
             ["mime-tree"] = MimeTargets.Tree,
             ["ndb"] = NdbTarget.Run,
+            ["msg"] = MsgTarget.Run,
             ["mail-open"] = MailTarget.Run,
             ["ltp"] = LtpTarget.Run,
         };

@@ -5,6 +5,8 @@
     <AssemblyName>$(PackagePrefix).OneMail.Fuzz</AssemblyName>
     <RootNamespace>$(PackagePrefix).OneMail.Fuzz</RootNamespace>
     <IsPackable>false</IsPackable>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +25,8 @@
     <!-- The test-side file builder makes the valid base files the patch lists are applied to. -->
     <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
     <Compile Include="../../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>

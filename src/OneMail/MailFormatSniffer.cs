@@ -79,7 +79,7 @@ public static class MailFormatSniffer
         // MS-OXMSG 2.1: a message is a compound file; MS-CFB 2.2 gives the signature.
         if (h.StartsWith(CfbMagic))
         {
-            return IsMsg(source) ? MailFormat.Msg : MailFormat.CompoundFile;
+            return RecursiveAI.OneMail.Msg.MsgFile.IsMsg(source) ? MailFormat.Msg : MailFormat.CompoundFile;
         }
 
         // MS-PST 2.2.2.6: dwMagic "!BDN", then dwCRCPartial (4), then wMagicClient.
@@ -187,39 +187,5 @@ public static class MailFormatSniffer
         }
 
         return true;
-    }
-
-    // MS-OXMSG 2.1.2: the property stream "__properties_version1.0" is in the root storage of every message file, and
-    // MS-CFB 2.6.1 stores directory entry names as UTF-16LE. Walking the directory needs the compound file reader, which is
-    // the MSG reader's job; sniffing only looks for the name's bytes in the first 16 MiB. A compound file that merely contains
-    // that name in its data would be called an MSG, and the MSG reader then rejects it with a typed defect.
-    private static readonly byte[] PropertiesStreamName = System.Text.Encoding.Unicode.GetBytes("__properties_version1.0");
-
-    private static bool IsMsg(IRandomAccessSource source)
-    {
-        const int Chunk = 1 << 16;
-        long limit = Math.Min(source.Length, 16L << 20);
-        byte[] buf = new byte[Chunk + PropertiesStreamName.Length];
-        int have = 0;
-        for (long pos = 0; pos < limit;)
-        {
-            int n = source.ReadFully(pos, buf.AsSpan(have, (int)Math.Min(Chunk, limit - pos)));
-            if (n == 0)
-            {
-                break;
-            }
-
-            int total = have + n;
-            if (buf.AsSpan(0, total).IndexOf(PropertiesStreamName) >= 0)
-            {
-                return true;
-            }
-
-            pos += n;
-            have = Math.Min(PropertiesStreamName.Length - 1, total);
-            Buffer.BlockCopy(buf, total - have, buf, 0, have);
-        }
-
-        return false;
     }
 }
