@@ -238,6 +238,30 @@ public class CalendarCardTests
         Assert.Contains("&lt;script&gt;", html, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EveryFixtureCardPassesTheSanitiserUnchanged(bool links)
+    {
+        int n = 0;
+        foreach (string ics in FixtureFiles())
+        {
+            foreach (CalendarCard c in CalendarCard.FromIcs(File.ReadAllBytes(ics), new CalendarCardOptions { NextOccurrences = 10 }).Take(30))
+            {
+                string html = c.ToHtml(links);
+                SanitizedHtml r = HtmlSanitizer.Sanitize(html);
+                Assert.True(r.ChangeCount == 0 && !r.Truncated && r.RemoteReferences.Count == (links ? c.Links.Count : 0), // links are listed as references, nothing else is
+                    Path.GetFileName(ics) + ": " + c.Summary + " -> " + r.ChangeCount + " " + r.Truncated + " " + r.RemoteReferences.Count + " " + string.Join("; ", r.Changes.Take(3).Select(x => x.ToString())));
+                n++;
+            }
+        }
+
+        Assert.True(n > 100, n.ToString());
+    }
+
+    private static IEnumerable<string> FixtureFiles() =>
+        Directory.EnumerateFiles(Path.Combine(Tests.Calendar.RecurrenceTestKit.DataRoot(), "calendar", "card"), "*.ics").Order(StringComparer.Ordinal);
+
     [Fact]
     public void HugeInputsAreBounded()
     {
