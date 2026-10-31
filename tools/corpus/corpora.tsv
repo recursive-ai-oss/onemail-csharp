@@ -1,0 +1,6 @@
+name	file	sha256	url	licence
+enron-cmu	enron_mail_20150507.tar.gz	b3da1b3fe0369ec3140bb4fbce94702c33b7da810ec15d718b3fadf5cd748ca7	https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz	no licence stated; research use, fetch only
+dovecot-crlf	dovecot-crlf	e07fd2fab006d9a96c80300e41cd27ee71f0afbbb4e22c5589cc3e468b2ee18c	https://dovecot.org/tmp/dovecot-crlf	no licence stated; fetch only
+mime4j	james-mime4j-5616ba583c7b4191222e2f16bf2cdc7fa08bd2fa.tar.gz	3477ec64d1db787ce882d9b6f70866e454f7dd18551ebfc84d3c3c7dc23755f4	https://codeload.github.com/apache/james-mime4j/tar.gz/5616ba583c7b4191222e2f16bf2cdc7fa08bd2fa	Apache-2.0; message files only
+edo-enron-pst	EnronDataOrg_AED_Mailbox-PSTs_20090122.7z		-	CC BY 3.0 US, cite "EnronData.org"; fetch only. No live download: the published Dropbox link is disabled and data.enrondata.org no longer resolves
+edo-enron-pst-md5	edo_pst_dataset_md5sum.log	a76d85efe27b13476c89fbb297b75f4421fcfd5cab80440a68772d71afe2c435	https://raw.githubusercontent.com/enrondata/enrondata/master/data/misc/edo_pst_dataset_md5sum.log	checksum list published with the dataset

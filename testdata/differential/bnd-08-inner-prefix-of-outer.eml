@@ -1,0 +1,21 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: probe
+Date: Mon, 14 May 2001 23:39:00 +0000
+Message-ID: <probe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="in-out"
+
+--in-out
+Content-Type: multipart/mixed; boundary="in"
+
+--in
+Content-Type: text/plain
+
+one
+--in--
+--in-out
+Content-Type: text/plain
+
+two
+--in-out--

@@ -1,0 +1,6 @@
+From: Alice <alice@example.com>
+To: j@[192.0.2.1], k@[IPv6:2001:db8::1]
+Subject: s
+Date: Mon, 14 May 2001 23:39:00 +0000
+
+body

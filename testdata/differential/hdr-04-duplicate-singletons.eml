@@ -1,0 +1,10 @@
+From: a@example.com
+From: c@example.com
+To: b@example.com
+To: d@example.com
+Subject: first
+Subject: second
+Date: Mon, 14 May 2001 23:39:00 +0000
+Date: Tue, 15 May 2001 01:00:00 +0000
+
+body

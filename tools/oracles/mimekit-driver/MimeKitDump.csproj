@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Oracle driver: runs the released MimeKit package as a black box and prints the normalised dump
+       (tools/oracles/README.md). It is a tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MimeKitDump</AssemblyName>
+    <RootNamespace>OneMail.Oracles.MimeKitDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+
+</Project>
