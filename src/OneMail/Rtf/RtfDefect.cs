@@ -84,6 +84,33 @@ public enum RtfDefectKind
 
     /// <summary>The number of defects reached the cap; later ones are not recorded.</summary>
     TooManyDefects,
+
+    /// <summary>Picture data is not valid hexadecimal, is cut short, or does not match its declared format; the picture is not shown.</summary>
+    InvalidPictureData,
+
+    /// <summary>A picture is larger than <see cref="RtfHtmlOptions.MaxPictureBytes"/>, or the pictures together exceed <see cref="RtfHtmlOptions.MaxTotalPictureBytes"/>; it is replaced by a placeholder.</summary>
+    PictureLimitExceeded,
+
+    /// <summary>A font, colour or list number is used that the document never defined; the default is used instead.</summary>
+    UndefinedReference,
+
+    /// <summary>The document nests tables (<c>\itap</c> above 1); the inner tables are flattened into the cell that holds them.</summary>
+    NestedTableFlattened,
+
+    /// <summary>A picture's declared format and its bytes disagree; the format the bytes show is used.</summary>
+    AmbiguousPictureFormat,
+
+    /// <summary>A list item sits deeper than the list above it; it is placed one level below the open list.</summary>
+    AmbiguousListLevel,
+
+    /// <summary>Text in a symbol font (<c>\fcharset2</c>) has no Unicode mapping in the document; the private-use code points of the Symbol block are kept, except the bullet.</summary>
+    AmbiguousSymbolFont,
+
+    /// <summary>The document holds more content than <see cref="RtfHtmlOptions.MaxNodes"/> or <see cref="RtfHtmlOptions.MaxOutputChars"/> allow; the rest is dropped.</summary>
+    ContentLimitExceeded,
+
+    /// <summary>A <c>\cell</c> comes where no table row was defined (<c>\trowd</c>); it is treated as a tab between texts.</summary>
+    AmbiguousBareCell,
 }
 
 /// <summary>One repair or limit hit, with where in the input it happened.</summary>

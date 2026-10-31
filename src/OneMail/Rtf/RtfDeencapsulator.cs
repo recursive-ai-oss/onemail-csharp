@@ -593,27 +593,7 @@ public static class RtfDeencapsulator
         }
 
         // RTF 1.9.1 \fcharset values and the Windows code page of each. 1 (default) and unknown values mean "the document's".
-        private static int CharsetToCodePage(int charset) => charset switch
-        {
-            0 => 1252,
-            77 => 10000,
-            128 => 932,
-            129 => 949,
-            130 => 1361,
-            134 => 936,
-            136 => 950,
-            161 => 1253,
-            162 => 1254,
-            163 => 1258,
-            177 => 1255,
-            178 => 1256,
-            186 => 1257,
-            204 => 1251,
-            222 => 874,
-            238 => 1250,
-            254 or 255 => 437,
-            _ => 0,
-        };
+        private static int CharsetToCodePage(int charset) => RtfCodePages.FromCharset(charset);
 
         // The code page for bytes in this state: \htmltag content uses the document default (MS-OXRTFEX 2.2.3.2);
         // other text uses the current font's, or the default font's when no \f was seen.
@@ -677,30 +657,7 @@ public static class RtfDeencapsulator
             return enc;
         }
 
-        private static Encoding? DefaultDecoder(int codePage)
-        {
-            var decoderFallback = new DecoderReplacementFallback("\uFFFD");
-            try
-            {
-                switch (codePage)
-                {
-                    case 65001:
-                    case 1200:
-                    case 1201:
-                    case 12000:
-                    case 12001:
-                    case 20127:
-                    case 28591:
-                        return Encoding.GetEncoding(codePage, EncoderFallback.ReplacementFallback, decoderFallback);
-                    default:
-                        return CodePagesEncodingProvider.Instance.GetEncoding(codePage, EncoderFallback.ReplacementFallback, decoderFallback);
-                }
-            }
-            catch (ArgumentException)
-            {
-                return null; // no such code page on this platform
-            }
-        }
+        private static Encoding? DefaultDecoder(int codePage) => RtfCodePages.Decoder(codePage);
 
         // A \uN escape can leave half a surrogate pair; a .NET string should not carry one.
         private string RepairSurrogates(string s)

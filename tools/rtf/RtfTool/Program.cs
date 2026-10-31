@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using RecursiveAI.OneArchive.Cfb;
+using RecursiveAI.OneMail;
 using RecursiveAI.OneMail.Rtf;
 using RecursiveAI.OneMail.Rtf.Compression;
 
@@ -11,21 +12,26 @@ using RecursiveAI.OneMail.Rtf.Compression;
 // txt.u / txt.a (PidTagBody as UTF-16LE or 8-bit), plus items.tsv (id, source file, storage path, kind, bytes, SHA-256).
 // run writes <id>.ours.rtf (decompressed), <id>.ours.rtfz (our compression), <id>.ours.deencap.<html|txt> (UTF-8) and
 // report.tsv (one row per RTF body with sizes, CRC and defects).
+// native <out-dir> <path>... opens each MSG, TNEF, PST or OST (a file, or a directory searched recursively) and writes the RTF body of every item
+// whose RTF is not an HTML or text encapsulation to <out-dir>/<id>.rtf, with native.tsv (id, source, items, RTF bodies, encapsulated).
+// html <dir> converts every <id>.rtf in <dir> with RtfHtmlConverter and writes <id>.ours.html, <id>.ours.txt and html.tsv.
 // decompress-all decompresses every *.rtfz in <dir> (used for damaged streams) and writes <name>.ours.rtf and ours.tsv.
 // roundtrip encapsulates the de-encapsulated bodies and the messages' own HTML and text bodies and takes them back out.
 // throughput times decompression, compression and de-encapsulation over the extracted bodies (a light check, not a benchmark).
 // verify reads <id>.oracle.rtfz (another program's compression of <id>.ours.rtf) and checks that OneMail decompresses it
 // to the same bytes, cleanly, with the CRC verified.
-return args.Length >= 1 ? args[0] switch
+return args.Length >= 1 ? await (args[0] switch
 {
-    "extract" when args.Length == 3 => Extract(args[1], args[2]),
-    "run" when args.Length == 2 => Run(args[1]),
-    "verify" when args.Length == 2 => Verify(args[1]),
-    "decompress-all" when args.Length == 2 => DecompressAll(args[1]),
-    "roundtrip" when args.Length == 2 => RoundTrip(args[1]),
-    "throughput" when args.Length >= 2 => Throughput(args[1], args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 5),
-    _ => Usage(),
-} : Usage();
+    "extract" when args.Length == 3 => Task.FromResult(Extract(args[1], args[2])),
+    "run" when args.Length == 2 => Task.FromResult(Run(args[1])),
+    "native" when args.Length >= 3 => Native(args[1], args[2..]),
+    "html" when args.Length == 2 => Task.FromResult(Html(args[1])),
+    "verify" when args.Length == 2 => Task.FromResult(Verify(args[1])),
+    "decompress-all" when args.Length == 2 => Task.FromResult(DecompressAll(args[1])),
+    "roundtrip" when args.Length == 2 => Task.FromResult(RoundTrip(args[1])),
+    "throughput" when args.Length >= 2 => Task.FromResult(Throughput(args[1], args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 5)),
+    _ => Task.FromResult(Usage()),
+}) : Usage();
 
 static int Usage()
 {
@@ -255,4 +261,97 @@ static int RoundTrip(string dir)
 
     Console.WriteLine($"roundtrip: {exact} exact, {normalised} equal after line endings became CRLF, {bad} different");
     return bad == 0 ? 0 : 1;
+}
+
+static async Task<int> Native(string outDir, string[] paths)
+{
+    Directory.CreateDirectory(outDir);
+    var tsv = new StringBuilder("id\tsource\titems\trtf\tencapsulated\tnative\n");
+    int totalItems = 0, totalRtf = 0, totalEncap = 0, totalNative = 0;
+    var files = new List<string>();
+    foreach (string path in paths)
+    {
+        if (Directory.Exists(path))
+        {
+            files.AddRange(Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories));
+        }
+        else
+        {
+            files.Add(path);
+        }
+    }
+
+    files.Sort(StringComparer.Ordinal);
+    foreach (string file in files)
+    {
+        string ext = Path.GetExtension(file).ToLowerInvariant();
+        if (ext is not (".msg" or ".pst" or ".ost" or ".dat" or ".tnef" or ".oft"))
+        {
+            continue;
+        }
+
+        int items = 0, rtf = 0, encap = 0, native = 0;
+        string stem = Path.GetFileNameWithoutExtension(file);
+        string parent = Path.GetFileName(Path.GetDirectoryName(file) ?? "");
+        try
+        {
+            await using MailContainer c = Mail.Open(file);
+            await foreach (IMailItem item in c)
+            {
+                items++;
+                MailBody? body = item.RtfBody;
+                if (body is null)
+                {
+                    continue;
+                }
+
+                rtf++;
+                using Stream s = body.Open();
+                using var ms = new MemoryStream();
+                s.CopyTo(ms);
+                byte[] data = ms.ToArray();
+                if (RtfDeencapsulator.Detect(data) != RtfEncapsulation.None)
+                {
+                    encap++;
+                    continue;
+                }
+
+                native++;
+                string id = parent + "__" + stem + "__" + items.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                File.WriteAllBytes(Path.Combine(outDir, id + ".rtf"), data);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(file + ": " + e.GetType().Name + ": " + e.Message);
+        }
+
+        totalItems += items;
+        totalRtf += rtf;
+        totalEncap += encap;
+        totalNative += native;
+        tsv.Append(parent + "__" + stem).Append('\t').Append(Path.GetFileName(file)).Append('\t').Append(items).Append('\t').Append(rtf).Append('\t').Append(encap).Append('\t').Append(native).Append('\n');
+    }
+
+    File.WriteAllText(Path.Combine(outDir, "native.tsv"), tsv.ToString());
+    Console.WriteLine($"files {files.Count} items {totalItems} with RTF {totalRtf} encapsulated {totalEncap} native {totalNative}");
+    return 0;
+}
+
+static int Html(string dir)
+{
+    var tsv = new StringBuilder("id\trtf_bytes\thtml_chars\ttext_chars\timages\tdefects\n");
+    foreach (string file in Directory.EnumerateFiles(dir, "*.rtf").Where(f => !f.EndsWith(".ours.rtf", StringComparison.Ordinal)).OrderBy(f => f, StringComparer.Ordinal))
+    {
+        byte[] data = File.ReadAllBytes(file);
+        RtfHtmlResult r = RtfHtmlConverter.Convert(data);
+        string id = Path.GetFileNameWithoutExtension(file);
+        File.WriteAllText(Path.Combine(dir, id + ".ours.html"), r.Html, new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(dir, id + ".ours.txt"), r.Text, new UTF8Encoding(false));
+        tsv.Append(id).Append('\t').Append(data.Length).Append('\t').Append(r.Html.Length).Append('\t').Append(r.Text.Length).Append('\t').Append(r.Images.Count).Append('\t')
+            .Append(string.Join(',', r.Defects.Select(d => d.Kind.ToString()).Distinct())).Append('\n');
+    }
+
+    File.WriteAllText(Path.Combine(dir, "html.tsv"), tsv.ToString());
+    return 0;
 }
