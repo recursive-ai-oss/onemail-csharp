@@ -84,6 +84,17 @@ internal static class Program
 
         Console.WriteLine("ndb: " + (ndbOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Structured headers: addresses, dates, identifiers and RFC 2231 parameters, and the writer's header encoding.
+        byte[] structured = "From: =?utf-8?q?Caf=C3=A9?= <a@example.com>\r\nTo: Doe, John <j@example.org>, g: x@example.net;\r\nDate: Mon, 14 May 2001 23:39:00 +0200\r\nMessage-ID: <id@example.com>\r\nContent-Disposition: attachment; filename*=utf-8''caf%C3%A9.txt\r\n\r\nx"u8.ToArray();
+        MimeEntity sm = MimeEntity.Parse(structured);
+        var mailboxes = AddressParser.Flatten(sm.GetAddresses("From")).Concat(AddressParser.Flatten(sm.GetAddresses("To"))).ToList();
+        var written = new MimeHeader("Subject", "caf\u00e9 \u65e5");
+        bool structuredOk = mailboxes.Count == 3 && mailboxes[0].Name == "Caf\u00e9" && mailboxes[1].Name == "Doe, John"
+            && sm.GetDate()!.Value.OffsetMinutes == 120 && sm.GetMessageId() == "id@example.com" && sm.FileName == "caf\u00e9.txt"
+            && written.Value == "caf\u00e9 \u65e5" && System.Text.Ascii.IsValid(written.Raw.Span)
+            && MimeHeaderValue.Parameter("filename", "caf\u00e9.txt").Contains("filename*=", StringComparison.Ordinal);
+        Console.WriteLine("structured: " + (structuredOk ? "ok" : "FAILED"));
+
+        return textOk && mimeOk && ndbOk && structuredOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

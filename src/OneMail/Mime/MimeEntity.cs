@@ -3,6 +3,7 @@ using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Mime.Transfer;
 using RecursiveAI.OneMail.Mime.Writing;
 using RecursiveAI.OneMail.Sources;
+using RecursiveAI.OneMail.Text;
 
 namespace RecursiveAI.OneMail.Mime;
 
@@ -64,7 +65,7 @@ internal sealed class RawContent
 /// A tree read from memory, a file or a seekable stream keeps using that source until it is discarded: do not dispose or
 /// change the source meanwhile. Entities are not thread-safe for modification.
 /// </remarks>
-public abstract class MimeEntity
+public abstract partial class MimeEntity
 {
     private static readonly byte[] Crlf = [(byte)'\r', (byte)'\n'];
 
@@ -100,6 +101,9 @@ public abstract class MimeEntity
     internal IRandomAccessSource? Source { get; set; }
 
     internal byte[] Separator { get; set; } = Crlf;
+
+    /// <summary>The mbox <c>From </c> line that began the message, with its line end, or empty. It is not a header field.</summary>
+    public ReadOnlyMemory<byte> EnvelopeLine { get; internal set; }
 
     internal List<MimeDefect> DefectList => _defects;
 
@@ -156,48 +160,6 @@ public abstract class MimeEntity
             MimeHeader? h = Headers.GetFirst("Content-Transfer-Encoding");
             return h is null ? ContentTransferEncoding.SevenBit : StructuredHeader.ParseTransferEncoding(h.RawValue.Span);
         }
-    }
-
-    /// <summary>
-    /// A <c>Content-Type</c> parameter by name (ASCII case-insensitive), unquoted. RFC 2231 continuations and extended values
-    /// are not interpreted at this layer: <c>filename*=</c> is its own name.
-    /// </summary>
-    /// <param name="name">The parameter name.</param>
-    /// <returns>The value, or null if the parameter is absent.</returns>
-    public string? GetContentTypeParameter(string name)
-    {
-        ArgumentNullException.ThrowIfNull(name);
-        MimeHeader? h = Headers.GetFirst("Content-Type");
-        if (h is null)
-        {
-            return null;
-        }
-
-        ReadOnlySpan<byte> v = h.RawValue.Span;
-        if (!StructuredHeader.TryParseMediaType(v, out _, out _, out int next))
-        {
-            return null;
-        }
-
-        var en = new StructuredHeader.ParameterEnumerator(v, next);
-        while (en.MoveNext())
-        {
-            if (!string.Equals(HeaderText.DecodeName(en.Name), name, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!en.Quoted)
-            {
-                return HeaderText.Decode(en.Value);
-            }
-
-            byte[] tmp = new byte[en.Value.Length];
-            int n = StructuredHeader.Unquote(en.Value, tmp);
-            return HeaderText.Decode(tmp.AsSpan(0, n));
-        }
-
-        return null;
     }
 
     private void ParseContentType(out string type, out string sub)
@@ -398,6 +360,11 @@ public abstract class MimeEntity
         {
             yield return new WriteSegment(null, Source, SourceStart, SourceLength);
             yield break;
+        }
+
+        if (!EnvelopeLine.IsEmpty)
+        {
+            yield return new WriteSegment(EnvelopeLine.ToArray(), null, 0, EnvelopeLine.Length);
         }
 
         foreach (MimeHeader h in Headers)
@@ -776,6 +743,17 @@ public sealed class MimeMultipart : MimeEntity
 
     internal void SetParsedClose(byte[] delimiter) => _closeDelimiter = delimiter;
 
+    // Takes the last parsed child out of the list and returns the delimiter that introduced it.
+    internal byte[] RemoveLastParsed()
+    {
+        int last = _children.Count - 1;
+        byte[] delimiter = _delimiters[last]!;
+        _children[last].Parent = null;
+        _children.RemoveAt(last);
+        _delimiters.RemoveAt(last);
+        return delimiter;
+    }
+
     internal override IEnumerable<MimeEntity> ChildEntities() => _children;
 
     internal override IEnumerable<WriteSegment> BodySegments(bool forceAssemble)
@@ -818,11 +796,14 @@ internal sealed class MimeTreeBuilder
     private sealed class Pending
     {
         public long Start;
+        public byte[]? Envelope;
         public readonly List<MimeHeader> Headers = [];
         public List<MimeDefect> Defects = [];
         public MimeEntity? Entity;
         public long BodyStart;
         public byte[]? PendingDelimiter;
+        public MimeEntity? GhostCandidate;
+        public List<MimeDefect>? DefectsOfGhost;
         public long PreambleEnd = -1;
         public long EpilogueStart = -1;
     }
@@ -845,9 +826,13 @@ internal sealed class MimeTreeBuilder
             {
                 ReadOnlySpan<byte> raw = r.Raw;
                 int valueOffset = raw.IndexOf((byte)':') + 1;
-                _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length));
+                _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length) { SourceOffset = r.Offset });
                 break;
             }
+
+            case MimeEventKind.EnvelopeLine:
+                _stack.Peek().Envelope = r.Raw.ToArray();
+                break;
 
             case MimeEventKind.HeadersEnd:
                 StartEntity(r);
@@ -858,6 +843,20 @@ internal sealed class MimeTreeBuilder
                 Pending p = _stack.Peek();
                 var m = (MimeMultipart)p.Entity!;
                 byte[] bytes = r.Raw.ToArray();
+                if (p.GhostCandidate is not null)
+                {
+                    // Two delimiter lines in a row: Python and MimeKit read them as one, so the empty part between them is
+                    // not a child. Its (empty) bytes and delimiter stay in the next delimiter, so writing is unchanged.
+                    byte[] carried = m.RemoveLastParsed();
+                    byte[] merged = new byte[carried.Length + bytes.Length];
+                    carried.CopyTo(merged, 0);
+                    bytes.CopyTo(merged, carried.Length);
+                    bytes = merged;
+                    p.DefectsOfGhost?.ForEach(d => p.Defects.Add(d));
+                    p.GhostCandidate = null;
+                    p.DefectsOfGhost = null;
+                }
+
                 if (p.PreambleEnd < 0)
                 {
                     p.PreambleEnd = r.Offset;
@@ -909,6 +908,7 @@ internal sealed class MimeTreeBuilder
         }
 
         e.Separator = r.Raw.ToArray();
+        e.EnvelopeLine = p.Envelope ?? default;
         e.Source = _source;
         e.SourceStart = p.Start;
         e.DefectList.AddRange(p.Defects);
@@ -940,6 +940,18 @@ internal sealed class MimeTreeBuilder
         MimeEntity e = p.Entity!;
         long end = r.Offset;
         e.SourceLength = end - p.Start;
+        if (e is MimePart && e.Headers.Count == 0 && e.Separator.Length == 0 && end == p.BodyStart && _stack.Count > 0
+            && _stack.Peek().Entity is MimeMultipart)
+        {
+            _stack.Peek().GhostCandidate = e;
+            _stack.Peek().DefectsOfGhost = [.. e.DefectList];
+        }
+        else if (_stack.Count > 0)
+        {
+            _stack.Peek().GhostCandidate = null;
+            _stack.Peek().DefectsOfGhost = null;
+        }
+
         switch (e)
         {
             case MimePart leaf:

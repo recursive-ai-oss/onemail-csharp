@@ -28,36 +28,36 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 |---|---|---|---|---|---|---|---|
 | B1 | `bnd-02` a content line `--abcdef` when the boundary is `abc` | content | content | content | A delimiter line is `--` + boundary + optional trailing whitespace; a longer line is content. | none | all agree |
 | B2 | `bnd-03` trailing spaces and tabs after a delimiter | delimiter | delimiter | delimiter | Trailing space and tab are padding (RFC 2046 5.1.1). | none | all agree |
-| B3 | `bnd-04` `--abc xyz`: text after the boundary | content | content | content | Not a delimiter; the line stays in the current part. | `AmbiguousBoundaryLine` | all agree |
+| B3 | `bnd-04` `--abc xyz`: text after the boundary | content | content | content | Not a delimiter; the line stays in the current part. | `AmbiguousBoundaryLikeLine` | all agree |
 | B4 | `bnd-14` delimiter in another case (`--ABC`) | content | content | content | Boundaries are case-sensitive. | none | all agree |
 | B5 | `bnd-07`, `bnd-08` one boundary is a prefix of the other | nested correctly | same | same | Longest-exact-match wins: a line closes or starts a part only if it equals a boundary in scope. | none | all agree |
 | B6 | `bnd-06` text after the closing delimiter, then another `--abc` | epilogue | epilogue | epilogue | Everything after the closing delimiter is epilogue, including later delimiter-looking lines. | `EpilogueHasDelimiter` | all agree |
-| B7 | `bnd-05` closing delimiter missing | last part keeps its final line break (5 bytes) | strips it (3) | strips it (3) | The last part runs to end of input and keeps every byte; no line break is assumed to belong to a delimiter that is not there. | `MissingClosingBoundary` | prov. (MK; keeps all bytes) |
+| B7 | `bnd-05` closing delimiter missing | last part keeps its final line break (5 bytes) | strips it (3) | strips it (3) | The last part runs to end of input and keeps every byte; no line break is assumed to belong to a delimiter that is not there. | `MissingFinalBoundary` | prov. (MK; keeps all bytes) |
 | B8 | `bnd-09` multipart with no `boundary` | multipart, no parts, body not exposed | leaf, body kept | leaf, body kept | Treated as a leaf of the declared type with the body kept; no parts. | `MultipartWithoutBoundary` | 2 of 3 |
 | B9 | `bnd-10` `boundary=""` | no parts | leaf | leaf | Same as B8. | `MultipartWithoutBoundary` | 2 of 3 |
 | B10 | `bnd-25` multipart whose body has no delimiter at all | no parts | leaf, body kept | no parts | No parts; the whole body is the preamble, bytes preserved. | `MissingStartBoundary` | 2 of 3 |
 | B11 | `bnd-11` boundary parameter that ends in a space | none found | finds a part | 2 parts | The boundary is matched literally and also with trailing space trimmed. | `BoundaryHasTrailingSpace` | prov. |
-| B12 | `bnd-12` unquoted `boundary=a/b=c` | accepted whole | cut at `=` | media type rejected | The unquoted value runs to `;` or end of value. | `UnquotedParameterSpecials` | prov. (MK) |
+| B12 | `bnd-12` unquoted `boundary=a/b=c` | accepted whole | cut at `=` | media type rejected | The unquoted value runs to `;` or end of value. | none (not raised) | prov. (MK) |
 | B13 | `bnd-13` two `boundary` parameters | first | first | media type rejected (leaf) | First occurrence wins. | `DuplicateParameter` | 2 of 3 |
 | B14 | `bnd-15` multipart with only `--abc--` | 0 parts | leaf, empty | 0 parts | 0 parts. | none | 2 of 3 |
 | B15 | `bnd-16` first delimiter directly after the headers, no blank line | header block never ends, 0 parts | 1 part | header error | The first line that is not a header field or continuation ends the header block and starts the body (see H5). | `MissingHeaderBodySeparator` | prov. (Py) |
 | B16 | `bnd-17` LF-only delimiters inside a CRLF message | 2 parts | 2 parts | 1 part | Each line may end in LF or CRLF independently. | `MixedLineEndings` | 2 of 3 |
 | B17 | `bnd-18` part with headers and no blank line before the next delimiter | 2 parts | 2 parts | 0 parts | Part with headers and an empty body. | `MissingHeaderBodySeparator` | 2 of 3 |
-| B18 | `bnd-23` delimiters separated by bare CR | no parts | 1 part | no parts | A bare CR is not a line break (see L1). | `BareCr` | 2 of 3 |
-| B19 | `bnd-26` inner multipart reuses the outer boundary | nested | outer swallows inner | nested | The innermost open multipart is tried first, so the shared line closes the inner part. | `AmbiguousBoundaryReuse` | prov. (MK, Go) |
+| B18 | `bnd-23` delimiters separated by bare CR | no parts | 1 part | no parts | A bare CR is not a line break (see L1). | `BareCarriageReturnInHeader` | 2 of 3 |
+| B19 | `bnd-26` inner multipart reuses the outer boundary | nested | outer swallows inner | nested | The innermost open multipart is tried first, so the shared line closes the inner part. | `AmbiguousDuplicateBoundary` | prov. (MK, Go) |
 | B20 | `bnd-19`, `bnd-20`, `bnd-21`, `bnd-22`, `bnd-24` empty part headers; blank line before delimiter; delimiter at end of file without line break; whitespace-only preamble and epilogue; 80-character boundary | same | same | same | The line break before a delimiter belongs to the delimiter; a part can have no headers (defaults apply); the boundary length limit is not enforced; whitespace-only preamble/epilogue counts as present but empty. | `BoundaryTooLong` for over 70 | all agree |
 
 ## Line endings and raw octets
 
 | ID | Probe | MK | Py | Go | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|---|
-| L1 | `eol-02` whole message with CR-only line ends; `eol-05` CR inside a header value; `eol-09` CR CR LF | CR-only: one long header; CR in value dropped from the decoded value | CR is a line break | CR kept in the value | A line ends at LF or CRLF only. A lone CR is data: it stays in the raw value and is dropped from the decoded value. | `BareCr` | prov. (MK, Go) |
+| L1 | `eol-02` whole message with CR-only line ends; `eol-05` CR inside a header value; `eol-09` CR CR LF | CR-only: one long header; CR in value dropped from the decoded value | CR is a line break | CR kept in the value | A line ends at LF or CRLF only. A lone CR is data: it stays in the raw value and is dropped from the decoded value. | `BareCarriageReturnInHeader` | prov. (MK, Go) |
 | L2 | `eol-01`, `eol-03`, `eol-04`, `eol-06`, `eol-07`, `eol-08` LF-only; mixed CRLF/LF; no final newline; headers end at EOF | same | same | same | Accept any mix of LF and CRLF; a body's bytes are never changed. | `MixedLineEndings` when mixed | all agree |
 | L3 | `raw-01`, `raw-09` NUL, form feed and vertical tab in a header value | kept | kept | kept | Kept in raw and decoded values. | `ControlCharacterInHeader` | all agree |
 | L4 | `raw-02` NUL in a header name | header | body starts here | header | Accepted as a header name; the raw bytes are kept. | `InvalidHeaderName` | 2 of 3 |
 | L5 | `raw-03`, `raw-07`, `raw-08` NUL in a body; 3000-character header; 20000-character body line | kept | kept | kept | No length limits below the configured resource limits; the defect `LineTooLong` marks lines over 998. | `LineTooLong` | all agree |
-| L6 | `raw-04`, `raw-05`, `raw-11`, `adr-24` raw 8-bit octets in headers | UTF-8, else Latin-1 | `U+FFFD` for non-ASCII | invalid bytes become `U+FFFD`; one address list fails | A raw 8-bit header value is decoded as UTF-8 if valid, otherwise as Windows-1252 (RFC 6532 for the UTF-8 case). | `EightBitHeader` | prov. (MK) |
-| L7 | `raw-10` UTF-8 byte-order mark before the first header | header found | body starts here | the BOM stays in the first name, which then goes unrecognised | The BOM is skipped for name matching and kept in the raw bytes. | `LeadingBom` | prov. |
+| L6 | `raw-04`, `raw-05`, `raw-11`, `adr-24` raw 8-bit octets in headers | UTF-8, else Latin-1 | `U+FFFD` for non-ASCII | invalid bytes become `U+FFFD`; one address list fails | A raw 8-bit header value is decoded as UTF-8 if valid, otherwise as Windows-1252 (RFC 6532 for the UTF-8 case). | `AmbiguousEightBitHeader` | prov. (MK) |
+| L7 | `raw-10` UTF-8 byte-order mark before the first header | header found | body starts here | the BOM stays in the first name, which then goes unrecognised | The BOM is ignored when the name is read (the raw bytes keep it), so the first field is found. | `InvalidHeaderName` | prov. (MK) |
 | L8 | `raw-06`, `cte-14`, `ct-14` 8-bit body declared 7bit or without charset | bytes kept | bytes kept | bytes kept | Body bytes are never altered; charset choice is the encodings layer's. | `EightBitIn7BitBody` | all agree |
 
 ## Header block
@@ -66,12 +66,12 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 |---|---|---|---|---|---|---|---|
 | H1 | `hdr-01`, `hdr-02`, `hdr-03` duplicate `Content-Type`, `MIME-Version`, `Content-Transfer-Encoding` | first | first | first | The first occurrence is the one in force; all stay in the tree. | `DuplicateHeader` | all agree |
 | H2 | `hdr-04`, `adr-25` duplicate `From`, `To`, `Subject`, `Date` | `From`/`To` lists merge; all `Subject`s kept | first | first | The typed accessors use the first occurrence; every header stays in the tree. | `DuplicateHeader` | 2 of 3 |
-| H3 | `hdr-07` whitespace before the colon (`Subject : x`) | header | body starts here | header | Accepted; the name is trimmed (RFC 5322 4.2 obsolete syntax). | `ObsoleteHeaderSyntax` | 2 of 3 |
-| H4 | `hdr-14` space inside a header name | header | body starts here | header | Accepted as written. | `InvalidHeaderName` | 2 of 3 |
+| H3 | `hdr-07` whitespace before the colon (`Subject : x`) | header | body starts here | header | Accepted; the name is trimmed (RFC 5322 4.2 obsolete syntax). | `WhitespaceBeforeHeaderColon` | 2 of 3 |
+| H4 | `hdr-14` space inside a header name | header | body starts here | header | Accepted as written; the name is kept (Latin-1) and `InvalidHeaderName` is reported. | `InvalidHeaderName` | 2 of 3 |
 | H5 | `hdr-05`, `hdr-06`, `hdr-09` a line without a colon in or after the headers | line skipped (or parse error on the first line) | body starts at the line | error | The first non-header line ends the header block and starts the body, so no byte is dropped. | `MissingHeaderBodySeparator` | prov. (Py) |
 | H6 | `hdr-10` body line that looks like a header (`Note: x`) with no blank line | header | header | error | It is a header. | `MissingHeaderBodySeparator` | all agree where parsed |
-| H7 | `hdr-08` continuation line before the first header | parse error | ignored | error | Kept as an unnamed orphan line in the raw header block; no header is created. | `OrphanContinuation` | prov. |
-| H8 | `hdr-11` `From ` envelope line first | skipped | skipped | skipped | Recognised and kept as an envelope line, not a header. | `EnvelopeLine` | all agree |
+| H7 | `hdr-08` continuation line before the first header | parse error | ignored | error | A line that starts with white space where a field should begin ends the header block and starts the body. | `HeaderContinuationWithoutHeader` | prov. |
+| H8 | `hdr-11` `From ` envelope line first | skipped | skipped | skipped | Kept as the entity's envelope line (its own reader event), not a header; the header block starts after it. | none | all agree |
 | H9 | `hdr-12` blank lines before the first header | empty header block | empty header block | empty header block | An empty header block; everything after is the body. | `NoHeaders` | all agree |
 | H10 | `hdr-16`, `hdr-15`, `hdr-21` folding with tabs, runs of spaces and blank continuation lines | keeps white space | keeps white space | collapses to one space | Unfolding removes the line break only; interior white space stays. | none | 2 of 3 |
 | H11 | `hdr-25` trailing white space on a value | trimmed | kept in the decoded value | trimmed | Trimmed in the decoded value, kept in raw. | none | 2 of 3 |
@@ -94,13 +94,13 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | ID | Probe | MK | Py | Go | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|---|
 | E1 | `cte-01`, `cte-04`, `cte-19`, `cte-17`, `cte-12`, `cte-10`, `cte-11` unknown, odd-case, empty, `binary`; QP lower-case hex, soft breaks, invalid escapes | same | same | same | Unknown, empty, 7bit, 8bit, binary: identity. Names are case-insensitive and trimmed. QP: invalid escapes pass through as written. | `UnknownTransferEncoding`, `InvalidQuotedPrintable` | all agree |
-| E2 | `cte-02`, `cte-03` composite type declared `base64` or `8bit` | parts parsed | parts parsed | decodes first, no parts | Ignored for `multipart/*` and `message/*` that is 7bit/8bit/binary; parts are parsed from the raw body. | `InvalidCompositeEncoding` | 2 of 3 |
+| E2 | `cte-02`, `cte-03` composite type declared `base64` or `8bit` | parts parsed | parts parsed | decodes first, no parts | The declared encoding is ignored for `multipart/*`: parts are parsed from the raw body. | `AmbiguousEncodedComposite` | 2 of 3 |
 | E3 | `cte-05` base64 with characters outside the alphabet | 9 bytes | 10 bytes | 3 bytes | Characters outside the alphabet are skipped, the rest is decoded as one stream. | `InvalidBase64` | prov. (Py) |
 | E4 | `cte-06` base64 without padding | drops the last partial group (9) | decodes it (11) | drops it (9) | The final partial group is decoded. | `MissingBase64Padding` | prov. (Py; keeps data) |
 | E5 | `cte-07`, `cte-20` white space and line breaks inside base64 | skipped | skipped | stops at white space | White space is skipped anywhere. | none | 2 of 3 |
 | E6 | `cte-08` data after `=` padding | continues | continues | stops | Decoding continues after padding; each padded run is decoded on its own. | `DataAfterBase64Padding` | 2 of 3 |
 | E7 | `cte-13` trailing spaces before a QP line end | kept | kept | stripped | Kept (they are data in transit; RFC 2045 6.7 rule 3 only forbids producing them). | none | 2 of 3 |
-| E8 | `cte-15` `message/rfc822` declared base64 | not decoded | decoded, parsed | decoded, parsed | Decoded, then parsed as a message. | `EncodedMessagePart` | 2 of 3 |
+| E8 | `cte-15` `message/rfc822` declared base64 | not decoded | decoded, parsed | decoded, parsed | Stays a leaf whose body is the encoded bytes (decoding it first would break the byte-for-byte tree). | `AmbiguousEncodedComposite` | prov. (MK) |
 | E9 | `cte-16` uuencode | decoded | decoded | not decoded | Decoded (`x-uuencode`, `uuencode`, `x-uue`, `uue`). | none | 2 of 3 |
 | E10 | `cte-18` comment after the name (`base64 (note)`) | decoded | decoded | not decoded | Comments are removed first. | none | 2 of 3 |
 
@@ -108,19 +108,19 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 
 | ID | Probe | MK | Py | Go | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|---|
-| N1 | `enc-01`, `enc-30` RFC 2047 encoded word inside a quoted or token parameter value | decoded | decoded (quoted only) | literal | Decoded, although RFC 2047 5 forbids it in parameters; every mail client does. | `EncodedWordInParameter` | 2 of 3 |
-| N2 | `enc-04` `filename=` and `filename*=` together | extended | plain | extended | The extended (RFC 2231) value wins. | `AmbiguousFilename` | 2 of 3 |
+| N1 | `enc-01`, `enc-30` RFC 2047 encoded word inside a quoted or token parameter value | decoded | decoded (quoted only) | literal | Decoded, although RFC 2047 5 forbids it in parameters; every mail client does. | `AmbiguousEncodedWordInQuotedString` | 2 of 3 |
+| N2 | `enc-04` `filename=` and `filename*=` together | extended | plain | extended | The extended (RFC 2231) value wins. | `AmbiguousParameterForms` | 2 of 3 |
 | N3 | `enc-02`, `enc-03`, `enc-09`, `enc-05` RFC 2231 charset, continuations, out-of-order continuations | same | same | same | Continuations are joined by index before charset decoding (RFC 2231 3). | none | all agree |
-| N4 | `enc-06` unknown charset in RFC 2231 | decoded as Latin-1 | `U+FFFD` | parameter dropped | Fall back to Windows-1252. | `UnknownCharset` | prov. |
-| N5 | `enc-07` `filename*=` without the charset quote marks | Latin-1 mojibake | UTF-8 | parameter dropped | Percent-decode, then UTF-8 if valid, else Windows-1252. | `InvalidExtendedParameter` | prov. (Py) |
-| N6 | `enc-08` continuations starting at `*1` | joined | dropped | dropped | Joined in index order. | `MissingContinuation` | prov. (MK) |
+| N4 | `enc-06` unknown charset in RFC 2231 | decoded as Latin-1 | `U+FFFD` | parameter dropped | Fall back to Windows-1252. | `AmbiguousUnknownCharset` | prov. |
+| N5 | `enc-07` `filename*=` without the charset quote marks | Latin-1 mojibake | UTF-8 | parameter dropped | Percent-decode, then UTF-8 if valid, else Windows-1252. | `MalformedExtendedParameter` | prov. (Py) |
+| N6 | `enc-08` continuations starting at `*1` | joined | dropped | dropped | Joined in index order. | `AmbiguousParameterSegments` | prov. (MK) |
 | N7 | `enc-14` two `filename` parameters | first | first | parameter dropped | First wins. | `DuplicateParameter` | 2 of 3 |
-| N8 | `enc-15` unquoted file name with a space | whole value | cut at the space | rejected | The value runs to `;` or end of value. | `UnquotedParameterSpecials` | prov. (MK) |
+| N8 | `enc-15` unquoted file name with a space | whole value | cut at the space | rejected | The value runs to `;` or end of value. | none (not raised) | prov. (MK) |
 | N9 | `enc-10`, `enc-11` `name` versus `filename` | disposition filename, else type name | same | same | Disposition `filename` first, then Content-Type `name`. | none | all agree |
 | N10 | `enc-12`, `enc-13` path separators, `..`, backslash escapes | as written | as written | as written | The name is kept as written; making it safe to write to disk is the caller's or the export layer's job. | `UnsafeFilename` | all agree |
-| N11 | `enc-16`–`enc-20`, `enc-22`–`enc-24`, `enc-28`, `enc-29` encoded words: Q and B, adjacent, mixed with text, unknown charset, over-long, split by a fold, empty, in `Comments`/`Keywords` | same | same | same | RFC 2047 decoding; white space between adjacent encoded words is dropped. | `OverlongEncodedWord`, `SplitEncodedWord` | all agree |
-| N12 | `enc-21` encoded word with invalid base64 | word removed | word replaced by a space | kept literally | Left in the text as written (RFC 2047 6.3 allows displaying it as ordinary text). | `InvalidEncodedWord` | prov. (Go) |
-| N13 | `enc-25` encoded word in a quoted display name | decoded | decoded | literal | Decoded. | `EncodedWordInQuotedString` | 2 of 3 |
+| N11 | `enc-16`–`enc-20`, `enc-22`–`enc-24`, `enc-28`, `enc-29` encoded words: Q and B, adjacent, mixed with text, unknown charset, over-long, split by a fold, empty, in `Comments`/`Keywords` | same | same | same | RFC 2047 decoding; white space between adjacent encoded words is dropped. | `EncodedWordTooLong`, `AmbiguousSplitMultibyte` | all agree |
+| N12 | `enc-21` encoded word with invalid base64 | word removed | word replaced by a space | kept literally | Left in the text as written (RFC 2047 6.3 allows displaying it as ordinary text). | `InvalidEncodedWordBase64`, `InvalidEncodedWordQuotedPrintable` | prov. (Go) |
+| N13 | `enc-25` encoded word in a quoted display name | decoded | decoded | literal | Decoded. | `AmbiguousEncodedWordInQuotedString` | 2 of 3 |
 | N14 | `enc-27` ISO-2022-JP encoded word | escape sequences left | decoded | not decoded | Decoded. | none | prov. (Py) |
 
 ## Addresses
@@ -128,20 +128,21 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | ID | Probe | MK | Py | Go | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|---|
 | A1 | `adr-01`, `adr-02`, `adr-27` group syntax, empty group | flattened | flattened | flattened | Groups are kept as groups in the model; the shared view flattens members. | none | all agree |
-| A2 | `adr-03` unquoted comma in a display name | one mailbox, name `Doe, John` | two: `Doe` (no domain) and `John` | list rejected | One mailbox named `Doe, John`: a comma before `<` stays in the phrase. | `UnquotedCommaInPhrase` | prov. (MK) |
+| A2 | `adr-03` unquoted comma in a display name | one mailbox, name `Doe, John` | two: `Doe` (no domain) and `John` | list rejected | One mailbox named `Doe, John`: a comma before `<` stays in the phrase. | `AmbiguousUnquotedCommaInPhrase` | prov. (MK) |
 | A3 | `adr-04` bare address after plain words | second mailbox dropped | second mailbox with a wrong local part | list rejected | The words become the display name and the address is kept. | `MissingAngleBrackets` | prov. |
 | A4 | `adr-05` name given as a trailing comment | name from the comment | no name | name from the comment | The comment becomes the display name when there is none. | none | 2 of 3 |
 | A5 | `adr-06`, `adr-07`, `adr-20` nested comments, obsolete source route, spaces around `@` and `.` | same | same | list rejected | Comments are stripped, the route is dropped, CFWS inside the address is removed. | `ObsoleteRoute` | 2 of 2 that parse |
 | A6 | `adr-08` quoted local part | quotes kept | quotes kept | unquoted | The address keeps its quoting as written; an unquoted form is available alongside. | none | 2 of 3 |
 | A7 | `adr-09` empty address `<>` | mailbox dropped | kept, address `<>` | list rejected | A mailbox with an empty address and its name is kept. | `EmptyAddress` | prov. |
-| A8 | `adr-10` local part without a domain | kept | kept | rejected | Kept as a local part only; a trailing `mary@` is dropped. | `MissingDomain` | 2 of 3 |
+| A8 | `adr-10` local part without a domain | kept | kept | rejected | Kept as written: `john` and `mary@` are two mailboxes, each with `MissingDomain` (dropping a recipient loses data). | `MissingDomain` | prov. |
 | A9 | `adr-11`, `adr-13`, `adr-14`, `adr-16`, `adr-21`, `adr-22`, `adr-26`, `adr-28` IP literals; empty list elements; unclosed `<`; dotted names; 50 entries; escaped quoted names; several `From`; empty `Cc`/`Bcc` | same | same | mostly same | Accepted as written; empty elements are skipped; an unclosed `<` is closed at the end of the value. | `UnclosedAngle` | all agree where parsed |
-| A10 | `adr-12`, `adr-24` raw UTF-8 or Latin-1 in an address | name decoded; local part with UTF-8 dropped | `U+FFFD` | rejected | RFC 6532: UTF-8 in local part and domain is accepted; names follow L6. | `EightBitHeader` | prov. |
+| A10 | `adr-12`, `adr-24` raw UTF-8 or Latin-1 in an address | name decoded; local part with UTF-8 dropped | `U+FFFD` | rejected | RFC 6532: UTF-8 in local part and domain is accepted; names follow L6. | `AmbiguousEightBitHeader` | prov. |
 | A11 | `adr-15` unclosed quoted name | name `John`, address kept | whole value as address | rejected | Recover as MimeKit does: the open quote ends at the `<`. | `UnterminatedQuote` | prov. (MK) |
 | A12 | `adr-17` `@` inside an unquoted display name | name kept | wrong address | rejected | The address is the one in angle brackets. | none | prov. (MK) |
-| A13 | `adr-18` two address-specs in one mailbox (`<a@x><b@y>`) | both | first only | rejected | Both are kept as two mailboxes. | `AdjacentAngleAddrs` | prov. (MK) |
+| A13 | `adr-18` two address-specs in one mailbox (`<a@x><b@y>`) | both | first only | rejected | Both are kept as two mailboxes. | `AmbiguousAdjacentAngleAddrs` | prov. (MK) |
 | A14 | `adr-19` semicolon as a separator | first only | first only | rejected | Only the first address is parsed; the remainder is kept as unparsed text in the defect. | `UnparsedAddressText` | 2 of 2 that parse |
 | A15 | `adr-23` leading, trailing and doubled dots in a local part (`.a@x`, `b.@x`, `c..d@x`) | address dropped | kept | rejected | Kept as written. These are common in old corporate mail, and dropping them loses recipients. | `ObsoleteLocalPart` | prov. (Py; in about 9% of messages in a 517,000-message public corpus, MimeKit drops such recipients) |
+| A16 | gateway-rewritten addresses seen in the Enron corpus: `<"a"@b.com@gw>`, `munn"."mary@gw`, `"d@x".@gw@gw` | MimeKit keeps the part up to the second `@`, or drops the address; Go rejects the list | Python gives `<>` or a mangled address | Kept as written, with `InvalidAddressSyntax`. | `InvalidAddressSyntax` | prov. (no common reading) |
 
 ## Dates
 
@@ -150,7 +151,7 @@ All forms are read into an instant plus the written zone; the source text is kep
 | ID | Probe | MK | Py | Go | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|---|
 | D1 | `date-01`–`date-13`, `date-18`, `date-24`, `date-26`, `date-28`, `date-33` standard, no seconds, no weekday, wrong weekday, `EST`/`GMT`/`UT`, comment zone, lower-case month, extra white space, ±14:00 | same | same | same | Accept; the weekday is ignored; named zones follow RFC 5322 4.3 (`EST` −5, `PDT` −7 …); with two `Date` headers the first is used. | `WeekdayMismatch` | all agree |
-| D2 | `date-34`–`date-37`, `date-03`–`date-05` two-digit years | 00–68 → 20xx; 69 → 2069; 70+ → 19xx | 00–68 → 20xx; 69–99 → 19xx | same as Py | 00–68 → 2000–2068, 69–99 → 1969–1999. All three libraries read `50` as 2050, which differs from RFC 5322 4.3 (50–99 → 19xx); OneMail follows the libraries. | `TwoDigitYear` | 2 of 3 (69) |
+| D2 | `date-34`–`date-37`, `date-03`–`date-05` two-digit years | 00–68 → 20xx; 69 → 2069; 70+ → 19xx | 00–68 → 20xx; 69–99 → 19xx | same as Py | 00–68 → 2000–2068, 69–99 → 1969–1999. All three libraries read `50` as 2050, which differs from RFC 5322 4.3 (50–99 → 19xx); OneMail follows the libraries. | `AmbiguousTwoDigitYear` | 2 of 3 (69) |
 | D3 | `date-14` three-digit year | rejected | year 101 | rejected | Add 1900, as RFC 5322 4.3 says (101 → 2001). | `ThreeDigitYear` | prov. (RFC only) |
 | D4 | `date-10`, `date-12`, `date-21`, `date-25` `-0000`, military letters, `GMT+2`, missing zone | UTC | UTC, zone unknown for `-0000` and none | `Z` and none rejected; `GMT+2` read as +2 | UTC with the zone marked unknown (RFC 5322 4.3: military zones are unreliable and read as `-0000`). | `UnknownTimeZone` | 2 of 3 |
 | D5 | `date-16` seconds = 60 | 59 | rejected | rejected | Accept as a leap second, instant clamped to :59. | `LeapSecond` | prov. (MK) |
@@ -161,7 +162,7 @@ All forms are read into an instant plus the written zone; the source text is kep
 | D10 | `date-29` `PDT` | −7 | −7 | rejected | Accepted (obsolete zone, RFC 5322 4.3). | none | 2 of 3 |
 | D11 | `date-30` fractional seconds | wrong time (00:00) | rejected | accepted | Fraction dropped. | `FractionalSeconds` | prov. (Go) |
 | D12 | `date-15`, `date-20`, `date-23`, `date-31`, `date-32` garbage, ISO with `T…Z`, 31 April, empty, day 0 | rejected | rejected | rejected | Rejected; the value reads as absent and the header stays as text. | `InvalidDate` | all agree |
-| D13 | `date-38` four-digit year with leading zeros (`0002`), which a client that once wrote a two-digit year can produce | 2002 | 2002 | year 2 | Read as a two-digit year (rule D2). | `TwoDigitYear` | 2 of 3 |
+| D13 | `date-38` four-digit year with leading zeros (`0002`), which a client that once wrote a two-digit year can produce | 2002 | 2002 | year 2 | Read as a two-digit year (rule D2). | `AmbiguousTwoDigitYear` | 2 of 3 |
 
 ## Nested messages and structure
 
@@ -172,8 +173,29 @@ All forms are read into an instant plus the written zone; the source text is kep
 | M3 | `nest-06`, `nest-07` `multipart/digest` children without a type | `message/rfc822` | `message/rfc822` | `text/plain` | `message/rfc822` (RFC 2046 5.1.5). | none | 2 of 3 |
 | M4 | `nest-08`, `nest-09` `message/delivery-status`, `message/partial` | bytes | groups parsed as headers | bytes | Bytes are kept; the status groups are parsed on demand. | none | 2 of 3 |
 | M5 | `nest-12` cut inside a part's header | partial part | partial part | no part | The part exists with its partial header. | `TruncatedHeader` | 2 of 3 |
-| M6 | `nest-14`, `nest-15`, `nest-16` 10 and 200 nested multiparts, 3000 parts | all parsed | all parsed | all parsed | None of the three limits depth (200) or part count (3000). OneMail's limits are on by default and are listed in the resource-limit notes. | `NestingTooDeep`, `TooManyParts` | no oracle limit |
+| M6 | `nest-14`, `nest-15`, `nest-16` 10 and 200 nested multiparts, 3000 parts | all parsed | all parsed | all parsed | None of the three limits depth (200) or part count (3000). OneMail's limits are on by default and are listed in the resource-limit notes. | `DepthLimitExceeded`, `EntityLimitExceeded` | no oracle limit |
 | M7 | `nest-10`, `nest-11`, `nest-18`, `nest-19`, `nest-20`, `nest-21` alternative/related, signed, QP HTML, inline and unknown dispositions, a lying `Content-Length`, mbox-like trailer lines | same | same | same | Structure as written; `Content-Length` is advisory and ignored; an unknown disposition is kept as written. | none | all agree |
+
+## Defect names in this table that are not raised, and why
+
+The decoders and the tree keep what they repair without a defect where the repair is the specified reading, or report it by another route.
+
+| Name in the table | Where it is reported instead |
+|---|---|
+| `InvalidBase64`, `MissingBase64Padding`, `DataAfterBase64Padding`, `InvalidQuotedPrintable` (E1, E3, E4, E6) | Body decoding is lazy, so the decoders report `TransferIssues` flags on the decoding stream, not tree defects. |
+| `DuplicateHeader` (H1, H2) | Not raised: all copies stay in the tree; only a repeated `Content-Type` or `Content-Transfer-Encoding` is a defect (`AmbiguousDuplicateContentType`, `AmbiguousDuplicateTransferEncoding`). |
+| `NoHeaders`, `EmptyMessage`, `TruncatedHeader` (H9, H12, H14, M2) | Not raised: an empty or cut-off message is a valid empty tree; `MissingHeaderBodySeparator` marks a header block that ran into the end of input. |
+| `MissingMimeVersion` (H13) | Not raised: a missing `MIME-Version` does not change parsing. |
+| `LineTooLong`, `EightBitIn7BitBody` (L5, L8) | Not raised: body bytes are never judged. |
+| `EnvelopeLine` (H8) | Not a defect: the reader emits an `EnvelopeLine` event. |
+| `UnsafeFilename` (N10) | Not raised: a file name is kept as written. |
+| `EncodedMessagePart` (E8) | Reported as `AmbiguousEncodedComposite`. |
+| `UnquotedParameterSpecials` (B12, N8) | Not raised: an unquoted value runs to `;`. |
+
+## Differences the differential run reports, and how each is explained
+
+`tools/oracles/explained.tsv` maps every difference between OneMail and each oracle to an entry above, to a documented normalisation of
+the comparison (`NORM-*`) or to a named limitation of that oracle (`LIMIT-*`). A difference with no line fails the run.
 
 ## Calendar and contacts (ICS, vCard)
 

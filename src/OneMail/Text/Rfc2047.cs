@@ -305,7 +305,16 @@ public static class Rfc2047
             }
             else if (c is 0x0D or 0x0A)
             {
-                return WordStatus.Malformed;
+                // A fold inside a word reads as the white space it leaves behind (Python, Go and MimeKit agree); a bare
+                // line break with no white space after it ends the word.
+                int after = c == 0x0D && k + 1 < value.Length && value[k + 1] == 0x0A ? k + 2 : k + 1;
+                if (after >= value.Length || value[after] is not (0x20 or 0x09))
+                {
+                    return WordStatus.Malformed;
+                }
+
+                spaces = true;
+                k = after - 1;
             }
 
             k++;
@@ -324,7 +333,7 @@ public static class Rfc2047
         bool paddingSeen = false;
         foreach (byte b in text)
         {
-            if (b is 0x20 or 0x09)
+            if (b is 0x20 or 0x09 or 0x0D or 0x0A)
             {
                 continue;
             }
@@ -385,6 +394,11 @@ public static class Rfc2047
         for (int i = 0; i < text.Length && w < destination.Length; i++)
         {
             byte b = text[i];
+            if (b is 0x0D or 0x0A)
+            {
+                continue; // the line break of a fold; the white space after it stays
+            }
+
             if (b == (byte)'_')
             {
                 // RFC 2047 §4.2(2): underscore is a space.

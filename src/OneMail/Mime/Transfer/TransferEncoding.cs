@@ -155,8 +155,8 @@ public sealed class Base64Decoder
 
 /// <summary>
 /// A stateful, lenient quoted-printable decoder (RFC 2045 §6.7). Soft line breaks (<c>=</c> then a line break) vanish,
-/// <c>=XX</c> escapes (either hex case) become bytes, whitespace before a line break is dropped (RFC 2045 §6.7 rule 3),
-/// and everything else passes through. Hard line breaks are copied as they are (CRLF stays CRLF, LF stays LF). A malformed
+/// <c>=XX</c> escapes (either hex case) become bytes, blanks before a line break are kept (they are data), and everything
+/// else passes through. Hard line breaks are copied as they are (CRLF stays CRLF, LF stays LF). A malformed
 /// escape stays literal.
 /// </summary>
 public sealed class QuotedPrintableDecoder
@@ -223,7 +223,9 @@ public sealed class QuotedPrintableDecoder
                     }
                     else if (c is (byte)'\r' or (byte)'\n')
                     {
-                        _wsCount = 0; // trailing whitespace is not part of the data
+                        // RFC 2045 §6.7 rule 3 says trailing blanks must not be produced, but the three reference parsers keep
+                        // them when they are present, and dropping them would change the body: they are data.
+                        o = FlushWhitespace(output, o);
                         output[o++] = c;
                     }
                     else
@@ -254,7 +256,11 @@ public sealed class QuotedPrintableDecoder
                     }
                     else if (c is (byte)' ' or (byte)'\t')
                     {
-                        _state = State.SoftWhitespace; // "=" then spaces then the line break: a soft break with trailing blanks
+                        // "=" then blanks then the line break is a soft break with trailing blanks. If something else follows,
+                        // the "=" and the blanks are literal, so the blanks are held until we know.
+                        _wsCount = 0;
+                        _ws[_wsCount++] = c;
+                        _state = State.SoftWhitespace;
                     }
                     else
                     {
@@ -286,16 +292,26 @@ public sealed class QuotedPrintableDecoder
                 case State.SoftWhitespace:
                     if (c == (byte)'\r')
                     {
+                        _wsCount = 0;
                         _state = State.SoftCr;
                     }
                     else if (c == (byte)'\n')
                     {
+                        _wsCount = 0;
                         _state = State.Normal;
                     }
-                    else if (c is not ((byte)' ' or (byte)'\t'))
+                    else if (c is (byte)' ' or (byte)'\t')
+                    {
+                        if (_wsCount < WhitespaceCapacity)
+                        {
+                            _ws[_wsCount++] = c;
+                        }
+                    }
+                    else
                     {
                         Issues |= TransferIssues.InvalidQuotedPrintableEscape;
                         output[o++] = (byte)'=';
+                        o = FlushWhitespace(output, o);
                         _state = State.Normal;
                         goto again;
                     }
@@ -325,10 +341,7 @@ public sealed class QuotedPrintableDecoder
         if (_state == State.AfterEquals || _state == State.SoftWhitespace)
         {
             Issues |= TransferIssues.TruncatedQuotedPrintableEscape;
-            if (_state == State.AfterEquals)
-            {
-                output[o++] = (byte)'=';
-            }
+            output[o++] = (byte)'=';
         }
         else if (_state == State.AfterHex)
         {
@@ -348,6 +361,124 @@ public sealed class QuotedPrintableDecoder
         _wsCount = 0;
         return o;
     }
+}
+
+/// <summary>
+/// A stateful, lenient uudecoder for bodies delivered in pieces. Text before the <c>begin</c> line is ignored, each data line
+/// starts with a length character (<c>' '</c> + n, or <c>`</c> for zero) and decoding stops at the <c>end</c> line. Characters
+/// from space to <c>`</c> all decode (space and backquote are both zero), as old encoders differ on that. A line whose length
+/// character claims more bytes than the line holds yields what it holds.
+/// </summary>
+public sealed class UuDecoder
+{
+    private const int MaxLine = 256;
+    private readonly byte[] _line = new byte[MaxLine];
+    private int _length;
+    private bool _begun;
+    private bool _ended;
+
+    /// <summary>The output space <see cref="Decode"/> may need for <paramref name="inputLength"/> input bytes.</summary>
+    /// <param name="inputLength">Input bytes.</param>
+    /// <returns>A safe output size.</returns>
+    public static int MaxOutputLength(int inputLength) => inputLength + MaxLine;
+
+    /// <summary>Decodes a piece of input.</summary>
+    /// <param name="input">Encoded bytes.</param>
+    /// <param name="output">At least <see cref="MaxOutputLength"/> bytes of room.</param>
+    /// <returns>Bytes written to <paramref name="output"/>.</returns>
+    public int Decode(ReadOnlySpan<byte> input, Span<byte> output)
+    {
+        int o = 0;
+        foreach (byte c in input)
+        {
+            if (c == (byte)'\n')
+            {
+                o += Line(output[o..]);
+                _length = 0;
+            }
+            else if (_length < MaxLine)
+            {
+                _line[_length++] = c;
+            }
+        }
+
+        return o;
+    }
+
+    /// <summary>Ends the input, decoding a last line that had no line break.</summary>
+    /// <param name="output">At least <see cref="MaxOutputLength"/>(0) bytes of room.</param>
+    /// <returns>Bytes written.</returns>
+    public int Finish(Span<byte> output)
+    {
+        int o = Line(output);
+        _length = 0;
+        return o;
+    }
+
+    private int Line(Span<byte> output)
+    {
+        ReadOnlySpan<byte> line = _line.AsSpan(0, _length);
+        if (line.Length > 0 && line[^1] == (byte)'\r')
+        {
+            line = line[..^1];
+        }
+
+        if (_ended)
+        {
+            return 0;
+        }
+
+        if (!_begun)
+        {
+            _begun = line.StartsWith("begin "u8);
+            return 0;
+        }
+
+        if (line.Length == 0)
+        {
+            return 0;
+        }
+
+        if (line.SequenceEqual("end"u8))
+        {
+            _ended = true;
+            return 0;
+        }
+
+        int n = (line[0] - 32) & 63;
+        int o = 0;
+        int i = 1;
+        while (o < n)
+        {
+            // Four characters carry three bytes; a short line is padded with zero characters.
+            int a = Sextet(line, i), b = Sextet(line, i + 1), c = Sextet(line, i + 2), d = Sextet(line, i + 3);
+            if (i >= line.Length)
+            {
+                break;
+            }
+
+            i += 4;
+            int v = (a << 18) | (b << 12) | (c << 6) | d;
+            if (o < n)
+            {
+                output[o++] = (byte)(v >> 16);
+            }
+
+            if (o < n)
+            {
+                output[o++] = (byte)(v >> 8);
+            }
+
+            if (o < n)
+            {
+                output[o++] = (byte)v;
+            }
+        }
+
+        return o;
+    }
+
+    private static int Sextet(ReadOnlySpan<byte> line, int i) => i < line.Length ? (line[i] - 32) & 63 : 0;
 }
 
 /// <summary>Encoders for the transfer encodings, for writing bodies.</summary>
@@ -460,6 +591,7 @@ public sealed class TransferDecodingStream : Stream
     private readonly ContentTransferEncoding _encoding;
     private readonly Base64Decoder? _b64;
     private readonly QuotedPrintableDecoder? _qp;
+    private readonly UuDecoder? _uu;
     private readonly byte[]? _in;
     private readonly byte[]? _out;
     private int _outPos;
@@ -485,7 +617,12 @@ public sealed class TransferDecodingStream : Stream
             _qp = new QuotedPrintableDecoder();
         }
 
-        if (_b64 is not null || _qp is not null)
+        else if (encoding == ContentTransferEncoding.UUEncode)
+        {
+            _uu = new UuDecoder();
+        }
+
+        if (_b64 is not null || _qp is not null || _uu is not null)
         {
             _in = new byte[ChunkSize];
             _out = new byte[ChunkSize + 128];
@@ -571,11 +708,11 @@ public sealed class TransferDecodingStream : Stream
         if (n <= 0)
         {
             _finished = true;
-            _outLen = _b64 is not null ? _b64.Finish(_out) : _qp!.Finish(_out);
+            _outLen = _b64 is not null ? _b64.Finish(_out) : _qp is not null ? _qp.Finish(_out) : _uu!.Finish(_out);
             return;
         }
 
-        _outLen = _b64 is not null ? _b64.Decode(_in.AsSpan(0, n), _out) : _qp!.Decode(_in.AsSpan(0, n), _out);
+        _outLen = _b64 is not null ? _b64.Decode(_in.AsSpan(0, n), _out) : _qp is not null ? _qp.Decode(_in.AsSpan(0, n), _out) : _uu!.Decode(_in.AsSpan(0, n), _out);
     }
 
     private int CopyOut(Span<byte> buffer)

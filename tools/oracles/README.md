@@ -10,7 +10,7 @@ compares it too.
 | MimeKit (NuGet) | 4.18.2 | `mimekit-driver` (.NET 10 console app; public API only) |
 | Python `email` | CPython 3.13.x, `policy.default` (`--policy compat32` for the legacy policy) | `python/pydump.py` |
 | Go `net/mail`, `mime`, `mime/multipart` | Go 1.26.x, standard library only | `go/` |
-| OneMail | the working tree | `onemail/` (a stub until the real driver lands) |
+| OneMail | the working tree | `onemail-driver` (.NET 10 console app over the library's public API) |
 
 None of these is referenced by anything under `src/`.
 
@@ -85,6 +85,32 @@ Representation noise is removed, and nothing else.
 10. Go's multipart reader is used in raw mode so that `Content-Transfer-Encoding` is left alone, and the driver then
     decodes `base64` (the standard stream decoder, which skips CR and LF only) and `quoted-printable`. Go has no
     uuencode, so `cteApplied` is `none` there.
+
+### What OneMail writes for each field
+
+`contentType` is `MediaType`; `params` are `GetContentTypeParameters` (RFC 2231 resolved, names lower-case); `filename` is `FileName`;
+`cteApplied` is the transfer decoding `GetDecodedContent` applies (`none`, `base64`, `quoted-printable`, `uuencode`; a multipart or
+message part is `none`); `preamble` and `epilogue` are true when they hold a non-white-space byte; the body hashes are of the decoded
+bytes; addresses come from `GetAddresses` with groups flattened; `date` is `GetDate` (`offsetMinutes` is null when the zone is unknown);
+`value` of the unstructured headers is `MimeHeader.Value`. `defects` lists `part<N>:<Kind>`, N being the entity's position in
+document order, from the reader plus the structured accessors run on the root.
+
+## The explained map
+
+OneMail is compared with each oracle in the same run, and **every difference must be explained** or the run fails (`report`
+exits 1, and so does `run-corpus.sh`). `explained.tsv` holds the rules, one per line, tab separated: an id, the oracle, a regular
+expression on the message name, one on the difference class, one on its sub-class, one on its detail, and flags. The first rule that
+matches explains the difference. An id is one of:
+
+- an entry of [`docs/ambiguities.md`](../../docs/ambiguities.md) (`A2`, `H5`, `E7` …): the resolution OneMail took there;
+- `NORM-*`: a normalisation of the comparison itself, written in `diffrun.py` next to the code that applies it (a difference that
+  disappears after the normalisation is reported under its own class, such as `address.merged-duplicates` for MimeKit joining the
+  lists of repeated `To` fields, or `address.obsolete-local` for the addresses MimeKit leaves out);
+- `LIMIT-*`: a named limitation of one oracle, for example Go's `net/mail` rejecting a whole list for one odd address.
+
+The flag `m` makes a rule apply only where **another oracle agrees with OneMail** on the same difference, which is the two-of-three
+rule of the ambiguity table. The report lists, per oracle, how many messages each rule explained and every unexplained class.
+`diffrun.py unexplained` prints the unexplained differences with detail, for corpora that may be read.
 
 Differences between oracles are classes in the report: `header.names`, `header.raw`, `header.decoded`, `header.order`,
 `address.*`, `date.*`, `entity.type`, `entity.params`, `entity.filename`, `entity.cte`, `entity.children`,

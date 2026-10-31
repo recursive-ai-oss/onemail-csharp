@@ -18,5 +18,7 @@ if [ -n "${ONEMAIL_DOTNET_ROOT:-}" ]; then export DOTNET_ROOT="$ONEMAIL_DOTNET_R
 export PATH="${DOTNET_ROOT:+$DOTNET_ROOT:}$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 "$py" "$here/diffrun.py" run --corpus "$name" --root "$root" --out "$out" --bin "$bin" "$@"
 rc=$?
-"$py" "$here/diffrun.py" report --corpus "$name" --out "$out" > /dev/null 2>&1 || true
+"$py" "$here/diffrun.py" report --corpus "$name" --out "$out" > /dev/null 2>&1
+rrc=$?
+[ $rc -eq 0 ] && rc=$rrc   # a report that finds unexplained differences fails the run
 exit $rc

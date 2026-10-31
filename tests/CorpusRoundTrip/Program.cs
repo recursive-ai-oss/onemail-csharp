@@ -8,6 +8,7 @@ using RecursiveAI.OneMail.Mime.Reading;
 //   dir   <root> [--skip N] [--take M]   every file under <root> (sorted by path) is one message
 //   mbox  <file> [--skip N] [--take M]   messages split at "From " lines (a test-only splitter; the mailbox readers are separate)
 //   (both accept --threads N, default 8)
+//   alloc-tree <mbox file>               bytes allocated per message to parse the entity tree and read Subject, From, To, Date and Message-ID decoded
 //   alloc <mbox file>                    bytes allocated per message while enumerating reader events with one reused reader
 //
 // For each message: parse into the entity tree without an exception, write it back, compare byte for byte, and check
@@ -34,6 +35,7 @@ internal static class Program
             "dir" => RunDir(path, skip, take),
             "mbox" => RunMbox(path, skip, take),
             "alloc" => RunAlloc(path),
+            "alloc-tree" => RunAllocTree(path),
             _ => 2,
         };
     }
@@ -218,6 +220,38 @@ internal static class Program
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Console.WriteLine($"messages={messages.Count} events={events} bytes={all.Length} allocated={allocated} B ({(double)allocated / messages.Count:F3} B/message) time={sw.Elapsed.TotalMilliseconds:F1} ms ({all.Length / 1e6 / sw.Elapsed.TotalSeconds:F0} MB/s)");
         return allocated < messages.Count ? 0 : 1; // under one byte per message: only runtime bookkeeping
+    }
+
+    private static int RunAllocTree(string file)
+    {
+        byte[] all = File.ReadAllBytes(file);
+        List<(int Start, int Length)> messages = Split(all);
+        ReadOnlyMemory<byte> mem = all;
+        long sink = TreePass(mem, messages);
+        sink += TreePass(mem, messages);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        sink += TreePass(mem, messages);
+        sw.Stop();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Console.WriteLine($"messages={messages.Count} bytes={all.Length} allocated={allocated} B ({(double)allocated / messages.Count:F1} B/message) time={sw.Elapsed.TotalMilliseconds:F1} ms ({all.Length / 1e6 / sw.Elapsed.TotalSeconds:F0} MB/s) sink={sink}");
+        return 0;
+    }
+
+    // Parse the tree, then read the fields a mail list shows, all decoded.
+    private static long TreePass(ReadOnlyMemory<byte> all, List<(int Start, int Length)> messages)
+    {
+        long sink = 0;
+        foreach ((int start, int length) in messages)
+        {
+            MimeEntity e = MimeEntity.Parse(all.Slice(start, length));
+            sink += e.Headers.GetFirst("Subject")?.Value.Length ?? 0;
+            sink += e.GetAddresses("From").Count + e.GetAddresses("To").Count;
+            sink += e.GetDate()?.Value.Year ?? 0;
+            sink += e.GetMessageId()?.Length ?? 0;
+        }
+
+        return sink;
     }
 
     private static long Pass(MimeReader reader, ReadOnlyMemory<byte> all, List<(int Start, int Length)> messages)

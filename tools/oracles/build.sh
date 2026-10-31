@@ -7,5 +7,6 @@ out="${1:-${ONEMAIL_ORACLE_BIN:-./bin-oracles}}"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 dotnet publish "$here/mimekit-driver/MimeKitDump.csproj" -c Release -o "$out/mimekit" -v quiet -clp:NoSummary
+dotnet publish "$here/onemail-driver/OneMailDump.csproj" -c Release -o "$out/onemail" -v quiet -clp:NoSummary
 (cd "$here/go" && GOTOOLCHAIN=local go build -o "$out/godump" .)
 echo "drivers in $out"

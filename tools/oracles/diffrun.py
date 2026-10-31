@@ -37,7 +37,7 @@ def default_commands(bin_dir):
         "python": [sys.executable, pydump, "--root", "{root}"],
         "python-compat32": [sys.executable, pydump, "--policy", "compat32", "--root", "{root}"],
         "go": [os.path.join(bin_dir, "godump"), "-root", "{root}"],
-        "onemail": [sys.executable, os.path.join(HERE, "onemail", "onemail_stub.py"), "--root", "{root}"],
+        "onemail": [os.path.join(bin_dir, "onemail", "OneMailDump"), "--root", "{root}"],
     }
 
 
@@ -102,7 +102,9 @@ def header_diffs(a, b, ordered, out, prefix):
                 break
         for x, y in zip(va, vb):
             if x[2] is not None and y[2] is not None and x[2] != y[2]:
-                out.append((prefix + "header.decoded", n, "%s: %r vs %r" % (n, x[2][:80], y[2][:80])))
+                # A difference in white space alone (a tab or a run of blanks kept or collapsed, a trailing blank) has its own class.
+                ws = " ".join(x[2].split()) == " ".join(y[2].split())
+                out.append((prefix + ("header.decoded.ws" if ws else "header.decoded"), n, "%s: %r vs %r" % (n, x[2][:80], y[2][:80])))
                 break
 
 
@@ -143,6 +145,64 @@ def entity_diffs(a, b, ordered, out, depth):
         entity_diffs(ma, mb, ordered, out, depth + 1)
 
 
+def obsolete_local(addr):
+    """Addresses that MimeKit leaves out and OneMail keeps (docs/ambiguities.md A15, A16): a leading, trailing or doubled dot in the
+    local part, more than one '@' outside quotes, or a quote that does not start a quoted word."""
+    at = addr.rfind("@")
+    local = addr if at < 0 else addr[:at]
+    if local and not local.startswith('"') and (local.startswith(".") or local.endswith(".") or ".." in local):
+        return True
+    unquoted_at = 0
+    quoted = False
+    prev = "."
+    i = 0
+    while i < len(addr):
+        c = addr[i]
+        if quoted:
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                quoted = False
+                nxt = addr[i + 1] if i + 1 < len(addr) else "@"
+                if nxt not in ".@":
+                    return True
+        elif c == '"':
+            if prev not in ".":
+                return True
+            quoted = True
+        elif c == "@":
+            unquoted_at += 1
+        prev = c
+        i += 1
+    return unquoted_at > 1
+
+
+def omitted_by_mimekit(mine, theirs):
+    """True when `theirs` is `mine` with some of the addresses that obsolete_local() flags either left out or cut at their second '@'
+    (MimeKit does either). Every other address must be equal, in order, and nothing may be left over."""
+    j = 0
+    for addr in mine:
+        if j < len(theirs) and addr == theirs[j]:
+            j += 1
+        elif obsolete_local(addr):
+            first = addr.find("@", addr.find('"', addr.find('"') + 1) if addr.startswith('"') else 0)
+            second = addr.find("@", first + 1) if first >= 0 else -1
+            if second > 0 and j < len(theirs) and addr[:second] == theirs[j]:
+                j += 1
+        else:
+            return False
+    return j == len(theirs) and mine != theirs
+
+
+def first_diff(x, y):
+    """The first address that differs between two lists, as ' (ours vs theirs)'; both lists are shown only by that element."""
+    for i, (p, q) in enumerate(zip(x, y)):
+        if p["addr"] != q["addr"]:
+            return " at %d: %r vs %r" % (i, p["addr"], q["addr"])
+    longer, tag = (x, "a") if len(x) > len(y) else (y, "b")
+    return " extra in %s: %r" % (tag, longer[min(len(x), len(y))]["addr"]) if len(x) != len(y) else ""
+
+
 def compare_records(a, b):
     """Returns a list of (class, sub, detail) differences between two dumps of the same message."""
     out = []
@@ -161,12 +221,28 @@ def compare_records(a, b):
         elif x is None or y is None:
             out.append(("address.parse-failed", k + ":" + (na if x is None else nb), k))
         elif x != y:
+            if OURS in (na, nb):
+                # NORM-A15: MimeKit leaves out an address whose local part has a leading, trailing or doubled dot; OneMail keeps it
+                # (docs/ambiguities.md A15). After leaving those out of OneMail's list, the lists are compared as usual.
+                mine, theirs = (x, y) if na == OURS else (y, x)
+                if (na if nb == OURS else nb) == "mimekit" and omitted_by_mimekit([i["addr"] for i in mine], [i["addr"] for i in theirs]):
+                    out.append(("address.obsolete-local", k, "%s: addresses MimeKit omits or cuts" % k))
+                    continue
+            # NORM-H2: MimeKit joins the lists of repeated address fields; OneMail reads the first (docs/ambiguities.md H2).
+            ours_rec, other_rec = (a, b) if na == OURS else (b, a)
+            if OURS in (na, nb) and other_rec["oracle"]["name"] == "mimekit":
+                mine, theirs = (x, y) if na == OURS else (y, x)
+                repeats = sum(1 for h in ours_rec["root"]["headers"] if h["name"].lower() == k)
+                if repeats > 1 and len(theirs) > len(mine) and [i["addr"] for i in theirs[:len(mine)]] == [i["addr"] for i in mine]:
+                    out.append(("address.merged-duplicates", k, "%s: %d fields" % (k, repeats)))
+                    continue
             if len(x) != len(y):
-                out.append(("address.count", k, "%s: %d vs %d" % (k, len(x), len(y))))
+                out.append(("address.count", k, "%s: %d vs %d%s" % (k, len(x), len(y), first_diff(x, y))))
             elif [i["addr"] for i in x] != [i["addr"] for i in y]:
-                out.append(("address.addr", k, "%s: %r vs %r" % (k, [i["addr"] for i in x][:3], [i["addr"] for i in y][:3])))
+                out.append(("address.addr", k, "%s: %s" % (k, first_diff(x, y))))
             else:
-                out.append(("address.name", k, "%s: %r vs %r" % (k, [i["name"] for i in x][:3], [i["name"] for i in y][:3])))
+                ws = [" ".join(i["name"].split()) for i in x] == [" ".join(i["name"].split()) for i in y]
+                out.append(("address.name.ws" if ws else "address.name", k, "%s: %r vs %r" % (k, [i["name"] for i in x][:3], [i["name"] for i in y][:3])))
     da, db = a.get("date"), b.get("date")
     if (da is None) != (db is None):
         out.append(("date.parse-failed", na if da is None else nb, "%r vs %r" % (da, db)))
@@ -207,6 +283,64 @@ def digest(rec):
         if h.get("value") is not None:
             text += " | %s=%r" % (h["name"].lower(), h["value"])
     return text
+
+
+# ---- the explained map ------------------------------------------------------------------------------------------------
+#
+# OneMail is compared with every oracle in the same run. Each difference between OneMail and an oracle must be explained by a
+# rule in explained.tsv (an entry of docs/ambiguities.md, a documented normalisation, or a named limitation of that oracle).
+# A difference no rule explains is "unexplained" and fails the run.
+
+OURS = "onemail"
+RULES = None
+
+
+def load_rules():
+    global RULES
+    if RULES is None:
+        RULES = []
+        with open(os.path.join(HERE, "explained.tsv"), encoding="utf-8") as f:
+            for n, line in enumerate(f, 1):
+                if not line.strip() or line.startswith("#"):
+                    continue
+                c = line.rstrip("\n").split("\t")
+                if len(c) < 7:
+                    sys.exit("explained.tsv line %d: expected 7 tab-separated fields" % n)
+                ident, oracle, file_re, cls_re, sub_re, detail_re, flags = c[:7]
+                RULES.append({"id": ident, "oracle": oracle, "file": re.compile(file_re), "cls": re.compile(cls_re),
+                              "sub": re.compile(sub_re), "detail": re.compile(detail_re, re.S), "flags": flags})
+    return RULES
+
+
+def diff_key(cls, sub):
+    """The dimension a difference is about, so that the same dimension can be looked up against the other oracles."""
+    return (cls, sub if cls.startswith(("header.", "part.header.", "address.")) else "")
+
+
+def explain_message(fid, per_oracle):
+    """per_oracle: {oracle: [(cls, sub, detail)]} for OneMail against that oracle (OneMail is side a).
+    Returns {oracle: [(cls, sub, rule id or None)]}."""
+    rules = load_rules()
+    keys = {o: {diff_key(c, s) for c, s, _ in d} for o, d in per_oracle.items()}
+    out = {}
+    for o, diffs in per_oracle.items():
+        res = []
+        for cls, sub, detail in diffs:
+            hit = None
+            for r in rules:
+                if r["oracle"] not in ("*", o) or not r["file"].search(fid) or not r["cls"].fullmatch(cls):
+                    continue
+                if not r["sub"].search(sub) or not r["detail"].search(detail):
+                    continue
+                if "m" in r["flags"]:  # needs another oracle that agrees with OneMail on this dimension
+                    k = diff_key(cls, sub)
+                    if not any(k not in keys[x] for x in keys if x != o):
+                        continue
+                hit = r["id"]
+                break
+            res.append((cls, sub, hit))
+        out[o] = res
+    return out
 
 
 # ---- storage -------------------------------------------------------------------------------------------------------
@@ -273,7 +407,45 @@ def compare_chunk(out, corpus, drivers, chunk, files):
                     p["examples"].setdefault(cls, {"id": f, "sub": sub, "detail": detail})
                 p["subs"][cls][sub] += 1
         s["pairs"]["%s~%s" % (d1, d2)] = p
+    if OURS in drivers:
+        s["explained"] = explain_chunk(dumps, drivers, files)
     return s
+
+
+def explain_chunk(dumps, drivers, files):
+    others = [d for d in drivers if d != OURS]
+    ex = {o: {"messages": 0, "differ": 0, "unexplainedMessages": 0, "rules": Counter(), "unexplained": Counter(), "examples": {}} for o in others}
+    for f in files:
+        a = dumps[OURS].get(f)
+        if not a or a.get("skipped") or a.get("crash"):
+            continue
+        per = {}
+        for o in others:
+            b = dumps[o].get(f)
+            if b and not b.get("skipped") and not b.get("crash"):
+                per[o] = compare_records(a, b)
+        res = explain_message(f, per)
+        for o, items in res.items():
+            e = ex[o]
+            e["messages"] += 1
+            if not items:
+                continue
+            e["differ"] += 1
+            bad = False
+            seen = set()
+            for cls, sub, rid in items:
+                if rid:
+                    if (cls, rid) not in seen:
+                        seen.add((cls, rid))
+                        e["rules"][rid] += 1
+                else:
+                    bad = True
+                    k = cls + ":" + sub
+                    e["unexplained"][k] += 1
+                    e["examples"].setdefault(k, f)
+            if bad:
+                e["unexplainedMessages"] += 1
+    return ex
 
 
 def jsonable(o):
@@ -370,7 +542,7 @@ def cmd_compare(a):
 
 
 def merge(out, corpus):
-    total = {"messages": 0, "crashes": Counter(), "oracleErrors": Counter(), "versions": {}, "defects": defaultdict(Counter), "pairs": {}}
+    total = {"messages": 0, "crashes": Counter(), "oracleErrors": Counter(), "versions": {}, "defects": defaultdict(Counter), "pairs": {}, "explained": {}}
     cdir = os.path.join(out, corpus, "compare")
     for n in sorted(os.listdir(cdir)):
         if not n.endswith(".json"):
@@ -383,6 +555,14 @@ def merge(out, corpus):
         total["versions"].update(s["versions"])
         for d, c in s["defects"].items():
             total["defects"][d].update(c)
+        for o, x in (s.get("explained") or {}).items():
+            t = total["explained"].setdefault(o, {"messages": 0, "differ": 0, "unexplainedMessages": 0, "rules": Counter(), "unexplained": Counter(), "examples": {}})
+            for f in ("messages", "differ", "unexplainedMessages"):
+                t[f] += x[f]
+            t["rules"].update(x["rules"])
+            t["unexplained"].update(x["unexplained"])
+            for k, f in x["examples"].items():
+                t["examples"].setdefault(k, f)
         for k, p in s["pairs"].items():
             t = total["pairs"].setdefault(k, {"compared": 0, "agree": 0, "differ": 0, "bothFailed": 0, "classes": Counter(),
                                               "subs": defaultdict(Counter), "examples": {}})
@@ -423,6 +603,15 @@ def cmd_report(a):
             detail = "(withheld: private corpus)" if private else ex["detail"].replace("|", "/").replace("\n", " ")[:90]
             lines.append("| %s | %d | %s | %s: %s |" % (cls, n, subs.replace("|", "/"), ex["id"], detail))
         lines.append("")
+    if t["explained"]:
+        lines += ["## OneMail against each oracle, by explanation", ""]
+        for o, x in sorted(t["explained"].items()):
+            lines += ["### onemail ~ %s" % o, "", "compared %d, identical %d, differ %d, **unexplained %d**" % (x["messages"], x["messages"] - x["differ"], x["differ"], x["unexplainedMessages"]), ""]
+            for rid, n in x["rules"].most_common():
+                lines.append("- %s: %d messages" % (rid, n))
+            for k, n in x["unexplained"].most_common():
+                lines.append("- **UNEXPLAINED** %s: %d (e.g. %s)" % (k, n, x["examples"][k]))
+            lines.append("")
     lines += ["## Oracle defect counts", ""]
     for d, c in sorted(t["defects"].items()):
         lines.append("- %s: %s" % (d, ", ".join("%s×%d" % kv for kv in c.most_common(12)) or "none"))
@@ -432,6 +621,24 @@ def cmd_report(a):
     with open(os.path.join(a.out, a.corpus, "report.json"), "w") as f:
         json.dump(jsonable(t), f, indent=1)
     print(text)
+    return 1 if any(x["unexplainedMessages"] for x in t["explained"].values()) else 0
+
+
+def cmd_unexplained(a):
+    """Prints every difference between OneMail and an oracle that no rule explains, with detail (small, non-private corpora)."""
+    drivers = a.drivers.split(",")
+    files = list_files("", a.out, a.corpus)
+    for ci in range(0, len(files), a.chunk):
+        chunk = files[ci:ci + a.chunk]
+        dumps = {d: read_dump(dump_path(a.out, a.corpus, d, ci // a.chunk)) for d in drivers}
+        for f in chunk:
+            per = {o: compare_records(dumps[OURS][f], dumps[o][f]) for o in drivers if o != OURS}
+            diffs = {o: [(c, s_, d) for c, s_, d in per[o]] for o in per}
+            for o, items in explain_message(f, per).items():
+                for (cls, sub, rid), (_, _, detail) in zip(items, diffs[o]):
+                    if rid is None:
+                        esc = lambda x: x.replace("\t", " ").replace("\r", "\\r").replace("\n", "\\n")
+                        print("\t".join(esc(x) for x in (f, o, cls, sub, detail)))
     return 0
 
 
@@ -453,11 +660,11 @@ def cmd_cases(a):
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "compare", "report", "cases"):
+    for name in ("run", "compare", "report", "cases", "unexplained"):
         p = sub.add_parser(name)
         p.add_argument("--corpus", required=True)
         p.add_argument("--out", required=True)
-        p.add_argument("--drivers", default="mimekit,python,go")
+        p.add_argument("--drivers", default="mimekit,python,go,onemail")
         p.add_argument("--chunk", type=int, default=1000)
         if name == "run":
             p.add_argument("--root", required=True)
@@ -471,7 +678,7 @@ def main():
         if name == "report":
             p.add_argument("--private", action="store_true", help="withhold message text from the report (automatic for enron*/edrm*)")
     a = ap.parse_args()
-    sys.exit({"run": cmd_run, "compare": cmd_compare, "report": cmd_report, "cases": cmd_cases}[a.cmd](a))
+    sys.exit({"run": cmd_run, "compare": cmd_compare, "report": cmd_report, "cases": cmd_cases, "unexplained": cmd_unexplained}[a.cmd](a))
 
 
 if __name__ == "__main__":
