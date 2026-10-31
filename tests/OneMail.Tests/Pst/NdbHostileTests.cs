@@ -425,3 +425,25 @@ public class NdbHostileTests
         }
     }
 }
+
+public class NdbFuzzRegressions
+{
+    // Found by the fuzzer (recipes in testdata/fuzz, replayed by `fuzz/run.sh replay ndb`): a changed wVer made the
+    // 8-byte header fields hold ANSI bytes, so ibAMapLast was enormous and ValidateAllocation tried to read billions of AMaps.
+    [Fact]
+    public void HugeAMapLastDoesNotHang()
+    {
+        byte[] file = NdbTestBuilder.Build(NdbFormat.Ansi, [new TestNode { Nid = 0x21, Data = [1, 2, 3] }]).Bytes;
+        file[10] = 0xFF;
+        Assert.True(NdbFile.TryOpen(file, out NdbFile? f, out _));
+        using (f)
+        {
+            Assert.True(f!.Header.Root.AMapLast > (ulong)file.Length);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            NdbAllocationSummary a = f.ValidateAllocation(TestContext.Current.CancellationToken);
+            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5));
+            Assert.True(a.AMapCount <= 2);
+            Assert.Contains(f.Defects, d => d.Kind == NdbDefectKind.AllocationPageInvalid);
+        }
+    }
+}

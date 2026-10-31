@@ -31,13 +31,23 @@ public sealed partial class NdbFile
     private long _amapCacheIndex = -1;
     private bool _amapCacheOk;
 
-    /// <summary>The number of AMap pages implied by the header: from the first AMap to ibAMapLast at fixed intervals.</summary>
+    /// <summary>
+    /// The number of AMap pages implied by the header: from the first AMap to ibAMapLast at fixed intervals. A damaged
+    /// ibAMapLast cannot make this larger than the number of AMap slots that fit in the file.
+    /// </summary>
     public long AMapCount
     {
         get
         {
             long last = (long)Math.Min(Header.Root.AMapLast, long.MaxValue);
-            return last < Layout.FirstAMap ? 0 : ((last - Layout.FirstAMap) / Layout.AMapInterval) + 1;
+            if (last < Layout.FirstAMap)
+            {
+                return 0;
+            }
+
+            long implied = ((last - Layout.FirstAMap) / Layout.AMapInterval) + 1;
+            long fits = Length < Layout.FirstAMap ? 0 : ((Length - Layout.FirstAMap) / Layout.AMapInterval) + 1;
+            return Math.Min(implied, fits);
         }
     }
 
@@ -78,6 +88,13 @@ public sealed partial class NdbFile
     {
         long count = AMapCount;
         long invalid = 0;
+        if (Header.Root.AMapLast > (ulong)Length)
+        {
+            // Not a hang risk (the count is clamped to the file), but the header is wrong about where the last AMap is.
+            Report(NdbDefectKind.AllocationPageInvalid, 0, $"ibAMapLast 0x{Header.Root.AMapLast:x} is beyond the end of the file");
+            invalid++;
+        }
+
         long free = 0;
         byte[] bits = ArrayPool<byte>.Shared.Rent(Layout.PageSize);
         try
