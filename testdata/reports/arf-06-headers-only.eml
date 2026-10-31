@@ -1,0 +1,25 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=feedback-report;
+ boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+This is a report.
+--b1
+Content-Type: message/feedback-report
+
+Feedback-Type: abuse
+User-Agent: SomeGenerator/1.0
+Version: 1
+--b1
+Content-Type: text/rfc822-headers
+
+From: <s@example.net>
+Subject: x
+--b1--

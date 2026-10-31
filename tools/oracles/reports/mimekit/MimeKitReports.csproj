@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MimeKit's driver for the report differential (tools/oracles/reports/README.md). Runs the released package as a black box
+       through its public API. A tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MimeKitReports</AssemblyName>
+    <RootNamespace>OneMail.Oracles.MimeKitReports</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+
+</Project>

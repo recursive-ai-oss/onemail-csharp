@@ -10,6 +10,8 @@ Nothing ships with a package yet.
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer; redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution; neither the name of the IETF Trust nor the names of specific contributors may be used to endorse or promote products derived from this software without specific prior written permission. This software is provided by the copyright holders and contributors "as is" and any express or implied warranties are disclaimed.
 
+`testdata/reports` holds messages we generated that quote header and field examples from RFC 2557, 3464, 7208 and 8601 (same IETF Trust Legal Provisions and Revised BSD terms as above, notice repeated there).
+
 ## Test corpora (fetched, never committed)
 
 `tools/corpus/fetch.sh` downloads these for round-trip and differential sweeps (pinned URL and SHA-256 in `tools/corpus/corpora.tsv`); no file from them is stored in this repository.

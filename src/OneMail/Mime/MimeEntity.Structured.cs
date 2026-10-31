@@ -184,4 +184,39 @@ public abstract partial class MimeEntity
             return i == s || i - s > 4 ? null : (major, int.Parse(HeaderText.DecodeName(v[s..i]), System.Globalization.CultureInfo.InvariantCulture));
         }
     }
+
+    /// <summary>
+    /// Every <c>Authentication-Results</c> field of this entity (RFC 8601), parsed, in the order they appear: the newest hop is
+    /// first. Parsing only; the results say what each server claims.
+    /// </summary>
+    /// <param name="defects">Receives what was skipped or guessed; may be null.</param>
+    /// <returns>The parsed fields; empty when there are none.</returns>
+    public IReadOnlyList<Authentication.AuthenticationResults> GetAuthenticationResults(List<MimeDefect>? defects = null)
+    {
+        var r = new List<Authentication.AuthenticationResults>();
+        foreach (MimeHeader h in Headers.GetAll("Authentication-Results"))
+        {
+            var a = Authentication.AuthenticationResults.Parse(h.RawValue.Span, Math.Max(0, h.ValueSourceOffset), Depth);
+            defects?.AddRange(a.Defects);
+            r.Add(a);
+        }
+
+        return r;
+    }
+
+    /// <summary>Every <c>Received-SPF</c> field of this entity (RFC 7208 section 9.1), parsed, in order. Parsing only.</summary>
+    /// <param name="defects">Receives what was skipped or guessed; may be null.</param>
+    /// <returns>The parsed fields; empty when there are none.</returns>
+    public IReadOnlyList<Authentication.ReceivedSpf> GetReceivedSpf(List<MimeDefect>? defects = null)
+    {
+        var r = new List<Authentication.ReceivedSpf>();
+        foreach (MimeHeader h in Headers.GetAll("Received-SPF"))
+        {
+            var a = Authentication.ReceivedSpf.Parse(h.RawValue.Span, Math.Max(0, h.ValueSourceOffset), Depth);
+            defects?.AddRange(a.Defects);
+            r.Add(a);
+        }
+
+        return r;
+    }
 }

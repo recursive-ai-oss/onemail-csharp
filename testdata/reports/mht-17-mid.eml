@@ -1,0 +1,16 @@
+Message-ID: <msg1@example.org>
+From: <a@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="rb"
+
+--rb
+Content-Type: text/html
+
+<html/>
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-ID: <img1@example.org>
+
+iVBORw0KGgo=
+--rb--

@@ -1,0 +1,12 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Authentication-Results: foo.example.net (foobar) 1 (baz);
+    dkim (Because I like it) / 1 (One yay) = (wait for it) fail
+      policy (A dot can go here) . (like that) expired
+      (this surprised me) = (as I wasn't expecting it) 1362471462
+Content-Type: text/plain
+
+body

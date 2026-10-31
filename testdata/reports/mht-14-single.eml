@@ -1,0 +1,7 @@
+From: <a@example.org>
+Subject: saved
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Location: http://x.example/page.html
+
+<html>page</html>

@@ -1,0 +1,25 @@
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary="mdn-boundary"
+
+--mdn-boundary
+Content-Type: text/plain; charset=utf-8
+
+Your message was displayed.
+--mdn-boundary
+Content-Type: message/disposition-notification
+
+Reporting-UA: pc; OneMail
+Final-Recipient: rfc822; j@example.com
+Original-Message-ID: <o1@example.com>
+Disposition: manual-action/mdn-sent-manually; displayed
+
+
+--mdn-boundary
+Content-Type: text/rfc822-headers
+
+From: <s@example.com>
+To: <a@example.org>
+Subject: hi
+Message-ID: <o1@example.com>
+
+--mdn-boundary--

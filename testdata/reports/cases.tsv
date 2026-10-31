@@ -1,0 +1,120 @@
+# file	description
+dsn-01-simple.eml	RFC 3464 E.1: one recipient
+dsn-02-multi-recipient.eml	RFC 3464 E.2: three recipients, folded diagnostic, comments in Status
+dsn-03-gateway.eml	RFC 3464 E.3: gateway, unknown address type
+dsn-04-delayed.eml	RFC 3464 E.4 shape: delayed, Will-Retry-Until, no returned content
+dsn-05-all-fields.eml	every RFC 3464 field, xtext, expanded/delivered/relayed, repeated extension field
+dsn-06-global.eml	RFC 6533: message/global-delivery-status with UTF-8 addresses and text
+dsn-07-headers-only.eml	original returned as text/rfc822-headers
+dsn-08-lf.eml	LF line ends
+dsn-09-crlf.eml	CRLF line ends
+dsn-10-no-recipient.eml	per-message block only
+dsn-11-blank-lines.eml	several blank lines between groups
+dsn-12-leading-blank.eml	blank lines before the first group
+dsn-13-no-colon-line.eml	a line without a colon inside a group
+dsn-14-fold-first.eml	a fold before any field
+dsn-15-duplicate-action.eml	Action twice
+dsn-16-missing-fields.eml	no Action and no Status
+dsn-17-bad-values.eml	unknown Action, bad Status, bad date, untyped values
+dsn-18-space-before-colon.eml	whitespace before the colon
+dsn-19-space-only-line.eml	a line holding only blanks between fields (RFC 3464 E.4 as printed)
+dsn-20-unterminated.eml	the closing delimiter is missing
+dsn-21-empty.eml	an empty delivery-status body
+dsn-22-no-report-type.eml	multipart/report without report-type
+dsn-23-wrong-second-part.eml	second part is text/plain
+dsn-24-one-part.eml	multipart/report with only the explanation
+dsn-25-8bit.eml	raw Latin-1 bytes in a diagnostic
+dsn-26-lone-cr.eml	a bare CR inside a value
+dsn-27-folded-long.eml	folds with tab and two spaces
+dsn-28-tab-status.eml	tab after the colon
+dsn-29-no-space-after-colon.eml	no space after the colon
+dsn-30-case.eml	upper-case names and keywords
+dsn-31-empty-values.eml	fields with empty values
+dsn-32-trailing-blank-block.eml	blank lines at the end
+dsn-33-embedded-nul.eml	NUL inside a value
+dsn-34-colon-in-name.eml	a name with a space
+dsn-35-base64-body.eml	base64 transfer encoding on the status part
+mdn-01-displayed.eml	RFC 8098 section 9 example
+mdn-02-processed-error.eml	automatic, modifiers, Error/Warning/Failure fields
+mdn-03-deleted-expired.eml	deleted with a modifier
+mdn-04-headers-only.eml	original as headers only
+mdn-05-extra-block.eml	a second block after a blank line
+mdn-06-missing-disposition.eml	no Disposition
+mdn-07-bad-disposition.eml	Disposition without modes
+mdn-08-global.eml	RFC 6533 global form
+mdn-09-failed.eml	failed
+mdn-10-duplicate.eml	two Disposition fields
+mdn-11-leading-blank.eml	blank line before the fields
+mdn-12-folded.eml	folded values and a comment
+mdn-13-no-original.eml	no third part
+arf-01-required.eml	RFC 5965 B.1: required fields
+arf-02-full.eml	RFC 5965 B.2: every field
+arf-03-auth-failure.eml	RFC 6591 authentication failure report, IPv6 source
+arf-04-not-spam.eml	RFC 5965 registry: not-spam
+arf-05-virus.eml	virus; Source-IP with a comment
+arf-06-headers-only.eml	original as text/rfc822-headers
+arf-07-missing-version.eml	no Version
+arf-08-bad-values.eml	bad Version, Source-IP, Incidents, date, untyped MTA
+arf-09-extra-block.eml	a second block
+arf-10-unknown-type.eml	a type outside the registry
+arf-11-duplicates.eml	single-valued fields repeated
+arf-12-no-original.eml	no third part
+arf-13-blank-first.eml	blank line before the fields
+arf-14-case.eml	name and keyword case
+auth-01-none.eml	RFC 8601 B.2: none with a version
+auth-02-spf.eml	RFC 8601 B.3
+auth-03-several.eml	RFC 8601 B.4: two fields
+auth-04-comment-heavy.eml	RFC 8601 B.7: comments everywhere
+auth-05-dkim-reason.eml	reason and several header properties
+auth-06-multiple-methods.eml	three methods
+auth-07-google.eml	a Gmail-style field with comments after results
+auth-08-microsoft.eml	Microsoft style: no authserv-id first, vendor properties without a type
+auth-09-version-method.eml	method versions
+auth-10-quoted-values.eml	quoted authserv-id, property and reason
+auth-11-no-id.eml	no authserv-id
+auth-12-bad-version.eml	versions other than 1
+auth-13-trailing-semicolon.eml	trailing semicolon
+auth-14-empty-clause.eml	empty clause
+auth-15-garbage.eml	clauses that are not method=result
+auth-16-none-and-results.eml	none beside results
+auth-17-case.eml	case of names and keywords
+auth-18-unterminated.eml	unterminated quote
+auth-19-unterminated-comment.eml	unterminated comment
+auth-20-empty-value.eml	empty property values
+auth-21-id-only.eml	authserv-id and nothing else
+auth-22-folded.eml	folds in odd places
+auth-23-ipv6-and-at.eml	IPv6 value, bare @domain, stray property
+auth-24-arc.eml	arc results with header.oldest-pass
+auth-26-exchange.eml	first token is a result, no identifier
+auth-27-method-version-first.eml	first token is a versioned method
+auth-25-result-comment.eml	all the SPF-style results
+spf-01-pass.eml	RFC 7208 9.1 example
+spf-02-fail.eml	every key
+spf-03-google.eml	Gmail style
+spf-04-old.eml	old style: capitalised result, angle brackets in a value
+spf-05-none.eml	result only
+spf-06-unknown.eml	unknown result
+spf-07-bad-pair.eml	words that are not pairs
+spf-08-quoted.eml	quoted problem text
+spf-09-folded.eml	folds
+spf-10-temperror.eml	bad client-ip
+mht-01-cid.eml	cid references
+mht-02-absolute.eml	absolute locations; relative references resolve against the root
+mht-03-relative.eml	relative locations, no real base: thismessage:/
+mht-04-start.eml	the start parameter names the second part
+mht-05-start-missing.eml	start names no part
+mht-06-duplicates.eml	two parts with the same location and the same Content-ID
+mht-07-escapes.eml	percent escapes
+mht-08-content-base.eml	legacy Content-Base on the root
+mht-09-folded-location.eml	a Content-Location split over two lines
+mht-10-file-urls.eml	file: URLs as saved by a browser
+mht-11-base-argument.eml	references with an HTML base element
+mht-12-cid-location.eml	a Content-Location holding a cid: URL must not satisfy cid: (RFC 2557 8.3)
+mht-13-rfc-example.eml	RFC 2557 section 4.2 example
+mht-19-related-location.eml	the multipart itself carries the base location
+mht-20-related-base.eml	the multipart carries a legacy Content-Base
+mht-14-single.eml	a lone HTML part
+mht-15-nested.eml	related inside mixed
+mht-16-outer-resource.eml	a related inside a related; the image lives in the outer one
+mht-17-mid.eml	mid: references
+mht-18-no-parts.eml	a related with no parts

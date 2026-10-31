@@ -24,6 +24,14 @@ internal static class Program
             ["mime-tree"] = MimeTargets.Tree,
             ["ndb"] = NdbTarget.Run,
         };
+        Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
+        ReportTargets.Register(reports);
+        foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in reports)
+        {
+            Action<ReadOnlySpan<byte>> a = kv.Value;
+            targets[kv.Key] = d => a(d);
+        }
+
         Dictionary<string, Action<ReadOnlySpan<byte>>> calendar = CalendarTargets.Register(new(StringComparer.Ordinal));
         foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in calendar)
         {

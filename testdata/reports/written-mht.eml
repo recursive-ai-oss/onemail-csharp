@@ -1,0 +1,26 @@
+Content-Type: multipart/related; type="text/html"; boundary="mht-boundary"
+MIME-Version: 1.0
+Subject: Saved page
+From: Saved <saved@example.org>
+Date: Sat, 02 Jan 2027 03:04:05 +0000
+
+--mht-boundary
+Content-Type: text/html; charset=utf-8
+Content-Location: http://www.example.org/dir/page.html
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><img src=3D"img/a.png"><img src=3D"cid:b@example.org"></body></=
+html>
+--mht-boundary
+Content-Type: image/png
+Content-Location: http://www.example.org/dir/img/a.png
+Content-Transfer-Encoding: base64
+
+AQIDBA==
+--mht-boundary
+Content-Type: image/png
+Content-ID: <b@example.org>
+Content-Transfer-Encoding: base64
+
+BQYH
+--mht-boundary--

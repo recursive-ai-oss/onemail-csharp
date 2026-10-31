@@ -1,0 +1,28 @@
+Content-Type: multipart/report; report-type=feedback-report;
+ boundary="arf-boundary"
+
+--arf-boundary
+Content-Type: text/plain; charset=utf-8
+
+This is an abuse report.
+--arf-boundary
+Content-Type: message/feedback-report
+
+Feedback-Type: abuse
+User-Agent: OneMail/1
+Version: 1
+Arrival-Date: Sat, 02 Jan 2027 03:04:05 +0000
+Source-IP: 192.0.2.1
+
+
+--arf-boundary
+Content-Type: message/rfc822
+
+From: <s@example.com>
+To: <a@example.org>
+Subject: hi
+Message-ID: <o1@example.com>
+
+body
+
+--arf-boundary--

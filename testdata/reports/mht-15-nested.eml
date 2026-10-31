@@ -1,0 +1,24 @@
+From: <a@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mx"
+
+--mx
+Content-Type: text/plain
+
+hi
+--mx
+Content-Type: multipart/related; boundary="rb"
+
+--rb
+Content-Type: text/html
+Content-Location: http://x.example/p.html
+
+<html/>
+--rb
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+Content-Location: http://x.example/a.png
+
+iVBORw0KGgo=
+--rb--
+--mx--

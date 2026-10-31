@@ -1,0 +1,23 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=delivery-status;
+ boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+This is a report.
+--b1
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; sun2.nsfnet-relay.ac.uk
+
+Final-Recipient: rfc822;thomas@de-montfort.ac.uk
+Status: 4.0.0 (unknown temporary failure)
+Action: delayed
+Will-Retry-Until: Sun, 17 Jul 1994 00:36:51 +0100
+--b1--

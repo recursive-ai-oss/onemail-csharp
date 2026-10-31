@@ -1,0 +1,23 @@
+# The explained map for the report differential: every difference between OneMail and an oracle must match a line here, or the run fails.
+# Fields (tab separated): id, oracle (mimekit|python|*), file-name regex (search), class regex (whole), sub-class regex (search),
+# detail regex (search). First matching line wins. The id names an entry of docs/ambiguities.md.
+RP1	python	dsn-(11|12|32)-	report\.blocks		
+RP3	*	dsn-13-	report\.names		
+RP4	*	dsn-34-	report\.names		
+RP5	python	dsn-18-	report\.names		
+RP6	mimekit	dsn-14-	report\.blocks		
+RP7	python	dsn-26-	report\.value		
+RP8	mimekit	dsn-21-	report\.blocks		
+LIMIT-python-global-dsn	python	(dsn-06-|written-dsn-global)	report\.blocks	message/global-delivery-status	
+LIMIT-python-cte	python	dsn-35-	report\.blocks		
+AR2	mimekit	auth-08-	auth\.props	dmarc	
+AR3	mimekit	auth-(11|12|14|15|16|18|19|27)-	auth\.parse-failed		defects=(?!none)
+AR4	mimekit	auth-10-	auth\.parse-failed		
+MH1	mimekit	mht-01-	mhtml\.hit		
+MH2	mimekit	(mht-(02|06|08|09|10|11|15|19)-|written-mht)	mhtml\.hit		
+MH3	mimekit	mht-03-	mhtml\.hit		
+MH4	mimekit	mht-07-	mhtml\.hit		
+MH5	mimekit	mht-17-	mhtml\.hit		
+MH6	python	^thismessage:	urljoin		
+MH7	python	 \+ http:g$	urljoin		
+MH8	python	 \+ HTTP://	urljoin		

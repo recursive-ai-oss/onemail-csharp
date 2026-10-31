@@ -1,0 +1,11 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+Authentication-Results: mx.example.com; spf=softfail (domain owner discourages use of this host) smtp.mailfrom=a@example.net
+Authentication-Results: mx.example.com; spf=temperror (dns timeout)
+Authentication-Results: mx.example.com; spf=permerror
+Content-Type: text/plain
+
+body

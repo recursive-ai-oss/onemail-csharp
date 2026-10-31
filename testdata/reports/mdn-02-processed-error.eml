@@ -1,0 +1,26 @@
+From: Mail Delivery Subsystem <MAILER-DAEMON@mx.example.org>
+To: <sender@example.com>
+Subject: Returned mail
+Date: Thu, 7 Jul 1994 17:16:05 -0400
+Message-ID: <bounce1@mx.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+This is a report.
+--b1
+Content-Type: message/disposition-notification
+
+Reporting-UA: mx; Mailer 1.0
+MDN-Gateway: smtp; gw.example.org
+Final-Recipient: rfc822;x@example.org
+Original-Message-ID: <id@example.org>
+Disposition: automatic-action/MDN-sent-automatically; processed/error,warning
+Error: unable to process
+Warning: something odd
+Failure: none
+X-Vendor: 7
+--b1--

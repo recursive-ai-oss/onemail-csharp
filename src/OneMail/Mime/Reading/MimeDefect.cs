@@ -214,6 +214,62 @@ public enum MimeDefectKind
     /// <summary>A message identifier list element is not a valid msg-id; it was skipped or taken as written.</summary>
     InvalidMessageId,
 
+    // ---- Report bodies, MHTML, authentication fields ----
+
+    /// <summary>A line in a report body (delivery status, disposition notification, feedback report) is neither a <c>Name: value</c> field nor a fold of one. It was skipped.</summary>
+    ReportMalformedLine,
+
+    /// <summary>A field required by the report's RFC is missing from a block (for example <c>Final-Recipient</c>, <c>Action</c>, <c>Status</c>, <c>Disposition</c>, <c>Feedback-Type</c>).</summary>
+    ReportMissingField,
+
+    /// <summary>A report field has a value of the wrong form (an unknown <c>Action</c>, a <c>Status</c> that is not <c>x.y.z</c>, a missing <c>type;</c> prefix, a bad date or address). The text is still available as written.</summary>
+    ReportInvalidFieldValue,
+
+    /// <summary>A field that may appear once appears again in the same block. The first one is used (ambiguity).</summary>
+    AmbiguousReportDuplicateField,
+
+    /// <summary>A report body has no field block, or a delivery status has no per-recipient block.</summary>
+    ReportMissingGroup,
+
+    /// <summary>A notification or feedback report has more than one block. The first block is the report; the rest are kept apart (ambiguity).</summary>
+    AmbiguousReportExtraBlocks,
+
+    /// <summary>A delivery status body has a blank line where the format has none to give: before the first field, after the last, or two in a row between blocks. The extra blank lines are skipped (ambiguity).</summary>
+    AmbiguousReportBlankLines,
+
+    /// <summary>A <c>multipart/report</c> lacks a <c>report-type</c>, lacks its machine-readable part, or its second part does not match the report type (RFC 6522 section 3).</summary>
+    ReportStructureInvalid,
+
+    /// <summary>The <c>start</c> parameter of a <c>multipart/related</c> names no part; the first part is the root.</summary>
+    MhtmlStartNotFound,
+
+    /// <summary>A <c>Content-Location</c> is empty or holds control characters.</summary>
+    InvalidContentLocation,
+
+    /// <summary>Two parts of a <c>multipart/related</c> have the same resolved <c>Content-Location</c>. A reference resolves to the first (ambiguity).</summary>
+    AmbiguousMhtmlDuplicateLocation,
+
+    /// <summary>Two parts of a <c>multipart/related</c> have the same <c>Content-ID</c>. A <c>cid:</c> reference resolves to the first (ambiguity).</summary>
+    AmbiguousMhtmlDuplicateContentId,
+
+    /// <summary>An <c>Authentication-Results</c> field has no authentication service identifier.</summary>
+    AuthenticationResultsMissingId,
+
+    /// <summary>The version after the identifier of an <c>Authentication-Results</c> field is not the number 1.</summary>
+    AuthenticationResultsInvalidVersion,
+
+    /// <summary>A clause of an <c>Authentication-Results</c> field could not be read and was skipped up to the next semicolon.</summary>
+    InvalidAuthenticationResults,
+
+    /// <summary><c>none</c> appears together with method results in one <c>Authentication-Results</c> field. Both are kept (ambiguity).</summary>
+    AmbiguousAuthenticationResultsNone,
+
+    /// <summary>A property of an <c>Authentication-Results</c> clause has no <c>ptype.</c> prefix (RFC 8601 section 2.2). It is kept with an empty property type (ambiguity).</summary>
+    AmbiguousAuthenticationResultsProperty,
+
+    /// <summary>A <c>Received-SPF</c> field has an unknown result keyword or a word that is not <c>key=value</c>.</summary>
+    InvalidReceivedSpf,
+
     // ---- Resource limits ----
 
     /// <summary>Nesting went deeper than <see cref="MimeLimits.MaxDepth"/>; the deeper content is kept as a leaf body.</summary>
@@ -230,6 +286,9 @@ public enum MimeDefectKind
 
     /// <summary>The input is longer than <see cref="MimeLimits.MaxTotalBytes"/>; reading stopped there.</summary>
     TotalSizeLimitExceeded,
+
+    /// <summary>A report body is longer than the reader reads (16 MiB) or has more fields than it keeps (100,000); the rest was ignored.</summary>
+    ReportLimitExceeded,
 }
 
 /// <summary>A repair, guess or refusal reported by the MIME reader, with where it happened.</summary>
@@ -253,7 +312,14 @@ public readonly record struct MimeDefect(MimeDefectKind Kind, long Offset, int L
         or MimeDefectKind.AmbiguousParameterForms
         or MimeDefectKind.AmbiguousUnquotedCommaInPhrase
         or MimeDefectKind.AmbiguousAdjacentAngleAddrs
-        or MimeDefectKind.AmbiguousTwoDigitYear;
+        or MimeDefectKind.AmbiguousTwoDigitYear
+        or MimeDefectKind.AmbiguousReportDuplicateField
+        or MimeDefectKind.AmbiguousReportExtraBlocks
+        or MimeDefectKind.AmbiguousReportBlankLines
+        or MimeDefectKind.AmbiguousMhtmlDuplicateLocation
+        or MimeDefectKind.AmbiguousMhtmlDuplicateContentId
+        or MimeDefectKind.AmbiguousAuthenticationResultsNone
+        or MimeDefectKind.AmbiguousAuthenticationResultsProperty;
 
     /// <summary>True for the kinds that report a resource limit being reached.</summary>
     public bool IsLimit => Kind >= MimeDefectKind.DepthLimitExceeded;
@@ -331,6 +397,25 @@ public readonly record struct MimeDefect(MimeDefectKind Kind, long Offset, int L
         MimeDefectKind.InvalidDate => "A date is not valid.",
         MimeDefectKind.InvalidMessageId => "A message identifier is not valid.",
         MimeDefectKind.InvalidParameter => "A parameter has no value.",
+        MimeDefectKind.ReportMalformedLine => "A report line is not a field.",
+        MimeDefectKind.ReportMissingField => "A required report field is missing.",
+        MimeDefectKind.ReportInvalidFieldValue => "A report field has a value of the wrong form.",
+        MimeDefectKind.AmbiguousReportDuplicateField => "A report field that may appear once is repeated.",
+        MimeDefectKind.ReportMissingGroup => "A report body has no field block for the message or recipients.",
+        MimeDefectKind.AmbiguousReportExtraBlocks => "A report has more than one field block.",
+        MimeDefectKind.AmbiguousReportBlankLines => "A report body has extra blank lines.",
+        MimeDefectKind.ReportStructureInvalid => "A multipart/report does not have the structure of RFC 6522.",
+        MimeDefectKind.ReportLimitExceeded => "A report body is larger than the limit.",
+        MimeDefectKind.MhtmlStartNotFound => "The start parameter names no part.",
+        MimeDefectKind.InvalidContentLocation => "A Content-Location is empty or has control characters.",
+        MimeDefectKind.AmbiguousMhtmlDuplicateLocation => "Two parts have the same Content-Location.",
+        MimeDefectKind.AmbiguousMhtmlDuplicateContentId => "Two parts have the same Content-ID.",
+        MimeDefectKind.AuthenticationResultsMissingId => "Authentication-Results has no authserv-id.",
+        MimeDefectKind.AuthenticationResultsInvalidVersion => "Authentication-Results has an invalid version.",
+        MimeDefectKind.InvalidAuthenticationResults => "A clause of Authentication-Results could not be read.",
+        MimeDefectKind.AmbiguousAuthenticationResultsNone => "Authentication-Results combines none with results.",
+        MimeDefectKind.AmbiguousAuthenticationResultsProperty => "An Authentication-Results property has no type prefix.",
+        MimeDefectKind.InvalidReceivedSpf => "A Received-SPF field could not be fully read.",
         _ => "No defect.",
     };
 }
