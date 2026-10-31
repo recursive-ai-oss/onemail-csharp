@@ -23,8 +23,119 @@ return args[0] switch
 {
     "sweep" => Sweep(args[1..]),
     "occ" => Occ(args[1], args[2]),
+    "pages" when args.Length >= 4 => Pages(args[1], args[2], args[3]),
     _ => 2,
 };
+
+// pages VECTORS OUTDIR HOST: the XSS vectors of testdata/sanitizer/xss.txt placed in every text field of an event (SUMMARY, LOCATION, DESCRIPTION,
+// URL, ATTACH and its FILENAME, the organizer's and an attendee's CN, the attendee address), shown as cards in frames of a browser page with
+// no sanitiser in between. page-sanitized.html has plain-text URLs, page-allow.html the same cards with links; page-raw-NN.html is the control
+// that puts the vector itself in the frame. Same layout as tools/sanitizer/browser-check.sh expects.
+static int Pages(string vectors, string outDir, string host)
+{
+    Directory.CreateDirectory(outDir);
+    List<(string Name, string Html)> vs = [];
+    string name = "";
+    System.Text.StringBuilder body = new();
+    bool have = false;
+    foreach (string line in File.ReadAllLines(vectors))
+    {
+        if (line == "====")
+        {
+            if (have)
+            {
+                vs.Add((name, body.ToString().Replace("{HOST}", host, StringComparison.Ordinal)));
+            }
+
+            have = false;
+            body.Clear();
+        }
+        else if (!have && line.StartsWith("# ", StringComparison.Ordinal) && line[2..].All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
+        {
+            name = line[2..];
+            have = true;
+        }
+        else if (have)
+        {
+            body.Append(line).Append('\n');
+        }
+    }
+
+    if (have)
+    {
+        vs.Add((name, body.ToString().Replace("{HOST}", host, StringComparison.Ordinal)));
+    }
+
+    const string Head = "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title><script>window.__fired=[];</script></head><body>";
+    const string Tail = "<pre id=\"result\">pending</pre><script>setTimeout(function(){document.getElementById('result').textContent="
+        + "'FIRED='+window.__fired.length+' '+JSON.stringify(window.__fired.slice(0,40));},4000);</script></body></html>";
+    const string FrameHead = "<!doctype html><html><head><meta charset=\"utf-8\"><script>(function(){var n=NAME;var f=function(k){return function(x){parent.__fired.push(n+':'+k+':'+String(x));};};"
+        + "window.alert=f('alert');window.confirm=f('confirm');window.prompt=f('prompt');window.write=f('write');window.msgbox=f('msgbox');})();</script></head><body>";
+    static string Esc(string v) => v.Replace("\\", "\\\\", StringComparison.Ordinal).Replace(";", "\\;", StringComparison.Ordinal).Replace(",", "\\,", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);
+    static CalendarCard CardOf(string v)
+    {
+        Component ev = new("VEVENT");
+        void Add(string n, string val, params (string, string)[] ps)
+        {
+            ContentProperty p = new(n, val);
+            foreach ((string k, string x) in ps)
+            {
+                p.Parameters.Set(k, x);
+            }
+
+            ev.Add(p);
+        }
+
+        Add("UID", "x@example.com");
+        Add("DTSTART", "20261130T140000Z");
+        Add("DTEND", "20261130T150000Z");
+        Add("SUMMARY", Esc(v));
+        Add("LOCATION", Esc(v));
+        Add("DESCRIPTION", Esc(v));
+        Add("URL", v.Replace("\n", "", StringComparison.Ordinal));
+        Add("CONFERENCE", v.Replace("\n", "", StringComparison.Ordinal));
+        Add("ATTACH", v.Replace("\n", " ", StringComparison.Ordinal), ("FILENAME", v));
+        Add("ORGANIZER", "mailto:" + v, ("CN", v));
+        Add("ATTENDEE", "mailto:" + v, ("CN", v), ("ROLE", v), ("PARTSTAT", v));
+        Component cal = new("VCALENDAR");
+        cal.Add(new ContentProperty("METHOD", "REQUEST"));
+        cal.Add(ev);
+        return CalendarCard.Create(new IcsComponent(cal))!;
+    }
+
+    int cards = 0;
+    foreach ((string file, Func<string, string> render) in new (string, Func<string, string>)[]
+    {
+        ("page-sanitized.html", v => CardOf(v).ToHtml()),
+        ("page-allow.html", v => CardOf(v).ToHtml(linkUrls: true)),
+        ("page-raw.html", v => v),
+    })
+    {
+        int piece = 0;
+        System.Text.StringBuilder sb = new(Head);
+        int i = 0;
+        foreach ((string vname, string html) in vs)
+        {
+            if (file == "page-raw.html" && i > 0 && i % 20 == 0)
+            {
+                sb.Append(Tail);
+                File.WriteAllText(Path.Combine(outDir, $"page-raw-{piece++:D2}.html"), sb.ToString());
+                sb = new System.Text.StringBuilder(Head);
+            }
+
+            string doc = FrameHead.Replace("NAME", "'" + vname + "'", StringComparison.Ordinal) + render(html) + "</body></html>";
+            cards += file == "page-sanitized.html" ? 1 : 0;
+            sb.Append("<iframe data-i=\"").Append(i++).Append("\" width=\"200\" height=\"40\" srcdoc=\"")
+                .Append(doc.Replace("&", "&amp;", StringComparison.Ordinal).Replace("\"", "&quot;", StringComparison.Ordinal)).Append("\"></iframe>\n");
+        }
+
+        sb.Append(Tail);
+        File.WriteAllText(Path.Combine(outDir, file == "page-raw.html" ? $"page-raw-{piece:D2}.html" : file), sb.ToString());
+    }
+
+    Console.WriteLine($"vectors: {vs.Count}, cards: {cards}");
+    return 0;
+}
 
 static IEnumerable<string> Files(string root) =>
     File.Exists(root) ? [root] : Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal);
