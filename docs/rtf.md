@@ -120,6 +120,7 @@ distinct streams:
 | our compressed size vs Outlook's own stream | 97,438 vs 97,422 bytes over the 27 distinct streams (1.0002 ×); 3 of 45 streams byte-identical, the rest differ only in which of several equal-length matches is used |
 | de-encapsulation vs RTFDE 0.1.2.2 | 31 HTML and 4 text results: identical apart from RT1 (all) and RT2 (4 files) |
 | de-encapsulation vs the message's own `PidTagHtml` / `PidTagBody` | 4 text bodies identical; 6 HTML bodies: 5 differ only by an injected content-type `<meta>` (RT3), 1 is the same text with re-serialised markup (RT4) |
+| encapsulate, then de-encapsulate, every recovered and own HTML and text body | 98 bodies: 97 exact, 1 equal once its LF line endings became CRLF, 0 different |
 | 10 RTF bodies without `\fromhtml1`/`\fromtext` | `NotEncapsulated`; RTFDE refuses them too |
 | 3,000 damaged streams (truncations, bit flips, header edits, insertions) | OneMail reports a defect on 2,998; the 2 without are valid; oracle refuses 2,616 of them; bytes equal wherever both decode, except 123 where OneMail's size or ratio limit refused what the oracle decoded (RT14) |
 

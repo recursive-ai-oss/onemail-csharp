@@ -13,6 +13,7 @@ The RTF bodies come from the public `.msg` files that `tools/corpus/fetch-msg.sh
     RtfTool run $WORK/rtf                                # OneMail's decompression, compression and de-encapsulation; report.tsv
     compare.py $WORK/rtf                                 # oracles + the messages' own bodies; writes <id>.oracle.rtfz and compare.txt
     RtfTool verify $WORK/rtf                             # OneMail reads the oracle's compression of each body
+    RtfTool roundtrip $WORK/rtf                          # encapsulate every extracted body (ours, and the messages' own) and take it back out
     mutants.py make $WORK/rtf $WORK/mut                  # 3,000 damaged streams and the oracle's answer to each
     RtfTool decompress-all $WORK/mut && mutants.py compare $WORK/mut
     RtfTool throughput $WORK/rtf 5                       # MB/s and allocations (a light check, not a benchmark)

@@ -12,6 +12,7 @@ using RecursiveAI.OneMail.Rtf.Compression;
 // run writes <id>.ours.rtf (decompressed), <id>.ours.rtfz (our compression), <id>.ours.deencap.<html|txt> (UTF-8) and
 // report.tsv (one row per RTF body with sizes, CRC and defects).
 // decompress-all decompresses every *.rtfz in <dir> (used for damaged streams) and writes <name>.ours.rtf and ours.tsv.
+// roundtrip encapsulates the de-encapsulated bodies and the messages' own HTML and text bodies and takes them back out.
 // throughput times decompression, compression and de-encapsulation over the extracted bodies (a light check, not a benchmark).
 // verify reads <id>.oracle.rtfz (another program's compression of <id>.ours.rtf) and checks that OneMail decompresses it
 // to the same bytes, cleanly, with the CRC verified.
@@ -21,6 +22,7 @@ return args.Length >= 1 ? args[0] switch
     "run" when args.Length == 2 => Run(args[1]),
     "verify" when args.Length == 2 => Verify(args[1]),
     "decompress-all" when args.Length == 2 => DecompressAll(args[1]),
+    "roundtrip" when args.Length == 2 => RoundTrip(args[1]),
     "throughput" when args.Length >= 2 => Throughput(args[1], args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 5),
     _ => Usage(),
 } : Usage();
@@ -195,4 +197,62 @@ static int DecompressAll(string dir)
 
     File.WriteAllText(Path.Combine(dir, "ours.tsv"), rows.ToString());
     return 0;
+}
+
+static string CrLf(string s) => s.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Replace("\n", "\r\n", StringComparison.Ordinal);
+
+static int RoundTrip(string dir)
+{
+    var utf8 = new UTF8Encoding(false, true);
+    int exact = 0;
+    int normalised = 0;
+    int bad = 0;
+    foreach (string f in Directory.EnumerateFiles(dir).Order(StringComparer.Ordinal))
+    {
+        string name = Path.GetFileName(f);
+        bool html = name.EndsWith(".ours.deencap.html", StringComparison.Ordinal) || name.EndsWith(".html", StringComparison.Ordinal) && !name.Contains(".ours.", StringComparison.Ordinal)
+            || name.EndsWith(".html.u", StringComparison.Ordinal);
+        bool text = name.EndsWith(".ours.deencap.txt", StringComparison.Ordinal) || name.EndsWith(".txt.u", StringComparison.Ordinal) || name.EndsWith(".txt.a", StringComparison.Ordinal);
+        if (!html && !text)
+        {
+            continue;
+        }
+
+        byte[] bytes = File.ReadAllBytes(f);
+        string original;
+        if (name.EndsWith(".u", StringComparison.Ordinal))
+        {
+            original = Encoding.Unicode.GetString(bytes);
+        }
+        else
+        {
+            try
+            {
+                original = utf8.GetString(bytes);
+            }
+            catch (DecoderFallbackException)
+            {
+                original = Encoding.Latin1.GetString(bytes);
+            }
+        }
+
+        byte[] rtf = html ? RtfEncapsulator.EncapsulateHtml(original) : RtfEncapsulator.EncapsulateText(original);
+        RtfDeencapsulationResult r = RtfDeencapsulator.Deencapsulate(rtf);
+        if (r.Text == original && r.Defects.Count == 0)
+        {
+            exact++;
+        }
+        else if (r.Text == CrLf(original) && r.Defects.Count == 0)
+        {
+            normalised++;
+        }
+        else
+        {
+            bad++;
+            Console.WriteLine("MISMATCH " + name);
+        }
+    }
+
+    Console.WriteLine($"roundtrip: {exact} exact, {normalised} equal after line endings became CRLF, {bad} different");
+    return bad == 0 ? 0 : 1;
 }
