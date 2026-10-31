@@ -16,6 +16,8 @@ internal static class Program
     private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal)
     {
         ["text"] = TextTarget.Run,
+        ["mime-reader"] = MimeTargets.Reader,
+        ["mime-tree"] = MimeTargets.Tree,
     };
 
     private static int Main(string[] args)

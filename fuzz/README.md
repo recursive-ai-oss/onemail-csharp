@@ -1,6 +1,6 @@
 # Fuzzing
 
-`fuzz/OneMail.Fuzz` holds the fuzz targets; SharpFuzz instruments `RecursiveAI.OneMail.dll` and libFuzzer drives it. There are no targets yet: each parser adds its own (a static `Run(ReadOnlySpan<byte>)` plus one line in `Program.cs` and one in `run.sh`).
+`fuzz/OneMail.Fuzz` holds the fuzz targets; SharpFuzz instruments `RecursiveAI.OneMail.dll` and libFuzzer drives it. Targets so far: `mime-reader` and `mime-tree`. Each parser adds its own (a static `Run(ReadOnlySpan<byte>)` plus one line in `Program.cs` and one in `run.sh`).
 
 Only the library's typed results may come out of a target. Any other exception, a failed invariant, a hang (`-timeout`) or a memory blow-up (`-rss_limit_mb`) is a finding.
 
