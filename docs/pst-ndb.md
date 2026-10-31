@@ -28,7 +28,11 @@ Observed on a real 4 KiB OST (a 16 MB Outlook 2013 offline store, wVer 36, `SO`,
 - The file has one AMap, the density list page (empty) and no PMap, FMap or FPMap pages. The AMap's free-byte total equals `cbAMapFree` in the header exactly when a bit stands for 512 bytes.
 - The 4 KiB header root is laid out as the Unicode one (offsets 180..252).
 
-Not yet seen on a real file: ANSI and 512-byte Unicode files (no public one was found; see below), 4 KiB files with more than one AMap, and encoded 4 KiB files. Those paths are tested against files written from the specification by the test-side builder only.
+Seen on real files since: Apache Tika's `testPST.pst` and `testPST_variousBodyTypes.pst` are Unicode files with 512-byte pages (wVer 23) and permute encoding (`bCryptMethod` 1). The first has nine AMap pages and two PMap pages; both open with no defect, scan mode finds every block the block B-tree lists, and the LTP layer reads every property and table context in them (`docs/pst-ltp.md`). Not yet seen on a real file: ANSI files (no public one was found), 4 KiB files with more than one AMap, and encoded 4 KiB files. Those paths are tested against files written from the specification by the test-side builder only.
+
+## Sources
+
+`NdbFile.TryOpen(IRandomAccessSource source, bool leaveOpen, ...)` opens a file over any source of the sources layer (a file, a stream, memory, or caller-supplied ranged reads); the path, stream and memory overloads are shortcuts for it. The node database reads with synchronous positioned reads, so a source that does not support them (`SupportsSyncRead` false) is refused with `ArgumentException`; short reads from a source are retried until the buffer is full or the source ends. Paths open with `FileShare.ReadWrite | FileShare.Delete`, so a file another program has open can still be read.
 
 ## Reading never throws
 

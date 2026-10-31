@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- The test-side file builder makes the node-database file the smoke reads back. -->
     <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>

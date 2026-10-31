@@ -4,9 +4,10 @@
 # and are listed in pst-corpus.tsv with their source, terms verdict and SHA-256.
 #
 #   tools/corpus/fetch-pst.sh cfreds-leakage     # NIST CFReDS "Data Leakage Case": the informant's Outlook 2013 OST
+#   tools/corpus/fetch-pst.sh tika               # Apache Tika's two small Unicode PSTs (data files only, Apache-2.0)
 #
-# Needs curl, sha1sum, sha256sum and a 7-Zip command-line (7z, 7za or 7zz). The disk image is unpacked to a scratch
-# file (about 20 GB) that is removed once the Outlook files are copied out.
+# cfreds-leakage needs curl, sha1sum, sha256sum and a 7-Zip command-line (7z, 7za or 7zz). The disk image is unpacked to a
+# scratch file (about 20 GB) that is removed once the Outlook files are copied out. tika needs curl and sha256sum.
 set -euo pipefail
 
 root="${ONEMAIL_CORPUS:-$HOME/onemail/corpus}/pst"
@@ -42,6 +43,18 @@ case "$set_name" in
       sevenzip e -y -o"$dest" "$work/1.ntfs" 'Users/informant/AppData/Local/Microsoft/Outlook/iaman.informant@nist.gov.ost' >/dev/null
     fi
     sha256sum -- ./*.ost ./*.pst 2>/dev/null || true
+    ;;
+  tika)
+    # Source: github.com/apache/tika at the commit below, the Microsoft parser module's test-documents. Only the data files are
+    # fetched, never the Java code or expected-output files beside them.
+    dest="$root/$set_name"; mkdir -p "$dest"; cd "$dest"
+    base=https://raw.githubusercontent.com/apache/tika/c66a83c2b3be6a7595758ab3aae85e07ea23d248/tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/test/resources/test-documents
+    for entry in testPST.pst:f2a6b1d2cad00f574e3d1c1211c4b1c854d6526caea77213adc3da92b7813ae3 testPST_variousBodyTypes.pst:24c5e6bbb8bf26a817c977283e40e7b69d2661fec0845abbe177f97efcb05fb0; do
+      f="${entry%%:*}"; sha="${entry##*:}"
+      if [[ ! -f "$f" ]]; then curl -fL --retry 3 -sS -o "$f.part" "$base/$f"; mv "$f.part" "$f"; fi
+      echo "$sha  $f" | sha256sum -c --quiet - || { echo "checksum mismatch: $f" >&2; exit 1; }
+    done
+    sha256sum -- ./*.pst
     ;;
   *) echo "unknown set $set_name" >&2; exit 2 ;;
 esac

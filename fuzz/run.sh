@@ -42,6 +42,7 @@ case "$target" in
   contentlines) maxlen=65536 ;;
   calendar) maxlen=65536 ;;
   ndb) maxlen=8192 ;;
+  ltp) maxlen=8192 ;;
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;

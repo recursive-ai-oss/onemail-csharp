@@ -22,6 +22,7 @@
     <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
     <!-- The test-side file builder makes the valid base files the patch lists are applied to. -->
     <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>

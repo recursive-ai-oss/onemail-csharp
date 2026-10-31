@@ -39,6 +39,33 @@ public sealed class NdbDataTree : IDisposable
     /// <returns>The entry.</returns>
     public BlockEntry GetLeaf(int index) => _leaves[index];
 
+    /// <summary>The number of data bytes in the <paramref name="index"/>th data block, after any decompression.</summary>
+    /// <param name="index">Zero-based leaf index.</param>
+    /// <returns>The block's logical size.</returns>
+    public int GetLeafSize(int index) => (int)((index + 1 < _starts.Count ? _starts[index + 1] : Length) - _starts[index]);
+
+    /// <summary>Copies bytes from inside one data block, for structures (heap blocks, table row blocks) that are laid out per block.</summary>
+    /// <param name="leaf">Zero-based leaf index.</param>
+    /// <param name="offset">Position inside the block's data.</param>
+    /// <param name="destination">Receives the bytes.</param>
+    /// <returns>The bytes copied: fewer than requested only at the end of the block, or zero where the block could not be read (defects say why) or the arguments are out of range.</returns>
+    public int ReadLeaf(int leaf, int offset, Span<byte> destination)
+    {
+        if ((uint)leaf >= (uint)_leaves.Count || offset < 0 || (leaf != _cachedLeaf && !Load(leaf)))
+        {
+            return 0;
+        }
+
+        int n = Math.Min(_cachedLength - offset, destination.Length);
+        if (n <= 0)
+        {
+            return 0;
+        }
+
+        _cache.AsSpan(offset, n).CopyTo(destination);
+        return n;
+    }
+
     internal void AddLeaf(in BlockEntry leaf, int logicalSize)
     {
         _leaves.Add(leaf);
@@ -124,6 +151,7 @@ public sealed class NdbDataTree : IDisposable
 public sealed class SubnodeTree
 {
     private readonly List<SubnodeEntry> _entries = [];
+    private bool _unsorted;
 
     internal SubnodeTree(Bid root)
     {
@@ -136,7 +164,15 @@ public sealed class SubnodeTree
     /// <summary>The subnode entries in stored order (sorted by NID in a well-formed file).</summary>
     public IReadOnlyList<SubnodeEntry> Entries => _entries;
 
-    internal void Add(in SubnodeEntry e) => _entries.Add(e);
+    internal void Add(in SubnodeEntry e)
+    {
+        if (_entries.Count > 0 && _entries[^1].Nid.Value >= e.Nid.Value)
+        {
+            _unsorted = true;
+        }
+
+        _entries.Add(e);
+    }
 
     /// <summary>Finds a subnode by its local NID.</summary>
     /// <param name="nid">The subnode's NID.</param>
@@ -144,6 +180,33 @@ public sealed class SubnodeTree
     /// <returns>True when the node has such a subnode.</returns>
     public bool TryGet(Nid nid, out SubnodeEntry entry)
     {
+        if (!_unsorted)
+        {
+            int lo = 0, hi = _entries.Count - 1;
+            while (lo <= hi)
+            {
+                int mid = (lo + hi) >>> 1;
+                uint v = _entries[mid].Nid.Value;
+                if (v == nid.Value)
+                {
+                    entry = _entries[mid];
+                    return true;
+                }
+
+                if (v < nid.Value)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid - 1;
+                }
+            }
+
+            entry = default;
+            return false;
+        }
+
         foreach (SubnodeEntry e in _entries)
         {
             if (e.Nid == nid)

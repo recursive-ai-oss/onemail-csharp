@@ -11,6 +11,7 @@ using RecursiveAI.OneMail.Mime.Authentication;
 using RecursiveAI.OneMail.Mime.Mhtml;
 using RecursiveAI.OneMail.Mime.Reports;
 using RecursiveAI.OneMail.Render;
+using RecursiveAI.OneMail.Pst.Ltp;
 using RecursiveAI.OneMail.Pst.Ndb;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores;
@@ -93,6 +94,32 @@ internal static class Program
 
         Console.WriteLine("ndb: " + (ndbOk ? "ok" : "FAILED"));
 
+        // Lists, tables and properties: a property context and a table context (rows in a subnode) in a 4 KiB file with compressed blocks.
+        bool ltpOk = true;
+        {
+            var pcNode = PcBuilder.Build(0x2004, [new PcSpec(0x37, LtpPropertyTypes.PtypString, System.Text.Encoding.Unicode.GetBytes("hi")), new PcSpec(0x0E07, LtpPropertyTypes.PtypInteger32, [7, 0, 0, 0]), new PcSpec(0x3701, LtpPropertyTypes.PtypBinary, new byte[5000], InSubnode: true)]);
+            var tcNode = TcBuilder.Build(0x80E, new TcSpec { Columns = [(0x3001, LtpPropertyTypes.PtypString), (0x0E08, LtpPropertyTypes.PtypInteger32)], Rows = Enumerable.Range(0, 30).Select(i => ((uint)(0x2004 + (i * 32)), new byte[]?[] { System.Text.Encoding.Unicode.GetBytes("n" + i), BitConverter.GetBytes(i) })).ToList(), RowsInSubnode = true, MatrixBlockSize = 300 });
+            byte[] lfile = NdbTestBuilder.Build(NdbFormat.Unicode4K, [pcNode, tcNode], new TestBuild { Compress = true }).Bytes;
+            ltpOk &= NdbFile.TryOpen(lfile, out NdbFile? lf, out _) && lf is not null;
+            if (lf is not null)
+            {
+                using (lf)
+                {
+                    ltpOk &= PropertyContext.TryOpen(lf, new Nid(0x2004), out PropertyContext? lpc, out _) && lpc is not null;
+                    ltpOk &= lpc!.TryGet(0x0E07, out PcProperty p) && LtpValues.TryGetInt32(lpc.ReadValue(p)!, out int seven) && seven == 7;
+                    ltpOk &= lpc.TryGet(0x3701, out PcProperty big) && lpc.GetValueLength(big) == 5000;
+                    lpc.Dispose();
+                    ltpOk &= TableContext.TryOpen(lf, new Nid(0x80E), out TableContext? ltc, out _) && ltc is not null && ltc.RowCount == 30;
+                    byte[] row = new byte[ltc!.RowSize];
+                    ltpOk &= ltc.TryReadRow(29, row) && ltc.GetRow(row).TryGetCell(ltc.FindColumn(0x3001), out LtpValueRef cell) && System.Text.Encoding.Unicode.GetString(ltc.ReadValue(cell)!) == "n29";
+                    ltc.Dispose();
+                    ltpOk &= lf.Defects.Count == 0;
+                }
+            }
+        }
+
+        Console.WriteLine("ltp: " + (ltpOk ? "ok" : "FAILED"));
+
         // Structured headers: addresses, dates, identifiers and RFC 2231 parameters, and the writer's header encoding.
         byte[] structured = "From: =?utf-8?q?Caf=C3=A9?= <a@example.com>\r\nTo: Doe, John <j@example.org>, g: x@example.net;\r\nDate: Mon, 14 May 2001 23:39:00 +0200\r\nMessage-ID: <id@example.com>\r\nContent-Disposition: attachment; filename*=utf-8''caf%C3%A9.txt\r\n\r\nx"u8.ToArray();
         MimeEntity sm = MimeEntity.Parse(structured);
@@ -134,6 +161,6 @@ internal static class Program
             && ar.Count == 1 && ar[0].Results[0].Method == "spf" && MhtmlUri.Resolve("http://a/b/c/d", "../g") == "http://a/b/g";
         Console.WriteLine("reports: " + (reportsOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return textOk && mimeOk && ndbOk && ltpOk && structuredOk && storesOk && reportsOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

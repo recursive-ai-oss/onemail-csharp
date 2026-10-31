@@ -14,6 +14,8 @@ public sealed class TestNode
     public required uint Nid { get; init; }
     public byte[] Data { get; init; } = [];
     public IReadOnlyList<TestNode> Subnodes { get; init; } = [];
+    /// <summary>When set, the node's data blocks exactly as given (one block each, under an XBLOCK when there are several) and <see cref="Data"/> is ignored; for heaps, whose blocks are meaningful.</summary>
+    public IReadOnlyList<byte[]>? Blocks { get; init; }
 }
 
 /// <summary>Knobs for <see cref="NdbTestBuilder"/>.</summary>
@@ -139,6 +141,20 @@ public static class NdbTestBuilder
             return WriteBlock(x, true);
         }
 
+        ulong WriteNodeData(TestNode n)
+        {
+            if (n.Blocks is null) { return WriteData(n.Data); }
+            if (n.Blocks.Count == 0) { return 0; }
+            var ids = n.Blocks.Select(b => WriteBlock(b, false)).ToList();
+            if (ids.Count == 1) { return ids[0]; }
+            var x = new byte[8 + (ids.Count * g.IdSize)];
+            x[0] = 1; x[1] = 1;
+            BinaryPrimitives.WriteUInt16LittleEndian(x.AsSpan(2), (ushort)ids.Count);
+            BinaryPrimitives.WriteUInt32LittleEndian(x.AsSpan(4), (uint)n.Blocks.Sum(b => b.Length));
+            for (int i = 0; i < ids.Count; i++) { PutId(x.AsSpan(8 + (i * g.IdSize)), ids[i]); }
+            return WriteBlock(x, true);
+        }
+
         // MS-PST 2.2.2.8.3.3: an SLBLOCK lists (nid, bidData, bidSub) for each subnode.
         ulong WriteSubnodes(IReadOnlyList<TestNode> subs)
         {
@@ -150,7 +166,7 @@ public static class NdbTestBuilder
             int i = 0;
             foreach (TestNode s in subs.OrderBy(n => n.Nid))
             {
-                ulong d = WriteData(s.Data), sub = WriteSubnodes(s.Subnodes);
+                ulong d = WriteNodeData(s), sub = WriteSubnodes(s.Subnodes);
                 Span<byte> e = sl.AsSpan(head + (i++ * entry));
                 PutId(e, s.Nid); PutId(e[g.IdSize..], d); PutId(e[(2 * g.IdSize)..], sub);
             }
@@ -160,7 +176,7 @@ public static class NdbTestBuilder
         var nbtEntries = new List<(ulong Key, byte[] Entry)>();
         foreach (TestNode n in nodes.OrderBy(n => n.Nid))
         {
-            ulong d = WriteData(n.Data), sub = WriteSubnodes(n.Subnodes);
+            ulong d = WriteNodeData(n), sub = WriteSubnodes(n.Subnodes);
             int sz = g.Ansi ? 16 : 32;
             var e = new byte[sz];
             PutId(e, n.Nid); PutId(e.AsSpan(g.IdSize), d); PutId(e.AsSpan(2 * g.IdSize), sub);
