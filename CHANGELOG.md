@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `RecursiveAI.OneMail.Composition`: `CreateReply`, `CreateReplyAll` and `CreateForward` (inline or as a `message/rfc822` attachment) on any item. They make the threading headers, recipients, subject prefix (never stacked), quoted text or HTML, inline images, and for Outlook items the MS-OXOMSG conversation index level, as MIME and, for Outlook originals, as a MAPI message; hostile originals are bounded and reported as typed defects. `ConversationIndex` and `SubjectPrefixes` are public. See `docs/composition.md`.
 - `StoreConverter` and `Mail.ConvertAsync`/`Mail.Convert`: any readable store or directory to EML, mbox, Maildir++, Apple Mail bundles, ICS, vCard, the j/x forms or TNEF, keeping folders, flags and keywords where the target has them, with progress, cancellation, an aggregate loss report and an `IStoreSink` extension point; the fidelity matrix is in `docs/fidelity.md`.
 - `onemail convert` and `onemail export`, with `--json`.
 - `MaildirStore.DeliverPath`: delivers and returns the path (`Deliver` re-listed the directory per message).
