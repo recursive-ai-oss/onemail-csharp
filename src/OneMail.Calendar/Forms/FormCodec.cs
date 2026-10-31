@@ -724,7 +724,7 @@ internal static class FormCodec
 
     internal static Component FromForm(FComponent fc, Dialect d, string path, DefectSink defects)
     {
-        Component c = new(FormText.Upper(fc.Name));
+        Component c = new(SafeName(fc.Name));
         foreach (FProperty p in fc.Props)
         {
             c.Add(FromForm(p, d, path, defects));
@@ -817,8 +817,18 @@ internal static class FormCodec
                 continue;
             }
 
-            IEnumerable<string> vals = d.IsVCard() && fp.Name == "label" ? fp.Values.Select(LabelEscape) : fp.Values;
-            ps.Add(new ContentParameter(FormText.Upper(fp.Name), vals));
+            // A parameter value cannot hold a line break in text; a line break there (or in a name) is a defect and is replaced.
+            IEnumerable<string> vals = d.IsVCard() && fp.Name == "label" ? fp.Values.Select(LabelEscape) : fp.Values.Select(v =>
+            {
+                if (v.AsSpan().IndexOfAny('\r', '\n') < 0)
+                {
+                    return v;
+                }
+
+                defects.Add(FormDefectKind.LineBreakEscaped, f.Offset, ppath);
+                return v.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
+            });
+            ps.Add(new ContentParameter(SafeParamName(fp.Name), vals));
         }
 
         if (d == Dialect.VCard21 && text.AsSpan().IndexOfAny('\r', '\n') >= 0)
@@ -851,6 +861,33 @@ internal static class FormCodec
         }
 
         return prop;
+    }
+
+    private static readonly System.Buffers.SearchValues<char> ParamNameBad = System.Buffers.SearchValues.Create(";:=,\"\r\n");
+
+    private static string SafeParamName(string name)
+    {
+        string n = FormText.Upper(name);
+        if (n.Length == 0)
+        {
+            return "X-EMPTY";
+        }
+
+        if (n.AsSpan().IndexOfAny(ParamNameBad) < 0)
+        {
+            return n;
+        }
+
+        char[] chars = n.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (ParamNameBad.Contains(chars[i]))
+            {
+                chars[i] = '-';
+            }
+        }
+
+        return new string(chars);
     }
 
     private static string SafeName(string name)

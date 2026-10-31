@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.Forms;
@@ -10,6 +11,34 @@ namespace RecursiveAI.OneMail.Tests.Calendar;
 public class FormsHostileTests
 {
     private static bool Has(FormReadResult r, FormDefectKind k) => r.Defects.Any(d => d.Kind == k);
+
+    private static byte[] Repro(string name, [CallerFilePath] string here = "") =>
+        File.ReadAllBytes(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "..", "testdata", "fuzz", name)));
+
+    [Fact]
+    public void AFuzzFoundComponentNameWithALineBreakIsRenamedNotThrown()
+    {
+        // The component name "vcalend<CR>" cannot be written as a BEGIN line.
+        FormReadResult r = JsonForms.FromJson(Repro("jcal-component-name-line-break.bin"));
+        Assert.NotNull(r.Document);
+        _ = ContentDocument.Parse(r.Document.ToArray());
+    }
+
+    [Fact]
+    public void AFuzzFoundMisdeclaredEncodingIsNotWellFormedNotAnException()
+    {
+        // The framework's reader throws ArgumentOutOfRangeException while switching encoding on this declaration.
+        FormReadResult r = XmlForms.FromXml(Repro("xcal-encoding-declaration-mismatch.bin"));
+        Assert.Contains(r.Defects, static d => d.Kind == FormDefectKind.NotWellFormed);
+    }
+
+    [Fact]
+    public void ALineBreakInAParameterValueOrNameIsReplacedAndReported()
+    {
+        FormReadResult r = JsonForms.FromJson("[\"vcard\",[[\"tel\",{\"x-a\\nb\":\"one\\ntwo\"},\"text\",\"1\"]]]");
+        Assert.Contains(r.Defects, static d => d.Kind == FormDefectKind.LineBreakEscaped);
+        Assert.Contains("one two", Encoding.UTF8.GetString(r.Document.ToArray()));
+    }
 
     [Fact]
     public void DeepJsonNestingStopsAtTheDepthLimit()

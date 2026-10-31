@@ -686,6 +686,13 @@ public static class XmlForms
             defects.Add(dtd ? FormDefectKind.DtdProhibited : FormDefectKind.NotWellFormed, -1, string.Empty, e.LineNumber, e.LinePosition);
             return null;
         }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or IndexOutOfRangeException or IOException or DecoderFallbackException)
+        {
+            // The framework's reader throws these, rather than XmlException, for some broken encoding declarations (an
+            // encoding switch halfway through a misdeclared stream); to a caller that is a document that is not well formed.
+            defects.Add(FormDefectKind.NotWellFormed, -1, string.Empty);
+            return null;
+        }
     }
 
     private static void CheckString(string s, FormLimits limits)
