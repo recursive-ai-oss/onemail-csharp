@@ -254,7 +254,7 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
                 int k = 0;
                 foreach (Stores.Emlx.EmlxItem it in bundle.Enumerate())
                 {
-                    yield return new EmlxMimeItem(this, null, fs, it.Path, k++);
+                    yield return new EmlxMimeItem(this, null, fs, it.Path, k++, BundleFolder(it.Path));
                 }
 
                 break;
@@ -344,6 +344,19 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         return ValueTask.CompletedTask;
     }
 
+    // An Apple Mail bundle keeps a folder's messages in "<name>.mbox/Messages"; subfolders are "<name>.mbox" directories inside it.
+    private static string? BundleFolder(string messagesFile)
+    {
+        string[] parts = messagesFile.Split('/');
+        List<string> names = [];
+        for (int i = 0; i < parts.Length - 2; i++)
+        {
+            names.Add(parts[i].EndsWith(".mbox", StringComparison.OrdinalIgnoreCase) ? parts[i][..^5] : parts[i]);
+        }
+
+        return names.Count == 0 ? null : string.Join('/', names);
+    }
+
     internal MboxReader MessageReader() => _messageReader ??= new MboxReader(_source!, _mbox);
 
     internal MimeReaderOptions? MimeOptions => _mime;
@@ -416,6 +429,11 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         }
 
         internal override MailDate? DeliveryDate() => StoreDate(entry.Modified);
+
+        internal override bool FlagsInStore => true;
+
+        internal override (MessageMarks Marks, IReadOnlyList<string> Keywords) StoreFlags() =>
+            (entry.Subdirectory == MaildirSubdirectory.New ? entry.Marks | MessageMarks.Recent : entry.Marks, entry.Keywords);
 
         internal override IEnumerable<MailDefect> StoreDefectsOf() => FromStoreDefects(entry.Defects);
     }
@@ -502,13 +520,13 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         private readonly string? _path;
         private readonly EmlxEntry _entry;
 
-        public EmlxMimeItem(MailContainer owner, IRandomAccessSource? shared, PhysicalStoreFileSystem? fs, string? path, int index)
-            : this(owner, shared, fs, path, index, ReadEntry(shared, fs, path))
+        public EmlxMimeItem(MailContainer owner, IRandomAccessSource? shared, PhysicalStoreFileSystem? fs, string? path, int index, string? folder = null)
+            : this(owner, shared, fs, path, index, folder, ReadEntry(shared, fs, path))
         {
         }
 
-        private EmlxMimeItem(MailContainer owner, IRandomAccessSource? shared, PhysicalStoreFileSystem? fs, string? path, int index, EmlxEntry entry)
-            : base(owner._mime, new MailProvenance(MailFormat.Emlx, path ?? owner.Location, null, entry.MessageOffset, entry.MessageLength, index))
+        private EmlxMimeItem(MailContainer owner, IRandomAccessSource? shared, PhysicalStoreFileSystem? fs, string? path, int index, string? folder, EmlxEntry entry)
+            : base(owner._mime, new MailProvenance(MailFormat.Emlx, path ?? owner.Location, folder, entry.MessageOffset, entry.MessageLength, index))
         {
             _owner = owner;
             _shared = shared;
@@ -530,6 +548,14 @@ public sealed class MailContainer : IAsyncEnumerable<IMailItem>, IDisposable, IA
         }
 
         internal override IEnumerable<MailDefect> StoreDefectsOf() => FromStoreDefects(_entry.Defects);
+
+        internal override bool FlagsInStore => true;
+
+        internal override (MessageMarks Marks, IReadOnlyList<string> Keywords) StoreFlags()
+        {
+            _owner.ThrowIfDisposed();
+            return (WithFile(f => EmlxReader.ReadMetadata(f, _entry).Marks), []);
+        }
 
         private static EmlxEntry ReadEntry(IRandomAccessSource? shared, PhysicalStoreFileSystem? fs, string? path)
         {
