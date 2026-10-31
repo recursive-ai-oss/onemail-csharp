@@ -129,8 +129,18 @@ public interface IMailAttachment
     /// <summary>The file name as written (the disposition's <c>filename</c>, else the type's <c>name</c>), decoded; null when it has none. Not made safe for a file system.</summary>
     string? FileName { get; }
 
-    /// <summary>The media type, lower case.</summary>
+    /// <summary>
+    /// The media type, lower case. A stored type other than <c>application/octet-stream</c> is returned as stored. When the item stored
+    /// none, or the generic <c>application/octet-stream</c>, and the file name's extension is in the built-in table, the type for that
+    /// extension is returned and <see cref="ContentTypeInferred"/> is true.
+    /// </summary>
     string ContentType { get; }
+
+    /// <summary>
+    /// True when <see cref="ContentType"/> was inferred from the file name's extension because the item stored no specific type.
+    /// A default member, so implementations written before it was added keep working.
+    /// </summary>
+    bool ContentTypeInferred => false;
 
     /// <summary>The <c>Content-ID</c> without angle brackets, or null. Inline content is addressed from HTML as <c>cid:</c> + this value.</summary>
     string? ContentId { get; }

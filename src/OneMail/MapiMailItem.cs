@@ -445,9 +445,17 @@ internal sealed class MapiMailAttachment(MapiAttachment attachment, MailProvenan
             }
 
             string? t = attachment.MimeType?.Trim();
+            if (AttachmentMediaTypes.IsGeneric(t) && AttachmentMediaTypes.Infer(FileName) is { } inferred)
+            {
+                return inferred;
+            }
+
             return string.IsNullOrEmpty(t) ? "application/octet-stream" : t.ToLowerInvariant();
         }
     }
+
+    public bool ContentTypeInferred
+        => attachment.EmbeddedMessage is null && AttachmentMediaTypes.IsGeneric(attachment.MimeType) && AttachmentMediaTypes.Infer(FileName) is not null;
 
     public string? ContentId
     {
