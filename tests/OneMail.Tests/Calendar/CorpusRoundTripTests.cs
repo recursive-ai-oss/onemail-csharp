@@ -13,8 +13,10 @@ public class CorpusRoundTripTests
     private static string DataRoot([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "..", "testdata"));
 
+    private static readonly string[] Roots = ["calendar", "fuzz/calendar"];
+
     public static IEnumerable<object[]> Files() =>
-        new[] { "calendar", "fuzz/calendar" }.SelectMany(d => Directory.EnumerateFiles(Path.Combine(DataRoot(), d), "*", SearchOption.AllDirectories))
+        Roots.SelectMany(d => Directory.EnumerateFiles(Path.Combine(DataRoot(), d), "*", SearchOption.AllDirectories))
             .Where(f => f.EndsWith(".ics", StringComparison.Ordinal) || f.EndsWith(".vcf", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .Select(f => new object[] { Path.GetRelativePath(DataRoot(), f).Replace('\\', '/') });

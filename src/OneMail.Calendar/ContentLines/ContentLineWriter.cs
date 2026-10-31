@@ -66,7 +66,7 @@ public sealed class ContentLineWriter
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
-        if (name.Length == 0 || name.AsSpan().IndexOfAny(";:\r\n") >= 0 || (group is not null && group.AsSpan().IndexOfAny(";:\r\n.") >= 0))
+        if (name.Length == 0 || name.AsSpan().IndexOfAny(";:\r\n") >= 0 || (group is not null && group.AsSpan().IndexOfAny(";:\r\n") >= 0))
         {
             throw new ArgumentException("The name or group is empty or contains a delimiter.", nameof(name));
         }

@@ -305,6 +305,29 @@ public class DocumentTests
     }
 
     [Fact]
+    public void EditingAPropertyWithAnOddGroupOrNameStillWrites()
+    {
+        // Found by fuzzing: a dotted group such as "A.B" (from "A.B.C:x") made the writer throw after an edit.
+        byte[] data = B("BEGIN:X\r\nA.B.C:x\r\nEND:X\r\n");
+        ContentDocument d = ContentDocument.Parse(data);
+        ContentProperty p = d.Components.Single().FindProperty("C")!;
+        Assert.Equal("A.B", p.Group);
+        p.Value = "y";
+        Assert.Equal("BEGIN:X\r\nA.B.C:y\r\nEND:X\r\n", Encoding.UTF8.GetString(d.ToArray()));
+    }
+
+    [Fact]
+    public void PropertyNamesAndGroupsWithDelimitersAreRefused()
+    {
+        Assert.Throws<ArgumentException>(() => new ContentProperty("A:B", "x"));
+        Assert.Throws<ArgumentException>(() => new ContentProperty("", "x"));
+        Assert.Throws<ArgumentException>(() => new ContentProperty("A", "x", "g;h"));
+        ContentProperty p = new("A", "x");
+        Assert.Throws<ArgumentException>(() => p.Name = "B\n");
+        Assert.Throws<ArgumentException>(() => p.Group = "");
+    }
+
+    [Fact]
     public void BlankAndMalformedLinesCannotBeEdited()
     {
         ContentDocument d = ContentDocument.Parse(B("junk\r\n"));

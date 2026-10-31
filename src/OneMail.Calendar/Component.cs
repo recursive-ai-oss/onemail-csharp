@@ -123,9 +123,11 @@ public sealed class ContentProperty : ComponentItem
     /// <param name="name">The property name.</param>
     /// <param name="value">The value, already escaped.</param>
     /// <param name="group">The group (<c>item1</c>), or null.</param>
+    /// <exception cref="ArgumentException">The name is empty, or the name or group contains a colon, semicolon or line break.</exception>
     public ContentProperty(string name, string value, string? group = null)
     {
-        ArgumentNullException.ThrowIfNull(name);
+        CheckName(name);
+        CheckGroup(group);
         ArgumentNullException.ThrowIfNull(value);
         _name = name;
         _value = value;
@@ -149,26 +151,27 @@ public sealed class ContentProperty : ComponentItem
     /// <summary>Whether this is a real property, or a blank or malformed line kept for fidelity. The latter two cannot be edited.</summary>
     public ContentLineKind Kind { get; }
 
-    /// <summary>The group (<c>item1</c> in <c>item1.EMAIL</c>), or null.</summary>
+    /// <summary>The group (<c>item1</c> in <c>item1.EMAIL</c>), or null. Setting it throws <see cref="ArgumentException"/> for an empty group or one with a colon, semicolon or line break.</summary>
     public string? Group
     {
         get => _group;
         set
         {
             EnsureEditable();
+            CheckGroup(value);
             _group = value;
             Touch();
         }
     }
 
-    /// <summary>The name as written; compare with <see cref="IsNamed"/>.</summary>
+    /// <summary>The name as written; compare with <see cref="IsNamed"/>. Setting it throws <see cref="ArgumentException"/> for an empty name or one with a colon, semicolon or line break.</summary>
     public string Name
     {
         get => _name;
         set
         {
             EnsureEditable();
-            ArgumentException.ThrowIfNullOrEmpty(value);
+            CheckName(value);
             _name = value;
             Touch();
         }
@@ -199,6 +202,24 @@ public sealed class ContentProperty : ComponentItem
     {
         _modified = true;
         _raw = default;
+    }
+
+    // A name or group with a delimiter would not read back as the same line.
+    private static void CheckName(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        if (name.AsSpan().IndexOfAny(";:\r\n") >= 0)
+        {
+            throw new ArgumentException("A property name cannot contain a colon, semicolon or line break.", nameof(name));
+        }
+    }
+
+    private static void CheckGroup(string? group)
+    {
+        if (group is not null && (group.Length == 0 || group.AsSpan().IndexOfAny(";:\r\n") >= 0))
+        {
+            throw new ArgumentException("A group cannot be empty or contain a colon, semicolon or line break.", nameof(group));
+        }
     }
 
     private void EnsureEditable()
