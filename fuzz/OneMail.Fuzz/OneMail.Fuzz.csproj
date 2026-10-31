@@ -6,6 +6,7 @@
     <RootNamespace>$(PackagePrefix).OneMail.Fuzz</RootNamespace>
     <IsPackable>false</IsPackable>
     <!-- The MSG file builder uses OneArchive's compound file writer, a preview API. -->
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
     <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 

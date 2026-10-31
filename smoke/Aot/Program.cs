@@ -144,6 +144,25 @@ internal static class Program
             && MailFormatSniffer.Sniff(new MemorySource("BEGIN:VCALENDAR\r\n"u8.ToArray())) == MailFormat.Ics;
         Console.WriteLine("view: " + (viewOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // MSG: sniff, open, read recipients, an attachment and an embedded message.
+        byte[] msgBytes = RecursiveAI.OneMail.Tests.Msg.MsgFixtures.All()["recipients-attachments.msg"];
+        using var msgSource = new MemorySource(msgBytes);
+        RecursiveAI.OneMail.Msg.MsgFile? msgFile = null;
+        bool msgOk = RecursiveAI.OneMail.Msg.MsgFile.IsMsg(msgSource) && MailFormatSniffer.Sniff(msgSource) == MailFormat.Msg
+            && RecursiveAI.OneMail.Msg.MsgFile.TryOpen(msgBytes, out msgFile, out _);
+        if (msgOk)
+        {
+            using (msgFile)
+            {
+                var mm = msgFile!.Message;
+                msgOk = mm.Subject == "Recipients, attachments and an embedded message" && mm.Recipients.Count == 3 && mm.Recipients[0].EmailAddress == "ann@example.org"
+                    && mm.Attachments.Count >= 2 && mm.Attachments[0].FileName == "data.bin" && mm.Attachments[0].OpenData()!.Length == 5000
+                    && mm.Body == "Hello\r\nworld";
+            }
+        }
+
+        Console.WriteLine("msg: " + (msgOk ? "ok" : "FAILED"));
+
+        return msgOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

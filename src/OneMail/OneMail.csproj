@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <!-- OneArchive's compound file reader is a preview API; its own documentation asks consumers to opt in with these two IDs. -->
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
     <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
     <Description>Reads and writes email formats for .NET: MIME/EML, MBOX, Maildir, TNEF, MSG, PST/OST and more, with a lossless model and typed defects.</Description>
   </PropertyGroup>

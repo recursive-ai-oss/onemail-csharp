@@ -8,15 +8,23 @@
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The test-side file builder makes the node-database file the smoke reads back. -->
     <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
+    <!-- The same for the compound-file builder that makes the MSG the smoke reads back. -->
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>

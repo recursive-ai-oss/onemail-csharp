@@ -301,3 +301,16 @@ chooses between readings of a valid tree. The tree always keeps every part (`doc
 | V6 | Text body without a usable charset | `us-ascii`, bytes above 127 replaced | UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252 (N5's rule). |
 | V7 | Address groups in `From`/`To`/… | Group name kept | Flattened to the members, the group name dropped (A1). The tree keeps the group. |
 | V8 | Attachment file name | `get_filename()`: disposition `filename`, else type `name`, with the parameter rules of N1–N8 | The same order (N9). Names are kept as written, not made safe for a file system (N10); no name is `null`, never an empty string. |
+
+## MAPI and MSG
+
+Observed on the Apache Tika and POI MSG files (55) and our generated ones, against extract-msg 0.55.0 as a black-box oracle.
+No Outlook has been observed yet, so each resolution is provisional.
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| X1 | Same property tag twice in one property stream | n/a | Both kept in the bag; lookups return the last | `AmbiguousDuplicateProperty` | prov. |
+| X2 | Value stream with no property entry (POI fuzz-minimised file) | ignores it | Read as a property; the stream is the data | `AmbiguousOrphanValueStream` | prov., lossless |
+| X3 | String type differs from the store support mask | follows the entry's type | The entry's own type decides | `AmbiguousStringType` | MS-OXMSG 2.4.2 |
+| X4 | 8-bit strings, no `PidTagMessageCodepage` | fixed Latin default | Locale's ANSI page, then Internet code page, then enclosing message, then 1252 | `AmbiguousCodePage` | 36 corpus strings differ, all in files with only a locale or Internet code page |
+| X5 | String size field: stream length or stream plus terminator | n/a | Both accepted | none | ANSI files store the NUL in the stream |

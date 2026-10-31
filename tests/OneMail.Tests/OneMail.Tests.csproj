@@ -7,6 +7,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <!-- OneArchive's compound file writer builds the MSG fixtures; its preview opt-in as in the library project. -->
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
     <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 

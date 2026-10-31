@@ -144,15 +144,11 @@ public class SharedViewTests
         return [.. B(msg.Length + "\n"), .. msg, .. B("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>flags</key><integer>1</integer></dict></plist>")];
     }
 
-    private static byte[] Cfb(bool withProperties)
+    // A compound-file header with nothing behind it: a container, but not a message.
+    private static byte[] Cfb()
     {
         byte[] b = new byte[2048];
         new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }.CopyTo(b, 0);
-        if (withProperties)
-        {
-            Encoding.Unicode.GetBytes("__properties_version1.0").CopyTo(b, 1024);
-        }
-
         return b;
     }
 
@@ -190,8 +186,8 @@ public class SharedViewTests
         "vcf" => B("begin:vcard\r\nVERSION:3.0\r\nFN:A\r\nEND:VCARD\r\n"),
         "pst" => Pst("SM"),
         "ost" => Pst("SO"),
-        "msg" => Cfb(true),
-        "cfb" => Cfb(false),
+        "msg" => Msg.MsgFixtures.All()["empty.msg"],
+        "cfb" => Cfb(),
         "tnef" => [0x78, 0x9F, 0x3E, 0x22, 1, 0],
         "text" => B("just some words\r\nand more\r\n"),
         "empty" => [],
