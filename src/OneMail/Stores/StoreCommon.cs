@@ -53,12 +53,6 @@ public enum StoreDefects
 
     /// <summary>EMLX: the byte count runs past the end of the file. The message is cut at the end of the file.</summary>
     TruncatedMessage = 1 << 11,
-
-    /// <summary>EMLX: the bytes after the message are not a property list. Kept as unparsed trailer bytes.</summary>
-    BadTrailer = 1 << 12,
-
-    /// <summary>EMLX: a partial message whose attachments are stored beside it (<c>.partial.emlx</c>).</summary>
-    PartialMessage = 1 << 13,
 }
 
 /// <summary>One defect with the byte offset it was found at, as delivered to a reader's defect handler.</summary>

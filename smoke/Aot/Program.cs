@@ -7,6 +7,11 @@ using RecursiveAI.OneMail.Client;
 using RecursiveAI.OneMail.Cryptography;
 using RecursiveAI.OneMail.Mime;
 using RecursiveAI.OneMail.Render;
+using RecursiveAI.OneMail.Sources;
+using RecursiveAI.OneMail.Stores;
+using RecursiveAI.OneMail.Stores.Emlx;
+using RecursiveAI.OneMail.Stores.Maildir;
+using RecursiveAI.OneMail.Stores.Mbox;
 using RecursiveAI.OneMail.Text;
 
 namespace RecursiveAI.OneMail.AotSmoke;
@@ -62,6 +67,27 @@ internal static class Program
             return 2;
         }
 
-        return textOk && mimeOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Mailbox stores: split and write an mbox, deliver to an in-memory Maildir, read an emlx with its property list.
+        byte[] mbox = "From a@b.c Mon Jan  1 00:00:00 2024\nSubject: x\n\n>From quoted\n\nFrom d@e.f Tue Jan  2 00:00:00 2024\nSubject: y\n\nz\n"u8.ToArray();
+        using var mboxSource = new MemorySource(mbox);
+        using var mboxReader = new MboxReader(mboxSource);
+        int count = 0;
+        while (mboxReader.Read())
+        {
+            count++;
+        }
+
+        using var written = new MemoryStream();
+        new MboxWriter(written, new MboxWriterOptions { Variant = MboxVariant.Mboxcl }).Append("Subject: s\n\nFrom x\n"u8.ToArray(), "me", DateTimeOffset.UnixEpoch);
+        var fs = new MemoryStoreFileSystem();
+        MaildirEntry delivered = new MaildirStore(fs).Deliver("Subject: m\n\nbody\n"u8.ToArray(), marks: MessageMarks.Seen, keywords: ["k"]);
+        byte[] emlx = "3\nabc<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>flags</key><integer>1</integer></dict></plist>"u8.ToArray();
+        using var emlxSource = new MemorySource(emlx);
+        EmlxMetadata meta = EmlxReader.ReadMetadata(emlxSource, EmlxReader.Read(emlxSource));
+        bool storesOk = count == 2 && written.Length > 0 && delivered.Keywords[0] == "k" && meta.Marks == MessageMarks.Seen
+            && StoreSniffer.Sniff(mboxSource) == StoreFormat.Mbox && StoreSniffer.Sniff(emlxSource) == StoreFormat.Emlx;
+        Console.WriteLine("stores: " + (storesOk ? "ok" : "FAILED"));
+
+        return textOk && mimeOk && storesOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
