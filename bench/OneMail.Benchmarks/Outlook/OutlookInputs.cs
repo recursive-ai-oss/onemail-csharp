@@ -44,11 +44,22 @@ internal static class OutlookInputs
         ? [.. Directory.EnumerateFiles(Path.Combine(Corpus, "tnef"), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)]
         : [];
 
-    /// <summary>The TNEF row names: file names, without the one 53-byte truncated stream that has no content to read.</summary>
-    public static IEnumerable<string> TnefNames => TnefFiles().Where(f => new FileInfo(f).Length > 100).Select(Path.GetFileName)!;
+    // BenchmarkDotNet shortens parameter values longer than 20 characters, so rows use short labels for the corpus file names.
+    private static readonly Dictionary<string, string> s_tnefLabels = new()
+    {
+        ["bug52400-winmail-simple.dat"] = "poi-simple",
+        ["bug52400-winmail-with-attachments.dat"] = "poi-attachments",
+        ["bug63955-winmail.dat"] = "poi-bug63955",
+        ["quick-winmail.dat"] = "poi-quick",
+        ["winmail-sample1.dat"] = "poi-sample1",
+        ["testWINMAIL.dat"] = "tika-testwinmail",
+    };
 
-    /// <summary>The path of the named TNEF file.</summary>
-    public static string TnefPath(string name) => TnefFiles().First(f => Path.GetFileName(f) == name);
+    /// <summary>The TNEF row labels: the corpus files without the one 53-byte truncated stream that has no content to read.</summary>
+    public static IEnumerable<string> TnefNames => s_tnefLabels.Where(kv => TnefFiles().Any(f => Path.GetFileName(f) == kv.Key && new FileInfo(f).Length > 100)).Select(kv => kv.Value);
+
+    /// <summary>The path of the TNEF file behind a row label.</summary>
+    public static string TnefPath(string label) => TnefFiles().First(f => Path.GetFileName(f) == s_tnefLabels.First(kv => kv.Value == label).Key);
 
     private static readonly string[] s_real = ["cfreds-ost", "tika-pst", "tika-bodytypes"];
     private static readonly string[] s_small = ["gen-u1k"];
