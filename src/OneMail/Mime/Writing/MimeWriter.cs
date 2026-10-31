@@ -178,7 +178,9 @@ public sealed class MimeWriter : IDisposable
 
     /// <summary>
     /// Writes one header field: <c>Name: value</c>, folded at word boundaries before <see cref="MimeWriterOptions.FoldWidth"/>
-    /// columns, ended by the writer's line end. Non-ASCII text is written as UTF-8 (RFC 6532).
+    /// columns, ended by the writer's line end. Non-ASCII text in free-text fields (Subject, Comments, Keywords,
+    /// Content-Description and unknown fields) is written as RFC 2047 encoded words; the fields with their own syntax (addresses,
+    /// identifiers, dates, Content-*) keep it as UTF-8 (RFC 6532), and parameters are built with <see cref="MimeHeaderValue.Parameter"/>.
     /// </summary>
     /// <param name="name">The field name: printable ASCII without a colon.</param>
     /// <param name="value">The value as one logical line. It must not contain a line break.</param>
@@ -278,6 +280,23 @@ internal static class MimeWriterSupport
         return r;
     }
 
+    // Headers whose value is not free text keep non-ASCII characters as UTF-8 (RFC 6532): addresses and identifiers have their own
+    // syntax, and Content-Type, Content-Disposition and the like carry parameters, which MimeHeaderValue.Parameter encodes.
+    private static bool IsStructured(string name) =>
+        name.StartsWith("Resent-", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("Content-", StringComparison.OrdinalIgnoreCase) && !name.Equals("Content-Description", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("From", StringComparison.OrdinalIgnoreCase) || name.Equals("To", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Cc", StringComparison.OrdinalIgnoreCase) || name.Equals("Bcc", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Reply-To", StringComparison.OrdinalIgnoreCase) || name.Equals("Sender", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Message-ID", StringComparison.OrdinalIgnoreCase) || name.Equals("In-Reply-To", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("References", StringComparison.OrdinalIgnoreCase) || name.Equals("Date", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("MIME-Version", StringComparison.OrdinalIgnoreCase) || name.Equals("Return-Path", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Received", StringComparison.OrdinalIgnoreCase);
+
+    // RFC 2047 §5(1): free text (Subject, Comments, Keywords, Content-Description, X- fields ...) carries non-ASCII text as encoded words.
+    private static string EncodeText(string name, string value) =>
+        IsStructured(name) || System.Text.Ascii.IsValid(value) ? value : Text.Rfc2047.Encode(value);
+
     // RFC 5322 §2.2.3: fold only at whitespace, so the unfolded value is the value given.
     public static byte[] FormatHeader(string name, string value, ReadOnlySpan<byte> newline, int foldWidth)
     {
@@ -299,7 +318,7 @@ internal static class MimeWriterSupport
             throw new ArgumentException("A header value cannot contain a line break; it would start a new header.", nameof(value));
         }
 
-        byte[] v = Encoding.UTF8.GetBytes(value.Trim(' ', '\t'));
+        byte[] v = Encoding.UTF8.GetBytes(EncodeText(name, value.Trim(' ', '\t')));
         var w = new ArrayBufferWriter<byte>(name.Length + v.Length + 16);
         w.Write(Encoding.ASCII.GetBytes(name));
         w.Write(": "u8);

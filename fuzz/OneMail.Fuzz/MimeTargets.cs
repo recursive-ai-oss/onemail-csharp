@@ -78,9 +78,43 @@ internal static class MimeTargets
         _ = e.MediaType;
         _ = e.TransferEncoding;
         _ = e.GetContentTypeParameter("boundary");
+
+        // The decoding layer: text, parameters, addresses, dates and identifiers parse on demand from raw bytes.
+        var defects = new List<MimeDefect>();
         foreach (MimeHeader h in e.Headers)
         {
             _ = h.Value;
+            _ = h.GetValue(defects);
+        }
+
+        foreach (string name in new[] { "From", "To", "Cc", "Bcc", "Reply-To", "Sender" })
+        {
+            foreach (MimeMailbox m in AddressParser.Flatten(e.GetAddresses(name, defects)))
+            {
+                _ = m.UnquotedAddress;
+                _ = m.LocalPart;
+                _ = m.Domain;
+                _ = m.ToString();
+            }
+        }
+
+        _ = e.GetDate(defects);
+        _ = e.GetMessageId(defects);
+        _ = e.GetContentId(defects);
+        _ = e.GetInReplyTo(defects);
+        _ = e.GetReferences(defects);
+        _ = e.GetContentTypeParameters(defects);
+        _ = e.GetDispositionParameters(defects);
+        _ = e.Disposition;
+        _ = e.FileName;
+        _ = e.ContentDescription;
+        _ = e.MimeVersion;
+        foreach (MimeDefect d in defects)
+        {
+            if (d.Offset < -1 || d.Length < 0)
+            {
+                throw new InvalidOperationException("defect with a negative offset or length");
+            }
         }
 
         switch (e)

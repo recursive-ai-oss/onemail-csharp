@@ -18,6 +18,12 @@ public enum MimeEventKind
     Header,
 
     /// <summary>
+    /// An mbox <c>From </c> line (<c>From sender date</c>) at the very start of the message. It is not a header field: it is kept
+    /// in the raw bytes and the header block starts after it. <see cref="MimeReader.Raw"/> is the line with its line end.
+    /// </summary>
+    EnvelopeLine,
+
+    /// <summary>
     /// The end of the header block. <see cref="MimeReader.Raw"/> is the empty separator line (empty when the input has no
     /// separator). <see cref="MimeReader.EntityType"/> says what follows.
     /// </summary>
@@ -738,6 +744,18 @@ public sealed class MimeReader : IDisposable
 
         int budget = Math.Min(_limits.MaxHeaderBlockBytes - f.HeaderBytes, int.MaxValue);
         int fieldMax = Math.Min(_limits.MaxHeaderFieldBytes, budget);
+        if (_bufBase + s == 0 && _n == 1 && b[s..e].StartsWith("From "u8))
+        {
+            // Python, Go and MimeKit all skip an mbox "From " line at the start; no header field is ever named "From ".
+            int envLf = b[s..e].IndexOf((byte)'\n');
+            if (envLf >= 0 || _eof || e - s > fieldMax)
+            {
+                return Emit(MimeEventKind.EnvelopeLine, s, envLf >= 0 ? envLf + 1 : e - s);
+            }
+
+            return Step.NeedData;
+        }
+
         if (!FindFieldEnd(b, s, e, out int end))
         {
             if (e - s > fieldMax)

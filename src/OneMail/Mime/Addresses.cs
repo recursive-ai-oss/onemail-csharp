@@ -233,6 +233,7 @@ public static class AddressParser
                         else if (!closes && _b[p] == (byte)'<')
                         {
                             // An unclosed quote ends where the angle address starts (ambiguity A11).
+                            Defect(MimeDefectKind.UnterminatedQuote, s);
                             return new Tok(K.Quoted, s, p, space, true);
                         }
 
@@ -241,6 +242,7 @@ public static class AddressParser
 
                     if (p >= _b.Length)
                     {
+                        Defect(MimeDefectKind.UnterminatedQuote, s);
                         return new Tok(K.Quoted, s, p, space, true);
                     }
 

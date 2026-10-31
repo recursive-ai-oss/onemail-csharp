@@ -102,6 +102,9 @@ public abstract partial class MimeEntity
 
     internal byte[] Separator { get; set; } = Crlf;
 
+    /// <summary>The mbox <c>From </c> line that began the message, with its line end, or empty. It is not a header field.</summary>
+    public ReadOnlyMemory<byte> EnvelopeLine { get; internal set; }
+
     internal List<MimeDefect> DefectList => _defects;
 
     /// <summary>The nesting depth: 0 for the root.</summary>
@@ -357,6 +360,11 @@ public abstract partial class MimeEntity
         {
             yield return new WriteSegment(null, Source, SourceStart, SourceLength);
             yield break;
+        }
+
+        if (!EnvelopeLine.IsEmpty)
+        {
+            yield return new WriteSegment(EnvelopeLine.ToArray(), null, 0, EnvelopeLine.Length);
         }
 
         foreach (MimeHeader h in Headers)
@@ -777,6 +785,7 @@ internal sealed class MimeTreeBuilder
     private sealed class Pending
     {
         public long Start;
+        public byte[]? Envelope;
         public readonly List<MimeHeader> Headers = [];
         public List<MimeDefect> Defects = [];
         public MimeEntity? Entity;
@@ -807,6 +816,10 @@ internal sealed class MimeTreeBuilder
                 _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length) { SourceOffset = r.Offset });
                 break;
             }
+
+            case MimeEventKind.EnvelopeLine:
+                _stack.Peek().Envelope = r.Raw.ToArray();
+                break;
 
             case MimeEventKind.HeadersEnd:
                 StartEntity(r);
@@ -868,6 +881,7 @@ internal sealed class MimeTreeBuilder
         }
 
         e.Separator = r.Raw.ToArray();
+        e.EnvelopeLine = p.Envelope ?? default;
         e.Source = _source;
         e.SourceStart = p.Start;
         e.DefectList.AddRange(p.Defects);
