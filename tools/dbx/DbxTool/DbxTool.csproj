@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Writes generated Outlook Express stores, extracts the messages of a store through OneMail, and compares an extraction with another
+       program's. A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>DbxTool</AssemblyName>
+    <RootNamespace>DbxTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The test-side database builder makes the generated stores (the gen command). -->
+    <Compile Include="../../../tests/OneMail.Tests/Stores/DbxTestBuilder.cs" Link="DbxTestBuilder.cs" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

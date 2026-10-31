@@ -61,6 +61,12 @@ public enum MailFormat
 
     /// <summary>vCard as XML, xCard (RFC 6351): a root in the <c>urn:ietf:params:xml:ns:vcard-4.0</c> namespace.</summary>
     XCard,
+
+    /// <summary>An Outlook Express 5/6 database file (<c>.dbx</c>): a message folder such as <c>Inbox.dbx</c>, or <c>Folders.dbx</c> or a helper database (those hold no messages).</summary>
+    Dbx,
+
+    /// <summary>An Outlook Express store folder: a directory holding <c>Folders.dbx</c> and the message files it names.</summary>
+    DbxStore,
 }
 
 /// <summary>
@@ -117,6 +123,11 @@ public static class MailFormatSniffer
             return MailFormat.Emlx;
         }
 
+        if (store == StoreFormat.Dbx)
+        {
+            return MailFormat.Dbx;
+        }
+
         return SniffText(h);
     }
 
@@ -131,6 +142,7 @@ public static class MailFormatSniffer
             StoreFormat.MaildirFolder => MailFormat.MaildirFolder,
             StoreFormat.MaildirRoot => MailFormat.MaildirRoot,
             StoreFormat.AppleMailBundle => MailFormat.AppleMailBundle,
+            StoreFormat.DbxStoreFolder => MailFormat.DbxStore,
             _ => MailFormat.Unknown,
         };
     }

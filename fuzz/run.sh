@@ -51,6 +51,7 @@ case "$target" in
   tnef) maxlen=2048 ;;
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;
+  dbx) maxlen=4096 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;
   mail-open) maxlen=65536 ;;
   rtf-decompress) maxlen=65536 ;;

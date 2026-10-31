@@ -53,6 +53,45 @@ public enum StoreDefects
 
     /// <summary>EMLX: the byte count runs past the end of the file. The message is cut at the end of the file.</summary>
     TruncatedMessage = 1 << 11,
+
+    /// <summary>DBX: the file is shorter than the fixed file header. Nothing in it can be enumerated.</summary>
+    DbxTruncatedHeader = 1 << 12,
+
+    /// <summary>DBX: a pointer lies outside the file or inside the file header. The object it names is skipped.</summary>
+    DbxBadPointer = 1 << 13,
+
+    /// <summary>DBX: an object does not start with its own address. The object is skipped.</summary>
+    DbxBadObjectMarker = 1 << 14,
+
+    /// <summary>DBX: an index tree is deeper than the limit or visits more nodes than the file can hold (a cycle). The walk of that branch stops.</summary>
+    DbxTreeLoop = 1 << 15,
+
+    /// <summary>DBX: the tree holds a different number of entries than the file header says. The tree is believed (ambiguity).</summary>
+    DbxEntryCountMismatch = 1 << 16,
+
+    /// <summary>DBX: an indexed-info object is inconsistent (lengths or field offsets out of range). Fields outside the object read as absent.</summary>
+    DbxBadIndexedInfo = 1 << 17,
+
+    /// <summary>DBX: a message chain ends at a bad pointer or object. The message is cut there.</summary>
+    DbxChainBroken = 1 << 18,
+
+    /// <summary>DBX: a message chain is longer than the file can hold (a cycle). The message is cut there.</summary>
+    DbxChainLoop = 1 << 19,
+
+    /// <summary>DBX: a chain segment states more text than its body or the file holds. The text is cut to what is there.</summary>
+    DbxBadSegmentLength = 1 << 20,
+
+    /// <summary>DBX: the length in the message record differs from the length of the chain. The chain is believed (ambiguity).</summary>
+    AmbiguousDbxDeclaredLength = 1 << 21,
+
+    /// <summary>DBX: a message file in an Outlook Express store folder that <c>Folders.dbx</c> does not list. Its messages are still read.</summary>
+    DbxUnlistedFile = 1 << 22,
+
+    /// <summary>DBX: an index tree node is not usable (bad address, bad marker or more entries than a node holds). That branch is skipped.</summary>
+    DbxBadTreeNode = 1 << 23,
+
+    /// <summary>DBX: the message record has no text chain (a header that was never downloaded). The message is empty (ambiguity).</summary>
+    AmbiguousDbxNoMessageText = 1 << 24,
 }
 
 /// <summary>One defect with the byte offset it was found at, as delivered to a reader's defect handler.</summary>
@@ -109,4 +148,10 @@ public enum StoreFormat
 
     /// <summary>An Apple Mail mailbox bundle (a directory holding <c>Messages</c> directories of <c>.emlx</c> files).</summary>
     AppleMailBundle,
+
+    /// <summary>An Outlook Express database file (<c>.dbx</c>): a message folder, <c>Folders.dbx</c>, or one of the helper databases.</summary>
+    Dbx,
+
+    /// <summary>A directory holding an Outlook Express <c>Folders.dbx</c> and the message files it names.</summary>
+    DbxStoreFolder,
 }
