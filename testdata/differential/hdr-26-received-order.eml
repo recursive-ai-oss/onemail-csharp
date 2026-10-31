@@ -1,0 +1,7 @@
+Received: from a by b; Mon, 14 May 2001 23:39:00 +0000
+Received: from c by d; Mon, 14 May 2001 23:38:00 +0000
+From: a@example.com
+Received: from e by f; Mon, 14 May 2001 23:37:00 +0000
+Subject: s
+
+body

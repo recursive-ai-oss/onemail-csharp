@@ -1,0 +1,9 @@
+<Project>
+  <!-- Oracle packages are pinned here, apart from the shipped packages' central versions. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="MimeKit" Version="4.18.2" />
+  </ItemGroup>
+</Project>

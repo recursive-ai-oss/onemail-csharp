@@ -1,0 +1,14 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: probe
+Date: Mon, 14 May 2001 23:39:00 +0000
+Message-ID: <probe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="abc"
+
+--abc
+Content-Type: message/rfc822
+Content-Transfer-Encoding: base64
+
+RnJvbTogaW5uZXJAZXhhbXBsZS5jb20KU3ViamVjdDogaW5uZXIKCmlubmVyIGJvZHkK
+--abc--

@@ -1,0 +1,13 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: probe
+Date: Mon, 14 May 2001 23:39:00 +0000
+Message-ID: <probe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/digest; boundary="abc"
+
+--abc
+Content-Type: text/plain
+
+text in digest
+--abc--

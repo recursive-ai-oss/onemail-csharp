@@ -1,0 +1,25 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: probe
+Date: Mon, 14 May 2001 23:39:00 +0000
+Message-ID: <probe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="abc"
+
+--abc
+Content-Type: message/rfc822
+
+From: i@example.com
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="in"
+
+--in
+Content-Type: text/plain
+
+plain
+--in
+Content-Type: text/html
+
+<p>html</p>
+--in--
+--abc--

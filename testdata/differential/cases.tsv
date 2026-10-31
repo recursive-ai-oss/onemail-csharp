@@ -1,0 +1,224 @@
+adr-01-group-empty	Empty group `undisclosed-recipients:;`.
+adr-02-group-members	Group with members and a trailing mailbox.
+adr-03-unquoted-comma	Unquoted comma in a display name (`Doe, John <j@x>`).
+adr-04-no-angle	Bare address, and display text followed by a bare address.
+adr-05-comment-name	Name given as a trailing comment (`j@x (John Doe)`).
+adr-06-nested-comments	Nested comments and comments between tokens.
+adr-07-obs-route	Obsolete source route `<@a.example,@b.example:j@x>`.
+adr-08-quoted-local	Quoted local part with a space and an escaped quote.
+adr-09-empty-angle	Empty addr-spec `<>` and name with empty angle.
+adr-10-no-domain	Address without a domain.
+adr-11-ip-literal	Domain as an IP literal and an IPv6 literal.
+adr-12-utf8-local	Raw UTF-8 in the local part and the domain.
+adr-13-empty-elements	Empty list elements: `a@x,,b@y,`.
+adr-14-unclosed-angle	Unclosed angle bracket `<j@x`.
+adr-15-unclosed-quote	Unclosed quoted display name.
+adr-16-dots-in-name	Unquoted display name with dots (`J. Q. Doe`).
+adr-17-name-with-at	Display name containing `@` unquoted.
+adr-18-multiple-angle	Two address-specs in one mailbox `<a@x><b@y>`.
+adr-19-semicolon-separator	Semicolons as separators (`a@x; b@y`).
+adr-20-case-and-spaces	Spaces inside the addr-spec (`a @ x . example`).
+adr-21-long-list	Fifty mailboxes folded over several lines.
+adr-22-quoted-name-escapes	Quoted display name with escaped specials.
+adr-23-trailing-dot-local	Local part with leading, trailing and doubled dots.
+adr-24-8bit-name	Raw 8-bit (Latin-1) display name.
+adr-25-duplicate-to	Two To headers with different addresses.
+adr-26-from-multiple	From with two mailboxes and a Sender.
+adr-27-reply-to-group	Reply-To as a group.
+adr-28-bcc-empty	Empty Bcc and empty Cc.
+bnd-01-plain	Well-formed two-part multipart (control).
+bnd-02-longer-boundary-prefix-line	A body line starts with the boundary and more text (`--abcdef`): a delimiter or content?
+bnd-03-trailing-whitespace	Delimiter lines carry trailing spaces and a tab (transport padding, RFC 2046 5.1.1).
+bnd-04-garbage-after-boundary	Delimiter followed by non-whitespace text (`--abc xyz`).
+bnd-05-missing-final	No closing delimiter; the message ends inside the last part.
+bnd-06-epilogue-and-reopen	Text after the closing delimiter, then another delimiter line.
+bnd-07-outer-prefix-of-inner	Outer boundary `out` is a prefix of the inner boundary `out-in`.
+bnd-08-inner-prefix-of-outer	Inner boundary `in` is a prefix of the outer boundary `in-out`.
+bnd-09-no-boundary-param	multipart/mixed with no boundary parameter.
+bnd-10-empty-boundary-param	multipart/mixed with `boundary=""`.
+bnd-11-boundary-with-space	Quoted boundary containing a space and a trailing space.
+bnd-12-unquoted-special-chars	Unquoted boundary containing `/` and `=` (needs quoting per RFC 2045 tspecials).
+bnd-13-duplicate-boundary-param	Two boundary parameters with different values.
+bnd-14-case-sensitive	Delimiter case differs from the parameter (`--ABC` vs `abc`).
+bnd-15-zero-parts	Only the closing delimiter.
+bnd-16-no-preamble-line	First delimiter is the first body line, no preamble, no blank line between header and body.
+bnd-17-lf-delimiters-in-crlf	CRLF message whose delimiter lines end in bare LF.
+bnd-18-part-without-blank-line	A part with headers and no blank line before the next delimiter.
+bnd-19-part-empty-headers	A part that starts with an empty line (no headers; defaults apply).
+bnd-20-final-newline-before-delim	Part body ends with one blank line before the delimiter (is the last line break part of the body?).
+bnd-21-delimiter-at-eof-no-newline	Closing delimiter is the last bytes of the file, no line break.
+bnd-22-preamble-only-whitespace	Preamble is blank lines only; epilogue is blank lines only.
+bnd-23-bare-cr-delimiters	Delimiter lines separated by bare CR only.
+bnd-24-long-boundary	Boundary of 80 characters (RFC 2046 limit is 70).
+bnd-25-multipart-nonmultipart-body	multipart type whose body has no delimiters at all.
+bnd-26-nested-same-boundary	Inner multipart reuses the outer boundary string.
+ct-01-case-and-space	Odd case and spacing: `TEXT/Plain ; Charset = "UTF-8"`.
+ct-02-no-subtype	Content-Type `text` with no subtype.
+ct-03-empty-subtype	Content-Type `text/`.
+ct-04-garbage	Content-Type with no slash and garbage.
+ct-05-param-no-equals	A parameter without `=` (`text/plain; charset`).
+ct-06-unterminated-quote	Unterminated quoted parameter value.
+ct-07-comment-in-type	Comments in the Content-Type value.
+ct-08-duplicate-charset	Duplicate charset parameters.
+ct-09-empty-value	Empty Content-Type header.
+ct-10-semicolons	Leading, trailing and doubled semicolons.
+ct-11-unknown-charset	Unknown charset name.
+ct-12-nonascii-param	Raw UTF-8 octets in a parameter value.
+ct-13-multipart-in-no-version	Content-Type message/rfc822 at top level with a nested message.
+ct-14-text-no-ct-8bit	No Content-Type, 8bit CTE, UTF-8 body (default charset question).
+cte-01-unknown	Unknown Content-Transfer-Encoding (`x-foo`).
+cte-02-multipart-base64	Multipart declared base64 (illegal for composite types).
+cte-03-multipart-8bit	Multipart declared 8bit with a high-bit preamble.
+cte-04-case-and-space	`Content-Transfer-Encoding:  Base64 ` in odd case and spacing.
+cte-05-b64-invalid-chars	Base64 body with characters outside the alphabet (`!`, `*`).
+cte-06-b64-no-padding	Base64 body with the padding removed.
+cte-07-b64-whitespace	Base64 body with embedded spaces, tabs and blank lines.
+cte-08-b64-data-after-pad	Base64 body with data after the padding.
+cte-09-b64-long-lines	Base64 body in one 200-column line.
+cte-10-qp-soft-breaks	Quoted-printable with soft line breaks and escapes.
+cte-11-qp-invalid-escape	Quoted-printable with invalid escapes (`=ZZ`, `=` at end of line before text, lone `=`).
+cte-12-qp-lowercase-hex	Quoted-printable with lower-case hex (`=e9`).
+cte-13-qp-trailing-ws	Quoted-printable with trailing spaces before the line end.
+cte-14-qp-8bit-literal	Quoted-printable body containing raw high-bit octets.
+cte-15-message-base64	message/rfc822 part declared base64 (inner message encoded).
+cte-16-uuencode	uuencode transfer encoding (legacy).
+cte-17-binary	`binary` CTE with CR, LF and NUL bytes.
+cte-18-comment	A comment after the encoding name (`base64 (note)`).
+cte-19-empty	Empty CTE header value.
+cte-20-b64-crlf-in-quad	Base64 line break in the middle of a 4-character group.
+cte-21-8bit-in-part-7bit-top	Multipart with a part that declares 8bit and holds UTF-8.
+date-01-standard	Date: Mon, 14 May 2001 23:39:00 +0000
+date-02-no-seconds	Date: Mon, 14 May 2001 23:39 +0000
+date-03-two-digit-year-99	Date: Thu, 4 Jan 99 08:00:00 +0000
+date-04-two-digit-year-49	Date: Fri, 4 Jan 49 08:00:00 +0000
+date-05-two-digit-year-50	Date: Wed, 4 Jan 50 08:00:00 +0000
+date-06-no-day-name	Date: 14 May 2001 23:39:00 +0000
+date-07-wrong-day-name	Date: Tue, 14 May 2001 23:39:00 +0000
+date-08-zone-est	Date: Mon, 14 May 2001 23:39:00 EST
+date-09-zone-gmt-ut	Date: Mon, 14 May 2001 23:39:00 GMT
+date-10-zone-minus-zero	Date: Mon, 14 May 2001 23:39:00 -0000
+date-11-zone-comment	Date: Mon, 14 May 2001 23:39:00 +0200 (CEST)
+date-12-zone-military	Date: Mon, 14 May 2001 23:39:00 Z
+date-13-lower-month	Date: Mon, 14 may 2001 23:39:00 +0000
+date-14-three-digit-year	Date: Mon, 14 May 101 23:39:00 +0000
+date-15-garbage	Date: sometime last Tuesday
+date-16-second-60	Date: Mon, 14 May 2001 23:59:60 +0000
+date-17-offset-2400	Date: Mon, 14 May 2001 23:39:00 +2400
+date-18-offset-1400	Date: Mon, 14 May 2001 23:39:00 +1400
+date-19-iso	Date: 2001-05-14 23:39:00
+date-20-iso-t-z	Date: 2001-05-14T23:39:00Z
+date-21-gmt-plus	Date: Mon, 14 May 2001 23:39:00 GMT+2
+date-22-hour-24	Date: Mon, 14 May 2001 24:00:00 +0000
+date-23-day-31-in-30-day-month	Date: Tue, 31 Apr 2001 10:00:00 +0000
+date-24-extra-spaces	Date: Mon,   14  May   2001   23:39:00    +0000
+date-25-missing-zone	Date: Mon, 14 May 2001 23:39:00
+date-26-year-1969	Date: Wed, 31 Dec 1969 23:59:59 +0000
+date-27-year-1899	Date: Sun, 1 Jan 1899 00:00:00 +0000
+date-28-year-2100	Date: Fri, 1 Jan 2100 00:00:00 +0000
+date-29-pdt-name	Date: Mon, 14 May 2001 23:39:00 PDT
+date-30-fractional	Date: Mon, 14 May 2001 23:39:00.123 +0000
+date-31-empty	Date: (empty)
+date-32-day-zero	Date: Mon, 0 May 2001 23:39:00 +0000
+date-33-duplicate	Two Date headers.
+date-34-two-digit-year-68	Date: Mon, 4 Jan 68 08:00:00 +0000
+date-35-two-digit-year-69	Date: Sat, 4 Jan 69 08:00:00 +0000
+date-36-two-digit-year-70	Date: Sun, 4 Jan 70 08:00:00 +0000
+date-37-year-00	Date: Tue, 4 Jan 00 08:00:00 +0000
+date-38-year-0002	Date: Fri, 4 Jan 0002 08:00:00 +0000
+enc-01-2047-in-filename	RFC 2047 encoded word inside a quoted filename parameter.
+enc-02-2231-filename	RFC 2231 `filename*=utf-8''...`.
+enc-03-2231-continuations	RFC 2231 continuations `filename*0*`, `filename*1*`, `filename*2`.
+enc-04-both-plain-and-2231	Both `filename=` and `filename*=` present.
+enc-05-2231-and-2047	`filename*=` whose value is itself an encoded word.
+enc-06-2231-bad-charset	RFC 2231 with an unknown charset.
+enc-07-2231-no-quote-marks	`filename*=` without the charset and language quote marks.
+enc-08-2231-missing-first	Continuations starting at `*1` (no `*0`).
+enc-09-2231-out-of-order	Continuations in the order `*1`, `*0`.
+enc-10-name-vs-filename	Content-Type `name` differs from Content-Disposition `filename`.
+enc-11-name-only	Only Content-Type `name`, no disposition filename.
+enc-12-path-in-filename	Filename with directory separators and `..`.
+enc-13-backslash-filename	Windows path and backslash escapes in a quoted filename.
+enc-14-duplicate-filename	Two `filename` parameters.
+enc-15-unquoted-space-filename	Unquoted filename containing spaces.
+enc-16-subject-2047-q	Subject with Q-encoded word, underscore as space.
+enc-17-subject-2047-b	Subject with B-encoded word.
+enc-18-adjacent-words	Adjacent encoded words separated by whitespace, and by a fold.
+enc-19-word-text-mix	Encoded words mixed with plain text without separating whitespace.
+enc-20-unknown-charset	Encoded word with an unknown charset.
+enc-21-bad-base64-word	Encoded word with invalid base64 payload.
+enc-22-long-word	Encoded word over 75 characters.
+enc-23-word-lowercase-encoding	Lower-case encoding letter and trailing `?=` oddities.
+enc-24-word-split-by-fold	One encoded word split across a fold (invalid).
+enc-25-word-in-quoted-string	Encoded word inside a quoted display name (disallowed by RFC 2047 5).
+enc-26-word-in-comment	Encoded word in a comment and in the address phrase.
+enc-27-iso2022jp	ISO-2022-JP encoded word.
+enc-28-empty-word	Empty encoded text `=?utf-8?q??=`.
+enc-29-comments-subject	Comments and Keywords with encoded words.
+enc-30-2047-in-ct-name	Encoded word in the Content-Type `name` parameter, unquoted token form.
+eol-01-lf-only	Whole message with bare LF line endings.
+eol-02-cr-only	Whole message with bare CR line endings.
+eol-03-mixed-headers	Headers mix CRLF and LF endings.
+eol-04-crlf-headers-lf-body	CRLF headers, bare LF body.
+eol-05-bare-cr-in-header	Bare CR in the middle of a header value (not a line end).
+eol-06-no-final-newline	Body without a final line break.
+eol-07-headers-eof-no-newline	Headers end at EOF with no line break and no blank line.
+eol-08-blank-line-lf-then-crlf-body	Header block ends with a bare LF blank line; body is CRLF.
+eol-09-double-cr-lf	Header ends `CR CR LF` (a stray CR before the line end).
+hdr-01-duplicate-content-type	Two Content-Type headers (text/plain then text/html).
+hdr-02-duplicate-mime-version	Two MIME-Version headers (1.0, 2.0).
+hdr-03-duplicate-cte	Two Content-Transfer-Encoding headers (base64 then 7bit), body is base64.
+hdr-04-duplicate-singletons	Two Subject, From, To and Date headers each.
+hdr-05-line-without-colon	A header line without a colon between two valid headers.
+hdr-06-first-line-no-colon	The first line is not a header (no colon), followed by headers.
+hdr-07-space-before-colon	Whitespace before the colon (`Subject : x`, obsolete syntax allowed by RFC 5322 4.2).
+hdr-08-continuation-first	A folded continuation line before any header.
+hdr-09-no-blank-line	No blank line between the headers and a body that does not look like a header.
+hdr-10-body-looks-like-header	No blank line, and the first body line looks like a header (`Note: x`).
+hdr-11-mbox-from-line	A leading `From ` envelope line (mbox) before the headers.
+hdr-12-leading-blank-lines	Blank lines before the first header.
+hdr-13-empty-value	Headers with empty values (`Subject:`, `X-Empty:`) and value of spaces.
+hdr-14-space-in-name	A header name containing a space (`X Bad: v`).
+hdr-15-blank-fold-line	Folded header whose continuation is whitespace only.
+hdr-16-tab-fold	Folding with a tab and with several spaces.
+hdr-17-no-mime-version	Content-Type present but no MIME-Version.
+hdr-18-empty-file	A zero-length file.
+hdr-19-whitespace-only	A file with only a blank line.
+hdr-20-headers-only	Header block, blank line, no body.
+hdr-21-long-fold	A 5-line folded Subject with encoded-word on the last line.
+hdr-22-colon-in-value	Colons in the value (`Subject: a: b: c`).
+hdr-23-case-insensitive-names	Header names in odd case (`sUbJeCt`, `CONTENT-TYPE`).
+hdr-24-many-headers	2000 distinct X- headers.
+hdr-25-trailing-ws-value	Trailing spaces and tabs on header values.
+hdr-26-received-order	Several Received headers and a trace block (order matters).
+nest-01-rfc822-attached	A message/rfc822 part holding a plain message.
+nest-02-rfc822-multipart-inside	message/rfc822 whose inner message is multipart.
+nest-03-rfc822-empty	message/rfc822 part with an empty body.
+nest-04-rfc822-no-headers	message/rfc822 whose body has no headers, only text.
+nest-05-rfc822-8bit	message/rfc822 with CTE 8bit and a UTF-8 inner message.
+nest-06-digest-default	multipart/digest: children default to message/rfc822 (RFC 2046 5.1.5).
+nest-07-digest-explicit-text	multipart/digest with an explicit text/plain child.
+nest-08-report-dsn	multipart/report with delivery-status and returned headers.
+nest-09-partial	message/partial fragment.
+nest-10-alternative	multipart/alternative with text, html and an inline image.
+nest-11-signed	multipart/signed with a detached signature part.
+nest-12-truncated-in-headers	Message cut off inside a part's header block.
+nest-13-truncated-in-header-name	Message cut off in the middle of a header name.
+nest-14-depth-10	Ten levels of nested multipart.
+nest-15-depth-200	Two hundred levels of nested multipart (resource-limit probe).
+nest-16-many-parts	One multipart with 3000 tiny parts (part-count probe).
+nest-17-rfc822-depth-30	message/rfc822 nested 30 levels.
+nest-18-text-html-qp	A realistic text/html quoted-printable top-level message.
+nest-19-attachment-inline-disposition	Content-Disposition `inline` with filename and one with an unknown disposition type.
+nest-20-content-length-lie	Header `Content-Length: 5` (mboxcl) but the body is longer.
+nest-21-mbox-trailer	A body whose last lines look like the start of the next mbox message.
+raw-01-nul-in-header-value	NUL byte inside a header value.
+raw-02-nul-in-header-name	NUL byte inside a header name.
+raw-03-nul-in-body	NUL bytes in a text body with no transfer encoding.
+raw-04-utf8-in-header	Raw UTF-8 octets in Subject, From display name and a custom header (RFC 6532 without SMTPUTF8 negotiation).
+raw-05-latin1-in-header	Raw ISO-8859-1 octets in Subject and a display name (invalid UTF-8).
+raw-06-8bit-body-7bit-cte	High-bit octets in a body declared 7bit.
+raw-07-overlong-header	A 3000-character header line (RFC 5322 limit 998).
+raw-08-overlong-body-line	A 20000-character body line.
+raw-09-form-feed-vt-in-header	Form feed and vertical tab in a header value.
+raw-10-utf8-bom	A UTF-8 byte order mark before the first header.
+raw-11-del-and-c1	DEL and C1 control octets in a header value.

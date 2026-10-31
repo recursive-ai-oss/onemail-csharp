@@ -1,0 +1,28 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: probe
+Date: Mon, 14 May 2001 23:39:00 +0000
+Message-ID: <probe@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/report; boundary="abc"; report-type=delivery-status
+
+--abc
+Content-Type: text/plain
+
+Could not deliver.
+--abc
+Content-Type: message/delivery-status
+
+Reporting-MTA: dns; mx.example.com
+
+Final-Recipient: rfc822; bob@example.com
+Action: failed
+Status: 5.1.1
+
+--abc
+Content-Type: text/rfc822-headers
+
+From: alice@example.com
+Subject: probe
+
+--abc--

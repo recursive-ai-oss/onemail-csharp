@@ -1,0 +1,5 @@
+from: a@example.com
+sUbJeCt: cased
+CONTENT-TYPE: Text/Plain; CHARSET=us-ascii
+
+body
