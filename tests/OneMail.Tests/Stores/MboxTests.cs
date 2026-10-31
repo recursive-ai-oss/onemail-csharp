@@ -207,18 +207,26 @@ public class MboxReaderTests
         }
 
         using MemorySource src = new(B(sb.ToString()));
-        using MboxReader r = new(src);
-        r.Read();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        int n = 1;
-        while (r.Read())
+
+        // The runtime occasionally allocates a few kilobytes on the thread for its own work (tiered compilation), so the
+        // smallest of three passes is the reader's own figure. One allocation per message would be at least 2000 x 24 bytes.
+        long allocated = long.MaxValue;
+        for (int pass = 0; pass < 3; pass++)
         {
-            n++;
+            using MboxReader r = new(src);
+            r.Read();
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            int n = 1;
+            while (r.Read())
+            {
+                n++;
+            }
+
+            allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - before);
+            Assert.Equal(2000, n);
         }
 
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.Equal(2000, n);
-        Assert.True(allocated < 2000, $"allocated {allocated} bytes for {n} messages");
+        Assert.True(allocated < 2000, $"allocated {allocated} bytes for 2000 messages");
     }
 
     [Fact]
