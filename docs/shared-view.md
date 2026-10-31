@@ -1,6 +1,6 @@
 # The shared read view and `Mail.*`
 
-Every item OneMail reads (a MIME message now; MSG, PST items, calendar items and others as their readers arrive) implements one
+Every item OneMail reads (a MIME message, an MSG, a PST/OST message; calendar items and others as their readers arrive) implements one
 read-only interface, `IMailItem`, in the root namespace `RecursiveAI.OneMail`. It is a **projection**: it copies nothing from
 the model underneath, parses only what the caller asks for, and never throws on malformed content. Code that only needs to read
 mail depends on the view; code that needs every byte and every defect goes to the model (for MIME, `MimeMailItem.Entity`).
@@ -36,12 +36,35 @@ unquoted line shift by the removed `>` bytes).
   The resolutions are V1–V8 in [`ambiguities.md`](ambiguities.md).
 - An embedded `message/rfc822` is an `IMailItem` with the same view, parsed from the same bytes.
 
+## MAPI items (MSG, PST, OST)
+
+`MapiMailItem` projects a `MapiMessage` (`docs/mapi.md`) onto the same view. Nothing is looked up outside the item.
+
+| Member | From |
+|---|---|
+| `Kind` | `PidTagMessageClass` by whole dot-separated segment, case-insensitive: `IPM.Appointment` Appointment, `IPM.Contact` Contact, `IPM.Task` Task, `IPM.StickyNote` Note, `IPM.Activity` Journal, `IPM.DistList` DistributionList; `IPM.Note`, `IPM.Post`, `IPM.Schedule`, `IPM.TaskRequest`, `IPM.Recall`, `IPM.Outlook.Recall`, `IPM.Sharing` and `REPORT` Message; no class Message; anything else Other. So `IPM.TaskRequest` is a message and not a task. |
+| `Subject` | `PidTagSubject` with the leading U+0001 plus one-character pair removed (the marker of the normalised-subject split, MS-OXPROPS). |
+| `From` | `PidTagSentRepresenting*`, else `PidTagSender*` (MS-OXCMAIL 2.1.3.1). |
+| `Sender` | `PidTagSender*`, only when a representing sender exists and has a different address; else null. |
+| address of a person | the object's SMTP address property when present, else its stored address (an SMTP address, or an Exchange distinguished name for an internal user: nothing is resolved); the name is the display name. |
+| `ToRecipients`, `Cc`, `Bcc` | recipient table rows by `PidTagRecipientType` 1, 2, 3, in table order. `ReplyTo` is empty. |
+| `Sent`, `TryGetDate` | `PidTagClientSubmitTime` (`ClientSubmit`), `PidTagMessageDeliveryTime` (`Delivery`), `PidTagCreationTime` (`Creation`). FILETIME in UTC, so `ZoneKnown` is false. |
+| `MessageId`, `InReplyTo`, `References` | `PidTagInternetMessageId` (0x1035), `PidTagInReplyToId` (0x1042), `PidTagInternetReferences` (0x1039), angle brackets removed. |
+| `ConversationIndex`, `ConversationTopic` | the two properties. |
+| `TextBody` | `PidTagBody`. `HtmlBody`: `PidTagHtml` (binary) or `PidTagBodyHtml` (string). `RtfBody`: `PidTagRtfCompressed`, **still compressed** (decompression is the RTF layer's). A body is absent when its property is absent. |
+| body text and charset | A string property is UTF-16LE (`Charset` utf-16le). An 8-bit text body uses the message's code page rule (`docs/msg.md`); binary HTML uses `PidTagInternetCodepage` (1200 means UTF-16LE), else the same rule; RTF has no charset. |
+| `Attachments` | the attachment table in order. `FileName` long name, else short name, else display name. `ContentType` `PidTagAttachMimeTag` lower-cased, `message/rfc822` for an embedded message, else `application/octet-stream`. `ContentId` without angle brackets. `IsInline`: has a content ID and `PidTagAttachContentDisposition` is not `attachment`. `Size`: length of `PidTagAttachDataBinary`, else `PidTagAttachSize`. `Embedded`: the embedded message as a `MapiMailItem`. |
+| `Defects` | the model's `MapiDefect`s (message, recipients, attachments, embedded messages), family `mapi`; ambiguity flag from the kind. |
+| `Provenance` | PST/OST: format, file, folder path, index in enumeration order; offset and length are -1 (a message is not a byte range). MSG: format, file, offset 0, the file's length. |
+
+PST/OST enumeration through `Mail.Open` yields ordinary messages of non-search folders in folder order (`docs/pst-messaging.md`).
+
 ## Opening things: `Mail.*`
 
 | Call | Result |
 |---|---|
 | `Mail.Parse(bytes \| stream, MimeReaderOptions?)` | One `IMailItem`. |
-| `Mail.Open(path \| stream \| source, MimeReaderOptions?, MboxReaderOptions?)` | A `MailContainer`: the sniffed `Format`, `IsStore`, `Enumerate()` and `await foreach`. A single message is a container of one. |
+| `Mail.Open(path \| stream \| source, MimeReaderOptions?, MboxReaderOptions?)` | A `MailContainer`: the sniffed `Format`, `IsStore`, `Enumerate()` and `await foreach`. A single message (EML, MSG) is a container of one; a PST or OST is a store. A PST/OST or MSG that is such by content but cannot be read at all throws `InvalidDataException`. |
 
 Each `Mail.*` method is one call into the layer that does the work; the options are those layers' own option types.
 
@@ -65,8 +88,8 @@ async enumeration (mbox messages are loaded before the item is yielded).
 | directory: `cur` and `new`; dot-prefixed Maildir subfolders; `Messages` directories of `.emlx` | `MaildirFolder`, `MaildirRoot`, `AppleMailBundle` |
 
 A message with no header block (starts with a blank line or with text that is not a header field) cannot be told from any text
-file and is `Unknown`; `Mail.Parse` still reads it. A recognised format whose reader is not in the library yet (`Pst`, `Ost`,
-`Msg`, `Tnef`, `Ics`, `VCard`, `CompoundFile`) makes `Open` throw `UnsupportedMailFormatException` with its `Format`; `Unknown`
+file and is `Unknown`; `Mail.Parse` still reads it. A recognised format whose reader is not in the library yet (`Tnef`, `Ics`, `VCard`,
+`CompoundFile`) makes `Open` throw `UnsupportedMailFormatException` with its `Format`; `Unknown`
 throws the same exception with `Format == Unknown`. DBX and OLM are not yet recognised.
 
 ## The CLI: `onemail inspect`

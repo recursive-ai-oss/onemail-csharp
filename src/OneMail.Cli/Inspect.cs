@@ -164,6 +164,24 @@ internal sealed class Inspect : IDisposable
                 _out.WriteLine(path + ": " + (e.Format == MailFormat.Unknown ? "unrecognised" : e.Format + " (recognised, not readable yet)"));
             }
         }
+        catch (InvalidDataException e)
+        {
+            // A PST, OST or MSG by its content whose container cannot be read at all: count it and go on with the next file.
+            Unsupported++;
+            if (_json)
+            {
+                Json("container", w =>
+                {
+                    w.WriteString("path", path);
+                    w.WriteBoolean("readable", false);
+                    w.WriteString("error", e.Message);
+                });
+            }
+            else
+            {
+                _out.WriteLine(path + ": unreadable (" + e.Message + ")");
+            }
+        }
     }
 
     private void Describe(IMailItem item, int index)

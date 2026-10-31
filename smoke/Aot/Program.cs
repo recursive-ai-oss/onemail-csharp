@@ -192,6 +192,39 @@ internal static class Program
 
         Console.WriteLine("msg: " + (msgOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // PST: build a small store, open it through the messaging layer and through Mail.Open, read an attachment and an embedded message.
+        byte[] pstBytes = new RecursiveAI.OneMail.Tests.Pst.PstFixtureBuilder(RecursiveAI.OneMail.Pst.Ndb.NdbFormat.Unicode).Build(RecursiveAI.OneMail.Tests.Pst.PstFixtures.Sample(), "Smoke store").Bytes;
+        bool pstOk = RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(pstBytes, out var pstStore, out _) && pstStore is not null;
+        if (pstOk)
+        {
+            using (pstStore)
+            {
+                var counts = pstStore!.ReadEverything();
+                pstOk = counts.Messages >= 4 && counts.Attachments >= 4 && counts.EmbeddedMessages == 1 && pstStore.Defects.Count == 0;
+            }
+        }
+
+        using (MailContainer pstOpened = Mail.Open(new MemorySource(pstBytes)))
+        {
+            IMailItem[] pstItems = pstOpened.Enumerate().ToArray();
+            IMailItem? hello = pstItems.FirstOrDefault(x => x.Subject == "Hello world");
+            pstOk &= pstOpened.Format == MailFormat.Pst && hello is not null && hello.Attachments.Count == 4 && hello.ToRecipients.Count == 1 && hello.ToRecipients[0].Address == "ann@example.com"
+                && hello.TextBody!.ReadText() == "Plain body" && hello.Attachments[1].Size == 70_000 && hello.Attachments[3].Embedded!.Subject == "Forwarded inner";
+            using Stream large = hello!.Attachments[1].Open();
+            pstOk &= large.Length == 70_000;
+        }
+
+        Console.WriteLine("pst: " + (pstOk ? "ok" : "FAILED"));
+
+        // Mail.Open on an MSG goes through the same view.
+        using (MailContainer msgOpened = Mail.Open(new MemorySource(msgBytes)))
+        {
+            IMailItem[] msgItems = msgOpened.Enumerate().ToArray();
+            bool openMsgOk = msgOpened.Format == MailFormat.Msg && msgItems.Length == 1 && msgItems[0].Subject == "Recipients, attachments and an embedded message";
+            Console.WriteLine("open-msg: " + (openMsgOk ? "ok" : "FAILED"));
+            msgOk &= openMsgOk;
+        }
+
+        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

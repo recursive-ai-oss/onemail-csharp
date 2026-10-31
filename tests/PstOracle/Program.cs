@@ -34,6 +34,30 @@ if (args is ["genpst", var gpath, var gfmt, var gpreset, ..])
     return 0;
 }
 
+if (args is ["pstalloc", var apath, var passes])
+{
+    // pstalloc <file> <passes>: walks the whole store several times (every folder, message, recipient and attachment read) and prints the bytes
+    // allocated per message and the working set after each pass; a flat working set across passes is the constant-memory claim.
+    if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(apath, out var astore, out var awhy) || astore is null) { Console.WriteLine("open failed " + string.Join("; ", awhy)); return 1; }
+    using (astore)
+    {
+        long peak = 0;
+        for (int pass = 0; pass < int.Parse(passes, System.Globalization.CultureInfo.InvariantCulture); pass++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            var c = astore.ReadEverything();
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long ws = Environment.WorkingSet;
+            peak = Math.Max(peak, ws);
+            Console.WriteLine($"pass {pass}: messages {c.Messages} recipients {c.Recipients} attachments {c.Attachments} allocated {allocated / 1024} KiB = {allocated / Math.Max(1, c.Messages)} B/message; working set {ws / 1048576} MiB; managed {GC.GetTotalMemory(true) / 1048576} MiB");
+        }
+
+        Console.WriteLine($"peak working set {peak / 1048576} MiB; file {new FileInfo(apath).Length / 1048576} MiB");
+    }
+
+    return 0;
+}
+
 if (args is ["messaging" or "propexact" or "props", var mpath, ..])
 {
     // The messaging layer over a whole file: "messaging <file> <pffexport .export dir>" compares with pffexport; "propexact <file>" checks every

@@ -314,3 +314,18 @@ No Outlook has been observed yet, so each resolution is provisional.
 | X3 | String type differs from the store support mask | follows the entry's type | The entry's own type decides | `AmbiguousStringType` | MS-OXMSG 2.4.2 |
 | X4 | 8-bit strings, no `PidTagMessageCodepage` | fixed Latin default | Locale's ANSI page, then Internet code page, then enclosing message, then 1252 | `AmbiguousCodePage` | 36 corpus strings differ, all in files with only a locale or Internet code page |
 | X5 | String size field: stream length or stream plus terminator | n/a | Both accepted | none | ANSI files store the NUL in the stream |
+
+## PST/OST messaging and LTP
+
+Observed on the Tika testPST files, the CFReDS OST and our generated files against `pffexport` 20180714 as a black-box oracle. No Outlook
+has been observed yet, so each resolution is provisional. L-entries are the lists-tables-properties choices of `docs/pst-ltp.md`.
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| P1 | Message has attachment subnodes but no attachment table | no attachments | The attachment subnodes found are used | `AmbiguousAttachmentTableMissing` | prov., lossless |
+| P2 | Embedded-message object property holds a bare subnode NID, not the (NID, size) structure | n/a | The NID is used | `AmbiguousObjectReference` | MS-PST 2.3.3.5 states the structure; prov. |
+| P3 | Table row identifier differs from the NID the object is stored under | trusts the node | The node decides; the mismatch is reported | `RowIdMismatch` | prov. |
+| L1 | Rows per block of a subnode row matrix | n/a | Taken from the first block's own size, which equals the formula for 8 KiB blocks | none | prov.; real files agree |
+| L2 | BTH key that does not increase | n/a | Skipped, so a node reached twice gives no duplicates | none | prov. |
+| L3 | Property or cell of an unknown type | n/a | Read as an HNID in a PC; kept inline when one, two or eight bytes | none | prov. |
+| L4 | Positions in a heap's fill-level bitmap blocks (HNBITMAPHDR) | n/a | Allocations may not start before the block's header (12, 66 or 136... bytes, 2 elsewhere) | none | exercised on our files only |
