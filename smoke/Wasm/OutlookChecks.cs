@@ -50,7 +50,7 @@ internal static class OutlookChecks
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm);
+        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard);
 
     public static bool Msg()
     {
@@ -207,6 +207,26 @@ internal static class OutlookChecks
         return view.FormattedName == "Dan Fennell" && view.Phones.Single().Value == "+1-206-555-0102" && view.Organization[0] == "Contoso, Ltd."
             && contact.Surname == "Fennell" && contact.Phone(RecursiveAI.OneMail.Contacts.ContactPhoneKind.Business) == "+1-206-555-0102" && contact.CompanyName == "Contoso, Ltd."
             && new MapiMailItem(msg, default).Contact?.DisplayName == "Dan Fennell";
+    }
+
+    // The calendar card: an invitation in Paris time shown in New York time (the IANA database must be present), a weekly sentence, the occurrence list, and hostile text escaped.
+    public static bool Calcard()
+    {
+        const string ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:c@example.com\r\nDTSTAMP:20260101T000000Z\r\n" +
+            "DTSTART;TZID=Europe/Paris:20261130T140000\r\nDTEND;TZID=Europe/Paris:20261130T150000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO\r\nSUMMARY:<script>x</script>\r\n" +
+            "ATTENDEE;CN=A;PARTSTAT=ACCEPTED:mailto:a@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        var cards = RecursiveAI.OneMail.Display.CalendarCard.FromIcs(Encoding.UTF8.GetBytes(ics),
+            new RecursiveAI.OneMail.Display.CalendarCardOptions { DisplayTimeZone = "America/New_York" });
+        if (cards.Count != 1)
+        {
+            return false;
+        }
+
+        var c = cards[0];
+        string html = c.ToHtml();
+        return c.Action == "Invitation" && c.When == "Mon, 30 Nov 2026 08:00–09:00 (America/New_York, UTC-05:00)" && c.Recurrence == "Weekly on Monday"
+            && c.Occurrences.Count == 5 && html.Contains("&lt;script&gt;", StringComparison.Ordinal) && !html.Contains("<script", StringComparison.Ordinal)
+            && c.ToText().StartsWith("Invitation\n", StringComparison.Ordinal);
     }
 
     // An Outlook for Mac archive: a small zip built here, sniffed by content, read through Mail.Open with an attachment, converted to a calendar object.

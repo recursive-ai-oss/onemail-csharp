@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `RecursiveAI.OneMail.Display.CalendarCard`: the compact card mail clients show for a calendar object, as an HTML fragment and as plain text. It covers iMIP/iTIP methods (invitation, update, cancellation, reply, counter-proposal, ...), the time in a caller-chosen zone with the organizer's time kept, a plain-English recurrence sentence ("Every 2 weeks on Monday and Wednesday, until 30 Nov 2026", or "Repeats (custom rule)" when it cannot be said exactly) with the next occurrences, location and conference URLs, organizer, attendees and a truncated description, from `.ics` files, `text/calendar` parts and Outlook appointment and meeting items (`FromIcs`, `FromMime`, `FromMapi`, `FromItem`). The HTML is built from escaped text and passes the display sanitiser unchanged. See `docs/calendar-card.md`.
+- `OutlookNames.NetShowUrl` (`PidLidNetShowUrl`).
+
 ## [0.3.0-preview.1]
 
 On the local feed. Calendar and contacts close with this preview (speed rows in docs/benchmarks.md); it also carries the bodies, display and conversion work done so far. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
