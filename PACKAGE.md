@@ -4,6 +4,8 @@ An email library for .NET with no dependency beyond the .NET base class library 
 
 **Early preview.** Working today: MIME/EML reading and writing (byte-identical round-trips), MHTML and delivery/disposition/feedback reports, mbox variants, Maildir and EMLX, ICS/vCard trees, Outlook items on read (MSG/OFT, PST/OST, TNEF, compressed RTF) with MAPI↔MIME conversion and loss reports, calendar recurrence and time zones, and `Mail.Parse`/`Mail.Open` for the one-line path. Outlook writing, protocols and cryptography come in later previews. The API is not stable yet. What is checked, and the known gaps: <https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/compatibility.md>.
 
+**Display HTML is not yet independently reviewed.** The sanitiser behind `ToDisplayHtml` (`RecursiveAI.OneMail.Display`) has not had its independent security review. Do not rely on it to make untrusted mail safe to show until a release says the review has passed.
+
 ```csharp
 using RecursiveAI.OneMail;
 
