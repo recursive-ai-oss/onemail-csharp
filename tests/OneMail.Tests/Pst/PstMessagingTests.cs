@@ -5,6 +5,12 @@ using RecursiveAI.OneMail.Pst.Ndb;
 
 namespace RecursiveAI.OneMail.Tests.Pst;
 
+/// <summary>Tests that measure the process-wide managed heap run alone, after the parallel tests, so other tests' allocations
+/// cannot show up in their numbers.</summary>
+[CollectionDefinition(nameof(HeapMeasurement), DisableParallelization = true)]
+public sealed class HeapMeasurement;
+
+[Collection(nameof(HeapMeasurement))]
 public class PstMessagingTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
