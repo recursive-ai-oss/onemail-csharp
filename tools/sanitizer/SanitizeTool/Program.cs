@@ -55,7 +55,8 @@ static int Usage()
 static int Show()
 {
     string html = Console.In.ReadToEnd();
-    SanitizedHtml r = HtmlSanitizer.Sanitize(html);
+    SanitizerOptions? opts = Environment.GetEnvironmentVariable("SANITIZE_ALLOW") == "1" ? new SanitizerOptions { RemoteContent = RemoteContentAction.Allow } : null;
+    SanitizedHtml r = HtmlSanitizer.Sanitize(html, opts);
     Console.WriteLine(r.Html);
     foreach (SanitizerChange c in r.Changes)
     {

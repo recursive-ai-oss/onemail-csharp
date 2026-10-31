@@ -82,6 +82,7 @@ public static class HtmlSanitizer
         // serialised and parsed is the root of the mutation attacks on sanitisers, so a result that never settles is replaced by plain text.
         bool stable = false;
         for (int round = 0; round < 3 && !stable; round++)
+
         {
             SanitizerContext vx = new(options, verify: true);
             string again = Write(output, vx);
@@ -247,6 +248,7 @@ public static class HtmlSanitizer
         private readonly StringBuilder _cssText = new();
         private int _nodes;
         private bool _depthReported;
+        private int _anchorDepth;
 
         public readonly StringBuilder Body = new();
         public string WrapperStyle = string.Empty;
@@ -392,11 +394,21 @@ public static class HtmlSanitizer
                 return;
             }
 
+            // The parser cannot produce an anchor inside an anchor from markup, but its adoption-agency repair of misnested formatting
+            // can leave one in the tree. Written out, it would be parsed back into a different shape, so the inner one is unwrapped.
+            if (name == "a" && _anchorDepth > 0)
+            {
+                cx.Change(SanitizerChangeKind.ElementUnwrapped, name);
+                Children(n, depth + 1);
+                return;
+            }
+
             if (!Count())
             {
                 return;
             }
 
+            int elementStart = Body.Length;
             Body.Append('<').Append(name);
             Attributes(n, name);
             Body.Append('>');
@@ -408,10 +420,29 @@ public static class HtmlSanitizer
             // The parser drops one newline right after <pre>, so a newline that begins the written content is doubled to survive a re-parse.
             // The check is on what was written, not on the first child: an element removed in front of the text can leave a newline first.
             int contentStart = Body.Length;
+            if (name == "a")
+            {
+                _anchorDepth++;
+            }
+
             Children(n, depth + 1);
+            if (name == "a")
+            {
+                _anchorDepth--;
+            }
+
             if (name == "pre" && Body.Length > contentStart && Body[contentStart] == '\n')
             {
                 Body.Insert(contentStart, '\n');
+            }
+
+            // An empty inline element says nothing. The parser's rules for formatting elements (the adoption agency and reconstruction) re-open
+            // and close empty ones in patterns that shift a little on every parse, so a deeply nested input could never settle.
+            if (Body.Length == contentStart && name is "a" or "b" or "i" or "u" or "s" or "em" or "strong" or "font" or "big" or "small" or "strike" or "tt" or "code"
+                && !Body.ToString(elementStart, contentStart - elementStart).Contains(" id=", StringComparison.Ordinal))
+            {
+                Body.Length = elementStart;
+                return;
             }
 
             Body.Append("</").Append(name).Append('>');

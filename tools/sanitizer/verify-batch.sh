@@ -47,6 +47,13 @@ for d in msg pst tnef mime4j enron-sample; do
   echo "corpus $d: $(timeout 600 $tool corpus "$corpus/$d" 2>&1 | head -12 | tr '\n' ' ')"
 done
 
+# The mail-subset RTF to HTML output (RtfTool html over a set of RTF bodies, files named <id>.ours.html).
+rtfset="${RTF_HTML_SET:-$HOME/onemail/work-u26/set}"
+if ls "$rtfset"/*.ours.html >/dev/null 2>&1; then
+  rm -rf "$work/rtfhtml"; mkdir -p "$work/rtfhtml"; cp "$rtfset"/*.ours.html "$work/rtfhtml/"
+  echo "corpus rtf-html ($(ls "$work/rtfhtml" | wc -l) files): $(timeout 600 $tool corpus "$work/rtfhtml" 2>&1 | head -12 | tr '\n' ' ')"
+fi
+
 wait "${pids[@]}"
 for t in sanitizer sanitizer-reparse; do
   w="$work/fuzz/$t"

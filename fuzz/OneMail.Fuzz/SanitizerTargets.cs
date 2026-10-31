@@ -12,6 +12,35 @@ namespace RecursiveAI.OneMail.Fuzz;
 //                        the property a browser relies on when it copies the markup through innerHTML (mutation XSS needs it to fail).
 internal static class SanitizerTargets
 {
+    // HTML srcset: a candidate is a URL (commas allowed inside it) followed by descriptors; a comma after a descriptor or at the end
+    // of the URL starts the next candidate. Reading it the way a browser does keeps the check from flagging commas inside a URL.
+    private static IEnumerable<string> SrcsetUrls(string value)
+    {
+        bool expectUrl = true;
+        foreach (string tok in value.Split([' ', '\t', '\n', '\r', '\f'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string t = tok;
+            if (expectUrl)
+            {
+                string url = t.TrimEnd(',');
+                yield return url;
+                expectUrl = t.EndsWith(',');
+                continue;
+            }
+
+            int comma = t.IndexOf(',');
+            if (comma >= 0)
+            {
+                if (comma + 1 < t.Length)
+                {
+                    yield return t[(comma + 1)..].TrimEnd(',');
+                }
+
+                expectUrl = t.EndsWith(',');
+            }
+        }
+    }
+
     private static readonly HashSet<string> Banned = new(StringComparer.Ordinal)
     {
         "script", "iframe", "object", "embed", "form", "input", "svg", "math", "link", "meta", "base", "noscript", "template", "frame",
@@ -99,7 +128,7 @@ internal static class SanitizerTargets
                 IEnumerable<string> urls = name switch
                 {
                     "href" or "src" or "background" => [a.Value.ToString()],
-                    "srcset" => a.Value.ToString().Split([' ', ',', '\t', '\n'], StringSplitOptions.RemoveEmptyEntries).Where(t => t.Contains(':', StringComparison.Ordinal) || t.StartsWith('/')),
+                    "srcset" => SrcsetUrls(a.Value.ToString()),
                     _ => [],
                 };
                 foreach (string u in urls)

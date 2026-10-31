@@ -117,6 +117,18 @@ the olm-reader 1.0.0 npm package (Apache-2.0). Corpus, fetched and never committ
 |---|---|---|---|---|---|---|
 | OLM (Outlook for Mac archive) | yes: mail, appointments, contacts, groups, tasks, notes, categories; attachments as lazy streams | no, by design | jar: 0 on both samples and on two generated archives (outlook_example 38 records, bill_rapp 492, generated 54); npm package: 0 on 485 messages, 12 documented tool differences | records keep every element (`OlmElement` tree); raw MIME source kept as text | yes | no Outlook 2011 layout sample; no archive with a raw MIME source, attendees or exceptions seen; a damaged zip is refused (recovery comes later); the working set is not constant in the entry count: OneArchive holds the zip directory (about 1 KB per entry; 123 MiB at 26,678 entries, 309 MiB at 213,345; see [`olm.md`](olm.md)) |
 
+## Display HTML (sanitiser, remote-content policy)
+
+Added after 0.2.0-preview.2. Vectors are our own, written from the categories of public evasion lists (no text copied). DOMPurify 3.4.17 (npm) is run as a released program
+only. What the code does is in [`display-html.md`](display-html.md); the sanitiser has not had its independent review yet.
+
+| Area | Checked against | Result | Known gaps |
+|---|---|---|---|
+| Vectors in headless Chrome (per-vector iframes) | 233 vectors: raw page, sanitised with the block policy, sanitised with the allow policy | raw: 42 script executions and 58 requests; block policy: 0 executions, 0 requests; allow policy: 0 executions, 29 paths fetched, none from a removed element | one browser engine |
+| DOMPurify 3.4.17, default configuration, same scorer in the same page | the same 233 vectors | ours 0 findings, DOMPurify 89, raw 194; ours looser in 0 categories | |
+| Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
+| Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio

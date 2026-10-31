@@ -314,4 +314,16 @@ public class SanitizerTests
             Assert.DoesNotContain(r.Changes, c => c.Detail.Contains("unstable", StringComparison.Ordinal));
         }
     }
+
+    [Fact]
+    public void DeeplyNestedMisnestedAnchorsSettle()
+    {
+        // The adoption-agency repair of an anchor opened inside an anchor, 24 or more blocks deep, leaves an anchor in an anchor in the tree.
+        foreach (int depth in new[] { 3, 24, 100, 200 })
+        {
+            SanitizedHtml r = HtmlSanitizer.Sanitize("<a>" + string.Concat(Enumerable.Repeat("<div>", depth)) + "<a><");
+            Assert.DoesNotContain(r.Changes, c => c.Detail.Contains("unstable", StringComparison.Ordinal));
+            Assert.Contains("&lt;", r.Html, StringComparison.Ordinal);
+        }
+    }
 }
