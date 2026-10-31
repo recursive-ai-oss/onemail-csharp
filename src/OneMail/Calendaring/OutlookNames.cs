@@ -13,6 +13,9 @@ public static class OutlookNames
 
     private static MapiNamedProperty Tsk(uint lid) => new(MapiPropertySets.Task, lid);
 
+    /// <summary>PidLidNetShowUrl: the URL launched to join the online meeting (MS-OXOCAL 2.2.1.56.8; ICS <c>X-MS-OLK-NETSHOWURL</c>).</summary>
+    public static readonly MapiNamedProperty NetShowUrl = Appt(0x8248);
+
     /// <summary>PidLidAppointmentSequence.</summary>
     public static readonly MapiNamedProperty AppointmentSequence = Appt(0x8201);
 
