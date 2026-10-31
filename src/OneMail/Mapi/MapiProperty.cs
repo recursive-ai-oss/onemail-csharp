@@ -264,11 +264,16 @@ public sealed class MapiProperty
     /// <param name="string8Encoding">The code page for PtypString8, normally the owning item's <see cref="MapiObject.String8Encoding"/>.</param>
     /// <param name="issues">Receives what the decoder repaired, or null.</param>
     /// <param name="index">The value index.</param>
-    /// <returns>The text, or null if the property is not a string type.</returns>
+    /// <returns>The text, or null if the property is not a string type or has no value at <paramref name="index"/> (a multi-valued property can hold none).</returns>
     public string? AsString(MailEncoding? string8Encoding = null, List<TextIssue>? issues = null, int index = 0)
     {
         MapiType t = Tag.PropertyType;
         if (t is not (MapiType.UnicodeString or MapiType.MultipleString or MapiType.String8 or MapiType.MultipleString8))
+        {
+            return null;
+        }
+
+        if ((uint)index >= (uint)ValueCount)
         {
             return null;
         }

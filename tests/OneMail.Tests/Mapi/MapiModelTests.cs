@@ -9,6 +9,18 @@ public class MapiModelTests
 {
     private static MapiProperty P(uint tag, byte[] bytes) => MapiProperty.Create(new MapiTag(tag), bytes);
 
+    // Found by fuzzing: a damaged multi-valued string property can hold no values at all; asking for text is "no value", not an exception.
+    [Fact]
+    public void MultiValuedStringWithNoValuesYieldsNull()
+    {
+        MapiProperty empty = MapiProperty.CreateMulti(new MapiTag(0x1000101F), []);
+        Assert.Null(empty.AsString());
+        Assert.Null(empty.AsString(index: 3));
+        MapiProperty two = MapiProperty.CreateMulti(new MapiTag(0x1000101E), [[0x41, 0], [0x42]]);
+        Assert.Equal("B", two.AsString(index: 1));
+        Assert.Null(two.AsString(index: 2));
+    }
+
     [Fact]
     public void TagSplitsIdAndType()
     {
