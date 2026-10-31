@@ -113,10 +113,15 @@ public static class CalendarCardRecurrence
             days.Add(start.Value.DayOfWeek);
         }
 
-        // The week start decides which days share a "week" when the interval skips weeks, so a differing WKST would change the meaning.
-        if (n > 1 && days.Count > 1 && r.WeekStart is { } w && w != DayOfWeek.Monday)
+        // The week start decides which days share a "week" when the interval skips weeks (RFC 5545 §3.3.10, WKST). Outlook writes WKST=SU on every
+        // rule, so Sunday-start rules are described when no day of the set, nor DTSTART's day, is a Sunday: then Monday-start and Sunday-start weeks
+        // group the days alike. Any other week start, or a Sunday in play, is left to the custom-rule text.
+        if (n > 1 && r.WeekStart is { } w && w != DayOfWeek.Monday && !(days.Count == 1 && days[0] == start.Value.DayOfWeek))
         {
-            return null;
+            if (w != DayOfWeek.Sunday || days.Contains(DayOfWeek.Sunday) || start.Value.DayOfWeek == DayOfWeek.Sunday)
+            {
+                return null;
+            }
         }
 
         days.Sort((a, b) => ((int)a + 6) % 7 - ((int)b + 6) % 7);

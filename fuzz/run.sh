@@ -59,6 +59,7 @@ case "$target" in
   rtf-html) maxlen=32768 ;;
   oxcmail) maxlen=16384 ;;
   oxocal) maxlen=4096 ;;
+  calcard) maxlen=8192 ;;
   olm) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
