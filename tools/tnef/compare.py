@@ -208,4 +208,5 @@ def main():
     sys.exit(min(total["unexplained"], 125))
 
 
-main()
+if __name__ == "__main__":
+    main()

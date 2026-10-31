@@ -3,6 +3,7 @@ using System.Text.Unicode;
 using RecursiveAI.OneMail.Mime;
 using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Text;
+using RecursiveAI.OneMail.Tnef;
 
 namespace RecursiveAI.OneMail;
 
@@ -129,13 +130,27 @@ public class MimeMailItem : IMailItem
     public string? ConversationTopic => Entity.Headers.GetFirst("Thread-Topic")?.Value;
 
     /// <inheritdoc/>
-    public MailBody? TextBody => Layout.Text is { } p ? new MimeMailBody(p) : null;
+    /// <remarks>The MIME text part; when the message has none, the plain text of the TNEF part (ambiguity V9).</remarks>
+    public MailBody? TextBody => Layout.Text is { } p ? new MimeMailBody(p) : Layout.Tnef.Select(t => t.Item.TextBody).FirstOrDefault(b => b is not null);
 
     /// <inheritdoc/>
-    public MailBody? HtmlBody => Layout.Html is { } p ? new MimeMailBody(p) : null;
+    /// <remarks>The MIME HTML part; when the message has none, the HTML of the TNEF part, from its HTML property or de-encapsulated from its RTF (ambiguity V9).</remarks>
+    public MailBody? HtmlBody => Layout.Html is { } p ? new MimeMailBody(p) : Layout.Tnef.Select(t => t.Item.HtmlBody).FirstOrDefault(b => b is not null);
 
     /// <inheritdoc/>
-    public MailBody? RtfBody => null;
+    /// <remarks>MIME has no RTF body; a TNEF part can bring one (ambiguity V9).</remarks>
+    public MailBody? RtfBody => Layout.Tnef.Select(t => t.Item.RtfBody).FirstOrDefault(b => b is not null);
+
+    /// <summary>
+    /// The TNEF parts (<c>application/ms-tnef</c>, winmail.dat) the view unpacked: their attachments are in <see cref="Attachments"/> in their place and their bodies
+    /// fill <see cref="RtfBody"/> and the bodies the MIME side lacks. The parts themselves are untouched in <see cref="Entity"/>; this is the way to the raw
+    /// bytes (<c>part.GetDecodedContent()</c>). A TNEF part that does not qualify (damaged, trailing CR LF, correlation key mismatch) is not listed and
+    /// stays an ordinary attachment (ambiguity V9).
+    /// </summary>
+    public IReadOnlyList<MimePart> TnefParts => Layout.Tnef.Select(t => t.Part).ToList();
+
+    /// <summary>The unpacked TNEF messages, in the same order as <see cref="TnefParts"/>, for callers that want their properties.</summary>
+    public IReadOnlyList<TnefMessage> TnefMessages => Layout.Tnef.Select(t => t.Message).ToList();
 
     /// <inheritdoc/>
     public IReadOnlyList<IMailAttachment> Attachments => Layout.Attachments;
@@ -154,6 +169,12 @@ public class MimeMailItem : IMailItem
             foreach (MimeDefect d in root.EnumerateDefects())
             {
                 yield return new MailDefect("mime", d.Kind.ToString(), d.Offset, d.IsAmbiguity);
+            }
+
+            if (Layout.TnefCrLf)
+            {
+                // OX20: a TNEF stream ending in CR LF is used although MS-OXCMAIL 2.2.3.8 says to ignore it.
+                yield return new MailDefect("tnef", "AmbiguousTnefTrailingCrLf", -1, true);
             }
 
             // Structured headers are parsed on demand, so their defects exist only once they have been read.
@@ -237,12 +258,14 @@ public class MimeMailItem : IMailItem
         public MimePart? Text;
         public MimePart? Html;
         public IReadOnlyList<IMailAttachment> Attachments = [];
+        public readonly List<(MimePart Part, TnefMessage Message, MapiMailItem Item)> Tnef = [];
+        public bool TnefCrLf;
 
         public static BodyLayout Build(MimeEntity root, MimeMailItem owner)
         {
             BodyLayout l = new() { Text = FindBody(root, "plain"), Html = FindBody(root, "html") };
             List<IMailAttachment> list = [];
-            Collect(root, l, list);
+            Collect(root, root, l, list);
             l.Attachments = list;
             _ = owner;
             return l;
@@ -289,20 +312,30 @@ public class MimeMailItem : IMailItem
             }
         }
 
-        private static void Collect(MimeEntity e, BodyLayout l, List<IMailAttachment> into, bool inAlternative = false)
+        private static void Collect(MimeEntity message, MimeEntity e, BodyLayout l, List<IMailAttachment> into, bool inAlternative = false)
         {
             switch (e)
             {
                 case MimeMultipart m:
                     foreach (MimeEntity c in m.Children)
                     {
-                        Collect(c, l, into, m.MediaSubType == "alternative");
+                        Collect(message, c, l, into, m.MediaSubType == "alternative");
                     }
 
                     break;
                 case MimePart p:
                     // RFC 2046 §5.1.4: the children of multipart/alternative are renderings of one body; a text rendering that is
                     // not marked as an attachment is an alternative of the body, not a file.
+                    if (p.IsTnef() && TnefInMime.TryRead(p, message, null, out TnefMessage? tnef, out TnefInMime.Refusal note))
+                    {
+                        // MS-OXCMAIL 2.2.3.8 and ambiguity V9: Outlook shows what the TNEF holds in place of winmail.dat.
+                        var item = new MapiMailItem(tnef!, new MailProvenance(MailFormat.Tnef, null, null, 0, tnef!.Document.Source.Length, -1));
+                        l.Tnef.Add((p, tnef!, item));
+                        l.TnefCrLf |= note == TnefInMime.Refusal.TrailingCrLf;
+                        into.AddRange(item.Attachments);
+                        break;
+                    }
+
                     bool alternativeText = inAlternative && p.MediaTopLevelType == "text" && p.Disposition != "attachment";
                     if (!alternativeText && !ReferenceEquals(p, l.Text) && !ReferenceEquals(p, l.Html))
                     {

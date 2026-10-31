@@ -6,10 +6,26 @@
     <IsPackable>false</IsPackable>
     <!-- The browser host covers the format core only: the core and Calendar packages. -->
     <IsTrimmable>true</IsTrimmable>
+    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The test-side file builders make the MSG, PST and TNEF the smoke reads back. -->
+    <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/PstFixtureBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Pst/PstFixtures.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>

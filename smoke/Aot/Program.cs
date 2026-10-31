@@ -287,6 +287,10 @@ internal static class Program
             && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.SentRepresentingSmtpAddress) == "a@example.com";
         Console.WriteLine("oxcmail: " + (oxcOk ? "ok" : "FAILED"));
 
-        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // TNEF inside MIME: unpacked into the MAPI message and the view, and exported as a TNEF message.
+        bool tnefMimeOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.TnefInMime();
+        Console.WriteLine("tnef-in-mime: " + (tnefMimeOk ? "ok" : "FAILED"));
+
+        return tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

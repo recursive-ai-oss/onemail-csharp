@@ -5,12 +5,29 @@ using RecursiveAI.OneMail.Mime;
 using RecursiveAI.OneMail.Mime.Transfer;
 using RecursiveAI.OneMail.Rtf;
 using RecursiveAI.OneMail.Text;
+using RecursiveAI.OneMail.Tnef;
 
 namespace RecursiveAI.OneMail.Conversion.OxcMail;
+
+/// <summary>Whether <see cref="MapiToMimeConverter"/> writes a pure MIME message or a TNEF message (MS-OXCMAIL 2.1).</summary>
+public enum OxcMailTnefExport
+{
+    /// <summary>A pure MIME message: bodies and attachments are MIME parts. The default.</summary>
+    PureMime = 0,
+
+    /// <summary>
+    /// A TNEF message (2.1.3.7): <c>multipart/mixed</c> holding a <c>text/plain</c> rendering of the body and one <c>application/ms-tnef</c> part (winmail.dat)
+    /// with every property, the attachments and the embedded messages, plus the <c>X-MS-TNEF-Correlator</c> field. The envelope fields stay MIME header fields.
+    /// </summary>
+    TnefMessage = 1,
+}
 
 /// <summary>Settings for <see cref="MapiToMimeConverter"/>.</summary>
 public sealed class OxcMailExportOptions
 {
+    /// <summary>Write a pure MIME message (the default) or a TNEF message. See <see cref="OxcMailTnefExport"/>.</summary>
+    public OxcMailTnefExport Tnef { get; init; } = OxcMailTnefExport.PureMime;
+
     /// <summary>
     /// Use <c>PidTagTransportMessageHeaders</c>, when the message has it, as the header block of the Internet message (MS-OXCMAIL
     /// 2.2.3.2.28 says readers keep the received headers there). Default true. Fields the properties also define are kept as received when
@@ -126,9 +143,17 @@ public sealed class MapiToMimeConverter : IItemConversion<MapiMessage, MimeEntit
         {
             var resolver = new MapiAddressResolver(m);
             var body = new Bodies(m, report, path);
-            MimeEntity root = BuildStructure(m, body, path, depth, out bool anyAttachments);
+            bool asTnef = options.Tnef == OxcMailTnefExport.TnefMessage;
+            bool anyAttachments = false;
+            MimeEntity root = asTnef ? BuildTnefStructure(m, body, path) : BuildStructure(m, body, path, depth, out anyAttachments);
             List<(string Name, string Value)> computed = ComputeHeaders(m, resolver, path);
             List<(string Name, string Value)> final = MergeTransport(m, resolver, computed, path);
+            if (asTnef)
+            {
+                // The received block may carry the correlator of the message this one was read from; the new TNEF part has its own.
+                final.RemoveAll(f => f.Name.Equals("X-MS-TNEF-Correlator", StringComparison.OrdinalIgnoreCase) || f.Name.Equals("X-MS-Tnef-Correlation", StringComparison.OrdinalIgnoreCase));
+            }
+
             final.Add(("MIME-Version", "1.0"));
             for (int i = 0; i < final.Count; i++)
             {
@@ -136,7 +161,12 @@ public sealed class MapiToMimeConverter : IItemConversion<MapiMessage, MimeEntit
             }
 
             _ = anyAttachments;
-            ReportProperties(m, path);
+            if (!asTnef)
+            {
+                // In a TNEF message the properties travel in the TNEF part; the writer's warnings name what it could not carry.
+                ReportProperties(m, path);
+            }
+
             return root;
         }
 
@@ -222,6 +252,73 @@ public sealed class MapiToMimeConverter : IItemConversion<MapiMessage, MimeEntit
                 mixed.Add(p);
             }
 
+            return mixed;
+        }
+
+        // MS-OXCMAIL 2.1.3.7: multipart/mixed with a text/plain rendering and the application/ms-tnef part.
+        private MimeMultipart BuildTnefStructure(MapiMessage m, Bodies body, string path)
+        {
+            // The correlation key relates the TNEF part to its message (2.1.3.2.26). It is derived from the message so that output is reproducible.
+            // A message that already has a key (it came from a TNEF message) keeps it, so the property is unchanged.
+            string? key = null;
+            bool keyIsNew = true;
+            if (m.Properties.Get(MapiPid.TnefCorrelationKey, MapiType.Binary) is { } existingKey)
+            {
+                ReadOnlySpan<byte> kb = existingKey.GetBytes().Span;
+                while (kb.Length > 0 && kb[^1] == 0)
+                {
+                    kb = kb[..^1];
+                }
+
+                if (kb.Length > 0 && System.Text.Ascii.IsValid(kb) && !kb.ContainsAnyInRange((byte)0, (byte)0x20))
+                {
+                    key = Encoding.ASCII.GetString(kb);
+                    keyIsNew = false;
+                }
+            }
+
+            if (key is null)
+            {
+                string identity = (m.GetString(MapiPid.InternetMessageId) ?? m.GetString(MapiPid.Subject) ?? string.Empty) + "|" + (m.GetTime(MapiPid.ClientSubmitTime)?.UtcTicks ?? 0).ToString(CultureInfo.InvariantCulture);
+                key = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(identity)).AsSpan(0, 16));
+            }
+
+            // The writer gets a view of the message with the key added and, as 2.1.3.1.1 asks for the top level, no recipient table: the header fields carry it.
+            var copy = new MapiMessage();
+            foreach (MapiProperty p in m.Properties)
+            {
+                copy.Properties.Add(p);
+            }
+
+            if (keyIsNew)
+            {
+                copy.Properties.Set(MapiProps.Bin(MapiPid.TnefCorrelationKey, Encoding.ASCII.GetBytes(key)));
+            }
+
+            copy.DeclaredString8Encoding = m.String8Encoding;
+            foreach (MapiAttachment a in m.Attachments)
+            {
+                copy.AddAttachment(a);
+            }
+
+            using var ms = new MemoryStream();
+            foreach (string warning in TnefMessageWriter.Write(copy, ms))
+            {
+                report.Add("mapi", warning, LossKind.Dropped, "TnefWriterLimit", "The TNEF format cannot carry this property.", path);
+            }
+
+            MimeMultipart mixed = NewMultipart("mixed");
+            if (body.Text is null)
+            {
+                report.Add("mime", "text/plain", LossKind.Approximated, "TnefPlainTextNotRendered", "The message has no plain-text body, so the text/plain part is empty; the HTML or RTF body is in the TNEF part.", path);
+            }
+
+            mixed.Add((body.Text ?? new Body(string.Empty, "utf-8", "text/plain")).ToPart("plain"));
+            var tnef = new MimePart("application/ms-tnef" + MimeHeaderValue.Parameter("name", "winmail.dat"));
+            tnef.SetDecodedContent(ms.ToArray(), ContentTransferEncoding.Base64);
+            tnef.Headers.Add("Content-Disposition", "attachment" + MimeHeaderValue.Parameter("filename", "winmail.dat"));
+            mixed.Add(tnef);
+            mixed.Headers.Add("X-MS-TNEF-Correlator", key);
             return mixed;
         }
 

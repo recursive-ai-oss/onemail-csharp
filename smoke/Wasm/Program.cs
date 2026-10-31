@@ -5,7 +5,7 @@ using RecursiveAI.OneMail.Sources;
 namespace RecursiveAI.OneMail.WasmSmoke;
 
 /// <summary>Runs the format core in the browser's .NET runtime: parse a message, read an mbox through the shared view, read
-/// an ICS tree. Prints one line per check and a final "wasm smoke: ok" or "wasm smoke: FAILED".</summary>
+/// an ICS tree, then the Outlook formats (<see cref="OutlookChecks"/>). Prints one line per check and a final "wasm smoke: ok" or "wasm smoke: FAILED".</summary>
 internal static class Program
 {
     private static int Main()
@@ -33,7 +33,10 @@ internal static class Program
         bool calendarOk = doc.ToArray().AsSpan().SequenceEqual(ics);
         Console.WriteLine("calendar: " + (calendarOk ? "ok" : "FAILED"));
 
-        bool ok = mimeOk && storesOk && calendarOk;
+        bool outlookOk = OutlookChecks.RunAll();
+        Console.WriteLine("outlook: " + (outlookOk ? "ok" : "FAILED"));
+
+        bool ok = mimeOk && storesOk && calendarOk && outlookOk;
         Console.WriteLine("wasm smoke: " + (ok ? "ok" : "FAILED"));
         return ok ? 0 : 1;
     }

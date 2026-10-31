@@ -103,7 +103,8 @@ from IANA. If the file has none, expansion falls back to the database and says s
 
 **Browser (WASM).** The runtime's database may be absent in the browser. Lookups are guarded by try/catch and return "unknown",
 never an exception. Set `TimeZones = new TimeZoneResolverOptions { UseRuntimeDatabase = false }` there and rely on the file's
-VTIMEZONEs; the AOT smoke app exercises that configuration.
+VTIMEZONEs; the AOT smoke app exercises that configuration. The browser smoke app also expands a rule through the runtime's database (`America/New_York` across the spring-forward day)
+and through a VTIMEZONE; both give the same instants in headless Chromium, so the database is present in the browser runtime as built.
 
 ## Method of the differential check
 

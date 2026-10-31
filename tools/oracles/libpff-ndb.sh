@@ -9,7 +9,10 @@ set -euo pipefail
 file="${1:?usage: libpff-ndb.sh <file> [pstoracle.dll]}"
 oracle_dll="${2:-}"
 # shellcheck disable=SC1090
+# the env file extends LD_LIBRARY_PATH without defining it first
+set +u
 . "${ONEMAIL_LIBPFF_ENV:-$HOME/onemail/oracles/libpff/env.sh}"
+set -u
 
 echo "== pffinfo"
 pffinfo "$file" | sed -n '/File size/,/Encryption type/p'

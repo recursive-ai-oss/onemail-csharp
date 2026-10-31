@@ -102,7 +102,7 @@ objects without flat data and attachments without data are not written and are r
 ## MIME to MAPI: `MimeToMapiConverter` (MS-OXCMAIL 2.2)
 
 `Convert(MimeEntity)` returns a new `MapiMessage` (property bag, recipient and attachment rows, embedded messages as items).
-Options (`OxcMailImportOptions`): `PartHandler`, `MaxEmbeddedDepth` (16), `MaxPartDepth` (64).
+Options (`OxcMailImportOptions`): `Tnef` (`Merge`, the default, or `KeepAsAttachment`), `TnefReader` (limits for TNEF parts), `PartHandler`, `MaxEmbeddedDepth` (16), `MaxPartDepth` (64).
 
 - **Message class** `IPM.Note`; `REPORT.IPM.Note.NDR` and `.IPNRN` for `multipart/report` with the matching `report-type`;
   `IPM.Note.SMIME.MultipartSigned` for `multipart/signed` and `IPM.Note.SMIME` for `application/pkcs7-mime`. Signed content and
@@ -126,8 +126,52 @@ Options (`OxcMailImportOptions`): `PartHandler`, `MaxEmbeddedDepth` (16), `MaxPa
 - **Attachments**: data, `PidTagAttachLongFilename` (and short), extension, `PidTagAttachMimeTag`, content ID without angle
   brackets, content location, the disposition as written (`PidTagAttachContentDisposition`), the inline flag, size. `message/rfc822`
   is an embedded message (method 5) converted by the same rules. Part headers with no property are `PartHeaderNotMapped`.
-- **The hook for TNEF.** `OxcMailImportOptions.PartHandler` sees every leaf part before it is classified. A caller that reads
-  `winmail.dat` returns true after adding the TNEF message's properties and attachments to the `MapiMessage` it is given.
+- **The hook.** `OxcMailImportOptions.PartHandler` sees every leaf part before it is classified; a caller that returns true has dealt with
+  the part (it may add properties and attachments to the `MapiMessage` it is given). TNEF parts are handled by the converter itself
+  (next section) after the handler has declined them.
+
+### TNEF parts (MS-OXCMAIL 2.2.3.8, MS-OXTNEF)
+
+A leaf part that holds a TNEF stream (found by content, as `MimeEntity.EnumerateTnefParts` does: `application/ms-tnef`, winmail.dat,
+or any `application/*` part starting with the signature 0x223E9F78) is unpacked into the message. The rules, in the order the converter
+applies them:
+
+1. **The part qualifies** when the stream conforms to MS-OXTNEF (no wrong signature, version, truncation, checksum or limit defect), and its correlation key matches the message's `X-MS-TNEF-Correlator` field
+   (step 4, OX21). A part that does not qualify is an ordinary attachment whose content type is `application/octet-stream`
+   (step 4), reported as `TnefNotUsed` with the reason. The message is then pure MIME, as the spec says.
+2. **Headers first.** The message is built from the header fields exactly as without a TNEF part. Then, for each TNEF property: not set
+   yet, it is added as the TNEF reader gave it (named properties keep their name and are renumbered into the message's own named IDs);
+   already set, it is ignored and, when its value differs, reported (`TnefPropertyIgnored`, `Overridden`). Properties that come from one
+   header field are one group: subject (`PidTagSubject`, prefix, normalised subject), the sender, the sent-representing sender and the
+   reply-to entries. When the headers set any of a group, the TNEF's other members of that group are ignored too (OX16).
+3. **Bodies.** A body property is added when the MIME side has none of that kind, so a TNEF's compressed RTF or HTML stays next to the plain
+   text of the MIME part (2.2: the plain text must not be preferred to a richer TNEF body). `PidTagNativeBody` and `PidTagInternetCodepage` are the
+   TNEF's (the author's values) unless the HTML is the MIME part's; then `PidTagNativeBody` is the richest body the message has (HTML, then RTF,
+   then text) (OX17).
+4. **Message class.** `IPM.Note` is what the converter gives a message nothing says more about; a class the TNEF carries (`IPM.Appointment`,
+   `IPM.Schedule.Meeting.Request`, ...) replaces it (`TnefMessageClassUsed`). A class the MIME structure gave (a report, S/MIME) stays (OX18).
+5. **Recipients.** The headers' recipients win; the TNEF's recipient table is used only when the headers gave none, and ignored with a
+   `TnefRecipientIgnored` entry for each address the headers lack (OX19).
+6. **Attachments** of the TNEF (data, embedded messages, OLE storages) are the message's attachments in the TNEF part's place, with
+   their properties as read; their 8-bit text keeps the code page of the TNEF. The 8-bit strings that were merged into the message are read
+   with the TNEF's code page too (a second TNEF part with another code page has its single 8-bit strings stored as Unicode,
+   `TnefCodePageDiffers`).
+7. A stream that ends in CR LF outside any attribute is unpacked although 2.2.3.8 step 3 says to ignore it (OX20); the message gets an `Internal`
+   `TnefTrailingCrLfIgnored` entry and the view an `AmbiguousTnefTrailingCrLf` defect.
+8. The part itself is a `TnefPartUnpacked` entry (`Internal`: the content is carried, the carrier is not).
+
+`OxcMailImportOptions.Tnef = KeepAsAttachment` leaves every TNEF part an attachment as for any binary part.
+
+## MIME from a TNEF message (`OxcMailExportOptions.Tnef`)
+
+`OxcMailTnefExport.TnefMessage` writes the TNEF form of MS-OXCMAIL 2.1.3.7 instead of a pure MIME message: `multipart/mixed` holding a
+`text/plain` rendering of the body and one `application/ms-tnef; name="winmail.dat"` part, plus `X-MS-TNEF-Correlator`. The envelope fields
+are still header fields (the reader takes them first). The TNEF holds every property, the attachments and the embedded messages; the
+top-level recipient table is left to the headers (2.1.3.1.1), so a `Bcc` recipient is not written unless `IncludeBcc` puts it in the header.
+Properties the TNEF format cannot carry are reported by name (`TnefWriterLimit`). A message with no plain-text body gets an empty
+`text/plain` part (`TnefPlainTextNotRendered`; HTML to text is not done here). The correlation key is the message's own
+`PidTagTnefCorrelationKey` when it has one (so the property is unchanged), else a value derived from the message so that output is
+reproducible (OX22). Properties that travel in the TNEF are not listed as `NoInternetMapping`. The default is a pure MIME message.
 
 ## Loss codes
 
@@ -138,7 +182,8 @@ Options (`OxcMailImportOptions`): `PartHandler`, `MaxEmbeddedDepth` (16), `MaxPa
 `NoInternetMapping`, `PartHeaderNotMapped`, `PartsTooDeep`, `RepeatedHeaderNotMapped`, `ReplyToUnresolved`, `RtfCarriedAsTextRtf`,
 `RtfRedundant`, `RtfUndecodable`, `SignatureNotVerifiable`, `StoreBookkeeping`, `SubjectPrefixMarkerRemoved`,
 `SubjectWhitespaceTrimmed`, `TextFromRtf`, `ThreadIndexNotBase64`, `TransportHeaderLineSkipped`, `TransportHeaderOverridden`,
-`TransportHeadersRewritten`, `ValueOutOfRange`.
+`TransportHeadersRewritten`, `ValueOutOfRange`; TNEF: `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefTrailingCrLfIgnored`,
+`TnefPlainTextNotRendered`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefWriterLimit`.
 
 ## Limits
 
@@ -159,3 +204,9 @@ Property values are read as the MAPI layer limits them. The converters allocate 
 3. **MIME to MAPI to MIME** (`OxcMailTool rt-mime`) over message files: ten fields compared before and after (subject, From, To,
    Cc, Date, Message-ID, In-Reply-To, References, text and HTML bodies, attachments); each difference needs a loss entry.
 4. **The view** (`OxcMailTool view`): how many senders and recipients resolve to SMTP.
+5. **TNEF in MIME** (`TnefTool mime`, `tools/tnef/compare_mime.py`, `OxcMailTool rt-tnef`). Each TNEF file of the corpus is wrapped in four
+   message shapes (Outlook's, a bare multipart, a single part, one with HTML from MIME). Every property of the TNEF is on the converted
+   message exactly as the TNEF reader gave it or has a `TnefPropertyIgnored` entry; the attachments' properties are equal to a fresh read of the
+   TNEF; a part that must not be unpacked is kept as an octet-stream attachment. The view's attachments (name, size, SHA-256) are compared with
+   tnefparse 1.4.0, tnef 1.4.18, ytnef 2.1.2 and MimeKit 4.18.2 (`MimeKitTnef`: `TnefPart.ExtractAttachments`). `rt-tnef` is `rt-mapi` with the
+   TNEF export.

@@ -5,6 +5,7 @@ using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
 using RecursiveAI.OneMail.Rtf.Compression;
 using RecursiveAI.OneMail.Text;
+using RecursiveAI.OneMail.Tnef;
 
 namespace RecursiveAI.OneMail.Conversion.OxcMail;
 
@@ -19,9 +20,28 @@ namespace RecursiveAI.OneMail.Conversion.OxcMail;
 /// <returns>True when the handler dealt with the part and the converter should skip it; false to let the converter handle it.</returns>
 public delegate bool OxcMailPartHandler(MimePart part, MapiMessage message, LossReport report);
 
+/// <summary>What <see cref="MimeToMapiConverter"/> does with a TNEF part (<c>application/ms-tnef</c>, winmail.dat).</summary>
+public enum OxcMailTnefHandling
+{
+    /// <summary>
+    /// MS-OXCMAIL 2.2.3.8: the part is read as TNEF and its properties, recipients and attachments become the message's, with the MIME side
+    /// winning conflicts. A part that does not qualify (damaged, trailing CR LF, correlation key mismatch) stays an attachment.
+    /// </summary>
+    Merge = 0,
+
+    /// <summary>The part is an ordinary attachment, as for any other binary part.</summary>
+    KeepAsAttachment = 1,
+}
+
 /// <summary>Settings for <see cref="MimeToMapiConverter"/>.</summary>
 public sealed class OxcMailImportOptions
 {
+    /// <summary>What to do with TNEF parts. <see cref="PartHandler"/> sees them first and can claim them. Default <see cref="OxcMailTnefHandling.Merge"/>.</summary>
+    public OxcMailTnefHandling Tnef { get; init; } = OxcMailTnefHandling.Merge;
+
+    /// <summary>Limits for reading TNEF parts, or null for the TNEF reader's defaults.</summary>
+    public TnefReaderOptions? TnefReader { get; init; }
+
     /// <summary>Called for every leaf part first; see <see cref="OxcMailPartHandler"/>. Null (the default) means no part is handled by the caller.</summary>
     public OxcMailPartHandler? PartHandler { get; init; }
 
@@ -71,10 +91,13 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
     private sealed class Importer(OxcMailImportOptions options, LossReport report)
     {
         private int _nextNamedId = 0x8000;
+        private MimeEntity? _root;
+        private readonly List<TnefMessage> _tnef = [];
         private readonly Dictionary<MapiNamedProperty, ushort> _namedIds = [];
 
         public MapiMessage Import(MimeEntity root, MapiAttachment? parent, string path, int depth)
         {
+            _root = root;
             var m = new MapiMessage(parent);
             m.Properties.Add(MapiProps.Str(MapiPid.MessageClass, MessageClassOf(root, path)));
             MapHeaders(m, root, path);
@@ -82,6 +105,12 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
             var attachments = new List<MapiAttachment>();
             Walk(root, m, bodies, attachments, path, depth, 0, signed: false);
             ApplyBodies(m, bodies);
+            foreach (TnefMessage t in _tnef)
+            {
+                TnefMerger.Merge(m, t, report, IdFor, path);
+                TnefMerger.MergeRecipients(m, t, report, path);
+            }
+
             for (int i = 0; i < attachments.Count; i++)
             {
                 attachments[i].Properties.Set(MapiProps.Int(MapiPid.AttachNumber, i));
@@ -521,6 +550,28 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
                         break;
                     }
 
+                    if (options.Tnef == OxcMailTnefHandling.Merge && leaf.IsTnef())
+                    {
+                        if (TnefInMime.TryRead(leaf, _root!, options.TnefReader, out TnefMessage? t, out TnefInMime.Refusal refusal))
+                        {
+                            _tnef.Add(t!);
+                            if (refusal == TnefInMime.Refusal.TrailingCrLf)
+                            {
+                                (string noteCode, string noteWhy) = TnefInMime.Describe(refusal);
+                                report.Add("mime", leaf.MediaType, LossKind.Internal, noteCode, noteWhy, path);
+                            }
+
+                            attachments.AddRange(t!.Attachments);
+                            report.Add("mime", leaf.MediaType, LossKind.Internal, "TnefPartUnpacked", "The TNEF part is not an attachment: its properties, recipients and attachments are the message's (MS-OXCMAIL 2.2.3.8).", path);
+                            break;
+                        }
+
+                        (string code, string why) = TnefInMime.Describe(refusal);
+                        report.Add("mime", leaf.MediaType, LossKind.Approximated, code, why, path);
+                        AddAttachment(attachments, leaf, leaf, m, path, depth, forceType: "application/octet-stream");
+                        break;
+                    }
+
                     if (!TryBody(leaf, bodies))
                     {
                         AddAttachment(attachments, leaf, leaf, m, path, depth);
@@ -669,13 +720,13 @@ public sealed class MimeToMapiConverter : IItemConversion<MimeEntity, MapiMessag
             }
         }
 
-        private void AddAttachment(List<MapiAttachment> list, MimeEntity e, MimePart? leaf, MapiMessage owner, string path, int depth)
+        private void AddAttachment(List<MapiAttachment> list, MimeEntity e, MimePart? leaf, MapiMessage owner, string path, int depth, string? forceType = null)
         {
             int index = list.Count;
             string where = path.Length == 0 ? $"attachment[{index}]" : $"{path}/attachment[{index}]";
             var a = new MapiAttachment(owner);
             string? fileName = e.FileName;
-            string type = e.MediaType;
+            string type = forceType ?? e.MediaType;
             string? cid = e.GetContentId();
             string? disposition = e.Headers.GetFirst("Content-Disposition")?.Value;
             string? location = e.Headers.GetFirst("Content-Location")?.Value.Trim();
