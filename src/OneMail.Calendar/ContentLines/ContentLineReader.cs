@@ -109,6 +109,7 @@ public ref struct ContentLineReader
     private byte[]? _buffer;
     private bool _reportedLf;
     private bool _reportedCr;
+    private bool _reportedDoubleCr;
 
     /// <summary>Starts reading.</summary>
     /// <param name="data">The bytes. A leading UTF-8 byte order mark is skipped (see <see cref="Position"/>).</param>
@@ -126,6 +127,7 @@ public ref struct ContentLineReader
         _buffer = null;
         _reportedLf = false;
         _reportedCr = false;
+        _reportedDoubleCr = false;
         Depth = 0;
         if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
         {
@@ -158,9 +160,22 @@ public ref struct ContentLineReader
         int ce = from + rel;
         if (d[ce] == '\r')
         {
-            if (ce + 1 < d.Length && d[ce + 1] == '\n')
+            // A run of carriage returns then a line feed is one line end: a CRLF file passed through a text-mode copy comes out
+            // CR CR LF, and six of the seven readers we compared join a fold after it (docs/ambiguities.md K1).
+            int run = ce + 1;
+            while (run < d.Length && d[run] == '\r')
             {
-                next = ce + 2;
+                run++;
+            }
+
+            if (run < d.Length && d[run] == '\n')
+            {
+                next = run + 1;
+                if (run > ce + 1 && !_reportedDoubleCr)
+                {
+                    _reportedDoubleCr = true;
+                    Report(CalendarDefectKind.AmbiguousDoubleCarriageReturn, ce, run + 1 - ce);
+                }
             }
             else
             {
