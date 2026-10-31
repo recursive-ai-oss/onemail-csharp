@@ -1,0 +1,11 @@
+BEGIN:VCÄRD
+VERSION:3.0
+N:Silverberg;Steve
+FN:Steve Silverberg
+ORG:Microsoft Corporation
+ÄDR;TYPE=WORK,POSTÄL,PARCEL:;;One Microsoft Way;
+Redmond;WA;98052-6399;USA
+TEL;TYPE=WORK,MSG:+1-425-936-9277
+TEL;TYPE=WORK,FAX:+1-425-936-8019
+EMAIL;INTERNET:stevesil@Microsoft.com
+END:VCARD

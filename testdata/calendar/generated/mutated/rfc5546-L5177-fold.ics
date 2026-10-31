@@ -1,0 +1,31 @@
+BEGIN:VCALENDAR
+PR
+  ODID:-//Example/ExampleCalendarClient//EN
+METHO
+	D:CANCEL
+VERSION:2.0
+BEGIN:VEVENT
+ORGANIZER:mailt
+ o:a@example.com
+ATTENDEE;C
+ UTYPE
+  =IN
+  DIVIDUAL;mailto:a@examp
+	le.com
+ATTENDEE;CUTYPE=INDIVIDUAL:ma
+  ilto:b@example.com
+ATTENDEE;CUTYPE=INDIVIDUAL:mailto:c@example.com
+ATTENDEE;CUTYPE=INDIVIDUAL:mailto:d@example.com
+COMMENT:Mr. B cannot attend.  It's raining.  Lets cancel.
+UID:calsrv.example.com
+ -873970198738777@e
+  xample.com
+SEQUENCE:1
+ST
+	ATUS:CA
+  NCELLED
+DTSTAMP:19970613T190000Z
+END:VEVEN
+	T
+E
+	ND:VCALENDAR

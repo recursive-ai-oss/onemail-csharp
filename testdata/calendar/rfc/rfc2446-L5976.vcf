@@ -1,0 +1,11 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Mansour;Steve
+FN:Steve Mansour
+ORG:Netscape Communications Corporation
+ADR;TYPE=WORK,POSTAL,PARCEL:;;501 East Middlefield Road;Mountain
+  View;CA;94043;USA
+TEL;TYPE=WORK,MSG:+1-650-937-2378
+TEL;TYPE=WORK,FAX:+1-650-937-2103
+EMAIL;TYPE=INTERNET:sman@netscape.com
+END:VCARD

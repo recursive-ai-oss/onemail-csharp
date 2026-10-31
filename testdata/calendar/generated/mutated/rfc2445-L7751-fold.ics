@@ -1,0 +1,49 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PR
+  ODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VJOURNAL
+DTSTAMP:19970324T
+	120000Z
+UID:uid
+ 5@host1.com
+ORGANIZER:MAILTO:jsmith
+	@host.com
+STATUS:DRAFT
+CLASS:PU
+  BLIC
+CATEGORY:Project R
+ eport, XYZ
+	, Weekl
+ y Meeting
+DESCRIPTION:Project xyz Review Meeting Minutes\n
+ Agenda\n1. Review of project version 1.0 requireme
+  nts.\n2.
+Defi
+	nition
+ of pro
+ ject proces
+	s
+  es.\n3. Review of project schedule
+ .\n
+ Pa
+ rtic
+	ipants: John Smith, Jane Doe, Jim 
+ Dandy\n-It was
+  decided that the requirements need t
+  o be 
+ signed off by
+  product marketing.\
+  n-Project processe
+	s were accepted.\n
+ -Project schedule needs to account for scheduled holidays
+  and employee vacation time. Check with HR for specific
+  dates.\n-New schedule will b
+ e distribute
+	d by Friday.\n-
+ Next weeks meeting is cancelle
+	d. No 
+  meeting until 3/23.
+END:VJO
+  URNAL
+END:VCALENDAR

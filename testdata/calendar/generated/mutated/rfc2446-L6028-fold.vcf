@@ -1,0 +1,11 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Moskowitz;Robert
+FN
+  :Ro
+ bert Moskow
+  itz
+NI
+  CKNAME:Bob
+EMAIL; TYPE=INTERNET:rgm-ietf@htt-consult.com
+END:VCARD

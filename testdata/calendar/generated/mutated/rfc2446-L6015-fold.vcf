@@ -1,0 +1,19 @@
+BEGIN:VC
+ ARD
+VERSION:3.0
+N:
+  Ganguly;Anik
+FN:Anik Ganguly
+ORG:Open Text Inc.
+ADR;TYPE=WORK,POSTAL,PARCEL:;Suite 101;
+ 38
+  777 Wes
+	t Six Mile Road;
+ Livoni
+	a;M
+	I;48152;USA
+TEL;TYPE=WORK,MSG:+1-734-
+  542-5955
+EMAIL;TYP
+	E=INTERNET:ganguly@acm.org
+END:VCARD

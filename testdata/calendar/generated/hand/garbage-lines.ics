@@ -1,0 +1,9 @@
+junk before
+BEGIN:VCALENDAR
+VERSION:2.0
+this line has no colon
+:novalue name
+SUMMARY :spaced name
+X_UNDERSCORE:1
+END:VCALENDAR
+trailing junk

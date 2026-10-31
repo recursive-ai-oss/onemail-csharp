@@ -1,0 +1,4 @@
+BEGIN:VCALENDAR
+PRODID:-//Example/ExampleCalendarClient//EN
+METHOD:CANCEL
+VERSION:2

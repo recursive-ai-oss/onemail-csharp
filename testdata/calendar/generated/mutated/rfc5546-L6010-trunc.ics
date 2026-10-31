@@ -1,0 +1,11 @@
+BEGIN:VCALENDAR
+PRODID:-//Example/ExampleCalendarClient//EN
+METHOD:REPLY
+VERSION:2.0
+BEGIN:VEVENT
+ORGANIZER:mailto:a@example.com
+ATTENDEE:mailto:b@example.com
+REQUEST-STATUS:3.0;Invalid Property Name;FOO
+UID:guid-1@example.com
+SEQUENCE:0
+DTSTAMP:1997060

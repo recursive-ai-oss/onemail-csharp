@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Oracle driver: runs the released Ical.Net and FolkerKinzel.VCards packages through their public API only and prints
+       the normalised facts (tools/calendar/README.md). A tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OracleFacts</AssemblyName>
+    <RootNamespace>OneMail.Oracles.OracleFacts</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ical.Net" />
+    <PackageReference Include="FolkerKinzel.VCards" />
+  </ItemGroup>
+
+</Project>

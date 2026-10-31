@@ -1,0 +1,16 @@
+BEGIN:VCALENDAR
+PRODID:-//Example/ExampleCalendarClient//EN
+METHOD:REQUEST
+VERSION:2.0
+BEGIN:VTODO
+DUE:19970701T160000Z
+ORGANIZER:mailto:foo1@example.com
+ATTENDEE;ROLE=CHAIR;PARTSTAT=ACCEPTED:mailto:foo1@example.com
+ATTENDEE;RSVP=YES:mailto:foo2@example.com
+SUMMARY:Phone Conference
+DESCRIPTION:Discuss a new location for the company picnic
+UID:calsvr.example.com-td-8739701987387773
+SEQUENCE:0
+STATUS:NEEDS-ACTION
+END:VEVENT
+END:VCALENDAR

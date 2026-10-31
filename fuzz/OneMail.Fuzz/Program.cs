@@ -13,7 +13,20 @@ internal static class Program
 {
     private delegate void Target(ReadOnlySpan<byte> data);
 
-    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Target> Targets = Collect();
+
+    private static Dictionary<string, Target> Collect()
+    {
+        Dictionary<string, Target> targets = new(StringComparer.Ordinal);
+        Dictionary<string, Action<ReadOnlySpan<byte>>> calendar = CalendarTargets.Register(new(StringComparer.Ordinal));
+        foreach (KeyValuePair<string, Action<ReadOnlySpan<byte>>> kv in calendar)
+        {
+            Action<ReadOnlySpan<byte>> a = kv.Value;
+            targets[kv.Key] = d => a(d);
+        }
+
+        return targets;
+    }
 
     private static int Main(string[] args)
     {

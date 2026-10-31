@@ -1,0 +1,30 @@
+BEGIN:VCALENDAR
+PRODID:-
+ //Example/ExampleCalendarClient/
+ /EN
+METH
+	OD:REPLY
+VERSION:2.0
+BEGIN:VEVEN
+	T
+ORGANIZER:mailto:a@exa
+ mple.com
+ATTENDEE;PARTST
+	AT=DELEGATED;DE
+ LEGATED-
+ TO="mailto:e@examp
+  le.com":m
+  ailto:c@example.com
+UI
+ D:calsrv.example.com-87397019873877
+	7@
+ example.com
+SEQ
+	UENC
+	E:0
+REQUEST-STATUS:2.0;Success
+DTSTAMP:19970611
+ T190000Z
+END:VEVENT
+END:VCALEND
+ AR

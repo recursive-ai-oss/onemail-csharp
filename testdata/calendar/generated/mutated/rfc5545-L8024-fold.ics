@@ -1,0 +1,30 @@
+BEGIN:VCALENDAR
+PRODID:-//xyz Corp//NONSGML PDA Calendar Version 1.0//EN
+VERSION:2.0
+BEGIN:VEV
+  ENT
+ 
+DTSTA
+ MP:19960704T120000Z
+UID:uid1
+  @example
+  .com
+ORGANIZER:mai
+  lto:jsm
+ ith@example.com
+DTSTART:19960918T14300
+ 0Z
+DTEND:19960920T220000
+ Z
+STATUS:CONFIRMED
+CATEGORIES:CONFERENCE
+SUMMARY:Networ
+  ld+Interop Conference
+DESCRIPTI
+	ON:Netw
+ orld+Interop Conference
+  and Exhibit\nAtlanta World C
+ ongress Center\n
+ Atlanta\, Georgia
+END:VEVENT
+END:VCALENDAR
