@@ -278,7 +278,7 @@ public class TimeZoneTests
     // Stands in for a Windows runtime without ICU on any platform: IANA names are not found, Windows ids are
     // (answered from the same data through CLDR's table, so only the lookup path differs).
     private static TimeZoneInfo? WindowsOnlyRuntime(string name) =>
-        WindowsZones.TryGetIana(name, out string? iana) ? TimeZoneInfo.FindSystemTimeZoneById(iana) : null;
+        WindowsZones.TryGetIana(name, out string? iana) ? RuntimeZone(iana) : null;
 
     [Theory]
     [InlineData("America/New_York", "Eastern Standard Time")]

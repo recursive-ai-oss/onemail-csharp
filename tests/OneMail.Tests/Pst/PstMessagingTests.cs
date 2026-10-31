@@ -308,16 +308,28 @@ public class PstMessagingTests
     {
         var many = new FxFolder { Name = "many", Messages = [.. Enumerable.Range(0, 400).Select(i => new FxMessage { Subject = "m" + i, Body = "b" + i, Recipients = [new FxRecipient { Name = "r", Smtp = "r@x" }] })] };
         using PstStore s = Open(Build(NdbFormat.Unicode4K, new FxFolder { Name = "top", Children = [many] }));
-        _ = s.ReadEverything(Ct);
-        GC.Collect();
-        long before = GC.GetTotalMemory(true);
-        for (int i = 0; i < 5; i++)
+        // Warm-up walks first (tiering, caches), then two equal windows of five walks. Only the second counts: a leak of L bytes per walk
+        // shows in every window, so a growth of 512 KiB over five walks still catches anything above about 100 KiB per walk.
+        for (int i = 0; i < 3; i++)
         {
             _ = s.ReadEverything(Ct);
         }
 
-        GC.Collect();
-        long after = GC.GetTotalMemory(true);
-        Assert.True(after - before < 512 * 1024, $"live heap grew by {after - before} bytes over five walks");
+        long Window()
+        {
+            GC.Collect();
+            long start = GC.GetTotalMemory(true);
+            for (int i = 0; i < 5; i++)
+            {
+                _ = s.ReadEverything(Ct);
+            }
+
+            GC.Collect();
+            return GC.GetTotalMemory(true) - start;
+        }
+
+        long first = Window();
+        long second = Window();
+        Assert.True(second < 512 * 1024, $"live heap grew by {second} bytes over five walks (first window {first})");
     }
 }
