@@ -41,6 +41,7 @@ case "$target" in
   mime-reader|mime-tree) maxlen=65536 ;;
   contentlines) maxlen=65536 ;;
   calendar) maxlen=65536 ;;
+  recurrence) maxlen=16384 ;;
   ndb) maxlen=8192 ;;
   ltp) maxlen=8192 ;;
   pst-messaging) maxlen=8192 ;;
