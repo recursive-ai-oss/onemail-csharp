@@ -23,7 +23,6 @@ GITHUB = [
     ("biweekly", "mangstadt/biweekly", "2e38b50161b0ebb870f7f1dc831436eab4e8ec40", ["src/test/resources/"], (".ics",), []),
     ("sabrevobject", "sabre-io/vobject", "5e2f338811916c03927398bb24e527989de63194", ["tests/"], (".ics", ".vcf"), []),
 ]
-GOVUK = [("govuk", "https://www.gov.uk/bank-holidays/%s.ics" % n) for n in ("england-and-wales", "scotland", "northern-ireland")]
 THUNDERBIRD_PAGE = "https://www.thunderbird.net/en-US/calendar/holidays/"
 THUNDERBIRD_BASE = "https://www.thunderbird.net"
 
@@ -57,9 +56,6 @@ def pin():
             data = get(url)
             rows.append((sid, p, url, sha(data), len(data)))
             print(sid, p, len(data), file=sys.stderr)
-    for sid, url in GOVUK:
-        data = get(url)
-        rows.append((sid, os.path.basename(url), url, sha(data), len(data)))
     page = get(THUNDERBIRD_PAGE).decode("utf-8")
     for path in sorted(set(re.findall(r'href="(/media/caldata/autogen/[^"]+\.ics)"', page))):
         url = THUNDERBIRD_BASE + path

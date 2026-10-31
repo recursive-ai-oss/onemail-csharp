@@ -726,9 +726,6 @@ biweekly	src/test/resources/biweekly/util/New_York.ics	https://raw.githubusercon
 sabrevobject	tests/VObject/RecurrenceIterator/UntilRespectsTimezoneTest.ics	https://raw.githubusercontent.com/sabre-io/vobject/5e2f338811916c03927398bb24e527989de63194/tests/VObject/RecurrenceIterator/UntilRespectsTimezoneTest.ics	7c93a5ea5b82d6af2e18135a5d2317cf404e263e6023bb0ed932c0a4901d0642	956
 sabrevobject	tests/VObject/issue153.vcf	https://raw.githubusercontent.com/sabre-io/vobject/5e2f338811916c03927398bb24e527989de63194/tests/VObject/issue153.vcf	c97cb0b2c46c4e46a367d981f15ae7dddb5901d5a8b283b55ac7c286eaf2e7f7	27377
 sabrevobject	tests/VObject/issue64.vcf	https://raw.githubusercontent.com/sabre-io/vobject/5e2f338811916c03927398bb24e527989de63194/tests/VObject/issue64.vcf	0ae7b18621efa38ddc6cae6e62cb2c418e996cf5728ac8a8a20adec02b8f2b5e	27349
-govuk	england-and-wales.ics	https://www.gov.uk/bank-holidays/england-and-wales.ics	05a163023d1a3b937530f520b3b416f72ee8947f7f6955fa790c1c9ee41ad49f	18206
-govuk	scotland.ics	https://www.gov.uk/bank-holidays/scotland.ics	e93282b85cdb780165fdd42f78ee6d07ead97397e996a21d43ad1b3322775e45	20554
-govuk	northern-ireland.ics	https://www.gov.uk/bank-holidays/northern-ireland.ics	1d941a62f36d547423dc38eaf531469cb77ac19397d8564362a3b9960e7af8e4	22936
 thunderbird	AlbaniaHolidays.ics	https://www.thunderbird.net/media/caldata/autogen/AlbaniaHolidays.ics	f8dcd7b94dfa894fc8308d40387d4bb39ddf373ef574d8448bacf9cbe2c9595b	21586
 thunderbird	AlgeriaHolidays.ics	https://www.thunderbird.net/media/caldata/autogen/AlgeriaHolidays.ics	f17b336187110066d029d58630ffb73e8a908fa560b5bb53e72978c74e6c54a6	16734
 thunderbird	AlgeriaHolidaysArabic.ics	https://www.thunderbird.net/media/caldata/autogen/AlgeriaHolidaysArabic.ics	76fae34f3770bb3cfbabd62fa7556e28d46a04ac9648f1d960c60dff4e83d8fc	17799

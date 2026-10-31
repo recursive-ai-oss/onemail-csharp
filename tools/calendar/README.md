@@ -14,7 +14,6 @@ Checks for `RecursiveAI.OneMail.Calendar`. Nothing here ships in a package.
 | ez-vcard test vCards (BSD-2-Clause) | licence file in the repository | no |
 | biweekly test calendars (BSD-2-Clause) | licence file in the repository | no |
 | sabre/vobject test calendars (BSD-3-Clause) | licence file in the repository | no |
-| GOV.UK bank holidays | Open Government Licence v3.0 | no |
 | Thunderbird holiday calendars | Mozilla website content licence | no |
 
 ## Round trip
