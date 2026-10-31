@@ -18,6 +18,9 @@
   <Folder Name="/fuzz/">
     <Project Path="fuzz/OneMail.Fuzz/OneMail.Fuzz.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Reading/Reading.csproj" />
+  </Folder>
   <Folder Name="/smoke/">
     <Project Path="smoke/Aot/Aot.csproj" />
     <Project Path="smoke/Wasm/Wasm.csproj" />

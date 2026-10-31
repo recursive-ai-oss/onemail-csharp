@@ -283,3 +283,21 @@ Probes are `testdata/reports/…` (`cases.tsv` describes each); MK is MimeKit 4.
 
 Documented oracle limits (not ambiguities; in `explained.tsv` as `LIMIT-*`): Python does not read
 `message/global-delivery-status` or transfer-encoded report parts as reports.
+
+## The shared read view (bodies and attachments)
+
+Checked against Python 3.13 `email` with `policy.default` (`get_body`/`iter_attachments`) over the probes, the Apache James test
+messages, the dovecot mbox and a sample of the CMU Enron maildir; `tools/oracles/viewcheck.sh` reproduces the run. The view's
+choices below are provisional: no mail client has been observed for them yet. The view raises no defects of its own; it
+chooses between readings of a valid tree. The tree always keeps every part (`docs/shared-view.md`).
+
+| ID | Case | Python `email` | Resolution |
+|---|---|---|---|
+| V1 | Which parts are attachments | Immediate children of the top multipart, except the first `text/plain`, `text/html`, `multipart/related` and `multipart/alternative`; a nested multipart is one attachment; a message that is not multipart has none | A leaf part or `message/*` part that is not the chosen text or HTML body, found by walking every multipart, in document order. A message that is a single leaf part (not text-body) is its own attachment. |
+| V2 | Body inside `multipart/signed` or a nested `multipart/mixed` | `get_body` does not look inside `multipart/signed`; the nested part's text is listed as an attachment | The body is searched in the signed content (the first child) and in nested mixed parts, in order; the signature part is an attachment. |
+| V3 | Body in `multipart/alternative` with several text parts | The last alternative that matches | The last alternative that matches (RFC 2046 5.1.4). The other text renderings are not attachments unless marked `Content-Disposition: attachment`. |
+| V4 | Inline parts | Parts of a `multipart/related` are not listed | Listed, with `IsInline` set when the part is not marked `attachment` and has a `Content-ID`, so callers can resolve `cid:` references. |
+| V5 | A text part with `Content-Disposition: attachment` | An attachment | An attachment; never the body. A text part with a file name but no disposition is still a body when it is the first match (the same as Python). |
+| V6 | Text body without a usable charset | `us-ascii`, bytes above 127 replaced | UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252 (N5's rule). |
+| V7 | Address groups in `From`/`To`/… | Group name kept | Flattened to the members, the group name dropped (A1). The tree keeps the group. |
+| V8 | Attachment file name | `get_filename()`: disposition `filename`, else type `name`, with the parameter rules of N1–N8 | The same order (N9). Names are kept as written, not made safe for a file system (N10); no name is `null`, never an empty string. |
