@@ -70,6 +70,36 @@ public class ContentLineReaderTests
     }
 
     [Fact]
+    public void CarriageReturnCarriageReturnLineFeedIsOneLineEndAndAFoldAfterItJoins()
+    {
+        // A CRLF file passed through a text-mode copy: every line ends CR CR LF.
+        var (lines, defects) = Read(B("BEGIN:X\r\r\nSUMMARY:Hello\r\r\n World\r\r\nNOTE:a\r\r\r\n b\r\r\nEND:X\r\r\n"));
+        Assert.Equal(4, lines.Count);
+        Assert.Equal("HelloWorld", lines[1].Value);
+        Assert.Equal("ab", lines[2].Value);
+        Assert.Equal([CalendarDefectKind.AmbiguousDoubleCarriageReturn], Kinds(defects));
+        Assert.Equal(7, defects[0].Offset);
+        Assert.Equal(3, defects[0].Length);
+    }
+
+    [Fact]
+    public void CarriageReturnsNotFollowedByALineFeedStayLineEnds()
+    {
+        var (lines, defects) = Read(B("A:1\r\rB:2\r"));
+        Assert.Equal(["1", "", "2"], lines.Select(l => l.Value));
+        Assert.Equal([CalendarDefectKind.BareCarriageReturn], Kinds(defects));
+    }
+
+    [Fact]
+    public void DoubleCarriageReturnDocumentsWriteBackByteIdentical()
+    {
+        byte[] data = B("BEGIN:VCARD\r\r\nFN:Ann\r\r\n Lee\r\r\nEND:VCARD\r\r\n");
+        ContentDocument d = ContentDocument.Parse(data);
+        Assert.Equal(data, d.ToArray());
+        Assert.Contains(d.Defects, x => x.Kind == CalendarDefectKind.AmbiguousDoubleCarriageReturn && x.IsAmbiguity);
+    }
+
+    [Fact]
     public void FoldWorksWithLfAndCr()
     {
         Assert.Equal("ab", Read(B("A:a\n b\n")).Lines[0].Value);

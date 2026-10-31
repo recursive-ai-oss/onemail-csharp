@@ -35,6 +35,7 @@ internal static class Program
             ["olm"] = OlmTarget.Run,
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
+            ["composition"] = CompositionTarget.Run,
             ["sanitizer"] = SanitizerTargets.Run,
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,
             ["render"] = RenderTarget.Run,

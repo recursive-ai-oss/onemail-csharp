@@ -292,6 +292,17 @@ internal static class Program
             && Mail.Parse(oxcBytes).Subject == "caf\u00e9" && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.Body) == "body"
             && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.SentRepresentingSmtpAddress) == "a@example.com";
         Console.WriteLine("oxcmail: " + (oxcOk ? "ok" : "FAILED"));
+        // Replies and forwards: threading headers, quoting, the subject prefix and a conversation index level.
+        byte[] composeIndex = RecursiveAI.OneMail.Composition.ConversationIndex.CreateHeader(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), Guid.Empty);
+        RecursiveAI.OneMail.Composition.ComposedMessage composeReply = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("From: Ann <a@example.com>\r\nSubject: AW: Plans\r\nMessage-ID: <m1@example.com>\r\nThread-Index: " + Convert.ToBase64String(composeIndex) + "\r\n\r\nhello\r\n"))
+            .CreateReply(new RecursiveAI.OneMail.Composition.CompositionOptions { RandomBytes = b => b.Fill(1) });
+        RecursiveAI.OneMail.Composition.ComposedMessage composeForward = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("From: a@example.com\r\nSubject: x\r\n\r\nhello\r\n"))
+            .CreateForward(new RecursiveAI.OneMail.Composition.CompositionOptions { ForwardStyle = RecursiveAI.OneMail.Composition.ForwardStyle.Attachment });
+        IMailItem composeBack = Mail.Parse(composeReply.Message.ToArray());
+        bool composeOk = composeReply.Subject == "Re: Plans" && composeBack.InReplyTo.SequenceEqual(["m1@example.com"]) && composeBack.References.SequenceEqual(["m1@example.com"])
+            && composeReply.To.Count == 1 && composeReply.To[0].Address == "a@example.com" && composeBack.ConversationIndex.Length == 27
+            && composeBack.TextBody!.ReadText().Contains("> hello", StringComparison.Ordinal) && composeForward.Message.MediaType == "multipart/mixed";
+        Console.WriteLine("compose: " + (composeOk ? "ok" : "FAILED"));
         // jCal, jCard, xCal and xCard: both directions, in memory, and the sniffer.
         ContentDocument formsIcs = ContentDocument.Parse("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a@b\r\nDTSTART:20260328T023000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE\r\nSUMMARY:Caf\u00e9\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"u8.ToArray());
         ContentDocument formsCard = ContentDocument.Parse("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Jane Doe\r\nN:Doe;Jane;;;\r\nTEL;TYPE=work:tel:+1-555-0100\r\nEND:VCARD\r\n"u8.ToArray());
@@ -396,7 +407,7 @@ internal static class Program
         Console.WriteLine("sanitizer: " + (sanitizerOk ? "ok" : "FAILED"));
 
         // A message to a PDF and to PNG pages through OneRender under NativeAOT; nothing is fetched (the remote image stays unserved).
-        IMailItem renderMsg = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: Render\r\nContent-Type: text/html\r\n\n<h1>Hello</h1><p>body <img src=\"http://x.test/i.png\"></p>\r\n"));
+        IMailItem renderMsg = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: Render\r\nContent-Type: text/html\r\n\r\n<h1>Hello</h1><p>body <img src=\"http://x.test/i.png\"></p>\r\n"));
         using var renderPdf = new MemoryStream();
         RecursiveAI.OneMail.Render.RenderResult renderPdfResult = renderMsg.ToPdfAsync(renderPdf).GetAwaiter().GetResult();
         int renderPngPages = 0;
@@ -410,7 +421,7 @@ internal static class Program
             && renderPngPages == 1 && renderPngBytes > 500 && renderPngResult.PagesWritten == 1 && renderPdfResult.UnservedRequests.Count == 0;
         Console.WriteLine("render: " + (renderOk ? "ok" : "FAILED"));
 
-        return contactsOk && renderOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && convertOk && olmOk && rtfHtmlOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && renderOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

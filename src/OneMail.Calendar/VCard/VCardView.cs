@@ -337,7 +337,8 @@ public sealed class VCardView : IEquatable<VCardView>
     {
         string decoded = p.GetDecodedValue();
         List<string> comps = ContentValues.SplitUnescaped(decoded, ';');
-        List<IReadOnlyList<string>> result = [];
+        List<IReadOnlyList<string>> result = new(count);
+        bool v21 = Version == VCardVersion.V21;
         for (int i = 0; i < count; i++)
         {
             string raw = i < comps.Count ? comps[i] : string.Empty;
@@ -345,14 +346,28 @@ public sealed class VCardView : IEquatable<VCardView>
             {
                 result.Add([]);
             }
-            else if (Version == VCardVersion.V21)
+            else if (v21)
             {
                 result.Add([Unescape(raw)]);
+            }
+            else if (raw.AsSpan().IndexOfAny(',', '\\') < 0)
+            {
+                // No list separator and no escape: the component is the one value.
+                result.Add([raw]);
             }
             else
             {
                 // An empty list element ("5,") carries nothing and is dropped.
-                result.Add(ContentValues.SplitUnescaped(raw, ',').Where(v => v.Length > 0).Select(v => Unescape(v)).ToList());
+                List<string> items = [];
+                foreach (string v in ContentValues.SplitUnescaped(raw, ','))
+                {
+                    if (v.Length > 0)
+                    {
+                        items.Add(Unescape(v));
+                    }
+                }
+
+                result.Add(items);
             }
         }
 
@@ -370,7 +385,18 @@ public sealed class VCardView : IEquatable<VCardView>
         {
             if (c.IsNamed("TYPE"))
             {
-                types.AddRange(c.Values.SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
+                foreach (string v in c.Values)
+                {
+                    // The usual value is one bare word: keep it as it is rather than splitting.
+                    if (v.Length > 0 && !v.Contains(',', StringComparison.Ordinal) && !char.IsWhiteSpace(v[0]) && !char.IsWhiteSpace(v[^1]))
+                    {
+                        types.Add(v);
+                    }
+                    else
+                    {
+                        types.AddRange(v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                    }
+                }
             }
             else if (c.IsBare && !(c.IsNamed("QUOTED-PRINTABLE") || c.IsNamed("BASE64") || c.IsNamed("B") || c.IsNamed("8BIT") || c.IsNamed("7BIT")))
             {
@@ -391,11 +417,17 @@ public sealed class VCardView : IEquatable<VCardView>
         return types.Any(t => t.Equals("pref", StringComparison.OrdinalIgnoreCase)) ? 1 : null;
     }
 
-    private List<VCardTyped> Typed(string name) => Component.FindProperties(name).Select(p =>
+    private List<VCardTyped> Typed(string name)
     {
-        IReadOnlyList<string> t = GetTypes(p);
-        return new VCardTyped(GetText(p), t, Preference(p, t), p);
-    }).ToList();
+        List<VCardTyped> result = [];
+        foreach (ContentProperty p in Component.FindProperties(name))
+        {
+            IReadOnlyList<string> t = GetTypes(p);
+            result.Add(new VCardTyped(GetText(p), t, Preference(p, t), p));
+        }
+
+        return result;
+    }
 
     /// <summary>Every EMAIL.</summary>
     public IReadOnlyList<VCardTyped> Emails => Typed("EMAIL");
@@ -407,11 +439,20 @@ public sealed class VCardView : IEquatable<VCardView>
     public IReadOnlyList<VCardTyped> Urls => Typed("URL");
 
     /// <summary>Every ADR.</summary>
-    public IReadOnlyList<VCardAddress> Addresses => Component.FindProperties("ADR").Select(p =>
+    public IReadOnlyList<VCardAddress> Addresses
     {
-        List<IReadOnlyList<string>> c = Structured(p, 7);
-        return new VCardAddress(c[0], c[1], c[2], c[3], c[4], c[5], c[6], GetTypes(p), p);
-    }).ToList();
+        get
+        {
+            List<VCardAddress> result = [];
+            foreach (ContentProperty p in Component.FindProperties("ADR"))
+            {
+                List<IReadOnlyList<string>> c = Structured(p, 7);
+                result.Add(new VCardAddress(c[0], c[1], c[2], c[3], c[4], c[5], c[6], GetTypes(p), p));
+            }
+
+            return result;
+        }
+    }
 
     /// <summary>The first ORG as its organization name followed by organizational units.</summary>
     public IReadOnlyList<string> Organization
