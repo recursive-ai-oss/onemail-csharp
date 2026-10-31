@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="structure-check.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="RecursiveAI.OneArchive" />
     <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
   </ItemGroup>

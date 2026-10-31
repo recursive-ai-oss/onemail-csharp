@@ -10,6 +10,12 @@ internal static class PlainTextHtml
 {
     private readonly record struct Para(int Depth, string Text);
 
+    // Longest run of address characters considered for a link (the link itself is further limited to 2,048 characters).
+    private const int MaxLinkScan = 4096;
+
+    // Deepest block quote written. RFC 3676 sets no limit, and one line of '>' signs would otherwise write a block quote for each.
+    private const int MaxQuoteDepth = 32;
+
     public static string Render(string text, bool flowed, bool delSp, SanitizerContext cx)
     {
         List<Para> paras = flowed ? Unflow(text, delSp) : Lines(text);
@@ -122,7 +128,7 @@ internal static class PlainTextHtml
 
             if (curDepth >= 0 && curDepth != d)
             {
-                list.Add(new Para(curDepth, cur.ToString()));
+                list.Add(new Para(Math.Min(curDepth, MaxQuoteDepth), cur.ToString()));
                 cur.Clear();
                 curDepth = -1;
             }
@@ -136,7 +142,7 @@ internal static class PlainTextHtml
             else
             {
                 cur.Append(line);
-                list.Add(new Para(d, cur.ToString()));
+                list.Add(new Para(Math.Min(d, MaxQuoteDepth), cur.ToString()));
                 cur.Clear();
                 curDepth = -1;
             }
@@ -144,7 +150,7 @@ internal static class PlainTextHtml
 
         if (curDepth >= 0)
         {
-            list.Add(new Para(curDepth, cur.ToString()));
+            list.Add(new Para(Math.Min(curDepth, MaxQuoteDepth), cur.ToString()));
         }
 
         return list;
@@ -166,6 +172,13 @@ internal static class PlainTextHtml
             while (end < line.Length && !char.IsWhiteSpace(line[end]) && line[end] is not ('<' or '>' or '"' or '\u00a0'))
             {
                 end++;
+            }
+
+            if (end - at > MaxLinkScan)
+            {
+                // Not an address anyone typed; skipped whole so a run of address characters costs a single pass.
+                i = end;
+                continue;
             }
 
             end = TrimTrailing(line, at, end);
@@ -214,40 +227,56 @@ internal static class PlainTextHtml
     }
 
     // Punctuation that ends a sentence is not part of the address; a closing bracket is, only when its opener is inside the address.
+    // The brackets are counted once, when the first trailing one is met, and adjusted as characters are given up, so a run of closing
+    // brackets costs time linear in its length.
     private static int TrimTrailing(string s, int start, int end)
     {
+        int[]? opens = null;
+        int[]? closes = null;
         while (end > start)
         {
             char c = s[end - 1];
             if (c is '.' or ',' or ';' or ':' or '!' or '?' or '\'' or '*')
             {
                 end--;
+                continue;
             }
-            else if (c is ')' or ']' or '}')
-            {
-                char open = c == ')' ? '(' : c == ']' ? '[' : '{';
-                int opens = 0, closes = 0;
-                for (int k = start; k < end; k++)
-                {
-                    opens += s[k] == open ? 1 : 0;
-                    closes += s[k] == c ? 1 : 0;
-                }
 
-                if (closes > opens)
-                {
-                    end--;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            else
+            int b = BracketIndex(c, out bool isClose);
+            if (b < 0 || !isClose)
             {
                 break;
             }
+
+            if (opens is null || closes is null)
+            {
+                opens = new int[3];
+                closes = new int[3];
+                for (int k = start; k < end; k++)
+                {
+                    int kb = BracketIndex(s[k], out bool kClose);
+                    if (kb >= 0)
+                    {
+                        (kClose ? closes : opens)[kb]++;
+                    }
+                }
+            }
+
+            if (closes[b] <= opens[b])
+            {
+                break;
+            }
+
+            closes[b]--;
+            end--;
         }
 
         return end;
+    }
+
+    private static int BracketIndex(char c, out bool isClose)
+    {
+        isClose = c is ')' or ']' or '}';
+        return c switch { '(' or ')' => 0, '[' or ']' => 1, '{' or '}' => 2, _ => -1 };
     }
 }

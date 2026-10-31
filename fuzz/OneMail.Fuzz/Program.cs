@@ -37,6 +37,7 @@ internal static class Program
             ["oxocal"] = OxocalTarget.Run,
             ["sanitizer"] = SanitizerTargets.Run,
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,
+            ["sanitizer-display"] = SanitizerTargets.Display,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

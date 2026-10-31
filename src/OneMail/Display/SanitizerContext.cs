@@ -22,7 +22,7 @@ internal enum UrlForm
 /// The state of one sanitising run: options, what was changed, remote references found, and the URL rules shared by the HTML and CSS
 /// halves. A run is single-threaded.
 /// </summary>
-internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
+internal sealed class SanitizerContext(SanitizerOptions options, bool verify, HashSet<string>? emitted = null)
 {
     public readonly SanitizerOptions Options = options;
 
@@ -31,6 +31,12 @@ internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
     /// The output of a run that is verified equals its input, which is the stability the re-parse check relies on.
     /// </summary>
     public readonly bool Verify = verify;
+
+    /// <summary>
+    /// The remote and caller-supplied URLs the first pass decided to write. The verify passes read the output again and apply no policy, so they
+    /// keep a URL only if the first pass wrote it: a reference that appears only on a re-parse (markup the first parse did not see) is dropped.
+    /// </summary>
+    public readonly HashSet<string> Emitted = emitted ?? [];
 
     public readonly List<SanitizerChange> Changes = [];
     public int ChangeCount;
@@ -221,6 +227,23 @@ internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
         return true;
     }
 
+    /// <summary>Records a URL the first pass writes; in a verify pass, returns it only if the first pass wrote it.</summary>
+    public string? Track(string? url)
+    {
+        if (url is null)
+        {
+            return null;
+        }
+
+        if (!Verify)
+        {
+            Emitted.Add(url);
+            return url;
+        }
+
+        return Emitted.Contains(url) ? url : null;
+    }
+
     /// <summary>The absolute form of a remote URL: protocol-relative references take https, backslashes before the host become slashes.</summary>
     public static string AbsoluteRemote(string url, UrlForm form)
     {
@@ -267,14 +290,14 @@ internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
         {
             case UrlForm.Http:
             case UrlForm.ProtocolRelative:
-                return AbsoluteRemote(n, f);
+                return Track(AbsoluteRemote(n, f));
             case UrlForm.Mailto:
             case UrlForm.Tel:
             case UrlForm.DataImage:
                 return n;
             case UrlForm.Relative:
             case UrlForm.Fragment:
-                return Options.AllowRewriteToAnyUrl ? n : null;
+                return Options.AllowRewriteToAnyUrl ? Track(n) : null;
             case UrlForm.OtherScheme:
                 if (!Options.AllowRewriteToAnyUrl)
                 {
@@ -284,7 +307,7 @@ internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
                 string scheme = n[..n.IndexOf(':')].ToLowerInvariant();
                 return scheme is "javascript" or "vbscript" or "data" or "file" or "blob" or "livescript" or "mocha" or "jar" or "view-source" or "filesystem"
                     ? null
-                    : n;
+                    : Track(n);
             default:
                 return null;
         }
@@ -318,7 +341,7 @@ internal sealed class SanitizerContext(SanitizerOptions options, bool verify)
         if (d.Action == RemoteContentAction.Allow)
         {
             AddRemote(absoluteUrl, kind, RemoteContentOutcome.Allowed, source);
-            return absoluteUrl;
+            return Track(absoluteUrl);
         }
 
         if (d.Action == RemoteContentAction.Rewrite && AcceptCallerUrl(d.Url) is { } rewritten)

