@@ -95,7 +95,7 @@ internal static class SanitizerTargets
         byte[] head = Encoding.UTF8.GetBytes("Subject: f\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: " + type + "; charset=utf-8\r\n\r\n");
         byte[] tail = Encoding.UTF8.GetBytes("\r\n--b\r\nContent-Type: image/gif\r\nContent-ID: <a>\r\nContent-Location: x.gif\r\nContent-Transfer-Encoding: base64\r\n\r\nR0lGODlhAQABAAAAACwAAAAAAQABAAACAkQBADs=\r\n--b--\r\n");
         byte[] raw = [.. head, .. data[1..], .. tail];
-        DisplayResult r = Mail.Parse(raw).ToDisplayHtml(new DisplayOptions { Sanitizer = Options(data[0] >> 2) });
+        DisplayResult r = Mail.Parse(raw).ToDisplayHtml(new DisplayOptions { Sanitizer = Options((byte)(data[0] >> 2)) });
         Check(r.Html);
     }
 
