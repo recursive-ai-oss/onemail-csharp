@@ -107,6 +107,17 @@ public class FormatFlowedTests
         Assert.Equal(input[0].Text, Assert.Single(FormatFlowed.Parse(enc, delSp)).Text);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void QuotePrefixLongerThanTheWidthStillRoundTrips(bool delSp)
+    {
+        // Found by fuzzing: 100 quote markers with width 20 left no room for text.
+        FlowedParagraph[] input = [new FlowedParagraph(100, "some words that need wrapping around"), new FlowedParagraph(0, "after")];
+        string enc = FormatFlowed.Encode(input, 20, delSp);
+        Assert.Equal(Texts(input), Texts(FormatFlowed.Parse(enc, delSp)));
+    }
+
     [Fact]
     public void PathologicalInputDoesNotThrow()
     {

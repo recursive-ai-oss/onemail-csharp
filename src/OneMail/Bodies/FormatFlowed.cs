@@ -232,7 +232,8 @@ public static class FormatFlowed
             while (pos < content.Length)
             {
                 bool stuff = depth == 0 && NeedsStuffing(content.AsSpan(pos));
-                int room = width - prefix - (stuff ? 1 : 0);
+                // A quote prefix as long as the width leaves no room; each line then carries one word (or one character with delSp) beyond it.
+                int room = Math.Max(width - prefix - (stuff ? 1 : 0), 2);
                 int remaining = content.Length - pos;
                 if (remaining <= room)
                 {
