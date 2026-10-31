@@ -177,7 +177,6 @@ def main():
                         diffs.append(("ours-only-prop-body", f"0x{key[0]:04X}"))
                     elif mv_fixture:
                         diffs.append(("ours-only-prop-after-mv", f"0x{key[0]:04X}/0x{key[1]:04X}"))
-                    elif key[0] == 0x3FFD:
                     elif m["type"] == "001F" or key[0] in LEGACY_IDS:
                         diffs.append(("ours-only-prop-legacy", f"0x{key[0]:04X}"))
                     else:
