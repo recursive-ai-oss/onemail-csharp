@@ -238,7 +238,7 @@ Inputs: a generated invite (1 event, 833 B), the largest Thunderbird holiday cal
 file (32.8 MB), a generated card (430 B) and a 10k-card address book (4.5 MB); recurrence cases daily UTC, weekly floating, monthly
 last-Friday in New York, yearly second Sunday of March in Berlin and daily in New York over 50 years.
 
-## Results, x64 (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, BenchmarkDotNet 0.15.8, load ~2.6 before/during/after; wq job `princessDonut.edqli8ve`)
+## Results, x64 (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, BenchmarkDotNet 0.15.8, load about 2.6 before, during and after)
 
 | Area | Input | OneMail ns | comparator ns | ratio | OneMail B/item | comparator B/item |
 |---|---|---:|---:|---:|---:|---:|
@@ -259,7 +259,7 @@ jCal/jCard (OneMail only): write 6.8 µs for the invite, 3.8 ms for the holidays
 Native reference (libical 3.0.17 from the distribution package, parse only): invite 14.1 µs, holidays 3.88 ms, 50k events 526 ms
 (OneMail's parse to the tree and typed pass: 3.9 µs, 0.93 ms, 421 ms).
 
-## Tuning (before / after, same machine, wq jobs `princessDonut.6b4aw8gk` and `princessDonut.edqli8ve`)
+## Tuning (before / after, same machine)
 
 | Row | before | after | change |
 |---|---:|---:|---|
@@ -268,7 +268,7 @@ Native reference (libical 3.0.17 from the distribution package, parse only): inv
 | Recurrence yearly Berlin | 1.284 | 0.470 | a yearly rule with `BYMONTH` scans the selected months, not 365 days |
 | ICS parse (all) | 0.133 geomean | 0.087 | same parse changes |
 
-## arm64 (Apple M2, 8 cores), before tuning only so far (`kurtisMac.zv3qkr0l`)
+## arm64 (Apple M2, 8 cores), before tuning only so far
 
 ICS parse 0.132 geomean (worst 0.180), build-write 0.132 (0.171), edit-write 0.059 (0.107), vCard parse 1.530 (1.707), vCard
 build-write 0.442 (0.461), vCard edit-write 0.121 (0.175), recurrence 0.412 (1.527, yearly Berlin). The tuned arm64 run is pending.
