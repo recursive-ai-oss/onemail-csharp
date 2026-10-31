@@ -117,6 +117,21 @@ the olm-reader 1.0.0 npm package (Apache-2.0). Corpus, fetched and never committ
 |---|---|---|---|---|---|---|
 | OLM (Outlook for Mac archive) | yes: mail, appointments, contacts, groups, tasks, notes, categories; attachments as lazy streams | no, by design | jar: 0 on both samples and on two generated archives (outlook_example 38 records, bill_rapp 492, generated 54); npm package: 0 on 485 messages, 12 documented tool differences | records keep every element (`OlmElement` tree); raw MIME source kept as text | yes | no Outlook 2011 layout sample; no archive with a raw MIME source, attendees or exceptions seen; a damaged zip is refused (recovery comes later); the working set is not constant in the entry count: OneArchive holds the zip directory (about 1 KB per entry; 123 MiB at 26,678 entries, 309 MiB at 213,345; see [`olm.md`](olm.md)) |
 
+## Conversions and store to store
+
+See [`fidelity.md`](fidelity.md) for the matrix (generated from the code; a test fails when a reported loss is not in its cell) and the
+command line. Checked on the worker with `tools/convert/run.sh`:
+
+| Check | Result |
+|---|---|
+| MIME to EML / mbox / Maildir / EMLX, read back byte-identical | probes 219/224, Mime4j 78/80, dovecot mbox 3,237/3,237, dovecot messages 2,858/2,859, Enron sample 5,032/5,032, DBX store 2,053/2,053; 0 changed (the skipped have no header block) |
+| MAPI to EML to MAPI | MSG 45 items / 8,743 properties and PST 25 items / 2,399 properties: 0 silent; OLM mail 530 items / 10,070 fields: 0 silent |
+| Store to store (OST, Tika PSTs, OLM, DBX, dovecot mbox, Maildir, Enron sample) | read = written + skipped everywhere; folder trees equal; Python `mailbox`/`email` agree on folders and counts in 18 of 18 runs |
+| Memory | CMU Enron (517,401 messages, 3,311 folders) to Maildir: 119 MB peak; to mbox: 129 MB peak |
+
+Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; MSG and PST
+are not destinations until 0.5 (the `IStoreSink` extension point is public).
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio

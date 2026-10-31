@@ -325,6 +325,8 @@ internal static class MimeWriterSupport
         int col = name.Length + 2;
         int i = 0;
         bool first = true;
+        int gapStart = 0;
+        int gapLength = 0;
         while (i < v.Length)
         {
             int j = i;
@@ -336,27 +338,28 @@ internal static class MimeWriterSupport
             int wordLen = j - i;
             if (!first)
             {
-                if (col + 1 + wordLen > foldWidth)
+                // The white space between two words is written as it is, so unfolding gives back the value given. A fold goes in front
+                // of it: the line break is removed on unfolding and the white space stays (RFC 5322 §2.2.3).
+                if (col + gapLength + wordLen > foldWidth)
                 {
                     w.Write(newline);
-                    w.Write(" "u8);
-                    col = 1;
+                    col = 0;
                 }
-                else
-                {
-                    w.Write(" "u8);
-                    col++;
-                }
+
+                w.Write(v.AsSpan(gapStart, gapLength));
+                col += gapLength;
             }
 
             w.Write(v.AsSpan(i, wordLen));
             col += wordLen;
             first = false;
+            gapStart = j;
             while (j < v.Length && v[j] is (byte)' ' or (byte)'\t')
             {
                 j++;
             }
 
+            gapLength = j - gapStart;
             i = j;
         }
 

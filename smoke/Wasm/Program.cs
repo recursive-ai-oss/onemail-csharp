@@ -42,7 +42,17 @@ internal static class Program
             && RecursiveAI.OneMail.Calendar.Forms.XmlForms.FromXml(xcal.Bytes).Document.ToArray().AsSpan().SequenceEqual(ics);
         Console.WriteLine("jxforms: " + (jxformsOk ? "ok" : "FAILED"));
 
-        bool ok = mimeOk && storesOk && calendarOk && outlookOk && jxformsOk;
+        // Conversion of one item needs no file system: the message is the same bytes in an .eml, a contact is not an iCalendar item.
+        byte[] msg = "Subject: x\r\nFrom: a@example.com\r\n\r\nhello\r\n"u8.ToArray();
+        IMailItem toConvert = Mail.Parse(msg);
+        var asEml = Mail.Convert(toConvert, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Eml);
+        var asTnef = Mail.Convert(toConvert, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Tnef);
+        var asIcs = Mail.Convert(toConvert, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Ics);
+        bool convertOk = asEml.Value is { } e && e.AsSpan().SequenceEqual(msg) && asTnef.Value is { Length: > 0 } && asIcs.Value is null
+            && RecursiveAI.OneMail.Conversion.Stores.FidelityMatrix.ToMarkdown().Contains("### MIME message", StringComparison.Ordinal);
+        Console.WriteLine("convert: " + (convertOk ? "ok" : "FAILED"));
+
+        bool ok = mimeOk && storesOk && calendarOk && outlookOk && jxformsOk && convertOk;
         Console.WriteLine("wasm smoke: " + (ok ? "ok" : "FAILED"));
         return ok ? 0 : 1;
     }

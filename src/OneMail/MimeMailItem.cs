@@ -222,7 +222,18 @@ public class MimeMailItem : IMailItem
     /// <summary>The store-supplied arrival date, if the store has one.</summary>
     internal virtual MailDate? DeliveryDate() => null;
 
-    /// <summary>Defects the store reader recorded for this message.</summary>
+    // The flags and keywords the store keeps for the message: Maildir's file name or an Apple Mail property list. Items whose
+    // store keeps none read the Status and X-Status fields of an mbox from the header block instead.
+    internal virtual bool FlagsInStore => false;
+
+    internal virtual (Stores.MessageMarks Marks, IReadOnlyList<string> Keywords) StoreFlags() => HeaderFlags(Entity.ToArray());
+
+    internal static (Stores.MessageMarks Marks, IReadOnlyList<string> Keywords) HeaderFlags(ReadOnlySpan<byte> message)
+    {
+        Stores.Mbox.MboxMetadata m = Stores.Mbox.MboxMetadata.Parse(message);
+        return (m.Flags, [.. m.Keywords, .. m.GmailLabels]);
+    }
+
     internal virtual IEnumerable<MailDefect> StoreDefectsOf() => [];
 
     internal static IEnumerable<MailDefect> FromStoreDefects(Stores.StoreDefects flags)

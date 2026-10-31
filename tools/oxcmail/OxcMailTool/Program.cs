@@ -4,12 +4,14 @@ using System.Text.Json;
 using RecursiveAI.OneMail;
 using RecursiveAI.OneMail.Conversion;
 using RecursiveAI.OneMail.Conversion.OxcMail;
+using RecursiveAI.OneMail.Conversion.Stores;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
 
 // OxcMailTool: converts Outlook items (MSG, PST, OST) to EML and EML back to Outlook items, and counts what carried over.
 //   OxcMailTool export IN OUT [--limit N]   writes OUT/NNNNNN.eml and NNNNNN.json (what the source says), checks our own parse of each EML against the source
 //   OxcMailTool rt-mapi IN [--limit N]      MAPI -> MIME -> MAPI: mapped properties come back exact, everything else is in the loss report
+//   OxcMailTool rt-store IN                 the same through the store-to-store engine (StoreConverter to Eml): what a user of Mail.ConvertAsync gets
 //   OxcMailTool rt-mime DIR [--limit N] [--sample N]   MIME -> MAPI -> MIME over a directory of .eml files (recursively)
 //   OxcMailTool view IN [--limit N]         how many senders and recipients resolve to SMTP, and with an X.500 address kept
 namespace OxcMailTool;
@@ -58,6 +60,7 @@ internal static class Program
             "rt-mapi" => RoundTripMapi(rest[0], limit, Export),
             // MAPI -> MIME with the properties in a TNEF part -> MAPI
             "rt-tnef" => RoundTripMapi(rest[0], limit, ExportTnef),
+            "rt-store" => RoundTripStore(rest[0]),
             "rt-mime" => RoundTripMime(rest[0], limit, sample),
             "view" => ViewStats(rest[0], limit),
             _ => 2,
@@ -453,6 +456,61 @@ internal static class Program
         }
 
         return silent == 0 ? 0 : 1;
+    }
+
+    private static int RoundTripStore(string input)
+    {
+        var sink = new RoundTripSink();
+        var converter = new StoreConverter(new StoreConversionOptions { MapiToMime = Export });
+        StoreConversionReport r = converter.ConvertAsync(input, ConvertFormat.Eml, sink, null, CancellationToken.None).GetAwaiter().GetResult();
+        Console.WriteLine($"engine: read {r.ItemsRead}, written {r.ItemsWritten}, skipped {r.ItemsSkipped}; mapi mail items checked {sink.Items}");
+        Console.WriteLine($"message+recipient+attachment properties compared {sink.Props}: exact {sink.Same}, same value with another string type {sink.TypeChanged}, differ or missing and in the loss report {sink.Explained}, silent {sink.Silent}");
+        Console.WriteLine($"items with no silent difference {sink.Items - sink.SilentItems}, with {sink.SilentItems}");
+        foreach ((string k, int v) in sink.SilentByName.OrderByDescending(x => x.Value).Take(40))
+        {
+            Console.WriteLine($"  silent {k}\t{v}");
+        }
+
+        return sink.Silent == 0 ? 0 : 1;
+    }
+
+    // Takes the EML the engine produced for each Outlook mail item, reads it back as MAPI and compares with the source item.
+    private sealed class RoundTripSink : IStoreSink
+    {
+        public int Items;
+        public int SilentItems;
+        public long Props, Same, TypeChanged, Explained, Silent;
+        public readonly SortedDictionary<string, int> SilentByName = new(StringComparer.Ordinal);
+
+        public ValueTask<string?> WriteAsync(StoreEntry entry, CancellationToken cancellationToken)
+        {
+            if (entry.Item is MapiMailItem m && entry.Kind == PayloadKind.Message)
+            {
+                Items++;
+                ConversionResult<MapiMessage> im = new MimeToMapiConverter().Convert(MimeEntity.Parse(entry.Content.ToArray()));
+                var reported = new HashSet<string>(entry.Report.Concat(im.Report).Select(e => e.Name).Concat(entry.Report.Concat(im.Report).Select(e => e.Name + "|" + e.Code)), StringComparer.OrdinalIgnoreCase);
+                var (p, s, t, e2, sl, names) = CompareMessage(m.Message, im.Value, reported, string.Empty);
+                Props += p;
+                Same += s;
+                TypeChanged += t;
+                Explained += e2;
+                Silent += sl;
+                if (sl > 0)
+                {
+                    SilentItems++;
+                    foreach (string n in names)
+                    {
+                        SilentByName[n] = SilentByName.GetValueOrDefault(n) + 1;
+                    }
+                }
+            }
+
+            return new ValueTask<string?>((string?)null);
+        }
+
+        public ValueTask CompleteAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     // A named property is numbered per message or store, so the same name can carry another ID after a conversion; the name, type and bytes decide.

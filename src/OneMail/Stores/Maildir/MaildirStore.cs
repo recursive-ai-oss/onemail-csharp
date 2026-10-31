@@ -231,6 +231,27 @@ public sealed class MaildirStore
         return FinishDelivery(folder, unique, tmp, marks, keywords);
     }
 
+    /// <summary>
+    /// Delivers a message like <see cref="Deliver"/> but returns only its path. <see cref="Deliver"/> finds the new entry by listing the
+    /// folder, which makes a long run of deliveries into one folder take time in proportion to the square of its size; this does not.
+    /// </summary>
+    /// <param name="message">The message bytes, written unchanged.</param>
+    /// <param name="folder">The folder; created if missing.</param>
+    /// <param name="marks">Standard flags.</param>
+    /// <param name="keywords">Keyword names.</param>
+    /// <returns>The file's path in this store's file system.</returns>
+    /// <exception cref="InvalidOperationException">More than 26 distinct keywords would be needed in the folder.</exception>
+    public string DeliverPath(ReadOnlyMemory<byte> message, string folder = "", MessageMarks marks = MessageMarks.None, IEnumerable<string>? keywords = null)
+    {
+        (string unique, string tmp) = BeginDelivery(folder);
+        using (Stream s = _fs.CreateNew(tmp))
+        {
+            s.Write(message.Span);
+        }
+
+        return PlaceDelivery(folder, unique, tmp, marks, keywords);
+    }
+
     /// <summary>Delivers a message read from a range of a source. See <see cref="Deliver"/>.</summary>
     /// <param name="source">Where the message bytes are.</param>
     /// <param name="offset">First byte of the message.</param>
@@ -543,6 +564,12 @@ public sealed class MaildirStore
 
     private MaildirEntry FinishDelivery(string folder, string unique, string tmp, MessageMarks marks, IEnumerable<string>? keywords)
     {
+        string target = PlaceDelivery(folder, unique, tmp, marks, keywords);
+        return Enumerate(folder).First(e => e.Path == target);
+    }
+
+    private string PlaceDelivery(string folder, string unique, string tmp, MessageMarks marks, IEnumerable<string>? keywords)
+    {
         string dir = FolderPath(folder);
         marks &= ~MessageMarks.Recent;
         string letters = KeywordLetters(folder, dir, keywords);
@@ -550,7 +577,7 @@ public sealed class MaildirStore
         string name = flagged ? MaildirName.Build(unique, marks, letters, null, _options.InfoSeparator) : unique;
         string target = Join(Join(dir, flagged ? "cur" : "new"), name);
         _fs.Rename(tmp, target);
-        return Enumerate(folder).First(e => e.Path == target);
+        return target;
     }
 
     // Keyword names -> Dovecot letters, extending dovecot-keywords for names it does not hold yet.
