@@ -512,3 +512,26 @@ olm-reader 1.0.0 npm package as black-box oracles. No Outlook for Mac has been o
 | O7 | Contact e-mail slot type 0, 1, 2 | n/a | work, home, other | none | prov.; the sample's addresses are named after their slot |
 | O8 | Recurrence with both a count and an end date | n/a | The count (`COUNT`) when the record says it is numbered, else the end date as a UTC `UNTIL` | `RecurrenceEnd` (loss entry) | prov.; all four sample patterns are numbered |
 | O9 | An attachment URL that matches no entry | the jar returns no bytes | Listed with no content | `AttachmentMissing` | prov. |
+
+## Bodies (HTML to text, text to HTML, `format=flowed`, best body)
+
+Observed against `w3m` 0.5.3, `lynx` 2.9.0 and `html2text` 2025.4.15 as black-box programs, and on 3,237 Dovecot messages for the flowed and alternative-order cases. No
+mail client has been observed, so each resolution is provisional. Details: [`bodies.md`](bodies.md).
+
+| ID | Case | Other readers | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| BD1 | `multipart/alternative` lists HTML before plain text | RFC 2046 §5.1.4 puts the preferred part last, which makes plain text preferred here | HTML is chosen anyway: every mainstream mail client renders the HTML | `AmbiguousAlternativeOrder` | 4 Dovecot messages; prov. |
+| BD2 | An HTML body with no text and no image | n/a | The plain-text body is chosen | `AmbiguousEmptyHtml` | prov. |
+| BD3 | An Outlook item with both bodies whose `PidTagNativeBody` says plain text (1) or clear-signed (4) | n/a | The plain text; the HTML is a rendering of it | none (`BodyReason.NativeText`) | MS-OXCMSG; prov. |
+| BD4 | An Outlook item whose `PidTagRtfInSync` is false | n/a | The body taken out of the RTF replaces the stored text (the RTF is the newer) | `AmbiguousStaleText` | MS-OXCMSG; prov. |
+| BD5 | An Outlook item that has only RTF written as RTF | n/a | The RTF body is returned as the best body (kind `Rtf`); the native RTF converter, when present, makes HTML for the view instead | `OnlyRtfAvailable` | prov. |
+| BD6 | `display: none`, `visibility: hidden`, `hidden`, `mso-hide: all`, and hiding style rules | `w3m`, `lynx` and `html2text` print hidden text (they apply no CSS) | Hidden content is skipped, as a screen would | none | 109 / 293 / 111 differing stretches |
+| BD7 | An image's alt text | `w3m` and `lynx` print it bare, `html2text` (with images ignored) nothing | `[alt]`; no alt or a 1 or 2 pixel image: nothing | none | 78 / 217 differing stretches |
+| BD8 | A link with no text of its own | `lynx` prints a link marker, `w3m` nothing | The address alone, `<address>`, so the destination is not lost | none | prov. |
+| BD9 | A link whose text already is its address (ignoring scheme, `www.`, `mailto:`, case, final slash) | `html2text` writes `<address>` | The text alone | none | prov. |
+| BD10 | Table cells that hold several lines | `w3m` sets cells side by side; `html2text` writes a markdown table | One cell after another; cells with only inline content share a line, separated by ` | ` | none | 114 / 87 differing stretches |
+| BD11 | `&#128;` to `&#159;` numeric references | the three programs drop or keep them as controls | The WHATWG mapping through windows-1252 (OneHtml), so `&#153;` is the trade mark sign | none | 2 MSG messages |
+| BD12 | A flowed line ending in a space followed by a line of another quote depth | RFC 3676 §4.5 ends the paragraph | The paragraph ends; its trailing space is kept without `delsp` | none | RFC |
+| BD13 | A paragraph that ends in a space, on `FormatFlowed.Encode` | n/a | Trailing spaces are dropped (a fixed line cannot end in one), except the `-- ` separator | none | RFC 3676 §4.2 |
+| BD14 | An HTML document past OneHtml's parse limits | OneHtml refuses it | The text before a cut is kept: the input is halved until it parses | `HtmlLimitExceeded` | hostile-input test |
+| BD15 | A lone CR in text being turned into HTML | n/a | A line break | none | prov. |

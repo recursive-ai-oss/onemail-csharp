@@ -34,6 +34,7 @@ internal static class Program
             ["olm"] = OlmTarget.Run,
             ["dbx"] = DbxTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
+            ["htmltext"] = HtmlTextTarget.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

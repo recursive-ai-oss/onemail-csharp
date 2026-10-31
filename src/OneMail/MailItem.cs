@@ -102,6 +102,12 @@ public abstract class MailBody
     /// </summary>
     /// <returns>The text.</returns>
     public abstract string ReadText();
+
+    /// <summary>True when the body is <c>text/plain</c> with <c>format=flowed</c> (RFC 3676): its soft line breaks are still in <see cref="ReadText"/>. See <see cref="Bodies.FormatFlowed"/>.</summary>
+    public virtual bool IsFormatFlowed => false;
+
+    /// <summary>True when the flowed body says <c>delsp=yes</c>. Meaningful only when <see cref="IsFormatFlowed"/> is true.</summary>
+    public virtual bool FlowedDelSp => false;
 }
 
 /// <summary>An attachment of an item. An attachment is an item in its own right: it has a name, a type, content, and, when it is a message, an embedded item with the full view.</summary>
@@ -196,6 +202,13 @@ public interface IMailItem
 
     /// <summary>The RTF body candidate, or null (MIME has none). See <see cref="TextBody"/>.</summary>
     MailBody? RtfBody { get; }
+
+    /// <summary>
+    /// The best body to show, or null when the item has none: HTML, else plain text (with <c>format=flowed</c> joined), else RTF written as RTF. The
+    /// order and the Outlook hints are in <see cref="Bodies.BodySelector"/>; use it directly for the reason and the issues. Evaluated on each call: it
+    /// reads the candidate bodies.
+    /// </summary>
+    MailBody? BestBody => Bodies.BodySelector.Select(this).Body;
 
     /// <summary>
     /// The attachments in document order, built on first use. Inline content (images a body refers to by <c>cid:</c>) is
