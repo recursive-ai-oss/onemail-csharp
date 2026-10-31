@@ -26,6 +26,9 @@
     <!-- The comparators for the Outlook-format rows: PST/OST (MS-PL), MSG (MIT), and MimeKit's TNEF reader above. -->
     <PackageReference Include="XstReader.Api" />
     <PackageReference Include="MsgReader" />
+    <!-- The comparators for the calendar and contact rows: iCalendar and recurrence (MIT), vCard (MIT). -->
+    <PackageReference Include="Ical.Net" />
+    <PackageReference Include="FolkerKinzel.VCards" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,6 +41,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
   </ItemGroup>
 
 </Project>

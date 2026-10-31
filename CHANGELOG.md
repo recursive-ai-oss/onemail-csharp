@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0-preview.1]
+
+On the local feed. Calendar and contacts close with this preview (speed rows in docs/benchmarks.md); it also carries the bodies, display and conversion work done so far. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
+
 ### Added
 
 - Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.
@@ -12,10 +16,15 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `StoreConverter` and `Mail.ConvertAsync`/`Mail.Convert`: any readable store or directory to EML, mbox, Maildir++, Apple Mail bundles, ICS, vCard, the j/x forms or TNEF, keeping folders, flags and keywords where the target has them, with progress, cancellation, an aggregate loss report and an `IStoreSink` extension point; the fidelity matrix is in `docs/fidelity.md`.
 - `onemail convert` and `onemail export`, with `--json`.
 - `MaildirStore.DeliverPath`: delivers and returns the path (`Deliver` re-listed the directory per message).
+- Outlook calendar and task items (MS-OXOCAL, MS-OXOTASK): appointments, recurrence blobs with exceptions, time zones, meeting requests, responses and cancellations, and tasks in the shared view, with conversion to and from iCalendar per MS-OXCICAL and loss reports.
+- Outlook for Mac OLM reading (`RecursiveAI.OneMail.Stores.Olm`): archives over the zip reader, every item kind with a lossless element tree, calendar and contact mapping with loss reports, and `Mail.Open` on `.olm`.
+- Display HTML (`RecursiveAI.OneMail.Display`): an allowlist sanitiser on the HTML DOM, a remote-content policy (block, allow or a rewrite callback), `cid:` and attachment resolution, and optional header and attachment blocks. It has not had its independent review yet.
+- Calendar and contact benchmark rows against Ical.Net and FolkerKinzel.VCards, with a libical reference, in `docs/benchmarks.md`.
 - `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
 
 ### Changed
 
+- Content lines: a run of carriage returns before a line feed is one line end (most readers join a fold written that way), reported as `AmbiguousDoubleCarriageReturn`; the bytes are kept. Parsing allocates less.
 - `MimeWriter` keeps the white space inside a header value when it writes one (runs of spaces and tabs were collapsed); untouched messages still write from their raw bytes.
 
 ## [0.2.0-preview.2]

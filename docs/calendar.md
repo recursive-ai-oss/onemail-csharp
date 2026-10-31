@@ -10,7 +10,7 @@ Normative notes for `RecursiveAI.OneMail.Calendar` (BCL only). Behaviour on ambi
 
 ## Defects
 
-`CalendarDefect(Kind, Offset, Length, Depth)`; `Ambiguous*` kinds mark a documented choice between valid readings, `IsLimit` kinds mark a resource limit. Parsing never throws on content. Offsets are absolute byte offsets in the input. `BareLineFeed` and `BareCarriageReturn` are reported once, at the first line. The kinds are listed with their meaning in `CalendarDefectKind`.
+`CalendarDefect(Kind, Offset, Length, Depth)`; `Ambiguous*` kinds mark a documented choice between valid readings, `IsLimit` kinds mark a resource limit. Parsing never throws on content. Offsets are absolute byte offsets in the input. `BareLineFeed`, `BareCarriageReturn` and `AmbiguousDoubleCarriageReturn` (CR CR LF, read as one line end) are reported once, at the first line. The kinds are listed with their meaning in `CalendarDefectKind`.
 
 ## Limits (`CalendarLimits`, on by default)
 

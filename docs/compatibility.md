@@ -12,6 +12,15 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## 0.3.0-preview.1
+
+Calendar and contacts, the other stores and the Outlook item semantics on read are complete for this stage; the sections below
+hold each format's numbers. Fuzzing, 600 s per target with 0 findings: `dbx` 8.1M executions, `olm` 17.5M, `oxocal` 0.3M,
+`rtf-html` 5.0M, `jcal-jcard` 12.8M, `xcal-xcard` 19.7M, `contentlines` 20.4M, `calendar` 11.2M, `vcard-view` 11.7M,
+`recurrence` 2.1M, plus the display, bodies and composition targets in their sections. Known gaps: no Outlook-produced
+calendar, contact or distribution-list fixtures yet (needs Outlook), and the display sanitiser has not had its independent
+review.
+
 ## 0.2.0-preview.1
 
 Added since 0.1. The 0.1 rows below still hold. Further oracles for these rows, all run as released programs: Python `extract-msg` 0.55.0,

@@ -50,9 +50,6 @@ public enum MailFormat
     /// <summary>A vCard (<c>BEGIN:VCARD</c>). Recognised; not readable yet.</summary>
     VCard,
 
-    /// <summary>An Outlook for Mac archive: a zip holding the <c>Local/</c> message, address book, calendar, task and note folders.</summary>
-    Olm,
-
     /// <summary>iCalendar as JSON, jCal (RFC 7265): an array starting <c>["vcalendar"</c>, or an array of such arrays.</summary>
     JCal,
 
@@ -70,6 +67,11 @@ public enum MailFormat
 
     /// <summary>An Outlook Express store folder: a directory holding <c>Folders.dbx</c> and the message files it names.</summary>
     DbxStore,
+
+    // New members go at the end: the numeric values of published members never change.
+
+    /// <summary>An Outlook for Mac archive: a zip holding the <c>Local/</c> message, address book, calendar, task and note folders.</summary>
+    Olm,
 }
 
 /// <summary>
