@@ -261,6 +261,74 @@ public class TimeZoneTests
     private static IcsTimeZone Zone(string tzid, TimeZoneResolverOptions? options = null, string? vtimezone = null, ExpansionReport? report = null) =>
         new TimeZoneResolver(vtimezone is null ? null : RecurrenceTestKit.Calendar(string.Empty, vtimezone), options, report).Resolve(tzid)!;
 
+    // What the resolver's runtime lookup finds: the IANA name, or on Windows without ICU the zone CLDR names for it.
+    private static TimeZoneInfo RuntimeZone(string iana)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(iana);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            Assert.True(WindowsZones.TryGetWindows(iana, out string? windows));
+            return TimeZoneInfo.FindSystemTimeZoneById(windows);
+        }
+    }
+
+    // Stands in for a Windows runtime without ICU on any platform: IANA names are not found, Windows ids are
+    // (answered from the same data through CLDR's table, so only the lookup path differs).
+    private static TimeZoneInfo? WindowsOnlyRuntime(string name) =>
+        WindowsZones.TryGetIana(name, out string? iana) ? TimeZoneInfo.FindSystemTimeZoneById(iana) : null;
+
+    [Theory]
+    [InlineData("America/New_York", "Eastern Standard Time")]
+    [InlineData("Europe/Berlin", "W. Europe Standard Time")]
+    [InlineData("Australia/Sydney", "AUS Eastern Standard Time")]
+    [InlineData("Pacific/Auckland", "New Zealand Standard Time")]
+    [InlineData("America/Tijuana", "Pacific Standard Time (Mexico)")]
+    [InlineData("America/Toronto", "Eastern Standard Time")]
+    public void IanaNamesFallBackToTheWindowsIdWhenTheRuntimeOnlyKnowsThose(string iana, string windows)
+    {
+        Assert.True(WindowsZones.TryGetWindows(iana, out string? w));
+        Assert.Equal(windows, w);
+        TimeZoneResolverOptions windowsOnly = new() { RuntimeLookup = WindowsOnlyRuntime };
+        ExpansionReport report = new();
+        IcsTimeZone z = Zone(iana, windowsOnly, report: report);
+        Assert.Equal(ZoneSource.Iana, z.Source);
+        Assert.Equal(iana, z.Id);
+        Assert.Empty(report.Defects);
+        foreach (DateTime t in new[] { new DateTime(2026, 1, 15, 12, 0, 0), new DateTime(2026, 7, 15, 12, 0, 0) })
+        {
+            Assert.Equal(Zone(iana).GetUtcOffset(t), z.GetUtcOffset(t));
+        }
+
+        // A Windows name still goes through the table, whatever the runtime knows.
+        ExpansionReport wr = new();
+        Assert.Equal(ZoneSource.WindowsName, Zone(windows, windowsOnly, report: wr).Source);
+        Assert.Equal(1, wr.CountOf(RecurrenceDefectKind.AmbiguousWindowsZone));
+    }
+
+    [Fact]
+    public void ZonesKnownToNeitherSideAreATypedDefectNotAnException()
+    {
+        ExpansionReport report = new();
+        Assert.Null(new TimeZoneResolver(null, new TimeZoneResolverOptions { RuntimeLookup = _ => null }, report).Resolve("Europe/Berlin"));
+        Assert.Contains(report.Defects, d => d.Kind == RecurrenceDefectKind.UnknownTimeZone);
+        ExpansionReport r2 = new();
+        Assert.Null(new TimeZoneResolver(null, new TimeZoneResolverOptions { RuntimeLookup = WindowsOnlyRuntime }, r2).Resolve("Nowhere/Middle"));
+        Assert.Contains(r2.Defects, d => d.Kind == RecurrenceDefectKind.UnknownTimeZone);
+    }
+
+    [Fact]
+    public void EveryWindowsNameMapsToAnIanaNameThatMapsBackToAWindowsName()
+    {
+        foreach ((string windows, string iana) in WindowsZones.Rows)
+        {
+            Assert.True(WindowsZones.TryGetWindows(iana, out string? back), iana);
+            Assert.Equal(windows, back); // the 001 row wins, so the default-territory zone returns to its own Windows name
+        }
+    }
+
     [Theory]
     [InlineData("Eastern Standard Time", "America/New_York")]
     [InlineData("W. Europe Standard Time", "Europe/Berlin")]
@@ -343,7 +411,7 @@ public class TimeZoneTests
     public void RuntimeZoneConvertsBothWaysAcrossBothChanges(string tzid)
     {
         IcsTimeZone z = Zone(tzid);
-        TimeZoneInfo info = TimeZoneInfo.FindSystemTimeZoneById(tzid);
+        TimeZoneInfo info = RuntimeZone(tzid);
         // Every half hour of 2026: local -> UTC -> local is stable except inside the skipped hour, and the offset matches the runtime's.
         int skipped = 0, repeated = 0;
         for (DateTime l = new(2026, 1, 1); l < new DateTime(2027, 1, 1); l = l.AddMinutes(30))
@@ -369,7 +437,9 @@ public class TimeZoneTests
     {
         IcsTimeZone v = Zone(tzid, new TimeZoneResolverOptions { UseRuntimeDatabase = false }, RecurrenceTestKit.NewYorkVTimeZone);
         IcsTimeZone r = Zone(tzid);
-        foreach (int year in new[] { 1999, 2006, 2007, 2026, 2040 })
+        // Windows zone data has only the current US rules (docs/recurrence.md); the VTIMEZONE here holds the pre-2007 ones too.
+        int[] years = OperatingSystem.IsWindows() ? [2007, 2026, 2040] : [1999, 2006, 2007, 2026, 2040];
+        foreach (int year in years)
         {
             for (DateTime t = new(year, 1, 1, 0, 0, 0, DateTimeKind.Utc); t < new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc); t = t.AddMinutes(30))
             {
