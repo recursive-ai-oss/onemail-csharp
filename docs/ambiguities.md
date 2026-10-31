@@ -141,7 +141,7 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | A12 | `adr-17` `@` inside an unquoted display name | name kept | wrong address | rejected | The address is the one in angle brackets. | none | prov. (MK) |
 | A13 | `adr-18` two address-specs in one mailbox (`<a@x><b@y>`) | both | first only | rejected | Both are kept as two mailboxes. | `AdjacentAngleAddrs` | prov. (MK) |
 | A14 | `adr-19` semicolon as a separator | first only | first only | rejected | Only the first address is parsed; the remainder is kept as unparsed text in the defect. | `UnparsedAddressText` | 2 of 2 that parse |
-| A15 | `adr-23` leading, trailing and doubled dots in a local part | dropped | kept | rejected | Kept (obsolete local part). | `ObsoleteLocalPart` | prov. (Py) |
+| A15 | `adr-23` leading, trailing and doubled dots in a local part (`.a@x`, `b.@x`, `c..d@x`) | address dropped | kept | rejected | Kept as written. These are common in old corporate mail, and dropping them loses recipients. | `ObsoleteLocalPart` | prov. (Py; in about 9% of messages in a 517,000-message public corpus, MimeKit drops such recipients) |
 
 ## Dates
 

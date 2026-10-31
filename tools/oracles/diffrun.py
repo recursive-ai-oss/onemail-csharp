@@ -401,9 +401,15 @@ def cmd_report(a):
     private = a.private or a.corpus.startswith(("enron", "edrm"))
     t = merge(a.out, a.corpus)
     if private:
+        # A sub-class can be a malformed header's "name", which is message text: keep only name-like ones.
+        safe = re.compile(r"^[a-z0-9_.-]{1,40}( \(more in [ab]\))?$")
         for p in t["pairs"].values():
             for ex in p["examples"].values():
                 ex["detail"] = "withheld"
+                ex["sub"] = ex["sub"] if safe.match(ex["sub"]) else "(withheld)"
+            for subs in p["subs"].values():
+                for k in [k for k in subs if k and not safe.match(k) and " -> " not in k and " vs " not in k]:
+                    subs["(withheld)"] += subs.pop(k)
     lines = ["# Differential report: %s" % a.corpus, "", "Messages: %d" % t["messages"], "",
              "Oracle versions: " + ", ".join("%s %s" % kv for kv in sorted(t["versions"].items())), "",
              "Driver crashes: %s" % (dict(t["crashes"]) or "none"), "",
