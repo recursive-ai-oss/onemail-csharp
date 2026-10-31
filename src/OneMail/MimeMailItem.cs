@@ -363,6 +363,8 @@ public class MimeMailItem : IMailItem
 
         public override string? Charset => part.GetContentTypeParameter("charset")?.ToLowerInvariant();
 
+        internal override string? ContentTypeParameter(string name) => part.GetContentTypeParameter(name);
+
         public override Stream Open() => part.OpenDecodedContent();
 
         public override string ReadText()
@@ -389,6 +391,8 @@ public class MimeMailItem : IMailItem
         public string ContentType => entity.MediaType;
 
         public string? ContentId => entity.GetContentId();
+
+        public string? ContentLocation => entity.Headers.GetFirst("Content-Location")?.Value is { } v ? string.Concat(v.Where(c => c is not ('\r' or '\n' or ' ' or '\t'))) : null;
 
         public bool IsInline => entity.Disposition != "attachment" && entity.Headers.GetFirst("Content-ID") is not null && entity.GetContentId() is not null;
 
