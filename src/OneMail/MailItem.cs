@@ -118,6 +118,9 @@ public abstract class MailBody
     /// </summary>
     /// <returns>The text.</returns>
     public abstract string ReadText();
+
+    /// <summary>A parameter of the body's content type (for example <c>format</c> or <c>delsp</c>), or null.</summary>
+    internal virtual string? ContentTypeParameter(string name) => null;
 }
 
 /// <summary>An attachment of an item. An attachment is an item in its own right: it has a name, a type, content, and, when it is a message, an embedded item with the full view.</summary>
@@ -131,6 +134,12 @@ public interface IMailAttachment
 
     /// <summary>The <c>Content-ID</c> without angle brackets, or null. Inline content is addressed from HTML as <c>cid:</c> + this value.</summary>
     string? ContentId { get; }
+
+    /// <summary>
+    /// The part's <c>Content-Location</c> (RFC 2557) or <c>PidTagAttachContentLocation</c>, which HTML can use to refer to it, or null.
+    /// A default member, so implementations written before it was added keep working.
+    /// </summary>
+    string? ContentLocation => null;
 
     /// <summary>True when the attachment is meant to be shown inside the body: it is not marked <c>attachment</c> and has a content ID.</summary>
     bool IsInline { get; }

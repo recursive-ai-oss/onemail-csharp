@@ -464,6 +464,8 @@ internal sealed class MapiMailAttachment(MapiAttachment attachment, MailProvenan
     }
 
     // As for MIME: inline when it has a content ID and is not marked as an attachment (PidTagAttachContentDisposition 0x3716).
+    public string? ContentLocation => attachment.GetString(0x3713) is { Length: > 0 } l ? l.Trim() : null;
+
     public bool IsInline => ContentId is not null
         && !(attachment.GetString(0x3716) is { } disp && disp.TrimStart().StartsWith("attachment", StringComparison.OrdinalIgnoreCase));
 
