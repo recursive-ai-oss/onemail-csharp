@@ -1,9 +1,9 @@
 # Mailbox stores
 
-How OneMail enumerates and writes mbox files, Maildir folders and Apple Mail (EMLX) stores. The code is in
-`RecursiveAI.OneMail.Stores` (shared types, file-system abstraction, content sniffing) and its `.Mbox`, `.Maildir` and `.Emlx`
+How OneMail enumerates and writes mbox files, Maildir folders and Apple Mail (EMLX) stores, and reads Outlook Express (DBX) stores. The code is in
+`RecursiveAI.OneMail.Stores` (shared types, file-system abstraction, content sniffing) and its `.Mbox`, `.Maildir`, `.Emlx` and `.Dbx`
 namespaces. Text here is written to be implemented the same way in another language. The cases where programs disagree are
-listed with their resolutions in [`ambiguities.md`](ambiguities.md) (S1–S13).
+listed with their resolutions in [`ambiguities.md`](ambiguities.md) (S1–S18).
 
 ## The store contract
 
@@ -127,6 +127,58 @@ ones nest it under `<GUID>/Data/…`) and lists their `.emlx` files by number. `
 list; `WriteFrom` rewrites a file from its parts (canonical count line, message, original trailer bytes), so a file with a canonical
 count line is reproduced exactly.
 
+## Outlook Express (DBX)
+
+An Outlook Express 5/6 store is a directory of `.dbx` files: `Folders.dbx` (the folder hierarchy), one message database per folder
+(`Inbox.dbx`, `Sent Items.dbx`, user folders) and helpers (`Pop3uidl.dbx`, `Offline.dbx`) that hold no mail. Reading is read-only and
+never writes. Facts are from the oedbx DBX format notes (Arne Schloh, updated by Zvonko Tesic); the constants and structures here are
+our own statement of them.
+
+**File.** Every database starts with `cf ad 12 fe` and a class id: `c5 fd 74 6f` message database, `c6 fd 74 6f` `Folders.dbx`,
+`c7 fd 74 6f` `Pop3uidl.dbx`, `30 9d fe 26` `Offline.dbx`. Sniffing reads those eight bytes only (never the extension). The fixed header is
+0x24bc bytes, the file info follows (length at header 0x1c), then the middle sector of objects. Every object starts with its own absolute
+file offset (its *marker*); a pointer is an absolute offset. A file shorter than the header reads as nothing (`DbxTruncatedHeader`).
+
+**Index tree.** Header 0xe4 points at the root of a B-tree of 0x27c-byte nodes: 0x18 bytes (marker, unused, left child, parent, node id,
+entry count, unused, left subtree count) and up to 0x33 entries of (value, right child, subtree count). Values are pointers to records.
+The walk is in order: left child, then each value followed by its child, which gives the records in index order. Header 0xc4 repeats the
+entry count. The walk keeps one 0x27c buffer per level on an explicit stack, stops at `MaxTreeDepth` (32) and at a node budget of
+`file length / 0x27c + 1` visits (`DbxTreeLoop`), skips a node whose address is outside the file or whose marker is wrong
+(`DbxBadTreeNode`), clamps an entry count above 0x33, and reports a final count different from the header's (`DbxEntryCountMismatch`,
+the tree wins). The other two trees (watched or ignored threads; sorted-by-parent folder lists) are not read: the main tree already holds
+every record.
+
+**Records.** A record (indexed info) is a 12-byte header (marker, body length, object length, field count, change count), an index of
+field-count 4-byte entries, and a data area. An entry is a field byte (low 7 bits the field number, top bit "value is in the entry") and
+three value bytes: a direct value is that 24-bit integer; otherwise it is an offset into the data area, and the field runs to the next
+stored offset or the end of the area. Strings end at a zero byte and are decoded as windows-1252 (S15). Times are Windows FILETIMEs.
+A body length over `MaxInfoBytes` (1 MiB) or past the end of the file is a defect (`DbxBadIndexedInfo`; a record cut by the end of the
+file keeps what is there), and a field offset outside the data area reads as absent. Message record fields used: 0x00 index, 0x01 flag
+word, 0x02 sent time, 0x03 line count, 0x04 pointer to the first text segment, 0x05 subject without prefixes, 0x06 saved time, 0x07
+message id, 0x08 subject, 0x09/0x0d/0x0e sender, 0x0a message id answered, 0x10 priority, 0x11 stated length, 0x12 received time,
+0x13/0x14 first recipient, 0x1a account. Any field is reachable by number (`DbxRecord.TryGetInt32`, `GetString`, `GetBytes`).
+Folder record fields: 0x00 index, 0x01 parent (-1 for the root "Outlook Express"), 0x02 name, 0x03 file name, 0x06 flags, 0x07 and 0x08
+counts, 0x09 special-folder kind (unverified, S18).
+
+**Messages.** The text is a singly linked chain of 0x210-byte segments: marker, body length (0x200), text length, next pointer, then the
+text; the last has next 0. Concatenating the text lengths gives the message exactly as Outlook Express stored it, with the line ends it
+received (usually CR LF); nothing is converted. The chain is followed lazily: `OpenMessage` is a forward-only stream, `MeasureMessage` walks
+only the 16-byte headers (3 % of the bytes), `ReadMessage` fills an array of exactly the measured length. A bad pointer or marker ends the
+chain (`DbxChainBroken`), a text length over the body length or the file is cut (`DbxBadSegmentLength`), and a chain that revisits a segment
+(found with Brent's method: two variables, no set) or exceeds the file or `MaxMessageBytes` (2 GiB) ends with `DbxChainLoop`; a loop is
+noticed within one more lap, so up to a lap of its text may repeat. The stated length (field 0x11) is advisory (S14). A record with no
+chain pointer yields an empty message (S17). Free (deleted) objects are never followed; their recovery is a forensic mode.
+
+**Store folders.** `DbxStoreFolder` reads `Folders.dbx` (found ignoring case), pairs each folder with its message file by the stored name
+(ignoring case) and enumerates folder by folder in index order, then message files no folder names, as `<file name>` folders with
+`DbxUnlistedFile`. The folder path joins names up the parent chain without the root ("Local Folders/Inbox"), climbing at most 64 levels.
+`Mail.Open` takes a `.dbx` file (`MailFormat.Dbx`; `Folders.dbx` and the helpers enumerate as empty) or a store directory
+(`MailFormat.DbxStore`, recognised by a `Folders.dbx` with the folder class id). An item holds no open file: it reopens its message file to
+read.
+
+**Memory.** Enumeration holds one record (its few hundred bytes) and the tree stack; messages are read when asked. The source is read
+synchronously (an async-only source is refused); `EnumerateMessagesAsync` runs the same code between cancellation checks.
+
 ## Defects
 
 | Defect | Where | Meaning |
@@ -142,6 +194,14 @@ count line is reproduced exactly.
 | `UnknownKeywordLetter` | Maildir | a keyword letter with no name in the folder's keyword file |
 | `MalformedControlFile` | Maildir | a keyword, UID or Courier list line that could not be read |
 | `BadByteCount`, `TruncatedMessage` | EMLX | as described above |
+| `DbxTruncatedHeader` | DBX | the file is shorter than the 0x24bc-byte header; nothing is enumerated |
+| `DbxBadPointer`, `DbxBadObjectMarker` | DBX | a record pointer outside the file or inside the header; an object not starting with its own offset. The object is skipped |
+| `DbxBadTreeNode`, `DbxTreeLoop`, `DbxEntryCountMismatch` | DBX | an unusable index node (skipped); a tree deeper than the limit or revisiting nodes (the walk stops); a count different from the header's (the tree wins) |
+| `DbxBadIndexedInfo` | DBX | a record whose lengths do not fit (skipped when unreadable, kept when only cut by the end of the file) |
+| `DbxChainBroken`, `DbxChainLoop`, `DbxBadSegmentLength` | DBX | a message chain ending at a bad object; a cycle or an over-long chain; a text length larger than the body or the file |
+| `AmbiguousDbxDeclaredLength` | DBX | the record's stated length differs from the chain's; the chain wins (S14) |
+| `AmbiguousDbxNoMessageText` | DBX | the record has no chain; the message is empty (S17) |
+| `DbxUnlistedFile` | DBX | a message file `Folders.dbx` does not name (S16) |
 
 ## Checks
 
@@ -159,5 +219,10 @@ count line is reproduced exactly.
   (no separators or no final separator in the source, a preamble, a wrong length corrected, an unquoted writer, a Takeout envelope with a zone).
 - **Writers.** `OneMailRanges write` makes every variant and a Maildir with flags and keywords; `py_check_written.py` reads them with
   Python's `mailbox` (mboxcl2 excepted, S6).
-- **Fuzz.** Targets `mbox` and `emlx` (`fuzz/`): the window size must not change the entries, entries must tile the file, copying records
-  must reproduce it, mboxrd quoting must be reversible, and nothing may throw.
+- **DBX against undbx.** `tools/dbx/check.sh` writes stores with the test-side builder (`DbxTestBuilder`: header, file info, conditions, shuffled
+  or contiguous chains, trees of any fan-out, record variants), extracts every message with OneMail and with undbx 0.21 (a distribution
+  package run as a program), and compares each folder's messages as a multiset of SHA-256 hashes (`compare.py`). Real stores
+  (`tools/corpus/fetch-dbx.sh`) go through the same comparison. Unit tests cover the builder round trip over fan-outs, shuffles and sizes, the
+  hostile cases and the happy path.
+- **Fuzz.** Targets `mbox`, `emlx` and `dbx` (`fuzz/`): the window size must not change the entries, entries must tile the file, copying records
+  must reproduce it, mboxrd quoting must be reversible, a DBX message read into an array must equal the streamed read and the measured chain, and nothing may throw.

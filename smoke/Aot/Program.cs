@@ -291,6 +291,35 @@ internal static class Program
         bool tnefMimeOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.TnefInMime();
         Console.WriteLine("tnef-in-mime: " + (tnefMimeOk ? "ok" : "FAILED"));
 
-        return tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Outlook Express database: a generated store read through the reader (shuffled chains, a narrow tree) and the happy path.
+        bool dbxOk;
+        {
+            List<RecursiveAI.OneMail.Tests.Stores.DbxTestMessage> dbxMsgs = [];
+            for (int i = 0; i < 30; i++)
+            {
+                dbxMsgs.Add(new RecursiveAI.OneMail.Tests.Stores.DbxTestMessage { Text = System.Text.Encoding.ASCII.GetBytes("Subject: dbx " + i + "\r\n\r\n" + new string('x', i * 40)), Subject = "dbx " + i });
+            }
+
+            byte[] dbxFile = RecursiveAI.OneMail.Tests.Stores.DbxTestBuilder.MessageDatabase(dbxMsgs, new RecursiveAI.OneMail.Tests.Stores.DbxBuild { TreeFanout = 3, ShuffleSeed = 4 });
+            using RecursiveAI.OneMail.Sources.MemorySource dbxSrc = new(dbxFile);
+            RecursiveAI.OneMail.Stores.Dbx.DbxReader dbxReader = new(dbxSrc);
+            int dbxN = 0;
+            bool dbxSame = true;
+            foreach (RecursiveAI.OneMail.Stores.Dbx.DbxMessageEntry e in dbxReader.EnumerateMessages())
+            {
+                dbxSame &= dbxReader.ReadMessage(e, out _).AsSpan().SequenceEqual(dbxMsgs[dbxN].Text);
+                dbxN++;
+            }
+
+            using MemoryStream dbxStream = new(dbxFile);
+            using MailContainer dbxBox = Mail.Open(dbxStream);
+            IMailItem[] dbxItems = [.. dbxBox.Enumerate()];
+            dbxOk = dbxReader.Kind == RecursiveAI.OneMail.Stores.Dbx.DbxFileKind.MessageDatabase && dbxN == 30 && dbxSame
+                && dbxBox.Format == MailFormat.Dbx && dbxItems.Length == 30 && dbxItems[29].Subject == "dbx 29";
+        }
+
+        Console.WriteLine("dbx: " + (dbxOk ? "ok" : "FAILED"));
+
+        return dbxOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
