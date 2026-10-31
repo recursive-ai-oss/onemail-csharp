@@ -197,6 +197,9 @@ public class MboxReaderTests
     [Fact]
     public void EnumerationAllocatesNothingPerMessage()
     {
+#if DEBUG
+        Assert.Skip("allocation counts are only meaningful in optimised builds (async state machines are classes in Debug)");
+#endif
         StringBuilder sb = new();
         for (int i = 0; i < 2000; i++)
         {
