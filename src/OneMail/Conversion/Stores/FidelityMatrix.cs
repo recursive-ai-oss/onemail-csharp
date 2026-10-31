@@ -40,7 +40,7 @@ public sealed record FidelityCell(string Source, ConvertFormat Target, Fidelity 
 /// </summary>
 public static class FidelityMatrix
 {
-    private static readonly string[] StoreCodes = ["FolderNameChanged", "FlagsNotCarried", "KeywordsNotCarried"];
+    private static readonly string[] StoreCodes = ["FolderNameChanged", "FlagsNotCarried", "KeywordsNotCarried", "KeywordsNormalized"];
 
     private static readonly string[] MboxExtra = ["FolderFlattened", "EnvelopeDateUnknown", "FlagsWrittenAsHeaders", "FinalLineEndingAdded"];
 
@@ -125,7 +125,7 @@ public static class FidelityMatrix
             (Fidelity flags, Fidelity folders, string[] codes, string note) = t switch
             {
                 ConvertFormat.Eml => (Fidelity.Lost, Fidelity.Derived, StoreCodes, "One .eml file per message; folders become directories. A file has no flags, so they are reported."),
-                ConvertFormat.Mbox => (Fidelity.Derived, Fidelity.Derived, ["FolderFlattened", "FolderNameChanged", "FlagsNotCarried", "EnvelopeDateUnknown", "FlagsWrittenAsHeaders", "FinalLineEndingAdded"], "Flags that the message does not state itself are written as Status, X-Status and X-Keywords fields in front of it; the only other case in which bytes change is a message with no final line ending, which gains one. One file per folder; a single-file destination drops folders."),
+                ConvertFormat.Mbox => (Fidelity.Derived, Fidelity.Derived, ["FolderFlattened", "FolderNameChanged", "FlagsNotCarried", "KeywordsNormalized", "EnvelopeDateUnknown", "FlagsWrittenAsHeaders", "FinalLineEndingAdded"], "Flags that the message does not state itself are written as Status, X-Status and X-Keywords fields in front of it; the only other case in which bytes change is a message with no final line ending, which gains one. One file per folder; a single-file destination drops folders."),
                 ConvertFormat.Maildir => (Fidelity.Exact, Fidelity.Derived, StoreCodes, "Flags and up to 26 keywords per folder go into the file name; Maildir++ folder names cannot hold a dot."),
                 _ => (Fidelity.Derived, Fidelity.Derived, StoreCodes, "Flags go into the .emlx property list; keywords have no place there."),
             };

@@ -255,6 +255,18 @@ public class StoreConversionTests
     }
 
     [Fact]
+    public async Task KeywordsWithSpacesAreNormalisedNotFatal()
+    {
+        using var tmp = new TempDir();
+        string src = tmp.Sub("takeout.mbox");
+        File.WriteAllText(src, "From a@b.c Mon Jan  1 00:00:00 2024\nFrom: a@b.c\nSubject: labelled\nX-Gmail-Labels: Sent Mail,Inbox\n\nbody\n");
+        StoreConversionReport r = await Mail.ConvertAsync(src, ConvertFormat.Maildir, tmp.Sub("out"), cancellationToken: Ct);
+        Assert.Equal(1, r.ItemsWritten);
+        Assert.Equal(1, r.Losses.First(t => t.Code == "KeywordsNormalized").Items);
+        Assert.Equal(["Sent_Mail", "Inbox"], Reread(tmp.Sub("out"), ConvertFormat.Maildir).Single().Keywords.Order(StringComparer.Ordinal).Reverse());
+    }
+
+    [Fact]
     public async Task SingleMboxFileFlattensFoldersAndSaysSo()
     {
         using var tmp = new TempDir();

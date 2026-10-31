@@ -166,6 +166,29 @@ internal static class StorePaths
         return s.Length == 0 ? "item" : s;
     }
 
+    /// <summary>Keyword names a Maildir or an X-Keywords field can hold: no white space or control characters, no duplicates.</summary>
+    public static List<string> SafeKeywords(StoreEntry e)
+    {
+        List<string> list = [];
+        bool changed = false;
+        foreach (string k in e.Keywords)
+        {
+            string n = string.Concat(k.Select(c => char.IsWhiteSpace(c) || char.IsControl(c) ? '_' : c));
+            changed |= n != k;
+            if (n.Length > 0 && !list.Contains(n, StringComparer.Ordinal))
+            {
+                list.Add(n);
+            }
+        }
+
+        if (changed)
+        {
+            e.Report.Add("store", "keywords", LossKind.Approximated, "KeywordsNormalized", "White space in a keyword or category name was replaced by an underscore.");
+        }
+
+        return list;
+    }
+
     public static string Join(string root, IEnumerable<string> segments) => Path.Combine([root, .. segments]);
 
     public static void SetTime(string path, DateTimeOffset? when)
@@ -392,7 +415,8 @@ internal static class StatusHeaders
         byte[] bytes = e.Content.ToArray();
         MessageMarks have = MboxMetadata.Parse(bytes).Flags;
         MessageMarks want = e.Marks & ~MessageMarks.Recent;
-        if (want == MessageMarks.None && e.Keywords.Count == 0)
+        List<string> keywords = StorePaths.SafeKeywords(e);
+        if (want == MessageMarks.None && keywords.Count == 0)
         {
             return bytes;
         }
@@ -421,9 +445,9 @@ internal static class StatusHeaders
             sb.Append("X-Status: ").Append(x).Append(eol);
         }
 
-        if (e.Keywords.Count > 0)
+        if (keywords.Count > 0)
         {
-            sb.Append("X-Keywords: ").Append(string.Join(',', e.Keywords.Select(k => k.ReplaceLineEndings(" ")))).Append(eol);
+            sb.Append("X-Keywords: ").Append(string.Join(',', keywords)).Append(eol);
         }
 
         if (want.HasFlag(MessageMarks.Forwarded))
@@ -491,7 +515,7 @@ internal sealed class MaildirSink : MailSinkBase
         string delivered;
         try
         {
-            delivered = _store.DeliverPath(entry.Content, folder, entry.Marks & ~MessageMarks.Recent, entry.Keywords);
+            delivered = _store.DeliverPath(entry.Content, folder, entry.Marks & ~MessageMarks.Recent, StorePaths.SafeKeywords(entry));
         }
         catch (InvalidOperationException)
         {
