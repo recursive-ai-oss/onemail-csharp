@@ -48,7 +48,7 @@ store). Details in [`benchmarks.md`](benchmarks.md).
 | `Authentication-Results` (RFC 8601), `Received-SPF` (RFC 7208) | yes | no | 0 against MimeKit (34 fields); Python has no parser | n/a | yes | `Received-SPF` has no oracle |
 | mbox: mboxo, mboxrd, mboxcl, mboxcl2, Gmail Takeout labels (RFC 4155) | yes | yes | message boundaries: 0 against Python and MimeKit on 17 files, 3,798 messages | record copy 16 / 16 | yes | MMDF not supported |
 | Maildir (Courier and Dovecot flags and keywords) | yes | yes | 0 against Python `mailbox` | 48 / 48 | via store tests | Courier keyword file line format unverified against a real store; one directory listing held in memory |
-| Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21 on generated stores (see the report) | n/a | dbx | no real store checked yet unless noted; deleted messages are not read |
+| Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21: 2,053 real records (34 with text) in 13 folders, 3,512 generated messages in 12 folders | n/a | dbx | one real store (a Windows XP laptop image, 28 files); OE4 files and deleted messages are not read |
 | EMLX and Apple Mail `.mbox` bundles | yes | yes | ground truth 14 / 14 | 14 / 14 | yes | flag bits unverified against a real Apple Mail store |
 | ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines and component trees) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
 | The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | MSG, PST, DBX and OLM items not in the view yet |

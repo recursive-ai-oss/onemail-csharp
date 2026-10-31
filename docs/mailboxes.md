@@ -171,7 +171,7 @@ chain pointer yields an empty message (S17). Free (deleted) objects are never fo
 
 **Store folders.** `DbxStoreFolder` reads `Folders.dbx` (found ignoring case), pairs each folder with its message file by the stored name
 (ignoring case) and enumerates folder by folder in index order, then message files no folder names, as `<file name>` folders with
-`DbxUnlistedFile`. The folder path joins names up the parent chain without the root ("Local Folders/Inbox"), climbing at most 64 levels.
+`DbxUnlistedFile`. The folder path joins names up the parent chain and leaves out the top-level folders (those with parent -1: the "Outlook Express" root, "Local Folders" and each account), so `Inbox` and `alt.2600` are paths, climbing at most 64 levels; two accounts holding a folder of the same name give the same path (the record itself says which account through `ParentIndex`).
 `Mail.Open` takes a `.dbx` file (`MailFormat.Dbx`; `Folders.dbx` and the helpers enumerate as empty) or a store directory
 (`MailFormat.DbxStore`, recognised by a `Folders.dbx` with the folder class id). An item holds no open file: it reopens its message file to
 read.

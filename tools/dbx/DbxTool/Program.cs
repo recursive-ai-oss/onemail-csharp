@@ -170,7 +170,7 @@ internal static class Program
         // Folders that exist but hold no messages still count.
         foreach (DbxFolderEntry f in store.Folders)
         {
-            list.WriteLine($"#folder\t{store.PathOf(f)}\t{f.FileName}\t{f.Index}\t{f.ParentIndex}");
+            list.WriteLine($"#folder\t{store.PathOf(f)}\t{f.FileName}\t{f.Index}\t{f.ParentIndex}\t{f.Name}\t{f.SpecialFolder}\t{f.MessageCount}");
         }
 
         return 0;
