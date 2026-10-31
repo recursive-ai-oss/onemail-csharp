@@ -216,6 +216,16 @@ public class SharedViewTests
                     using MailContainer c = Mail.Open(path);
                     Assert.Equal(expected, c.Format);
                 }
+                else if (expected == MailFormat.Msg)
+                {
+                    using MailContainer c = Mail.Open(path);
+                    Assert.Equal(expected, c.Format);
+                }
+                else if (expected is MailFormat.Pst or MailFormat.Ost)
+                {
+                    // The sample is a bare header: the format is recognised by content, and the store cannot be read.
+                    Assert.Throws<InvalidDataException>(() => Mail.Open(path));
+                }
                 else
                 {
                     UnsupportedMailFormatException e = Assert.Throws<UnsupportedMailFormatException>(() => Mail.Open(path));

@@ -71,10 +71,17 @@ def redecoded(a, b):
     # code page the file declares: if that gives our text, the only difference is the oracle's code page choice.
     if not (isinstance(a, str) and isinstance(b, str)):
         return False
-    try:
-        raw = z(b).encode("cp1252", errors="surrogateescape")
-    except UnicodeError:
-        return False
+    # The oracle's fixed page is ISO-8859-15 (Big5 lead byte 0xA6 shows as S-caron, 0xA4 as the euro sign); characters of the other
+    # Latin-1 range map back to the byte of the same value.
+    raw = bytearray()
+    for ch in z(b):
+        try:
+            raw += ch.encode("iso8859_15")
+        except UnicodeError:
+            if ord(ch) > 255:
+                return False
+            raw.append(ord(ch))
+    raw = bytes(raw)
     for cp in ("cp950", "cp936", "cp932", "cp949"):
         try:
             if raw.decode(cp) == a:
