@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Dumps what OneMail reads from TNEF streams, for the comparison with other readers, checks the attribute and property round trips,
+       and writes the generated fixtures. A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>TnefTool</AssemblyName>
+    <RootNamespace>TnefTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The test-side stream builder makes the generated fixtures (the gen command). -->
+    <Compile Include="../../../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" Link="TnefTestBuilder.cs" />
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

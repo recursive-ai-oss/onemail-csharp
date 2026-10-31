@@ -357,3 +357,20 @@ Entries without an observed Outlook-side result are provisional. Method: [rtf.md
 | RT16 | Data ends before the end marker | compressed-rtf returns what it decoded | The decoded bytes, with a defect | `MissingEndMarker` | prov. |
 | RT17 | RAWSIZE disagrees with the output; `MELA` contents | spec: MELA CRC not validated, size may be read either way | Output is what the data holds (growing up to the limit), with a defect; MELA is the contents as stored | `RawSizeMismatch` | spec 2.2.3.1 |
 | RT18 | Compressing nothing | spec note: Outlook writes `02 00 0D 00` | `01 0C F0` (end marker only) is written; `02 00 0D 00` is read as one NUL byte | none | spec |
+
+## TNEF
+
+Observed on the public Apache POI and Tika TNEF files (6 distinct) and our generated ones, against tnefparse 1.4.0, tnef 1.4.18 and ytnef 2.1.2
+as black-box oracles. No Outlook has been observed, so each resolution is provisional unless it follows the specification's own text.
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| T1 | A message-level legacy attribute appears twice | n/a | The last one is used; both stay in the attribute layer | `AmbiguousDuplicateAttribute` | prov., lossless |
+| T2 | A legacy attribute and the encapsulated property differ (e.g. attDateRecd vs PidTagMessageDeliveryTime in winmail-sample1.dat) | n/a | The encapsulated property wins; the legacy value is not added | `AmbiguousLegacyConflict` | MS-OXTNEF 2.1.3; seen in 1 corpus file |
+| T3 | PtypNull value in a property list | tnef and ytnef reject it (0 and 4 bytes alike) | Takes no bytes | none | MS-OXCDATA 2.11.1; prov. |
+| T4 | Legacy message class names (`IPM.Microsoft Mail.Note`) | n/a | Mapped to the modern class | `AmbiguousMessageClass` | MS-OXTNEF 2.3.3.4; the spec sample and corpus files use it |
+| T5 | Wrong checksum on the message class attribute | n/a | Ignored, the data is used | `AmbiguousMessageClassChecksum` | MS-OXTNEF 2.3.3.4 |
+| T6 | An embedded-message or OLE attachment also has attAttachData | n/a | The attribute is ignored | `AmbiguousAttachDataIgnored` | MS-OXTNEF 2.3.3.7 |
+| T7 | attOemCodepage differs from PidTagMessageCodepage | n/a | attOemCodepage decides how 8-bit strings are read | `AmbiguousCodePage` | MS-OXTNEF 2.3.3.2 order; no corpus file has the conflict, so no client observation |
+| T8 | attOwner with no meeting class | n/a | Maps to the PidTagSentRepresenting group | `AmbiguousOwner` | prov. |
+

@@ -28,6 +28,7 @@
     <!-- The same for the compound-file builder that makes the MSG the smoke reads back. -->
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>
