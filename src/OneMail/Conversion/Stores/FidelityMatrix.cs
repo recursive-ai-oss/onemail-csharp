@@ -82,7 +82,7 @@ public static class FidelityMatrix
 
     private static readonly string[] OlmToCard = ["MemberName", "NotAContact", "Unmapped"];
 
-    private static readonly string[] OlmToMime = ["BccNotWritten", "DateZoneNotStored", "EmbeddedMessageAsData", "Unmapped", "OlmFieldDiffersFromSource"];
+    private static readonly string[] OlmToMime = ["AddressUnresolved", "BccNotWritten", "DateZoneNotStored", "EmbeddedMessageAsData", "Unmapped", "OlmFieldDiffersFromSource"];
 
     private static readonly string[] Forms = [.. Enum.GetNames<Calendar.Forms.FormLossKind>().Where(n => n != "None").Select(n => "Form" + n)];
 

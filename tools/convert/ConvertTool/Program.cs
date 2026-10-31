@@ -297,17 +297,31 @@ internal static class Program
                 {
                     silent++;
                     Console.Error.WriteLine($"  silent {field}: item '{olm.Subject}' folder {olm.Folder} source={(olm.MimeSource is null ? "none" : "present")}");
+                    if (Environment.GetEnvironmentVariable("CONVERT_TOOL_VERBOSE") == "1")
+                    {
+                        Console.Error.WriteLine("    raw: " + Encoding.UTF8.GetString(r.Value!).Split("\r\n")[..12].FirstOrDefault(l => l.StartsWith("Subject", StringComparison.Ordinal)));
+                        Console.Error.WriteLine($"    subject view [{olm.Subject}] back [{back.Subject}] topic [{olm.ConversationTopic}] [{back.ConversationTopic}]");
+                        Console.Error.WriteLine($"    view: From [{string.Join("; ", olm.From)}] To [{string.Join("; ", olm.ToRecipients)}] Cc [{string.Join("; ", olm.Cc)}]\n    back: From [{string.Join("; ", back.From)}] To [{string.Join("; ", back.ToRecipients)}] Cc [{string.Join("; ", back.Cc)}]");
+                    }
+
                     silentBy[field] = silentBy.GetValueOrDefault(field) + 1;
                 }
             }
 
-            string Addr(IEnumerable<MailAddress> l) => string.Join(",", l.Select(a => a.Address.ToLowerInvariant()));
+            // Only real addr-specs are written; the others are reported (AddressUnresolved) and are not part of the comparison.
+            static bool Valid(MailAddress a) => a.Address.Contains('@', StringComparison.Ordinal) && !a.Address.Any(c => char.IsWhiteSpace(c) || "<>,;()[]\\\"".Contains(c, StringComparison.Ordinal));
+            void Unresolved(string header, IEnumerable<MailAddress> l) => Check(header + " unresolved addresses reported", !l.Any(a => !Valid(a)) || rep.Contains("AddressUnresolved|" + header));
+            string Addr(IEnumerable<MailAddress> l) => string.Join(",", l.Where(a => Valid(a)).Select(a => a.Address.ToLowerInvariant()));
             Check("Subject", (olm.Subject ?? string.Empty) == (back.Subject ?? string.Empty), element: "OPFMessageCopySubject");
             Check("From", Addr(olm.From) == Addr(back.From), element: "OPFMessageCopyFromAddresses");
             Check("To", Addr(olm.ToRecipients) == Addr(back.ToRecipients), element: "OPFMessageCopyToAddresses");
             Check("Cc", Addr(olm.Cc) == Addr(back.Cc), element: "OPFMessageCopyCCAddresses");
             Check("Bcc", Addr(olm.Bcc) == Addr(back.Bcc), "BccNotWritten");
             Check("ReplyTo", Addr(olm.ReplyTo) == Addr(back.ReplyTo));
+            Unresolved("From", olm.From);
+            Unresolved("To", olm.ToRecipients);
+            Unresolved("Cc", olm.Cc);
+            Unresolved("Reply-To", olm.ReplyTo);
             Check("MessageId", olm.MessageId == back.MessageId, element: "OPFMessageCopyMessageID");
             Check("InReplyTo", string.Join(' ', olm.InReplyTo) == string.Join(' ', back.InReplyTo));
             Check("References", string.Join(' ', olm.References) == string.Join(' ', back.References));

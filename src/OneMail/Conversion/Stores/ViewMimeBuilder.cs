@@ -82,15 +82,15 @@ internal static class ViewMimeBuilder
 
         // Header fields go in front of the content fields the body part already has.
         List<(string, string)> h = [];
-        AddAddresses(h, "From", item.From);
+        AddAddresses(h, "From", item.From, report);
         if (item.Sender is { } s)
         {
-            AddAddresses(h, "Sender", [s]);
+            AddAddresses(h, "Sender", [s], report);
         }
 
-        AddAddresses(h, "To", item.ToRecipients);
-        AddAddresses(h, "Cc", item.Cc);
-        AddAddresses(h, "Reply-To", item.ReplyTo);
+        AddAddresses(h, "To", item.ToRecipients, report);
+        AddAddresses(h, "Cc", item.Cc, report);
+        AddAddresses(h, "Reply-To", item.ReplyTo, report);
         if (item.Bcc.Count > 0)
         {
             report.Add("view", "Bcc", LossKind.Dropped, "BccNotWritten", "Blind-copy recipients are not written to a message file.");
@@ -141,12 +141,36 @@ internal static class ViewMimeBuilder
         return root;
     }
 
-    private static void AddAddresses(List<(string, string)> h, string name, IReadOnlyList<MailAddress> list)
+    // An address field holds addr-specs (RFC 5322 3.4.1). Records of older mail systems keep display names or directory paths where the
+    // address should be; writing those as addresses would make a field that reads back as something else, so they are left out and reported.
+    private static void AddAddresses(List<(string, string)> h, string name, IReadOnlyList<MailAddress> list, LossReport report)
     {
-        if (list.Count > 0)
+        List<string> written = [];
+        foreach (MailAddress a in list)
         {
-            h.Add((name, string.Join(", ", list.Select(a => MapiToMimeConverter.FormatMailbox(a.Name, a.Address)))));
+            if (IsAddrSpec(a.Address))
+            {
+                written.Add(MapiToMimeConverter.FormatMailbox(a.Name, a.Address));
+            }
+            else
+            {
+                report.Add("view", name, LossKind.Dropped, "AddressUnresolved", "The record gives no mail address (only '" + a.ToString() + "'); nothing is written for it.");
+            }
         }
+
+        if (written.Count > 0)
+        {
+            h.Add((name, string.Join(", ", written)));
+        }
+    }
+
+    private static readonly System.Buffers.SearchValues<char> NotInAddress = System.Buffers.SearchValues.Create(" \t\r\n<>,;()[]\\\"");
+
+    /// <summary>Whether text is a plausible addr-spec: a local part and a domain around an at sign, with no white space, angle brackets, quotes or controls.</summary>
+    public static bool IsAddrSpec(string s)
+    {
+        int at = s.LastIndexOf('@');
+        return at > 0 && at < s.Length - 1 && !s.AsSpan().ContainsAny(NotInAddress);
     }
 
     private static string OneLine(string s) => s.AsSpan().ContainsAny('\r', '\n') ? s.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ') : s;
