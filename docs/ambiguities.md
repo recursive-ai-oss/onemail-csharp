@@ -203,7 +203,7 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 
 | ID | Case | Py-ical | Py-vobj | Resolution | Defect | Basis |
 |---|---|---|---|---|---|---|
-| K1 | Line ends: LF only, lone CR | accepts LF | accepts LF | CRLF, LF and lone CR all end a line. Reported once per file, at the first. | `BareLineFeed`, `BareCarriageReturn` | all agree for LF; CR prov. |
+| K1 | Line ends: LF only, lone CR, CR CR LF | accepts LF | accepts LF | CRLF, LF and lone CR all end a line. A run of two or more CRs then LF is one line end, so a fold after it still joins and no CR reaches the value. Reported once per file, at the first. | `BareLineFeed`, `BareCarriageReturn`, `AmbiguousDoubleCarriageReturn` | all agree for LF; CR prov.; CR CR LF 6 of 7 (probe below) |
 | K2 | Fold with two whitespace characters after the break | one removed (`ab cd`) | one removed | Exactly one space or tab is removed (RFC 5545 §3.1); the rest is content. | none | all agree |
 | K3 | Fold inside a multi-byte UTF-8 sequence | n/a | n/a | Lines are unfolded as bytes before decoding, so the character is whole. | none | RFC 5545 §3.1 |
 | K4 | Line with no colon | skipped | parse error | Kept in place as a malformed line (written back as read); not a property. | `MissingColon` | prov. (lossless) |
@@ -229,7 +229,17 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | CV4 | A second or later `TEL`/`EMAIL` of a kind with one slot | n/a | n/a | The second work (home) number goes to Business2 (Home2); later ones are reported, not stored. The first three emails fill the slots in card order. | `AdditionalValueNotMapped`, and on export `PhoneSlotChanged`, `EmailSlotChanged` | spec; prov. |
 | CV5 | `BDAY` as a partial date or with a time | n/a | n/a | `PidTagBirthday` is the date at 11:59 UTC, `PidLidBirthdayLocal` the date at 0:00 (Outlook's own pair); the time of day is dropped; a date without a year is not stored. | `TimeOfDayDropped`, `PartialDate` | spec 2.1.3.2.5; prov. |
 | CV6 | An empty text property in a contact (`PidTagDepartmentName` = "") | n/a | n/a | Treated as absent: no vCard property is written and the report says so. | `EmptyValueNotWritten` | agent default |
-| CV7 | CR CR LF in a vCard | tolerated by vobject | n/a | Two line ends (K1); a folded value that contains it is cut, as the reader does for any line end. A reader-level decision is open. | none | prov. |
+| CV7 | CR CR LF in a vCard | vobject, ez-vcard join the fold; Ical.Net and biweekly do for iCalendar; ical.js keeps a CR in the value; FolkerKinzel cuts the value | n/a | One line end (K1): a folded value that contains it is joined. | `AmbiguousDoubleCarriageReturn` | 6 of 7 (probe below) |
+
+**CR CR LF probe (K1, CV7).** `tools/calendar/crcrlf/run.sh` writes one iCalendar and one vCard four ways (all CRLF; every line end CR CR LF; only the end before a fold; only some other line ends) and reads them with every pinned oracle. Before the change we cut the folded value; the readers split as follows (each reads one or both of the formats):
+
+| Reading of CR CR LF + space | Oracles | Count |
+|---|---|---|
+| One line end: the fold joins and no CR reaches the value | biweekly 0.6.8, Ical.Net 5.2.3, vobject 0.9.9, ez-vcard 0.12.2 | 4 |
+| The fold joins but a CR stays in the value (`Hello\rWorld`; a trailing CR on plain lines) | ical.js 2.2.1, icalendar 7.3.0 (which also refuses the file when plain lines end that way) | 2 |
+| The value is cut at the line end; the rest becomes another line | FolkerKinzel.VCards 8.2.0 (vCard) | 1 |
+
+Majority: the fold joins (6 of 7), and with 4 of those the CR is not data. Resolution: a run of CRs then LF is one line end. The bytes are untouched.
 
 ### JSON and XML forms (jCal, jCard, xCal, xCard)
 

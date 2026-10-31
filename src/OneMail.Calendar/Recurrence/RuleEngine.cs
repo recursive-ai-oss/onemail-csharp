@@ -340,6 +340,17 @@ internal sealed class RuleEngine
                 }
             }
         }
+        else if (_hasMonths && _weekNos.Length == 0 && _yearDays.Length == 0)
+        {
+            // BYMONTH with BYDAY: DayMatches decides each day alone, so only the selected months need scanning (about a twelfth of the year).
+            for (int m = 1; m <= 12; m++)
+            {
+                if (_months[m])
+                {
+                    ScanDays(new DateTime(y, m, 1).Ticks / TicksPerDay, DateTime.DaysInMonth(y, m));
+                }
+            }
+        }
         else
         {
             ScanDays(new DateTime(y, 1, 1).Ticks / TicksPerDay, DateTime.IsLeapYear(y) ? 366 : 365);

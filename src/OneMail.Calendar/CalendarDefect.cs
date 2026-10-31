@@ -93,6 +93,15 @@ public enum CalendarDefectKind
 
     /// <summary>The input is longer than <see cref="CalendarLimits.MaxTotalBytes"/>. The rest is kept as one malformed block.</summary>
     TotalSizeLimitExceeded,
+
+    // ---- Appended after the first release ----
+
+    /// <summary>
+    /// A line ends with two or more carriage returns before the line feed (<c>CR CR LF</c>), as a CRLF file looks after a text-mode
+    /// copy that doubles the CR. The whole run and the line feed are one line end, so a fold after it still joins (ambiguity). Reported
+    /// once, at the first such line end. The source bytes are kept.
+    /// </summary>
+    AmbiguousDoubleCarriageReturn,
 }
 
 /// <summary>A repair, guess or refusal reported while reading content lines or building a component tree.</summary>
@@ -103,7 +112,7 @@ public enum CalendarDefectKind
 public readonly record struct CalendarDefect(CalendarDefectKind Kind, long Offset, int Length, int Depth)
 {
     /// <summary>True for the <c>Ambiguous*</c> kinds, where clients disagree and the library took a documented reading.</summary>
-    public bool IsAmbiguity => Kind is CalendarDefectKind.AmbiguousNonUtf8Text or CalendarDefectKind.AmbiguousCaretEncoding;
+    public bool IsAmbiguity => Kind is CalendarDefectKind.AmbiguousNonUtf8Text or CalendarDefectKind.AmbiguousCaretEncoding or CalendarDefectKind.AmbiguousDoubleCarriageReturn;
 
     /// <summary>True for the kinds that report a resource limit being reached.</summary>
     public bool IsLimit => Kind >= CalendarDefectKind.LineTooLong;
@@ -131,6 +140,7 @@ public readonly record struct CalendarDefect(CalendarDefectKind Kind, long Offse
         CalendarDefectKind.AmbiguousNonUtf8Text => "A line is not valid UTF-8 and was read as Windows-1252.",
         CalendarDefectKind.UnknownCharset => "A CHARSET parameter names an unsupported charset.",
         CalendarDefectKind.AmbiguousCaretEncoding => "A parameter value uses RFC 6868 caret encoding.",
+        CalendarDefectKind.AmbiguousDoubleCarriageReturn => "A line ends with CR CR LF and was read as one line end.",
         CalendarDefectKind.BeginWithoutName => "A BEGIN line has no component name.",
         CalendarDefectKind.UnmatchedEnd => "An END line matches no open component.",
         CalendarDefectKind.MissingEnd => "A component is not closed.",
