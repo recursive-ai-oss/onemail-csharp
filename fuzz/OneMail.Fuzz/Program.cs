@@ -13,7 +13,10 @@ internal static class Program
 {
     private delegate void Target(ReadOnlySpan<byte> data);
 
-    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal)
+    {
+        ["text"] = TextTarget.Run,
+    };
 
     private static int Main(string[] args)
     {
