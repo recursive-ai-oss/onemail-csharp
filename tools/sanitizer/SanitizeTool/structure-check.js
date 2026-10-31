@@ -47,11 +47,12 @@
   function noStrings(css) { return css.replace(/"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'/g, '""'); }
   function serialise(frag) { var d = document.createElement('div'); d.appendChild(frag.cloneNode(true)); return d.innerHTML; }
 
-  // Positive controls: known-bad outputs must be flagged, otherwise a clean result proves nothing.
+  // Positive controls: known-bad outputs must be flagged, otherwise a clean result proves nothing. They are parsed in a template, which is inert:
+  // an img with a handler in a live div would run it.
   var controls = ['<img src=x onerror=alert(1)>', '<a href="javascript:alert(1)">x</a>', '<svg><circle/></svg>', '<p style="background:expression(x)">x</p>',
     '<script>x<\/script>', '<img src="http://h.test/a" srcset="javascript:x 1x">', '<style>@import url(x);</style>'];
   var flagged = 0;
-  controls.forEach(function (c) { var before = violations.length; var d = document.createElement('div'); d.innerHTML = c; checkTree('control', d); if (violations.length > before) flagged++; });
+  controls.forEach(function (c) { var before = violations.length; var t = document.createElement('template'); t.innerHTML = c; checkTree('control', t.content); if (violations.length > before) flagged++; });
   violations.length = 0;
   var controlsOk = flagged === controls.length;
 
