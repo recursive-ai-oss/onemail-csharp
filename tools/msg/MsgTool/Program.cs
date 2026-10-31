@@ -39,7 +39,26 @@ internal static class Program
         }
 
         string[] files = args.Skip(1).SelectMany(Expand).ToArray();
-        switch (args[0])
+        if (files.Length == 0)
+        {
+            Console.Error.WriteLine("no .msg or .oft files in " + string.Join(", ", args.Skip(1)));
+            return 2;
+        }
+
+        try
+        {
+            return Run(args[0], files);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine("cannot read: " + e.Message);
+            return 1;
+        }
+    }
+
+    private static int Run(string command, string[] files)
+    {
+        switch (command)
         {
             case "summary":
                 Console.WriteLine("file\tbytes\topen\tprops\trecipients\tattachments\tembedded\tobjects\tdefects\topen_alloc\topen_ms\tall_alloc\tdefect_kinds");
@@ -50,11 +69,32 @@ internal static class Program
 
                 return 0;
             case "json":
-                Json(files[0]);
+                // a directory gives one line per file, as for the other commands
+                foreach (string f in files)
+                {
+                    Json(f);
+                    Console.WriteLine();
+                }
+
                 return 0;
             case "view":
-                View(files[0]);
-                return 0;
+                int unreadable = 0;
+                foreach (string f in files)
+                {
+                    try
+                    {
+                        View(f);
+                        Console.WriteLine();
+                    }
+                    catch (RecursiveAI.OneMail.UnsupportedMailFormatException e)
+                    {
+                        // a file the strict compound-file reader refuses (a fuzz sample): say so and go on
+                        Console.Error.WriteLine(f + ": " + e.Message);
+                        unreadable++;
+                    }
+                }
+
+                return unreadable == 0 ? 0 : 1;
             case "streams":
                 int bad = 0;
                 foreach (string f in files)
@@ -64,7 +104,7 @@ internal static class Program
 
                 return bad == 0 ? 0 : 1;
             default:
-                Console.Error.WriteLine("unknown command " + args[0]);
+                Console.Error.WriteLine("unknown command " + command);
                 return 2;
         }
     }

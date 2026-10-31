@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Oracle driver: runs the released MimeKit package as a black box on messages that carry a TNEF part and prints what MimeKit's
+       TNEF support extracts (names, sizes, SHA-256) and what its attachment list shows. A tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MimeKitTnef</AssemblyName>
+    <RootNamespace>OneMail.Oracles.MimeKitTnef</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+
+</Project>

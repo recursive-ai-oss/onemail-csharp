@@ -35,6 +35,13 @@ unquoted line shift by the removed `>` bytes).
   one leaf part is its own attachment. `IsInline` is true for a part that is not marked `attachment` and has a `Content-ID`.
   The resolutions are V1–V8 in [`ambiguities.md`](ambiguities.md).
 - An embedded `message/rfc822` is an `IMailItem` with the same view, parsed from the same bytes.
+- **A TNEF part** (`application/ms-tnef`, winmail.dat, found by content) that qualifies under MS-OXCMAIL 2.2.3.8 (`conversion.md`, TNEF parts) is
+  shown the way Outlook shows it, not as a file (V9): the part is not listed as an attachment; the attachments the TNEF holds (embedded messages
+  included, each an item with its own view) take its place in document order; `RtfBody` is the TNEF's compressed RTF decompressed; `TextBody`
+  and `HtmlBody` are the TNEF's (an HTML property, or the HTML or text de-encapsulated from its RTF) when the MIME side has none of that kind.
+  The MIME parts always win. A part that does not qualify (damaged stream, trailing CR LF, correlation key mismatch) stays one ordinary
+  attachment. `MimeMailItem.TnefParts` lists the unpacked parts (the raw bytes are `part.GetDecodedContent()`; the tree is untouched) and
+  `TnefMessages` their MAPI messages. Header fields are never taken from a TNEF: the view of a MIME item reads its headers only.
 
 ## MAPI items (MSG, PST, OST)
 

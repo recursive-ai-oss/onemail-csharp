@@ -14,7 +14,7 @@ internal static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("usage: TnefTool dump|stats|roundtrip|alloc <files...> | gen <directory>");
+            Console.Error.WriteLine("usage: TnefTool dump|stats|roundtrip|alloc <files...> | gen <directory> | mime <directory> <files...>");
             return 2;
         }
 
@@ -22,6 +22,20 @@ internal static class Program
         {
             case "gen":
                 return Gen(args[1]);
+            case "parts":
+                // parts <files...>: the leaf parts of each message and whether each is a TNEF stream
+                foreach (string f in args[1..])
+                {
+                    MimeCheck.Parts(f);
+                }
+
+                return 0;
+            case "scan":
+                // scan <output directory> <list file>: real messages that hold a TNEF part
+                return MimeCheck.Scan(args[1], args[2]);
+            case "mime":
+                // mime <output directory> <tnef files...>: wraps each stream in MIME messages and checks conversion and view
+                return MimeCheck.Run(args[1], args[2..]);
             case "dump":
                 foreach (string f in args[1..])
                 {

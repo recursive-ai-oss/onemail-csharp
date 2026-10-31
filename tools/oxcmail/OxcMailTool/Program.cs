@@ -17,6 +17,7 @@ namespace OxcMailTool;
 internal static class Program
 {
     private static readonly OxcMailExportOptions Export = new() { BoundaryFactory = NextBoundary() };
+    private static readonly OxcMailExportOptions ExportTnef = new() { BoundaryFactory = NextBoundary(), Tnef = OxcMailTnefExport.TnefMessage };
 
     private static Func<string> NextBoundary()
     {
@@ -28,7 +29,7 @@ internal static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("usage: OxcMailTool export|rt-mapi|rt-mime|view IN [OUT] [--limit N] [--sample N]");
+            Console.Error.WriteLine("usage: OxcMailTool export|rt-mapi|rt-tnef|rt-mime|view IN [OUT] [--limit N] [--sample N]");
             return 2;
         }
 
@@ -54,7 +55,9 @@ internal static class Program
         return args[0] switch
         {
             "export" => ExportAll(rest[0], rest[1], limit),
-            "rt-mapi" => RoundTripMapi(rest[0], limit),
+            "rt-mapi" => RoundTripMapi(rest[0], limit, Export),
+            // MAPI -> MIME with the properties in a TNEF part -> MAPI
+            "rt-tnef" => RoundTripMapi(rest[0], limit, ExportTnef),
             "rt-mime" => RoundTripMime(rest[0], limit, sample),
             "view" => ViewStats(rest[0], limit),
             _ => 2,
@@ -394,7 +397,7 @@ internal static class Program
 
     // ---- MAPI -> MIME -> MAPI ----------------------------------------------------------------------------------------------------------
 
-    private static int RoundTripMapi(string input, int limit)
+    private static int RoundTripMapi(string input, int limit, OxcMailExportOptions exportOptions)
     {
         int items = 0, exact = 0, withDiff = 0, silentItems = 0;
         long props = 0, same = 0, typeChanged = 0, explained = 0, silent = 0;
@@ -403,9 +406,17 @@ internal static class Program
         {
             items++;
             MapiMessage src = item.Message;
-            ConversionResult<MimeEntity> ex = new MapiToMimeConverter(Export).Convert(src);
+            ConversionResult<MimeEntity> ex = new MapiToMimeConverter(exportOptions).Convert(src);
             MimeEntity mime = MimeEntity.Parse(ex.Value.ToArray());
             ConversionResult<MapiMessage> im = new MimeToMapiConverter().Convert(mime);
+            if (exportOptions.Tnef == OxcMailTnefExport.TnefMessage)
+            {
+                foreach (LossEntry e in ex.Report.Concat(im.Report).Where(e => e.Code is "TnefNotUsed" or "TnefWriterLimit"))
+                {
+                    Console.Error.WriteLine($"  {origin}: {e.Code} {e.Name}: {e.Reason}");
+                }
+            }
+
             var reported = new HashSet<string>(ex.Report.Concat(im.Report).Select(e => e.Name).Concat(ex.Report.Concat(im.Report).Select(e => e.Name + "|" + e.Code)), StringComparer.OrdinalIgnoreCase);
             var (p, s, t, e2, sl, names) = CompareMessage(src, im.Value, reported, string.Empty);
             props += p;
@@ -444,6 +455,30 @@ internal static class Program
         return silent == 0 ? 0 : 1;
     }
 
+    // A named property is numbered per message or store, so the same name can carry another ID after a conversion; the name, type and bytes decide.
+    private static bool SameValue(MapiProperty p, MapiProperty q)
+    {
+        if (p.ValueEquals(q))
+        {
+            return true;
+        }
+
+        if (p.Name is null || p.Name != q.Name || p.Type != q.Type || p.ValueCount != q.ValueCount)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < p.ValueCount; i++)
+        {
+            if (!p.GetBytes(i).Span.SequenceEqual(q.GetBytes(i).Span))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static (long Props, long Same, long TypeChanged, long Explained, long Silent, List<string> SilentNames) CompareMessage(MapiMessage a, MapiMessage b, HashSet<string> reported, string path)
     {
         long props = 0, same = 0, typeChanged = 0, explained = 0, silent = 0;
@@ -465,7 +500,7 @@ internal static class Program
                 q = other.Properties.Get(p.Id, MapiType.UnicodeString, MapiType.String8);
             }
 
-            if (q is not null && p.Type == q.Type && p.ValueEquals(q))
+            if (q is not null && p.Type == q.Type && SameValue(p, q))
             {
                 same++;
                 return;
@@ -622,7 +657,7 @@ internal static class Program
 
             bool ok = (x.OpenData() is { } xs && y.OpenData() is { } ys && Same(xs, ys))
                 && x.FileName == y.FileName
-                && string.Equals(x.MimeType ?? "application/octet-stream", y.MimeType, StringComparison.OrdinalIgnoreCase);
+                && string.Equals(x.MimeType ?? "application/octet-stream", y.MimeType ?? "application/octet-stream", StringComparison.OrdinalIgnoreCase);
             if (ok)
             {
                 same++;

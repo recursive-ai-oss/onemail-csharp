@@ -50,3 +50,13 @@ about 3 KB of allocations with `ChecksumMismatch`, `LimitReached`, `MissingCodeP
 attOemCodepage and reads back to the same message with no extra property.
 
 Ambiguity entries are in `ambiguities.md` (T1-T8).
+
+## TNEF inside MIME
+
+`MimeEntity.EnumerateTnefParts()` and `ReadTnef` read the part on their own. `MimeToMapiConverter` merges a qualifying part into the
+`MapiMessage` (MS-OXCMAIL 2.2.3.8; the rules and loss codes are in [`conversion.md`](conversion.md)) and `MimeMailItem` shows its attachments and
+bodies in place of winmail.dat ([`shared-view.md`](shared-view.md), V9). A part qualifies when the stream has none of `NotTnef`,
+`UnexpectedVersion`, `AttributeTruncated`, `ChecksumMismatch` or `LimitReached`, does not end in CR LF outside the attributes (a
+`TrailingBytes` of exactly those two bytes), and its `PidTagTnefCorrelationKey` matches the message's `X-MS-TNEF-Correlator`. Of the six corpus
+files, `bug52400-winmail-simple.dat` and `bug52400-winmail-with-attachments.dat` end in CR LF and `oom.tnef` is damaged, so they are not unpacked.
+`MapiToMimeConverter` writes a TNEF message on request (`OxcMailExportOptions.Tnef`).

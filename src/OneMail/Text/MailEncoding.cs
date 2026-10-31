@@ -250,9 +250,21 @@ public sealed class MailEncoding
             1201 => new UnicodeEncoding(true, false, throwOnInvalid),
             12000 => new UTF32Encoding(false, false, throwOnInvalid),
             12001 => new UTF32Encoding(true, false, throwOnInvalid),
-            _ => CodePagesEncodingProvider.Instance.GetEncoding(cp, enc, dec)
-                ?? throw new NotSupportedException("The runtime has no encoder for code page " + cp + "."),
+            _ => CodePagesEncodingProvider.Instance.GetEncoding(cp, enc, dec) ?? BuiltIn(cp, enc, dec),
         };
+    }
+
+    // The provider lists only the encodings the runtime does not have itself; ISO-8859-1 (28591) and US-ASCII (20127) are the runtime's own.
+    private static Encoding BuiltIn(int cp, EncoderFallback enc, DecoderFallback dec)
+    {
+        try
+        {
+            return Encoding.GetEncoding(cp, enc, dec);
+        }
+        catch (ArgumentException e)
+        {
+            throw new NotSupportedException("The runtime has no encoder for code page " + cp + ".", e);
+        }
     }
 
     // Decodes with an Encoding Standard decoder (OneHtml). OneHtml's SourceText is built for HTML: it lets a byte order
