@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- jCal, jCard, xCal and xCard (`RecursiveAI.OneMail.Calendar.Forms`): read and write both directions from ICS and vCard trees with a loss report, typed defects and resource limits; `MailFormatSniffer` names the four forms.
+
 ## [0.2.0-preview.1]
 
 Outlook formats on read: MSG and OFT, PST and OST, TNEF and compressed RTF, the MAPI property model, and conversion between MAPI and MIME. Calendar recurrence and time zones. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
@@ -23,6 +27,7 @@ Outlook formats on read: MSG and OFT, PST and OST, TNEF and compressed RTF, the 
 - Calendar recurrence expansion (RRULE, RDATE, EXDATE, overrides) and time-zone resolution through VTIMEZONE, the IANA database and Windows zone names.
 - Benchmark rows for PST and OST enumeration and extraction, MSG read and TNEF read ([docs/benchmarks.md](docs/benchmarks.md)).
 - Contacts: `VCardView` covers the rest of RFC 6350 (`Gender`, `Geos`, `Impps`, `Related`, `Keys`, `Sounds`, repeated properties, lazy `VCardMedia`); `MapiContact` and `MapiDistributionList` read Outlook contacts and lists (also as `MapiMailItem.Contact` / `.DistributionList`); `ContactToVCardConverter` and `VCardToContactConverter` convert both ways by MS-OXVCARD with loss reports ([docs/contacts.md](docs/contacts.md)).
+
 - The PST/OST messaging layer (`RecursiveAI.OneMail.Pst.Messaging`): store, named properties, folders, messages, recipients, attachments and embedded messages as MAPI property bags, in ANSI, Unicode and 4 KiB files.
 - MAPI items (MSG, PST, OST) in the shared view; `Mail.Open` reads them and `onemail inspect` lists them.
 - TNEF parts inside MIME messages: `MimeToMapiConverter` merges them into the MAPI message by the rules of MS-OXCMAIL 2.2.3.8 (headers win, richer bodies kept, loss-report entries for every property set aside), the shared view shows their attachments and bodies in place of winmail.dat (`MimeMailItem.TnefParts`), and `OxcMailExportOptions.Tnef` writes a TNEF message.

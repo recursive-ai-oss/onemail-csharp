@@ -37,6 +37,13 @@ internal static class Program
         Console.WriteLine("outlook: " + (outlookOk ? "ok" : "FAILED"));
 
         bool ok = mimeOk && storesOk && calendarOk && outlookOk;
+        var jcal = RecursiveAI.OneMail.Calendar.Forms.JsonForms.ToJson(doc);
+        var xcal = RecursiveAI.OneMail.Calendar.Forms.XmlForms.ToXCal(doc);
+        bool jxformsOk = RecursiveAI.OneMail.Calendar.Forms.JsonForms.FromJson(jcal.Bytes).Document.ToArray().AsSpan().SequenceEqual(ics)
+            && RecursiveAI.OneMail.Calendar.Forms.XmlForms.FromXml(xcal.Bytes).Document.ToArray().AsSpan().SequenceEqual(ics);
+        Console.WriteLine("jxforms: " + (jxformsOk ? "ok" : "FAILED"));
+
+        bool ok = mimeOk && storesOk && calendarOk && jxformsOk;
         Console.WriteLine("wasm smoke: " + (ok ? "ok" : "FAILED"));
         return ok ? 0 : 1;
     }

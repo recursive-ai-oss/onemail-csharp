@@ -3,6 +3,7 @@
 
   corpus.py fetch [dest]     download every file in corpus.tsv and verify its SHA-256 (default dest: $ONEMAIL_CORPUS/calendar)
   corpus.py pin              regenerate corpus.tsv from the pinned commits below (network; use when moving a pin)
+  corpus.py pin-forms        add (or refresh) the jCal / jCard / xCal / xCard test files of the same repositories to corpus.tsv
   corpus.py rfc [outdir]     cut the BEGIN:VCALENDAR / BEGIN:VCARD example blocks out of the RFC texts into outdir
                              (default testdata/calendar/rfc; the RFC texts are verified against RFC_SHA256)
 
@@ -22,6 +23,12 @@ GITHUB = [
     ("ezvcard", "mangstadt/ez-vcard", "55bb5ded1df8b4989cb8d2f344e7d6209850d2df", ["src/test/resources/"], (".vcf",), []),
     ("biweekly", "mangstadt/biweekly", "2e38b50161b0ebb870f7f1dc831436eab4e8ec40", ["src/test/resources/"], (".ics",), []),
     ("sabrevobject", "sabre-io/vobject", "5e2f338811916c03927398bb24e527989de63194", ["tests/"], (".ics", ".vcf"), []),
+]
+# The JSON and XML forms: (id, repo, commit, path prefixes, extensions). Same repositories and commits as above.
+FORMS_GITHUB = [
+    ("icaljs-forms", "kewisch/ical.js", "33ba266282fac7c721d792e04124513df73fe140", ["test/parser/"], (".json",)),
+    ("biweekly-forms", "mangstadt/biweekly", "2e38b50161b0ebb870f7f1dc831436eab4e8ec40", ["src/test/resources/"], (".json", ".xml")),
+    ("ezvcard-forms", "mangstadt/ez-vcard", "55bb5ded1df8b4989cb8d2f344e7d6209850d2df", ["src/test/resources/"], (".json", ".xml")),
 ]
 THUNDERBIRD_PAGE = "https://www.thunderbird.net/en-US/calendar/holidays/"
 THUNDERBIRD_BASE = "https://www.thunderbird.net"
@@ -66,6 +73,30 @@ def pin():
         for r in rows:
             f.write("\t".join(map(str, r)) + "\n")
     print(len(rows), "files pinned")
+
+
+def pin_forms():
+    old = [r for r in rows() if not r[0].endswith("-forms")]
+    new = []
+    for sid, repo, commit, prefixes, exts in FORMS_GITHUB:
+        tree = json.loads(get("https://api.github.com/repos/%s/git/trees/%s?recursive=1" % (repo, commit)))
+        assert not tree.get("truncated"), sid
+        for e in tree["tree"]:
+            p = e["path"]
+            if e["type"] != "blob" or not p.lower().endswith(exts) or not any(p.startswith(x) for x in prefixes):
+                continue
+            if p.endswith("pom.xml"):
+                continue
+            url = "https://raw.githubusercontent.com/%s/%s/%s" % (repo, commit, p)
+            data = get(url)
+            new.append((sid, p, url, sha(data), len(data)))
+    with open(MANIFEST, "w", newline="\n") as f:
+        f.write("# source\tpath\turl\tsha256\tbytes\n")
+        for r in old:
+            f.write("\t".join(r) + "\n")
+        for r in new:
+            f.write("\t".join(map(str, r)) + "\n")
+    print(len(new), "forms files pinned")
 
 
 def rows():
@@ -159,6 +190,8 @@ if __name__ == "__main__":
     root = os.path.abspath(os.path.join(HERE, "..", ".."))
     if cmd == "pin":
         pin()
+    elif cmd == "pin-forms":
+        pin_forms()
     elif cmd == "fetch":
         dest = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.environ.get("ONEMAIL_CORPUS", os.path.expanduser("~/onemail/corpus")), "calendar")
         sys.exit(fetch(dest))

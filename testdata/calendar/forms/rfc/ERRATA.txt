@@ -1,0 +1,9 @@
+rfc7265-b2.json: comments removed and the concatenated description joined (JSON has neither)
+rfc7265-b2.json: rdate period is the string "2006-01-02T15:00:00/PT2H"; RFC 7265 §3.6.9 makes a period an array of two strings
+rfc7265-b2.json: STANDARD rrule byday is "1SU"; the iCalendar text of the same example has BYDAY=-1SU
+rfc7265-b2.json: the second VEVENT summary is "Event #2"; the iCalendar text has "Event #2 bis"
+rfc7265-b2.json: the second VEVENT dtstart is 2006-01-02T14:00:00; the iCalendar text has 20060104T140000
+rfc6321-b2.ics: the example has no BEGIN:VCALENDAR line
+rfc6321-b2.xml: PRODID is "-//Example Inc.//Example Client//EN"; the iCalendar text has "Example Corp."
+rfc6321-b2.xml: the VTIMEZONE tzid has no <text> element; RFC 6321 Appendix A requires value-text
+rfc6321-b2.xml: the description text is wrapped over several lines in the RFC; joined to the single line of the iCalendar text

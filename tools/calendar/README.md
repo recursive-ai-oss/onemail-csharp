@@ -29,3 +29,9 @@ prints, per source, how many files parsed and wrote back byte-identical, and lis
 ## Fuzz
 
 `fuzz/run.sh contentlines <seconds>` and `fuzz/run.sh calendar <seconds>`; see `fuzz/README.md`.
+
+## JSON and XML forms
+
+`FormsDump` (`tools/calendar/FormsDump`): `to json|xml <file>`, `from json|xml <file>`, `check <root>…` (text to form to text round trips and form stability; `FORMS_PROBLEMS=n` lists more than 25 problems per source), `emit <root> <outdir>`, `reread <indir> <outdir> json|xml` and `alloc <root>…` (bytes allocated per property). `make_forms_fixtures.py` cuts the RFC examples into `testdata/calendar/forms/rfc`.
+
+`oracles/setup_forms.sh <dir>` fetches the pinned oracles (ical.js, ez-vcard, biweekly, icalendar, with Node and a JDK, hash-checked); `oracles/forms/run_forms_diff.sh <workdir>` runs them over the corpus and the committed fixtures and writes `report/*.txt`; `oracles/forms/explained.tsv` lists every accepted difference with its reason, and the run ends with the count of unexplained classes.
