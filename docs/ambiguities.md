@@ -357,3 +357,27 @@ Entries without an observed Outlook-side result are provisional. Method: [rtf.md
 | RT16 | Data ends before the end marker | compressed-rtf returns what it decoded | The decoded bytes, with a defect | `MissingEndMarker` | prov. |
 | RT17 | RAWSIZE disagrees with the output; `MELA` contents | spec: MELA CRC not validated, size may be read either way | Output is what the data holds (growing up to the limit), with a defect; MELA is the contents as stored | `RawSizeMismatch` | spec 2.2.3.1 |
 | RT18 | Compressing nothing | spec note: Outlook writes `02 00 0D 00` | `01 0C F0` (end marker only) is written; `02 00 0D 00` is read as one NUL byte | none | spec |
+
+## MS-OXCMAIL conversion (MAPI to MIME and back)
+
+The rules are in [`conversion.md`](conversion.md). No Outlook has been observed yet; the two oracles are black-box MimeKit 4.18.2 and
+Python 3.13 reading what we write, and the corpus is the Tika and POI MSG files and the Tika and CFReDS PST/OST files. Each
+resolution is provisional until Outlook can be run.
+
+| ID | Case | What the spec says | Resolution | Defect or report entry | Basis |
+|---|---|---|---|---|---|
+| OX1 | An `EX` sender or recipient has no SMTP address property | 2.1.3.1.7: look it up in the address book directory | Without a directory: the same distinguished name elsewhere in the message, then the matching transport `From`/`Sender` field (one mailbox), then a unique display name in the transport headers. Never derived from the distinguished name | `AddressUnresolved` when nothing resolves | on the 45 MSG and 25 PST/OST items, 16 of 28 EX senders and 50 of 50 EX recipients resolve; the 12 senders that do not have no SMTP property and no transport From field |
+| OX2 | Transport headers and properties disagree | 2.2.3.2.28 keeps the received block; 2.1.3.2 builds fields from properties | The received field stays when it agrees; the properties win when it does not (a user edit makes the properties newer) | `TransportHeaderOverridden`, `NamedPropertyValueSetAside` | 2 fields and 5 named-property values across the 70 corpus items |
+| OX3 | Default values (`PidTagSensitivity` 0, false receipt flags) | 2.1.3.2.6 and 2.1.3.1.5: no field | No field; reading back leaves the property absent | `DefaultValueNotWritten` | spec |
+| OX4 | `Importance: Normal` | 2.1.3.2.5: MAY be omitted | Written whenever the property exists (0, 1, 2) | none | keeps the property on the way back |
+| OX5 | RTF that encapsulates nothing | 2.1.3.3: not covered | A `text/rtf` part when there is no HTML, else not written | `RtfCarriedAsTextRtf`, `RtfRedundant` | provisional |
+| OX6 | Case of a `PS_INTERNET_HEADERS` name | 2.2.3.2.29: "the header name" | As the message wrote it. Stores differ (Exchange stores lower case, Outlook as written), so comparisons are case-insensitive | none | corpus holds both |
+| OX7 | Missing or invalid `Date` on import | 2.2.3.2.2: the current time | No `PidTagClientSubmitTime`; a conversion must be reproducible. Export falls back to the delivery time | `DateFromDeliveryTime` | deviation from the spec, deliberate |
+| OX8 | Non-ASCII display name | 2.1.3.1: RFC 2047 | The whole name as one run of encoded words (never leaving "@" or "(" in plain text beside them) | none | MimeKit and Python read it; a plain-text remainder broke an address in a first attempt |
+| OX9 | Which MIME part is the body | 2.2.3.3.2 | The part the shared view chooses (`shared-view.md`), a named text part included | none | keeps view and conversion in step |
+| OX10 | Composite media type on flat attachment data | not covered | `application/octet-stream` | `CompositeTypeOnFlatData` | `multipart/signed` without a boundary broke the parse |
+| OX11 | Bcc | 2.1.3.1.1.2 | Not written unless asked; a `Bcc` field on import is Bcc recipients | `BccNotWritten` | spec |
+| OX12 | `multipart/signed` on import | 2.2.3.4 | Class `IPM.Note.SMIME.MultipartSigned`; content and signature become a body and an attachment | `SignatureNotVerifiable` | signed MIME stays bytes elsewhere; this is the Outlook form |
+| OX13 | Subject prefix | 2.2.3.2.6.1: one to three characters other than colon, blank or digit, then colon and blanks | As stated, with an empty `PidTagSubjectPrefix` when there is none | none | |
+| OX14 | Embedded message names | not covered | The attachment's own name only; the subject is not invented as a name | none | |
+| OX15 | Reply-To entries | 2.1.3.1.2: names ignored when the counts differ | Only one-off SMTP entries are written; address-book entries need a directory | `ReplyToUnresolved` | |

@@ -1,0 +1,2 @@
+# oracle<TAB>source item<TAB>field<TAB>why. A difference listed here is the oracle's own reading, not the conversion's.
+mimekit	cyrillic_message.msg#0	subject	The received Subject header is kept as received and uses the charset label "Cp1251"; MimeKit does not know that label and reads the bytes as Latin-1, while Python and OneMail read it as windows-1251.

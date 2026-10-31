@@ -29,9 +29,29 @@ internal static class MsgTarget
 
     public static void Run(ReadOnlySpan<byte> data)
     {
-        if (data.Length == 0)
+        if (BuildFile(data) is not { } file)
         {
             return;
+        }
+
+        if (!MsgFile.TryOpen(file, out MsgFile? f, out _, new MsgReaderOptions { MaxValueBytes = 1 << 20 }))
+        {
+            return;
+        }
+
+        using (f)
+        {
+            f.ReadEverything();
+            Touch(f.Message);
+        }
+    }
+
+    /// <summary>Makes the compound file a patch-list input stands for, or null when it stands for none.</summary>
+    internal static byte[]? BuildFile(ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0)
+        {
+            return null;
         }
 
         byte[] file;
@@ -54,7 +74,7 @@ internal static class MsgTarget
                     streams.RemoveAt(index);
                     if (streams.Count == 0)
                     {
-                        return;
+                        return null;
                     }
 
                     continue;
@@ -76,16 +96,7 @@ internal static class MsgTarget
             file = MsgTestBuilder.Pack(streams, empty);
         }
 
-        if (!MsgFile.TryOpen(file, out MsgFile? f, out _, new MsgReaderOptions { MaxValueBytes = 1 << 20 }))
-        {
-            return;
-        }
-
-        using (f)
-        {
-            f.ReadEverything();
-            Touch(f.Message);
-        }
+        return file;
     }
 
     private static void Touch(MapiMessage m)

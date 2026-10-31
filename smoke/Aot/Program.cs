@@ -239,6 +239,22 @@ internal static class Program
             && rtfText.Text == "a\tb\r\n" && rtfCp.Text == "\u041f";
         Console.WriteLine("rtf: " + (rtfOk ? "ok" : "FAILED"));
 
-        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // MS-OXCMAIL: an Outlook message to Internet mail and back, with an Exchange sender resolved through its SMTP property.
+        var oxcMsg = new RecursiveAI.OneMail.Mapi.MapiMessage();
+        oxcMsg.Properties.Add(RecursiveAI.OneMail.Mapi.MapiProperty.CreateOwned(new RecursiveAI.OneMail.Mapi.MapiTag(RecursiveAI.OneMail.Mapi.MapiPid.Subject, RecursiveAI.OneMail.Mapi.MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes("caf\u00e9")));
+        oxcMsg.Properties.Add(RecursiveAI.OneMail.Mapi.MapiProperty.CreateOwned(new RecursiveAI.OneMail.Mapi.MapiTag(RecursiveAI.OneMail.Mapi.MapiPid.SenderAddressType, RecursiveAI.OneMail.Mapi.MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes("EX")));
+        oxcMsg.Properties.Add(RecursiveAI.OneMail.Mapi.MapiProperty.CreateOwned(new RecursiveAI.OneMail.Mapi.MapiTag(RecursiveAI.OneMail.Mapi.MapiPid.SenderEmailAddress, RecursiveAI.OneMail.Mapi.MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes("/o=x/cn=a")));
+        oxcMsg.Properties.Add(RecursiveAI.OneMail.Mapi.MapiProperty.CreateOwned(new RecursiveAI.OneMail.Mapi.MapiTag(RecursiveAI.OneMail.Mapi.MapiPid.SenderSmtpAddress, RecursiveAI.OneMail.Mapi.MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes("a@example.com")));
+        oxcMsg.Properties.Add(RecursiveAI.OneMail.Mapi.MapiProperty.CreateOwned(new RecursiveAI.OneMail.Mapi.MapiTag(RecursiveAI.OneMail.Mapi.MapiPid.Body, RecursiveAI.OneMail.Mapi.MapiType.UnicodeString), System.Text.Encoding.Unicode.GetBytes("body")));
+        RecursiveAI.OneMail.Conversion.ConversionResult<RecursiveAI.OneMail.Mime.MimeEntity> oxcMime = new RecursiveAI.OneMail.Conversion.OxcMail.MapiToMimeConverter().Convert(oxcMsg);
+        byte[] oxcBytes = oxcMime.Value.ToArray();
+        RecursiveAI.OneMail.Conversion.ConversionResult<RecursiveAI.OneMail.Mapi.MapiMessage> oxcBack = new RecursiveAI.OneMail.Conversion.OxcMail.MimeToMapiConverter().Convert(RecursiveAI.OneMail.Mime.MimeEntity.Parse(oxcBytes));
+        var oxcView = new MapiMailItem(oxcMsg, default);
+        bool oxcOk = oxcView.From.Count == 1 && oxcView.From[0].Address == "a@example.com" && oxcView.From[0].X500Address == "/o=x/cn=a"
+            && Mail.Parse(oxcBytes).Subject == "caf\u00e9" && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.Body) == "body"
+            && oxcBack.Value.GetString(RecursiveAI.OneMail.Mapi.MapiPid.SentRepresentingSmtpAddress) == "a@example.com";
+        Console.WriteLine("oxcmail: " + (oxcOk ? "ok" : "FAILED"));
+
+        return oxcOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

@@ -51,6 +51,7 @@ case "$target" in
   mail-open) maxlen=65536 ;;
   rtf-decompress) maxlen=65536 ;;
   rtf-deencap) maxlen=16384 ;;
+  oxcmail) maxlen=16384 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
