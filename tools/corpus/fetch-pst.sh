@@ -33,15 +33,13 @@ case "$set_name" in
     fetch "$base/cfreds_2015_data_leakage_pc.7z.002" 5DEE46ABF6FA833268E5AE199A13854CCF42689B cfreds_2015_data_leakage_pc.7z.002
     fetch "$base/cfreds_2015_data_leakage_pc.7z.003" 1687686F819092E05047F195F102D8FA0C38ED66 cfreds_2015_data_leakage_pc.7z.003
     if ! ls ./*.ost ./*.pst >/dev/null 2>&1; then
-      work="$(mktemp -d "$dest/unpack.XXXXXX")"
+      work="$dest/unpack.work"; mkdir -p "$work"
       trap 'rm -rf "$work"' EXIT
+      # The 7z holds a raw disk image (~20 GB). 7-Zip reads its partition table as MBR and shows each partition as a file; the
+      # second one (1.ntfs) is the Windows volume, which 7-Zip reads as NTFS.
       sevenzip x -y -o"$work" cfreds_2015_data_leakage_pc.7z.001 >/dev/null
-      img="$(ls "$work"/*.dd "$work"/*.001 "$work"/* 2>/dev/null | head -1)"
-      # 7-Zip reads the partition table and the NTFS volume inside the raw image directly.
-      sevenzip x -y -o"$work/vol" "$img" -ir'!*.ost' -ir'!*.pst' >/dev/null || true
-      find "$work/vol" \( -iname '*.ost' -o -iname '*.pst' \) -type f -print0 | while IFS= read -r -d '' f; do
-        cp -- "$f" "$dest/$(basename "$f")"
-      done
+      sevenzip x -y -o"$work" "$work/cfreds_2015_data_leakage_pc.dd" 1.ntfs >/dev/null
+      sevenzip e -y -o"$dest" "$work/1.ntfs" 'Users/informant/AppData/Local/Microsoft/Outlook/iaman.informant@nist.gov.ost' >/dev/null
     fi
     sha256sum -- ./*.ost ./*.pst 2>/dev/null || true
     ;;

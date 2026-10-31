@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OneMail.Tests/OneMail.Tests.csproj" />
+    <Project Path="tests/PstOracle/PstOracle.csproj" />
   </Folder>
   <Folder Name="/bench/">
     <Project Path="bench/OneMail.Benchmarks/OneMail.Benchmarks.csproj" />

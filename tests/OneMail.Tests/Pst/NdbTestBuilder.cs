@@ -252,9 +252,9 @@ public static class NdbTestBuilder
         dl.CopyTo(CollectionsMarshalSpan(file, g.Dl, g.Page));
         if (format != NdbFormat.Unicode4K)
         {
-            var pm = new byte[g.Page];
-            FinishPage(g, pm, 0x83, 0x4600, 0x4600, allocation: true);
-            pm.CopyTo(CollectionsMarshalSpan(file, 0x4600, g.Page));
+            var pmap = new byte[g.Page];
+            FinishPage(g, pmap, 0x83, 0x4600, 0x4600, allocation: true);
+            pmap.CopyTo(CollectionsMarshalSpan(file, 0x4600, g.Page));
         }
 
         eof = file.Count;

@@ -8,11 +8,12 @@ using RecursiveAI.OneMail.Pst.Ndb;
 // Dumps what the NDB layer sees in a PST/OST as "key value" lines, so the numbers can be set beside what the libpff tools report.
 //   PstOracle dump <file>      header, node and block counts, data-tree sizes, allocation, defects, scan agreement
 //   PstOracle nodes <file>     one line per node: nid, type, data bid, data length, subnode bid
-if (args is ["gen", var outPath, var count])
+if (args is ["gen", var outPath, var count, ..] && args.Length <= 4)
 {
-    // A 4 KiB-page file with <count> small nodes, for the working-set runs.
+    // A file (ansi, unicode or 4k; default 4k) with <count> small nodes, for the working-set runs.
     var nodes = Enumerable.Range(1, int.Parse(count, System.Globalization.CultureInfo.InvariantCulture)).Select(i => new RecursiveAI.OneMail.Tests.Pst.TestNode { Nid = ((uint)i * 32) + 4, Data = new byte[200 + (i % 50)] }).ToList();
-    File.WriteAllBytes(outPath, RecursiveAI.OneMail.Tests.Pst.NdbTestBuilder.Build(NdbFormat.Unicode4K, nodes).Bytes);
+    NdbFormat fmt = args.Length == 4 ? args[3] switch { "ansi" => NdbFormat.Ansi, "unicode" => NdbFormat.Unicode, _ => NdbFormat.Unicode4K } : NdbFormat.Unicode4K;
+    File.WriteAllBytes(outPath, RecursiveAI.OneMail.Tests.Pst.NdbTestBuilder.Build(fmt, nodes).Bytes);
     return 0;
 }
 
