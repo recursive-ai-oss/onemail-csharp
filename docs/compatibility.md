@@ -12,6 +12,30 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## 0.2.0-preview.1
+
+Added since 0.1. The 0.1 rows below still hold. Further oracles for these rows, all run as released programs: Python `extract-msg` 0.55.0,
+`compressed-rtf` 1.0.7, `RTFDE` 0.1.2.2 and `tnefparse` 1.4.0; `tnef` 1.4.18 and `ytnef` 2.1.2 (distribution packages); `recurring-ical-events`
+3.8.2 and `python-dateutil` 2.9.0; Ical.Net 5.2.3 (NuGet, public API). Further corpora, fetched and never committed: the NIST CFReDS Data
+Leakage case OST, and MSG, PST and TNEF test files from Apache Tika and Apache POI ([`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)).
+No Outlook has been run yet.
+
+| Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
+|---|---|---|---|---|---|---|
+| MSG / OFT (MS-OXMSG) | yes | no | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by the compound file reader (typed defect); writing comes later |
+| PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | no public ANSI or 512-byte-page Unicode PST from Outlook exists; those layouts and 4 KiB multi-map stores are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
+| PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world sample |
+| TNEF / winmail.dat (MS-OXTNEF) | yes | yes | 0 against tnefparse, tnef and ytnef: 563 checks, 125 explained | attributes identical 17 / 17; MAPI property-exact 17 / 17 | yes | no TNEF-in-MIME message in the public corpora; checked on generated wrappers (64 messages) |
+| Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` attachment positions not applied |
+| HTML and text from RTF (MS-OXRTFEX) | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented) | n/a | yes | native RTF to HTML (non-encapsulated bodies) comes later |
+| MAPI and MIME conversion (MS-OXCMAIL) | yes | yes | see the conversion table below | 0 silent losses both ways | yes | |
+| ICS recurrence and time zones (RFC 5545 3.8.5, VTIMEZONE, IANA, Windows names) | yes | n/a | 2,384 recurring components: 0 unexplained against recurring-ical-events (2,372 compared), python-dateutil (2,378) and Ical.Net (2,188); every RFC 5545 example passes; DST transitions 108 / 108 in four zones | n/a | yes | |
+| Outlook calendar, contact and task items; DBX; OLM; jCal/jCard/xCal/xCard | not yet | not yet | | | | in progress |
+
+Speed: PST/OST against XstReader.Api, MSG against MsgReader and TNEF against MimeKit all meet the bar on x64 and arm64 (geometric means
+0.197 / 0.320, 0.096 / 0.101, 0.312 / 0.287; worst row 0.569). Working set stays near 100 MB (x64) from 1,000 to 50,000 messages (826 MB
+store). Details in [`benchmarks.md`](benchmarks.md).
+
 ## 0.1.0-preview.1
 
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip of untouched input | Fuzzed | Known gaps |

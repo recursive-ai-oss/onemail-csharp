@@ -4,12 +4,24 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.2.0-preview.1]
+
+Outlook formats on read: MSG and OFT, PST and OST, TNEF and compressed RTF, the MAPI property model, and conversion between MAPI and MIME. Calendar recurrence and time zones. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
+
 ### Fixed
 
 - Encoding to ISO-8859-1 and US-ASCII code pages (the runtime's own, not in the code page provider) no longer throws in `MailEncoding.GetBytes`.
 
 ### Added
 
+- The MAPI property model (`RecursiveAI.OneMail.Mapi`): typed property bags with named properties, code-page handling and the MS-OXPROPS tag tables.
+- MSG and OFT reading (MS-OXMSG) over the compound file reader of OneArchive, with embedded messages and attachments.
+- The PST/OST lists, tables and properties layer (`RecursiveAI.OneMail.Pst.Ltp`: heap-on-node, BTH, property and table contexts) over the node database, reading through the random-access sources.
+- TNEF reading and writing (MS-OXTNEF): the attribute layer, MAPI messages and embedded messages.
+- Compressed RTF (MS-OXRTFCP) both ways and HTML and text de-encapsulation from RTF (MS-OXRTFEX), in a namespace with no dependencies on the rest of the library.
+- Conversion between MAPI messages and MIME per MS-OXCMAIL in both directions, with a loss report listing every value that did not carry over (`RecursiveAI.OneMail.Conversion`).
+- Calendar recurrence expansion (RRULE, RDATE, EXDATE, overrides) and time-zone resolution through VTIMEZONE, the IANA database and Windows zone names.
+- Benchmark rows for PST and OST enumeration and extraction, MSG read and TNEF read ([docs/benchmarks.md](docs/benchmarks.md)).
 - The PST/OST messaging layer (`RecursiveAI.OneMail.Pst.Messaging`): store, named properties, folders, messages, recipients, attachments and embedded messages as MAPI property bags, in ANSI, Unicode and 4 KiB files.
 - MAPI items (MSG, PST, OST) in the shared view; `Mail.Open` reads them and `onemail inspect` lists them.
 - TNEF parts inside MIME messages: `MimeToMapiConverter` merges them into the MAPI message by the rules of MS-OXCMAIL 2.2.3.8 (headers win, richer bodies kept, loss-report entries for every property set aside), the shared view shows their attachments and bodies in place of winmail.dat (`MimeMailItem.TnefParts`), and `OxcMailExportOptions.Tnef` writes a TNEF message.

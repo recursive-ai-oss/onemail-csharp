@@ -2,7 +2,7 @@
 
 An email library for .NET with no dependency beyond the .NET base class library and its sibling libraries (OneArchive, OneHtml, OneRender). It reads and writes the formats mail lives in, keeps what it reads lossless, and says what it repaired instead of throwing.
 
-> **Early preview.** MIME, the mailbox stores, ICS/vCard trees and the lower PST layer work today; Outlook items, protocols and cryptography are still to come. Nothing here is a stable API yet. What is checked, and the known gaps: [docs/compatibility.md](docs/compatibility.md).
+> **Early preview.** MIME, the mailbox stores, ICS/vCard trees with recurrence and time zones, and Outlook items on read (MSG/OFT, PST/OST, TNEF, compressed RTF, MAPI↔MIME conversion) work today; Outlook writing, protocols and cryptography are still to come. Nothing here is a stable API yet. What is checked, and the known gaps: [docs/compatibility.md](docs/compatibility.md).
 
 ```csharp
 using RecursiveAI.OneMail;
