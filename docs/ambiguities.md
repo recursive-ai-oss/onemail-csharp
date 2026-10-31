@@ -142,6 +142,7 @@ Abbreviations: **MK** MimeKit, **Py** Python, **Go** Go standard library.
 | A13 | `adr-18` two address-specs in one mailbox (`<a@x><b@y>`) | both | first only | rejected | Both are kept as two mailboxes. | `AmbiguousAdjacentAngleAddrs` | prov. (MK) |
 | A14 | `adr-19` semicolon as a separator | first only | first only | rejected | Only the first address is parsed; the remainder is kept as unparsed text in the defect. | `UnparsedAddressText` | 2 of 2 that parse |
 | A15 | `adr-23` leading, trailing and doubled dots in a local part (`.a@x`, `b.@x`, `c..d@x`) | address dropped | kept | rejected | Kept as written. These are common in old corporate mail, and dropping them loses recipients. | `ObsoleteLocalPart` | prov. (Py; in about 9% of messages in a 517,000-message public corpus, MimeKit drops such recipients) |
+| A16 | gateway-rewritten addresses seen in the Enron corpus: `<"a"@b.com@gw>`, `munn"."mary@gw`, `"d@x".@gw@gw` | MimeKit keeps the part up to the second `@`, or drops the address; Go rejects the list | Python gives `<>` or a mangled address | Kept as written, with `InvalidAddressSyntax`. | `InvalidAddressSyntax` | prov. (no common reading) |
 
 ## Dates
 

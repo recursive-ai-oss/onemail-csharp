@@ -146,9 +146,35 @@ def entity_diffs(a, b, ordered, out, depth):
 
 
 def obsolete_local(addr):
+    """Addresses that MimeKit leaves out and OneMail keeps (docs/ambiguities.md A15, A16): a leading, trailing or doubled dot in the
+    local part, more than one '@' outside quotes, or a quote that does not start a quoted word."""
     at = addr.rfind("@")
     local = addr if at < 0 else addr[:at]
-    return bool(local) and not local.startswith('"') and (local.startswith(".") or local.endswith(".") or ".." in local)
+    if local and not local.startswith('"') and (local.startswith(".") or local.endswith(".") or ".." in local):
+        return True
+    unquoted_at = 0
+    quoted = False
+    prev = "."
+    i = 0
+    while i < len(addr):
+        c = addr[i]
+        if quoted:
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                quoted = False
+                nxt = addr[i + 1] if i + 1 < len(addr) else "@"
+                if nxt not in ".@":
+                    return True
+        elif c == '"':
+            if prev not in ".":
+                return True
+            quoted = True
+        elif c == "@":
+            unquoted_at += 1
+        prev = c
+        i += 1
+    return unquoted_at > 1
 
 
 def first_diff(x, y):
