@@ -145,6 +145,21 @@ def entity_diffs(a, b, ordered, out, depth):
         entity_diffs(ma, mb, ordered, out, depth + 1)
 
 
+def obsolete_local(addr):
+    at = addr.rfind("@")
+    local = addr if at < 0 else addr[:at]
+    return bool(local) and not local.startswith('"') and (local.startswith(".") or local.endswith(".") or ".." in local)
+
+
+def first_diff(x, y):
+    """The first address that differs between two lists, as ' (ours vs theirs)'; both lists are shown only by that element."""
+    for i, (p, q) in enumerate(zip(x, y)):
+        if p["addr"] != q["addr"]:
+            return " at %d: %r vs %r" % (i, p["addr"], q["addr"])
+    longer, tag = (x, "a") if len(x) > len(y) else (y, "b")
+    return " extra in %s: %r" % (tag, longer[min(len(x), len(y))]["addr"]) if len(x) != len(y) else ""
+
+
 def compare_records(a, b):
     """Returns a list of (class, sub, detail) differences between two dumps of the same message."""
     out = []
@@ -163,10 +178,26 @@ def compare_records(a, b):
         elif x is None or y is None:
             out.append(("address.parse-failed", k + ":" + (na if x is None else nb), k))
         elif x != y:
+            if OURS in (na, nb):
+                # NORM-A15: MimeKit leaves out an address whose local part has a leading, trailing or doubled dot; OneMail keeps it
+                # (docs/ambiguities.md A15). After leaving those out of OneMail's list, the lists are compared as usual.
+                mine, theirs = (x, y) if na == OURS else (y, x)
+                kept = [i for i in mine if not obsolete_local(i["addr"])]
+                if len(kept) != len(mine) and [i["addr"] for i in kept] == [i["addr"] for i in theirs] and (na if nb == OURS else nb) == "mimekit":
+                    out.append(("address.obsolete-local", k, "%s: %d dropped" % (k, len(mine) - len(kept))))
+                    continue
+            # NORM-H2: MimeKit joins the lists of repeated address fields; OneMail reads the first (docs/ambiguities.md H2).
+            ours_rec, other_rec = (a, b) if na == OURS else (b, a)
+            if OURS in (na, nb) and other_rec["oracle"]["name"] == "mimekit":
+                mine, theirs = (x, y) if na == OURS else (y, x)
+                repeats = sum(1 for h in ours_rec["root"]["headers"] if h["name"].lower() == k)
+                if repeats > 1 and len(theirs) > len(mine) and [i["addr"] for i in theirs[:len(mine)]] == [i["addr"] for i in mine]:
+                    out.append(("address.merged-duplicates", k, "%s: %d fields" % (k, repeats)))
+                    continue
             if len(x) != len(y):
-                out.append(("address.count", k, "%s: %d vs %d" % (k, len(x), len(y))))
+                out.append(("address.count", k, "%s: %d vs %d%s" % (k, len(x), len(y), first_diff(x, y))))
             elif [i["addr"] for i in x] != [i["addr"] for i in y]:
-                out.append(("address.addr", k, "%s: %r vs %r" % (k, [i["addr"] for i in x][:3], [i["addr"] for i in y][:3])))
+                out.append(("address.addr", k, "%s: %s" % (k, first_diff(x, y))))
             else:
                 ws = [" ".join(i["name"].split()) for i in x] == [" ".join(i["name"].split()) for i in y]
                 out.append(("address.name.ws" if ws else "address.name", k, "%s: %r vs %r" % (k, [i["name"] for i in x][:3], [i["name"] for i in y][:3])))

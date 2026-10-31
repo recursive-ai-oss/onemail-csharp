@@ -92,7 +92,7 @@ H10	*	.	address\.name\.ws
 LIMIT-go-empty-address-list	go	.	address\.presence			
 LIMIT-go-address-list	go	.	address\.parse-failed			
 LIMIT-go-address-quoting	go	.	address\.addr			m
-H2	mimekit	.	address\.count			m
+A15	mimekit	.	address\.obsolete-local			
 A4	python	.	address\.name			m
 L6	*	.	address\.name			m
 E2	*	.	entity\.(cte|children)			
@@ -125,3 +125,4 @@ N11	python	.	header\.decoded			m
 H4	python	.	header\.names|entity\.params|body\..*			m
 H5	go	.	header\.names			m
 H5	mimekit	.	header\.names|entity\.params|body\..*			m
+H2	mimekit	.	address\.merged-duplicates			
