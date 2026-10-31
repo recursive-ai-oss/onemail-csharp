@@ -8,6 +8,22 @@ using RecursiveAI.OneMail.Pst.Ndb;
 // Dumps what the NDB layer sees in a PST/OST as "key value" lines, so the numbers can be set beside what the libpff tools report.
 //   PstOracle dump <file>      header, node and block counts, data-tree sizes, allocation, defects, scan agreement
 //   PstOracle nodes <file>     one line per node: nid, type, data bid, data length, subnode bid
+if (args is ["gen", var outPath, var count])
+{
+    // A 4 KiB-page file with <count> small nodes, for the working-set runs.
+    var nodes = Enumerable.Range(1, int.Parse(count, System.Globalization.CultureInfo.InvariantCulture)).Select(i => new RecursiveAI.OneMail.Tests.Pst.TestNode { Nid = ((uint)i * 32) + 4, Data = new byte[200 + (i % 50)] }).ToList();
+    File.WriteAllBytes(outPath, RecursiveAI.OneMail.Tests.Pst.NdbTestBuilder.Build(NdbFormat.Unicode4K, nodes).Bytes);
+    return 0;
+}
+
+if (args is ["pad", var padPath, var megabytes])
+{
+    // Extends a file with zeros (sparse) so a scan has a long way to go.
+    using var fs = new FileStream(padPath, FileMode.Open, FileAccess.Write);
+    fs.SetLength(fs.Length + (long.Parse(megabytes, System.Globalization.CultureInfo.InvariantCulture) << 20));
+    return 0;
+}
+
 if (args.Length < 2) { Console.Error.WriteLine("usage: PstOracle dump|nodes <file>"); return 2; }
 if (!NdbFile.TryOpen(args[1], out NdbFile? f, out IReadOnlyList<NdbDefect> openDefects) || f is null)
 {
@@ -18,7 +34,37 @@ if (!NdbFile.TryOpen(args[1], out NdbFile? f, out IReadOnlyList<NdbDefect> openD
 
 using (f)
 {
-    return args[0] switch { "dump" => Dump(f, args[1]), "nodes" => Nodes(f), "orphans" => Orphans(f), "pages" => Pages(f), _ => 2 };
+    return args[0] switch { "dump" => Dump(f, args[1]), "nodes" => Nodes(f), "scan" => ScanOnly(f), "walk" => Walk(f), "orphans" => Orphans(f), "pages" => Pages(f), _ => 2 };
+}
+
+static int Walk(NdbFile f)
+{
+    // Enumerates both trees and reads every node's data, keeping nothing: the library's own working set.
+    long nodes = 0, bytes = 0, blocks = 0;
+    byte[] buf = new byte[65536];
+    using (var c = f.Nodes.CreateCursor())
+    {
+        while (c.MoveNext())
+        {
+            nodes++;
+            using NdbDataTree? t = f.OpenDataTree(c.Current.Data);
+            for (long off = 0; t is not null && off < t.Length; off += buf.Length) bytes += t.Read(off, buf);
+        }
+    }
+
+    using (var c = f.Blocks.CreateCursor()) { while (c.MoveNext()) blocks++; }
+    long heap = GC.GetTotalMemory(true);
+    Console.WriteLine($"walk heapAfterGC {heap} gcs {GC.CollectionCount(0)}/{GC.CollectionCount(2)} allocated {GC.GetTotalAllocatedBytes()}");
+    Console.WriteLine($"walk nodes {nodes} bytes {bytes} blocks {blocks} defects {f.Defects.Count} peakWorkingSet {Process.GetCurrentProcess().PeakWorkingSet64}");
+    return 0;
+}
+
+static int ScanOnly(NdbFile f)
+{
+    long n = 0, blocks = 0;
+    foreach (NdbScanItem it in f.Scan()) { n++; if (it.Kind == NdbScanKind.Block) blocks++; }
+    Console.WriteLine($"scan items {n} blocks {blocks} length {f.Length} peakWorkingSet {Process.GetCurrentProcess().PeakWorkingSet64}");
+    return 0;
 }
 
 static int Pages(NdbFile f)
@@ -125,14 +171,16 @@ static int Dump(NdbFile f, string path)
     Console.WriteLine(dl is null ? "densityList none" : $"densityList entries {dl.Entries.Count} flags {dl.Flags} clean {dl.Check.IsClean}");
 
     long pages = 0, scanBlocks = 0, scanBlocksInBbt = 0;
+    var scanPageOffsets = new HashSet<long>();
     var pageTypes = new SortedDictionary<byte, int>();
     foreach (NdbScanItem it in f.Scan())
     {
-        if (it.Kind == NdbScanKind.Page) { pages++; pageTypes[it.PageType] = pageTypes.GetValueOrDefault(it.PageType) + 1; }
+        if (it.Kind == NdbScanKind.Page) { pages++; scanPageOffsets.Add(it.Ib); pageTypes[it.PageType] = pageTypes.GetValueOrDefault(it.PageType) + 1; }
         else { scanBlocks++; if (bbt.Contains(it.Ib)) scanBlocksInBbt++; }
     }
 
     Console.WriteLine($"scan pages {pages} blocks {scanBlocks} blocksInBbt {scanBlocksInBbt} bbtNotFoundByScan {blocks - scanBlocksInBbt}");
+    Console.WriteLine($"scan rootsFound nbt {scanPageOffsets.Contains((long)h.Root.NodeBTree.Ib)} bbt {scanPageOffsets.Contains((long)h.Root.BlockBTree.Ib)}");
     foreach (var kv in pageTypes) Console.WriteLine($"scan pageType 0x{kv.Key:x2} {kv.Value}");
 
     var kinds = new SortedDictionary<NdbDefectKind, int>();

@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The test-side file builder makes the node-database file the smoke reads back. -->
+    <Compile Include="../../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
     <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />

@@ -3,7 +3,9 @@ using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Client;
 using RecursiveAI.OneMail.Cryptography;
 using RecursiveAI.OneMail.Render;
+using RecursiveAI.OneMail.Pst.Ndb;
 using RecursiveAI.OneMail.Text;
+using RecursiveAI.OneMail.Tests.Pst;
 
 namespace RecursiveAI.OneMail.AotSmoke;
 
@@ -40,6 +42,26 @@ internal static class Program
             && Rfc2047.DecodeText(Rfc2047.Encode("café 日")) == "café 日";
         Console.WriteLine("text: " + (textOk ? "ok" : "FAILED"));
 
-        return textOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // Node database: write a small 4 KiB file (compressed blocks) and a Unicode one, read both back through the trees.
+        bool ndbOk = true;
+        foreach (NdbFormat format in new[] { NdbFormat.Unicode, NdbFormat.Unicode4K })
+        {
+            byte[] payload = new byte[3000];
+            for (int i = 0; i < payload.Length; i++) { payload[i] = (byte)(i % 11); }
+            byte[] file = NdbTestBuilder.Build(format, [new TestNode { Nid = 0x21, Data = payload }], new TestBuild { Compress = true }).Bytes;
+            ndbOk &= NdbFile.TryOpen(file, out NdbFile? ndb, out _) && ndb is not null;
+            if (ndb is null) { continue; }
+            using (ndb)
+            {
+                ndbOk &= ndb.Nodes.TryGet(new Nid(0x21), out NodeEntry node);
+                using NdbDataTree? data = ndb.OpenDataTree(node.Data);
+                byte[] back = new byte[3000];
+                ndbOk &= data is not null && data.Read(0, back) == 3000 && back.AsSpan().SequenceEqual(payload) && ndb.Defects.Count == 0;
+            }
+        }
+
+        Console.WriteLine("ndb: " + (ndbOk ? "ok" : "FAILED"));
+
+        return textOk && ndbOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

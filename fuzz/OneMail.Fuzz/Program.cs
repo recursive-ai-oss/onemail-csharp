@@ -16,6 +16,7 @@ internal static class Program
     private static readonly Dictionary<string, Target> Targets = new(StringComparer.Ordinal)
     {
         ["text"] = TextTarget.Run,
+        ["ndb"] = NdbTarget.Run,
     };
 
     private static int Main(string[] args)

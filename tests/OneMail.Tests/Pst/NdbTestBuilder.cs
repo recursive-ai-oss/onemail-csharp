@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using RecursiveAI.OneMail.Pst.Ndb;

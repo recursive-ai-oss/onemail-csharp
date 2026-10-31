@@ -38,6 +38,7 @@ shift
 case "$target" in
   # <target>) maxlen=<bytes> ;;   one line per target in the harness
   text) maxlen=4096 ;;
+  ndb) maxlen=8192 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../OneMail.Tests/Pst/NdbTestBuilder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
   </ItemGroup>
 
