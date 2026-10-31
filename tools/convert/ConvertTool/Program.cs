@@ -26,7 +26,7 @@ internal static class Program
         return args[0] switch
         {
             "bytes" => Bytes(args[1], Format(args[2]), args[3]),
-            "store" => Store(args[1], Format(args[2]), args[3]),
+            "store" => Store(args[1], Format(args[2]), args[3], args.Length > 4 ? args[4] : null),
             "olm" => Olm(args[1]),
             _ => 2,
         };
@@ -55,7 +55,13 @@ internal static class Program
             case ConvertFormat.Eml:
                 foreach (string f in Directory.EnumerateFiles(dest, "*.eml", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
                 {
-                    yield return (Path.GetRelativePath(dest, Path.GetDirectoryName(f)!).Replace('\\', '/').Replace(".", "", StringComparison.Ordinal), File.ReadAllBytes(f));
+                    string rel = Path.GetRelativePath(dest, Path.GetDirectoryName(f)!).Replace('\\', '/');
+                    if (rel.StartsWith("_items", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    yield return (rel == "." ? string.Empty : rel, File.ReadAllBytes(f));
                 }
 
                 break;
@@ -161,7 +167,7 @@ internal static class Program
 
     // ---- store ----
 
-    private static int Store(string input, ConvertFormat format, string work)
+    private static int Store(string input, ConvertFormat format, string work, string? dump)
     {
         string dest = Wipe(work);
         var sw = Stopwatch.StartNew();
@@ -180,6 +186,11 @@ internal static class Program
                 got[folder] = got.GetValueOrDefault(folder) + 1;
             }
 
+            if (dump is not null)
+            {
+                File.WriteAllLines(dump, got.Select(p => p.Key + "\t" + p.Value.ToString(CultureInfo.InvariantCulture)));
+            }
+
             long mailBack = got.Values.Sum();
             Console.WriteLine($"  read back {mailBack} messages in {got.Count} folders (the rest of the written items are calendar and contact files beside the store)");
             long side = Directory.Exists(Path.Combine(dest, "_items")) ? Directory.EnumerateFiles(Path.Combine(dest, "_items"), "*", SearchOption.AllDirectories).LongCount() : 0;
@@ -192,7 +203,8 @@ internal static class Program
             foreach ((string folder, long n) in got)
             {
                 long written = r.Folders.Where(p => Same(p.Key, folder)).Sum(p => p.Value.Written);
-                long sideInFolder = side == 0 ? 0 : Directory.EnumerateFiles(Path.Combine(dest, "_items"), "*", SearchOption.AllDirectories).Count(f => Same(Path.GetRelativePath(Path.Combine(dest, "_items"), Path.GetDirectoryName(f)!).Replace('\\', '/').Replace(".", "", StringComparison.Ordinal), folder));
+                string sideRoot = Path.Combine(dest, "_items");
+                long sideInFolder = side == 0 ? 0 : Directory.EnumerateFiles(sideRoot, "*", SearchOption.AllDirectories).Count(f => Same(RelFolder(sideRoot, f), folder));
                 if (n + sideInFolder != written)
                 {
                     Console.WriteLine($"  folder '{folder}': {n} messages + {sideInFolder} side files, source says {written} written");
@@ -211,10 +223,16 @@ internal static class Program
         return bad == 0 && r.ItemsRead == r.ItemsWritten + r.ItemsSkipped ? 0 : 1;
     }
 
+    private static string RelFolder(string root, string file)
+    {
+        string rel = Path.GetRelativePath(root, Path.GetDirectoryName(file)!).Replace('\\', '/');
+        return rel == "." ? string.Empty : rel;
+    }
+
     // Folder names are compared as the destination spells them: unsafe characters replaced.
     private static bool Same(string source, string dest) => string.Equals(SafeName(source), dest, StringComparison.Ordinal);
 
-    private static string SafeName(string folder) => string.Join('/', folder.Split('/').Select(p => new string([.. p.Select(c => c < 0x20 || "<>:\"/\\|?*".Contains(c, StringComparison.Ordinal) ? '_' : c)]).TrimEnd('.', ' ')).Select(p => p.Length == 0 ? "_" : p)).Replace(".", "", StringComparison.Ordinal);
+    private static string SafeName(string folder) => string.Join('/', folder.Split('/').Select(p => new string([.. p.Select(c => c < 0x20 || "<>:\"/\\|?*".Contains(c, StringComparison.Ordinal) ? '_' : c)]).TrimEnd('.', ' ')).Select(p => p.Length == 0 ? "_" : p));
 
     // ---- olm ----
 

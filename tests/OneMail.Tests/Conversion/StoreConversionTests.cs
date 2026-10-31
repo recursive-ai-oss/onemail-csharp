@@ -83,7 +83,8 @@ public class StoreConversionTests
             case ConvertFormat.Eml:
                 foreach (string f in Directory.EnumerateFiles(dest, "*.eml", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
                 {
-                    list.Add(new Written(System.IO.Path.GetRelativePath(dest, System.IO.Path.GetDirectoryName(f)!).Replace('\\', '/').Replace(".", "", StringComparison.Ordinal), File.ReadAllBytes(f), MessageMarks.None, []));
+                    string rel = System.IO.Path.GetRelativePath(dest, System.IO.Path.GetDirectoryName(f)!).Replace('\\', '/');
+                    list.Add(new Written(rel == "." ? string.Empty : rel, File.ReadAllBytes(f), MessageMarks.None, []));
                 }
 
                 break;

@@ -353,10 +353,42 @@ internal static class Program
         bool oxocalOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Oxocal();
         Console.WriteLine("oxocal: " + (oxocalOk ? "ok" : "FAILED"));
 
+        // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
+        bool convertOk;
+        {
+            string work = Path.Combine(Path.GetTempPath(), "onemail-aot-convert-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(work);
+            try
+            {
+                string box = Path.Combine(work, "in.mbox");
+                File.WriteAllBytes(box, System.Text.Encoding.ASCII.GetBytes("From a@b.c Mon Jan  1 00:00:00 2024\nFrom: a@b.c\nSubject: one\n\nbody\n\nFrom d@e.f Tue Jan  2 00:00:00 2024\nFrom: d@e.f\nSubject: two\n\nbody\n"));
+                bool all = true;
+                foreach (RecursiveAI.OneMail.Conversion.Stores.ConvertFormat f in new[] { RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Maildir, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.AppleMail, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Eml, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Mbox })
+                {
+                    string dest = Path.Combine(work, "out-" + f);
+                    RecursiveAI.OneMail.Conversion.Stores.StoreConversionReport rep = Mail.ConvertAsync(box, f, dest).GetAwaiter().GetResult();
+                    all &= rep.ItemsRead == 2 && rep.ItemsWritten == 2 && rep.ItemsSkipped == 0;
+                }
+
+                using MailContainer back = Mail.Open(Path.Combine(work, "out-Maildir"));
+                IMailItem one = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: x\r\n\r\nb\r\n"));
+                convertOk = all && back.Enumerate().Count() == 2
+                    && Mail.Convert(one, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Tnef).Value is { Length: > 0 }
+                    && Mail.Convert(one, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.VCard).Value is null
+                    && RecursiveAI.OneMail.Conversion.Stores.FidelityMatrix.Cells.Count > 100;
+            }
+            finally
+            {
+                Directory.Delete(work, recursive: true);
+            }
+        }
+
+        Console.WriteLine("convert: " + (convertOk ? "ok" : "FAILED"));
 
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && jxformsOk && dbxOk && oxocalOk && convertOk && olmOk && rtfHtmlOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
