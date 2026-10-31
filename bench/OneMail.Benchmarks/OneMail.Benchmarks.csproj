@@ -2,8 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>$(PackagePrefix).OneMail.Benchmarks</AssemblyName>
-    <RootNamespace>$(PackagePrefix).OneMail.Benchmarks</RootNamespace>
+    <!-- BenchmarkDotNet finds the project to build per benchmark by the assembly name, so it matches the project file name. -->
+    <AssemblyName>OneMail.Benchmarks</AssemblyName>
+    <RootNamespace>RecursiveAI.OneMail.Benchmarks</RootNamespace>
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);CA1822;CA1002;CA1819</NoWarn>
   </PropertyGroup>
@@ -17,6 +18,8 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <!-- The comparator for the MIME rows. It is run as a released binary and appears nowhere under src/. -->
+    <PackageReference Include="MimeKit" />
   </ItemGroup>
 
   <ItemGroup>
