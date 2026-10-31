@@ -14,10 +14,6 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
-        // MimeKit's TNEF reader decodes 8-bit strings with legacy code pages, which .NET only has once this provider is registered
-        // (MimeKit's documentation asks .NET Core applications to do so). OneMail needs no registration.
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
         if (args.Length == 4 && args[0] == "peak")
         {
             return Peak(args[1], args[2], args[3]);
@@ -149,6 +145,11 @@ internal static class Program
             {
                 string method = b.GetProperty("Method").GetString()!;
                 string parms = b.TryGetProperty("Parameters", out JsonElement p) && p.ValueKind == JsonValueKind.String ? p.GetString()! : "";
+                if (b.GetProperty("Statistics").ValueKind != JsonValueKind.Object || b.GetProperty("Memory").GetProperty("BytesAllocatedPerOperation").ValueKind != JsonValueKind.Number)
+                {
+                    continue;  // the run produced no result for this method (it crashed): leave the row out and let the missing side show
+                }
+
                 double median = b.GetProperty("Statistics").GetProperty("Median").GetDouble();
                 long alloc = b.GetProperty("Memory").GetProperty("BytesAllocatedPerOperation").GetInt64();
                 (method == "Ours" ? ours : theirs)[parms] = (median, alloc);

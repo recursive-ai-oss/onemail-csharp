@@ -35,6 +35,14 @@ internal struct Totals
 /// </summary>
 internal static class OutlookWorkloads
 {
+    static OutlookWorkloads()
+    {
+        // MimeKit's TNEF reader decodes 8-bit strings with legacy code pages, which .NET only has once this provider is registered
+        // (MimeKit's documentation asks .NET Core applications to do so). OneMail needs no registration. BenchmarkDotNet's child
+        // processes have their own entry point, so this cannot live in Main.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     /// <summary>Messages read so far by the walk in progress; the <c>curve</c> command samples it.</summary>
     public static long Progress;
 
@@ -183,9 +191,27 @@ internal static class OutlookWorkloads
     {
         var t = new Totals();
         var sink = new CountingStream();
-        using var xst = new XstFile(path);
+        var xst = new XstFile(path);
         WalkXst(xst.RootFolder, ref t, sink);
+        DisposeLater(xst);
         return t;
+    }
+
+    // XstFile.Dispose starts a background release of the file's caches that reopens the file; on a short walk that thread can still be
+    // running when Dispose returns, and then it throws on its own thread and ends the process (seen in a loop over a 2 MB store). So files
+    // are disposed a few dozen walks later, which costs the comparator nothing in time and keeps at most that many handles open.
+    private static readonly Queue<XstFile> s_openFiles = new();
+
+    private static void DisposeLater(XstFile file)
+    {
+        lock (s_openFiles)
+        {
+            s_openFiles.Enqueue(file);
+            while (s_openFiles.Count > 32)
+            {
+                s_openFiles.Dequeue().Dispose();
+            }
+        }
     }
 
     private static void WalkXst(XstFolder folder, ref Totals t, CountingStream sink)

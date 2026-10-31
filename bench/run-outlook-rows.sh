@@ -49,12 +49,12 @@ if [ "$full" = 1 ]; then
       msg-*) row=msg ;;
       *) row=tnef ;;
     esac
-    for side in ours theirs; do DOTNET_GCgen0MaxBudget=0x2000000 dotnet "$dll" peak $row $side "$input" | grep '^PEAK' >> "$out/peak.tsv" || true; done
+    for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" peak $row $side "$input" | grep '^PEAK' >> "$out/peak.tsv" || true; done
   done < "$out/counts.tsv"
   for input in gen-u10k gen-u50k; do
-    for side in ours theirs; do DOTNET_GCgen0MaxBudget=0x2000000 dotnet "$dll" curve pst $side "$input" | grep '^CURVE' >> "$out/curve.tsv" || true; done
+    for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" curve pst $side "$input" | grep '^CURVE' >> "$out/curve.tsv" || true; done
     # The comparator's documented cache release, for the memory comparison (it is much slower, so it is not a timed row).
-    DOTNET_GCgen0MaxBudget=0x2000000 ONEMAIL_XST_CLEAR=1 dotnet "$dll" curve pst theirs "$input" | grep '^CURVE' | sed 's/^CURVE\(-END\)\?\ttheirs/CURVE\1\ttheirs-clear/' >> "$out/curve.tsv" || true
+    DOTNET_GCgen0MaxBudget=2000000 ONEMAIL_XST_CLEAR=1 dotnet "$dll" curve pst theirs "$input" | grep '^CURVE' | sed 's/^CURVE\(-END\)\?\ttheirs/CURVE\1\ttheirs-clear/' >> "$out/curve.tsv" || true
   done
   lp="${ONEMAIL_LIBPFF:-$HOME/onemail/oracles/libpff}"
   if [ -f "$lp"/env.sh ]; then
