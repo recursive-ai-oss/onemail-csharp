@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Fennell;Zoë;李雷;;
+FN:Zoë Fennell
+ORG:Contoso\, Ltd.;Dept 16
+TITLE:Engineer
+TEL;TYPE=cell:+1-555-3076
+ADR;TYPE=work:;;940 Main St\nSuite 16;Town\, Hills;ST;16836;Country
+EMAIL;TYPE=internet;TYPE=pref:zoë16.0@example.com
+EMAIL;TYPE=internet:zoë16.1@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 16
+X-MS-IMADDRESS:zoë@im.example
+CATEGORIES:Smith,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/16
+PHOTO;ENCODING=b;TYPE=JPEG:nemGXGDh0vKPnP7RYXC0lDfssX7sRgwcZNup39HsBrDjKBnC
+ MTpGcZXsaWXf7ViKZYncQpw7VjahCrqx
+REV:20240127T101010Z
+UID:urn:uuid:bbb448a3-1111-4222-8333-444444444444
+X-CUSTOM-16:value
+END:VCARD

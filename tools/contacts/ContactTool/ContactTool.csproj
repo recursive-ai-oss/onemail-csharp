@@ -13,6 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The test-side MSG builder writes the generated contacts (the gen command). -->
+    <Compile Include="../../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
     <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
   </ItemGroup>
 

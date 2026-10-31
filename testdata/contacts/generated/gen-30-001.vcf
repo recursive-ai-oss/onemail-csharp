@@ -1,0 +1,21 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Müller;Åsa;Müller;;
+FN:Åsa Müller
+ORG:R&D\;Labs;Dept 1
+TITLE:Engineer
+TEL;TYPE=voice:+1-555-4282
+EMAIL;TYPE=internet;TYPE=pref:åsa1.0@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 1
+X-MS-IMADDRESS:åsa@im.example
+CATEGORIES:Müller,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/1
+PHOTO;ENCODING=b;TYPE=JPEG:vc1yLKhgb+rhQxvXTR+AER0yACGRZb56t5RmmHavp1n36xsa
+ B5T8jCFLd5gphdCP6m0igW/MUyWl/4gp
+REV:20240523T101010Z
+UID:urn:uuid:b6faab1c-1111-4222-8333-444444444444
+X-CUSTOM-1:value
+END:VCARD

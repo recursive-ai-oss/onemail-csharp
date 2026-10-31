@@ -1,0 +1,22 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Müller;Zoë;Ünal;;
+FN:Zoë Müller
+ORG:Fabrikam;Dept 7
+TITLE:Dr
+TEL;TYPE=home:+1-555-7063
+EMAIL;TYPE=internet;TYPE=pref:zoë7.0@example.com
+EMAIL;TYPE=internet:zoë7.1@example.com
+EMAIL;TYPE=internet:zoë7.2@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 7
+X-MS-IMADDRESS:zoë@im.example
+CATEGORIES:Åsa,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/7
+PHOTO;VALUE=uri:https://example.com/p.jpg
+REV:20240511T101010Z
+UID:urn:uuid:dff8d84b-1111-4222-8333-444444444444
+X-CUSTOM-7:value
+END:VCARD

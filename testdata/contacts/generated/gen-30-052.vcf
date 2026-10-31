@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Anna;Zoë;Fennell;;
+FN:Zoë Anna
+NICKNAME:Zoë,李雷
+ORG:R&D\;Labs;Dept 52
+TITLE:Engineer
+TEL;TYPE=fax:+1-555-8316
+TEL;TYPE=work:+1-555-1418
+TEL;TYPE=pager:+1-555-9684
+item1.EMAIL;TYPE=internet;TYPE=pref:zoë52.0@example.com
+item1.EMAIL;TYPE=internet:zoë52.1@example.com
+item1.EMAIL;TYPE=internet:zoë52.2@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 52
+X-MS-IMADDRESS:zoë@im.example
+CATEGORIES:Anna,Fennell
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/52
+PHOTO;ENCODING=b;TYPE=JPEG:S8ohpMQH4C99m2IDvxZcdyhgv7TMeEuGOuBDvzwWuwXgbHU6
+ 4BCcsG81b+BmsDMogvX+j0L3X4LuwzvH
+REV:20240111T101010Z
+UID:urn:uuid:30a4f275-1111-4222-8333-444444444444
+X-CUSTOM-52:value
+END:VCARD

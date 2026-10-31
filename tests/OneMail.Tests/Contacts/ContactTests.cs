@@ -259,6 +259,24 @@ public class ContactTests
     }
 
     [Fact]
+    public void EmptyValuesAndMovedSlotsAreReportedNotLostSilently()
+    {
+        var m = new MapiMessage();
+        m.Properties.Add(S(MapiPid.MessageClass, "IPM.Contact"));
+        m.Properties.Add(S(MapiPid.DisplayName, "Ann"));
+        m.Properties.Add(S(MapiPid.DepartmentName, string.Empty));
+        m.Properties.Add(S(MapiPid.Business2TelephoneNumber, "+1-555-0102"));
+        m.Properties.Add(N(0x8092, "SMTP"));
+        m.Properties.Add(N(0x8093, "ann@example.com"));
+        m.Properties.Add(NI(0x8022, 0));
+        LossReport report = new ContactToVCardConverter().Convert(m).Report;
+        Assert.Contains(report, e => e.Name == "PidTagDepartmentName" && e.Code == "EmptyValueNotWritten");
+        Assert.Contains(report, e => e.Code == "PhoneSlotChanged");
+        Assert.Contains(report, e => e.Code == "EmailSlotChanged");
+        Assert.Contains(report, e => e.Code == "DefaultValueNotWritten");
+    }
+
+    [Fact]
     public void VCardToContactFollowsTheMsOxVcardImportExample()
     {
         Component card = Doc("BEGIN:vCard\r\nVERSION:3.0\r\nFN:Dan Fennell\r\nORG:Contoso, Ltd.\r\nADR;TYPE=WORK,POSTAL,PARCEL:;;7890 Elm Street;Boulder;CO;33041;U.S.\r\nTEL;TYPE=VOICE,MSG,WORK:+1-206-555-0102\r\n"

@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Müller;Zoë;O'Brien;;
+FN:Zoë Müller
+ORG:Fabrikam;Dept 47
+TITLE:Engineer
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-5798
+TEL;TYPE=pager;VALUE=uri:tel:+1-555-5076
+TEL;TYPE=voice;VALUE=uri:tel:+1-555-2301
+ADR;TYPE=postal:;;244 Main St\nSuite 47;Town\, Hills;ST;22393;Country
+EMAIL;TYPE=internet;PREF=1:zoë47.0@example.com
+BDAY:--0322
+ANNIVERSARY:20100605
+GENDER:;custom
+LANG;PREF=1:en
+GEO:geo:-34.04666,155.50356
+IMPP:xmpp:zoë@example.com
+CATEGORIES:Smith,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/47
+PHOTO:data:image/jpeg;base64,trDdSGn7r02DsCjUq/tG2IbJv914gfkRLyOfwV9ZhSizNf
+ g6UN+IqJp7jDJoPItEr3ObFlqetuiMC0nN
+REV:20240826T101010Z
+UID:urn:uuid:c1a3c592-1111-4222-8333-444444444444
+X-CUSTOM-47:value
+END:VCARD

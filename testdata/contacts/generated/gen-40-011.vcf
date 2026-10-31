@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Smith;Zoë;李雷;Dr.;
+FN:Zoë Smith
+NICKNAME:李雷,Ünal
+ORG:Acme\\Corp;Dept 11
+TITLE:Dr
+TEL;TYPE=voice;VALUE=uri:tel:+1-555-1659
+TEL;TYPE=home;VALUE=uri:tel:+1-555-9347
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-1928
+EMAIL;TYPE=internet;PREF=1:zoë11.0@example.com
+BDAY:19800322
+ANNIVERSARY:20100605
+GENDER:F
+LANG;PREF=1:fr
+GEO:geo:-8.40458,-19.96696
+IMPP:xmpp:zoë@example.com
+CATEGORIES:Ünal,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/11
+PHOTO:data:image/jpeg;base64,nPcFtqehCnGD9c1OuvLyrDRMZuSKUMfx+SFrDvSP44a8SO
+ YXaRyXjkXcoTuiQtPl4YuBvpdk4yrq4cxX
+REV:20241123T101010Z
+UID:urn:uuid:00025d6b-1111-4222-8333-444444444444
+X-CUSTOM-11:value
+END:VCARD

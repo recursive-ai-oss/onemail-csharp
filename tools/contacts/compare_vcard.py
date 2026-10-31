@@ -138,6 +138,8 @@ def related(x, y, raw):
         return "OL-EMPTY the oracle returns an empty array for data it cannot decode (a surplus = at the end)"
     if x[0] == "PHOTO" and (b"\r\r\n" in raw):
         return "K1 CR CR LF ends the line twice, which breaks the folding of the photo"
+    if x[0] == "GENDER" and ov.startswith("s:;") and rv == "s:;" + ov[3:][1:]:
+        return "OL-GENDER the oracle drops the first letter of an identity given without a sex (GENDER:;text)"
     if x[0] in ("ORG", "CATEGORIES", "NOTE") and (b"=\r\n\r\n" in raw or b"=\n\n" in raw):
         return "OL-QP a quoted-printable soft break before a blank line: the readers disagree on where the value ends"
     return None

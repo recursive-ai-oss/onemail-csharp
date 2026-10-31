@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:4.0
+N:O'Brien;Anna;Zoë;;
+FN:Anna O'Brien
+NICKNAME:Åsa,Anna
+ORG:Acme\\Corp;Dept 59
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=home;VALUE=uri:tel:+1-555-7473
+ADR;TYPE=postal:;;636 Main St\nSuite 59;Town\, Hills;ST;83964;Country
+EMAIL;TYPE=internet;PREF=1:anna59.0@example.com
+EMAIL;TYPE=internet:anna59.1@example.com
+EMAIL;TYPE=internet:anna59.2@example.com
+BDAY:19800322
+ANNIVERSARY:--0605
+GENDER:O
+LANG;PREF=1:de
+GEO:geo:-46.05819,-157.24379
+IMPP:xmpp:anna@example.com
+CATEGORIES:Smith,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/59
+REV:20240519T101010Z
+UID:urn:uuid:27f75fe1-1111-4222-8333-444444444444
+X-CUSTOM-59:value
+END:VCARD

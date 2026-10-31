@@ -4,6 +4,7 @@ using System.Text;
 using RecursiveAI.OneMail.Calendar;
 using RecursiveAI.OneMail.Calendar.Ics;
 using RecursiveAI.OneMail.Calendar.Recurrence;
+using RecursiveAI.OneMail.Calendar.VCard;
 using RecursiveAI.OneMail.Conversion;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
@@ -46,7 +47,7 @@ internal static class OutlookChecks
 
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
-        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime);
+        & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts);
 
     public static bool Msg()
     {
@@ -165,6 +166,28 @@ internal static class OutlookChecks
         var view = new MapiMailItem(msg, default);
         return view.From[0].Address == "a@example.com" && view.From[0].X500Address == "/o=x/cn=a" && Mail.Parse(eml).Subject == "caf\u00e9"
             && back.GetString(MapiPid.Body) == "body" && back.GetString(MapiPid.SentRepresentingSmtpAddress) == "a@example.com";
+    }
+
+    // A contact to a vCard and back, a vCard read through the typed view, and a distribution list as a group card.
+    public static bool Contacts()
+    {
+        var msg = new MapiMessage();
+        msg.Properties.Add(Str(MapiPid.MessageClass, "IPM.Contact"));
+        msg.Properties.Add(Str(MapiPid.DisplayName, "Dan Fennell"));
+        msg.Properties.Add(Str(MapiPid.GivenName, "Dan"));
+        msg.Properties.Add(Str(MapiPid.Surname, "Fennell"));
+        msg.Properties.Add(Str(MapiPid.CompanyName, "Contoso, Ltd."));
+        msg.Properties.Add(Str(MapiPid.BusinessTelephoneNumber, "+1-206-555-0102"));
+        ConversionResult<RecursiveAI.OneMail.Calendar.Component> card = new RecursiveAI.OneMail.Conversion.OxVCard.ContactToVCardConverter().Convert(msg);
+        var doc = new ContentDocument();
+        doc.Root.Add(card.Value);
+        byte[] bytes = doc.ToArray();
+        VCardView view = VCardDocument.Cards(ContentDocument.Parse(bytes)).Single();
+        MapiMessage back = new RecursiveAI.OneMail.Conversion.OxVCard.VCardToContactConverter().Convert(card.Value).Value;
+        var contact = new RecursiveAI.OneMail.Contacts.MapiContact(back);
+        return view.FormattedName == "Dan Fennell" && view.Phones.Single().Value == "+1-206-555-0102" && view.Organization[0] == "Contoso, Ltd."
+            && contact.Surname == "Fennell" && contact.Phone(RecursiveAI.OneMail.Contacts.ContactPhoneKind.Business) == "+1-206-555-0102" && contact.CompanyName == "Contoso, Ltd."
+            && new MapiMailItem(msg, default).Contact?.DisplayName == "Dan Fennell";
     }
 
     public static bool TnefInMime()

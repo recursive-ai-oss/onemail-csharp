@@ -15,6 +15,7 @@ using RecursiveAI.OneMail.Mapi;
 //   ContactTool export IN OUT [--limit N]           writes OUT/NNNNNN.30.vcf and .40.vcf for the contacts, for the vCard oracles
 //   ContactTool rt-contact IN [--limit N]           contact -> vCard -> contact: mapped properties come back exact, the rest is in the loss report
 //   ContactTool rt-vcard DIR [--limit N]            vCard -> contact -> vCard: the same, in the other direction
+//   ContactTool gen DIR [SEED [COUNT]]              writes generated contact and distribution list MSG files
 //   ContactTool vfacts DIR OUT.jsonl                typed-view facts of every .vcf, for the oracle comparison
 namespace ContactTool;
 
@@ -50,6 +51,7 @@ internal static class Program
             "rt-vcard" => RoundTripVCard(rest[0], limit),
             "vfacts" => VFacts.Run(rest[0], rest[1]),
             "photo" => Photo(rest[0]),
+            "gen" => ContactGen.Run(rest[0], rest.Count > 1 ? int.Parse(rest[1], CultureInfo.InvariantCulture) : 20261031, rest.Count > 2 ? int.Parse(rest[2], CultureInfo.InvariantCulture) : 64),
             _ => 2,
         };
     }
@@ -364,7 +366,7 @@ internal static class Program
                         else
                         {
                             cn.Mismatch++;
-                            cn.MismatchNames[key + " " + origin] = 1;
+                            cn.MismatchNames[key + " " + origin + " src=" + Value(src, p) + " back=" + (backByKey.TryGetValue(key, out MapiProperty? bb) ? Value(back, bb) : "<absent>")] = 1;
                         }
 
                         continue;
@@ -406,7 +408,7 @@ internal static class Program
             }
 
             Console.WriteLine($"contact -> vCard {version} -> contact: items {cn.Items}, properties exact {cn.Exact}, reported {cn.Reported}, derived {cn.Derived}, MISMATCH {cn.Mismatch}, SILENT {cn.Silent}, added by import {cn.Added}");
-            foreach (KeyValuePair<string, int> k in cn.MismatchNames.Take(20))
+            foreach (KeyValuePair<string, int> k in cn.MismatchNames.Take(2000))
             {
                 Console.WriteLine("  mismatch " + k.Key);
             }

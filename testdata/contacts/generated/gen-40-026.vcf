@@ -1,0 +1,27 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Åsa;Dan;Anna;Dr.;
+FN:Dan Åsa
+NICKNAME:Zoë,李雷
+ORG:Fabrikam;Dept 26
+TITLE:Engineer
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-9369
+TEL;TYPE=work;VALUE=uri:tel:+1-555-3234
+ADR;TYPE=home:;;836 Main St\nSuite 26;Town\, Hills;ST;69738;Country
+ADR;TYPE=postal:;;145 Main St\nSuite 26;Town\, Hills;ST;88167;Country
+EMAIL;TYPE=internet;PREF=1:dan26.0@example.com
+EMAIL;TYPE=internet:dan26.1@example.com
+BDAY:1980-03-22
+ANNIVERSARY:20100605
+GENDER:F
+LANG;PREF=1:fr
+GEO:geo:-15.87237,-156.01554
+IMPP:xmpp:dan@example.com
+CATEGORIES:Ünal,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/26
+PHOTO:https://example.com/p.jpg
+REV:20240601T101010Z
+UID:urn:uuid:6048a462-1111-4222-8333-444444444444
+X-CUSTOM-26:value
+END:VCARD

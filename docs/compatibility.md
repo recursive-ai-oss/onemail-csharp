@@ -25,10 +25,30 @@ the oracles' split), Apache James Mime4j test messages (80), our generated probe
 | mbox: mboxo, mboxrd, mboxcl, mboxcl2, Gmail Takeout labels (RFC 4155) | yes | yes | message boundaries: 0 against Python and MimeKit on 17 files, 3,798 messages | record copy 16 / 16 | yes | MMDF not supported |
 | Maildir (Courier and Dovecot flags and keywords) | yes | yes | 0 against Python `mailbox` | 48 / 48 | via store tests | Courier keyword file line format unverified against a real store; one directory listing held in memory |
 | EMLX and Apple Mail `.mbox` bundles | yes | yes | ground truth 14 / 14 | 14 / 14 | yes | flag bits unverified against a real Apple Mail store |
-| ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines and component trees) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
+| ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines, component trees, typed views; contacts below) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
 | The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | MSG, PST, DBX and OLM items not in the view yet |
 | PST / OST node database (MS-PST NDB) | yes (lower layer only) | no | NIST CFReDS OST: every node and block enumerates, header agrees with libpff | n/a | yes | no messages from PST yet; ANSI and 512-byte-page Unicode PSTs untested on real files (no public sample) |
 | MSG/OFT, TNEF, OLM, DBX, compressed RTF | not yet | not yet | | | | planned |
+
+## Contacts (vCard typed view, Outlook contacts, MS-OXVCARD)
+
+Method and rules: [`contacts.md`](contacts.md). No Outlook has been run. The corpus has two contact items (Tika and POI MSG, the same contact) and no
+Outlook contact PST, so the MS-OXOCNTC properties are covered by 56 generated contacts and 8 lists (`ContactTool gen`, seed 20261031). Oracles run black-box:
+vobject 0.9.9, FolkerKinzel.VCards 8.2.0 (public API), extract-msg 0.55.0.
+
+| Check | Against | Result |
+|---|---|---|
+| vCard typed view, fetched corpus (28 .vcf) | vobject / FolkerKinzel.VCards | vobject: 25 compared (3 it cannot parse), 365 agree, 17 explained, **0 unexplained**; FolkerKinzel: 28 compared, 417 agree, 37 explained, **0 unexplained** |
+| vCard typed view, generated 2.1/3.0/4.0 (60) + RFC examples + hand fixtures (86 files) | vobject / FolkerKinzel.VCards | vobject: 83 compared, 998 agree, 31 explained, **0**; FolkerKinzel: 86, 909 agree, 81 explained, **0** |
+| vCards we produce (132 files from the 2 real and 64 generated items, 3.0 and 4.0) | vobject / FolkerKinzel.VCards | both parse **all 132**; vobject 2,393 agree, 17 explained, **0 unexplained**; FolkerKinzel 2,204 agree, 254 explained, **0** |
+| Contact fields (2 real + 56 generated MSG) | extract-msg | 58 contacts, 4,408 field checks, **0 differences** |
+| Contact to vCard to contact (3.0 / 4.0) | every property exact, derived or in the loss report | real (2): 44 / 42 exact, 168 / 170 reported, 16 derived, **0 mismatch, 0 silent**; generated (56): 2,016 / 2,002 exact, 713 / 717 reported, 103 / 113 derived, **0 mismatch, 0 silent** |
+| vCard to contact to vCard (138 cards) | every card property carried or reported; contact stable on a second round | 1,311 carried, **0 not carried and not reported**; 137 / 138 stable (the one: a card without `FN` gets one composed from `N`) |
+| Byte-identical round trip of untouched vCards | the content-line tree | 28 + 86 corpus and generated files and 132 produced cards: all byte-identical |
+| Fuzz `vcard-view` | 600 s, `Checked` build | 5,049,889 executions, 0 findings |
+
+Gaps: no Outlook-produced contact PST or MSG with the full property set, and no Outlook import/export of vCards to compare against (the Outlook oracle, before 0.5).
+The slot order of telephone numbers and email addresses is approximated by a vCard and reported (`PhoneSlotChanged`, `EmailSlotChanged`).
 
 ## MS-OXCMAIL conversions (MAPI to MIME and back)
 

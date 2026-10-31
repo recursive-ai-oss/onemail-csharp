@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Fennell;Anna;Fennell;Dr.;
+FN:Anna Fennell
+NICKNAME:O'Brien,Dan
+ORG:Contoso\, Ltd.;Dept 20
+TITLE:Dr
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-7561
+TEL;TYPE=voice;VALUE=uri:tel:+1-555-9907
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-6401
+EMAIL;TYPE=internet;PREF=1:anna20.0@example.com
+EMAIL;TYPE=internet:anna20.1@example.com
+EMAIL;TYPE=internet:anna20.2@example.com
+BDAY:1980-03-22T10:20:30Z
+ANNIVERSARY:20100605
+GENDER:;custom
+LANG;PREF=1:de
+GEO:geo:-69.95330,50.32334
+IMPP:xmpp:anna@example.com
+CATEGORIES:Fennell,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/20
+REV:20241119T101010Z
+UID:urn:uuid:97eb485f-1111-4222-8333-444444444444
+X-CUSTOM-20:value
+END:VCARD

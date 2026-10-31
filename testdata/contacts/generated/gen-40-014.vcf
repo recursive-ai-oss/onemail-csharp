@@ -1,0 +1,28 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Fennell;Dan;Ünal;Dr.;
+FN:Dan Fennell
+NICKNAME:Müller,Zoë
+ORG:Acme\\Corp;Dept 14
+TITLE:Engineer
+TEL;TYPE=pager;VALUE=uri:tel:+1-555-5265
+TEL;TYPE=home;VALUE=uri:tel:+1-555-8136
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-9022
+ADR;TYPE=work:;;658 Main St\nSuite 14;Town\, Hills;ST;33930;Country
+ADR;TYPE=home:;;365 Main St\nSuite 14;Town\, Hills;ST;83507;Country
+item1.EMAIL;TYPE=internet;PREF=1:dan14.0@example.com
+item1.EMAIL;TYPE=internet:dan14.1@example.com
+BDAY:19800322
+ANNIVERSARY:20100605
+GENDER:F
+LANG;PREF=1:de
+GEO:geo:-37.93672,-153.58408
+IMPP:xmpp:dan@example.com
+CATEGORIES:Zoë,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/14
+PHOTO:https://example.com/p.jpg
+REV:20240118T101010Z
+UID:urn:uuid:8df9165b-1111-4222-8333-444444444444
+X-CUSTOM-14:value
+END:VCARD

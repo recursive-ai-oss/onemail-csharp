@@ -1,0 +1,22 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Dan;Fennell;Ünal;;
+FN:Fennell Dan
+ORG:Contoso\, Ltd.;Dept 43
+TITLE:Engineer
+TEL;TYPE=pager:+1-555-1619
+ADR;TYPE=work:;;348 Main St\nSuite 43;Town\, Hills;ST;28338;Country
+EMAIL;TYPE=internet;TYPE=pref:fennell43.0@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 43
+X-MS-IMADDRESS:fennell@im.example
+CATEGORIES:O'Brien,Ünal
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/43
+PHOTO;ENCODING=b;TYPE=JPEG:xx5uGeWH1rcP/7ctLNRIHXw4jWD/u7Ld4+2cc4vFuZzRlFC/
+ sdPVjWxIInqrMaJQZv92dP+KqALTbX25
+REV:20240609T101010Z
+UID:urn:uuid:f6ce3eab-1111-4222-8333-444444444444
+X-CUSTOM-43:value
+END:VCARD

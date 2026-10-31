@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Zoë;Ünal;Müller;;
+FN:Ünal Zoë
+ORG:Fabrikam;Dept 13
+TITLE:Dr
+TEL;TYPE=voice:+1-555-3051
+TEL;TYPE=pager:+1-555-9991
+ADR;TYPE=home:;;319 Main St\nSuite 13;Town\, Hills;ST;60600;Country
+ADR;TYPE=postal:;;137 Main St\nSuite 13;Town\, Hills;ST;27282;Country
+EMAIL;TYPE=internet;TYPE=pref:ünal13.0@example.com
+EMAIL;TYPE=internet:ünal13.1@example.com
+EMAIL;TYPE=internet:ünal13.2@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 13
+X-MS-IMADDRESS:ünal@im.example
+CATEGORIES:Zoë,Dan
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/13
+PHOTO;ENCODING=b;TYPE=JPEG:CTwlTcK1XPFoxbr3JXzoC8lVJBVH9NTfoRg3ObSM5Xkc5Ahd
+ wXhwPiD/oQb+go+3syBRnhDNeWH8ktnt
+REV:20240118T101010Z
+UID:urn:uuid:9e85d252-1111-4222-8333-444444444444
+X-CUSTOM-13:value
+END:VCARD

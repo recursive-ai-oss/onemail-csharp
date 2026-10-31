@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:O'Brien;Dan;Smith;Dr.;
+FN:Dan O'Brien
+NICKNAME:Fennell,Dan
+ORG:R&D\;Labs;Dept 10
+TITLE:Dr
+TEL;TYPE=pager:+1-555-5381
+TEL;TYPE=home:+1-555-2976
+TEL;TYPE=voice:+1-555-8504
+EMAIL;TYPE=internet;TYPE=pref:dan10.0@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 10
+X-MS-IMADDRESS:dan@im.example
+CATEGORIES:Dan,Zoë
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/10
+PHOTO;ENCODING=b;TYPE=JPEG:JCiqruVTpbmvQMTV3TD7pPap6mweODgtWNRiPsixwY0/m9Ou
+ 3v/T8+eTCjV6bqxbpGj59Wn23Wt6YrPX
+REV:20240125T101010Z
+UID:urn:uuid:b564704e-1111-4222-8333-444444444444
+X-CUSTOM-10:value
+END:VCARD

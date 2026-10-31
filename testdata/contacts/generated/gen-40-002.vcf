@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Smith;Åsa;Smith;;
+FN:Åsa Smith
+NICKNAME:Anna,李雷
+ORG:Contoso\, Ltd.;Dept 2
+TITLE:Engineer
+TEL;TYPE=home;VALUE=uri:tel:+1-555-5272
+TEL;TYPE=work;VALUE=uri:tel:+1-555-6832
+EMAIL;TYPE=internet;PREF=1:åsa2.0@example.com
+EMAIL;TYPE=internet:åsa2.1@example.com
+BDAY:1980-03-22T10:20:30Z
+ANNIVERSARY:--0605
+GENDER:;custom
+LANG;PREF=1:en
+GEO:geo:-32.02121,-142.64240
+IMPP:xmpp:åsa@example.com
+CATEGORIES:O'Brien,O'Brien
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/2
+PHOTO:data:image/jpeg;base64,fmYM1wSEk3xwaYCylPjSd4/qhHTG15RGlPBjeq6W6og44Z
+ V53gQKUU+wcBdK5cmXp6K0o728MbJX3AWV
+REV:20240823T101010Z
+UID:urn:uuid:b057dedb-1111-4222-8333-444444444444
+X-CUSTOM-2:value
+END:VCARD

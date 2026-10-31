@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Zoë;Müller;Zoë;Dr.;
+FN:Müller Zoë
+NICKNAME:Dan,O'Brien
+ORG:Acme\\Corp;Dept 53
+TITLE:Dr
+TEL;TYPE=home;VALUE=uri:tel:+1-555-6793
+ADR;TYPE=postal:;;320 Main St\nSuite 53;Town\, Hills;ST;42549;Country
+EMAIL;TYPE=internet;PREF=1:müller53.0@example.com
+EMAIL;TYPE=internet:müller53.1@example.com
+BDAY:--0322
+ANNIVERSARY:--0605
+GENDER:M
+LANG;PREF=1:fr
+GEO:geo:0.88165,-63.39119
+IMPP:xmpp:müller@example.com
+CATEGORIES:Åsa,Müller
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/53
+PHOTO:data:image/jpeg;base64,VBUyd7TABEP5z/7ip+Mm/pLFXdMsH7IZT470sSG5HCiVMM
+ pkaSUahteihS5kG0v2nfQZHi+Oe77uF33o
+REV:20240420T101010Z
+UID:urn:uuid:0611efa6-1111-4222-8333-444444444444
+X-CUSTOM-53:value
+END:VCARD

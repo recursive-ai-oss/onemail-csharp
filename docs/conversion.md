@@ -210,3 +210,11 @@ Property values are read as the MAPI layer limits them. The converters allocate 
    TNEF; a part that must not be unpacked is kept as an octet-stream attachment. The view's attachments (name, size, SHA-256) are compared with
    tnefparse 1.4.0, tnef 1.4.18, ytnef 2.1.2 and MimeKit 4.18.2 (`MimeKitTnef`: `TnefPart.ExtractAttachments`). `rt-tnef` is `rt-mapi` with the
    TNEF export.
+
+## Contacts and vCards: `ContactToVCardConverter`, `VCardToContactConverter` (MS-OXVCARD)
+
+Both implement `IItemConversion`; the reports use the families `mapi` (a contact property) and `vcard` (a card property, with its group). The mapping
+tables, import rules and codes are in [contacts.md](contacts.md). The check (`ContactTool rt-contact`, `rt-vcard`) is the same statement as for MIME:
+every property of the source is exact, in the documented derived set, or in the loss report. Codes added by this pair: `PhoneSlotChanged`,
+`EmailSlotChanged` (Approximated), `EmptyValueNotWritten`, `DefaultValueNotWritten` (Internal), `PartialDate`, `TimeOfDayDropped`,
+`OrgUnitsMerged`, `AddressExtendedMerged`, `PhotoNotInline`, `KeyNotX509`, `GenderIdentityDropped`.

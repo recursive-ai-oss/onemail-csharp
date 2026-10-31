@@ -1,0 +1,27 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Fennell;Smith;Fennell;;
+FN:Smith Fennell
+ORG:Acme\\Corp;Dept 35
+TITLE:Dr
+TEL;TYPE=fax;VALUE=uri:tel:+1-555-7565
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-2332
+ADR;TYPE=home:;;353 Main St\nSuite 35;Town\, Hills;ST;72620;Country
+EMAIL;TYPE=internet;PREF=1:smith35.0@example.com
+EMAIL;TYPE=internet:smith35.1@example.com
+EMAIL;TYPE=internet:smith35.2@example.com
+BDAY:19800322
+ANNIVERSARY:20100605
+GENDER:F;she
+LANG;PREF=1:de
+GEO:geo:19.68993,-0.12286
+IMPP:xmpp:smith@example.com
+CATEGORIES:Fennell,Fennell
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/35
+PHOTO:data:image/jpeg;base64,gFWIz+KQmqyvTA3XoPfbTNpInFN9vz+bf01J0za4iye4xf
+ KQIR3HpzjXd+ILnWCluBdnrUmwly5ZXBFn
+REV:20240605T101010Z
+UID:urn:uuid:604957c5-1111-4222-8333-444444444444
+X-CUSTOM-35:value
+END:VCARD

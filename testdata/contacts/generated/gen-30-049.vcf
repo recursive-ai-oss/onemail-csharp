@@ -1,0 +1,21 @@
+BEGIN:VCARD
+VERSION:3.0
+N:李雷;Dan;Zoë;;
+FN:Dan 李雷
+ORG:Contoso\, Ltd.;Dept 49
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=work:+1-555-7995
+EMAIL;TYPE=internet;TYPE=pref:dan49.0@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 49
+X-MS-IMADDRESS:dan@im.example
+CATEGORIES:李雷,Smith
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/49
+PHOTO;ENCODING=b;TYPE=JPEG:wEx7l6HvAxQQWuGkngHnPz4wNkJiFThgL4wXT9pitb5FqI+G
+ 7O5aB++HnfV44mq+w9H3Lc0o4VJCSyIy
+REV:20241018T101010Z
+UID:urn:uuid:4e7dc683-1111-4222-8333-444444444444
+X-CUSTOM-49:value
+END:VCARD

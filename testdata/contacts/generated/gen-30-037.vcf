@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Fennell;Dan;Müller;;
+FN:Dan Fennell
+NICKNAME:Zoë,Fennell
+ORG:Fabrikam;Dept 37
+TITLE:Engineer
+TEL;TYPE=cell:+1-555-4940
+item1.EMAIL;TYPE=internet;TYPE=pref:dan37.0@example.com
+item1.EMAIL;TYPE=internet:dan37.1@example.com
+item1.EMAIL;TYPE=internet:dan37.2@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 37
+X-MS-IMADDRESS:dan@im.example
+CATEGORIES:O'Brien,O'Brien
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/37
+PHOTO;ENCODING=b;TYPE=JPEG:I31XcNebp4vH4fHtREggsuIbn9IBUiCqEx3CC0hk98t6BSvP
+ Xsrug7lWLJgan6VXK/4JADne/bXPo9N/
+REV:20240312T101010Z
+UID:urn:uuid:e262a407-1111-4222-8333-444444444444
+X-CUSTOM-37:value
+END:VCARD

@@ -27,7 +27,7 @@ public sealed class ContactToVCardOptions
 /// <para>Text is escaped as vCard 3.0 and 4.0 require; a CR LF in a value becomes <c>\n</c>. Comma and semicolon inside a name or address part are escaped, so
 /// they survive; <see cref="VCardToContactConverter"/> reads them back. Never throws for odd content. Dates before 1601 or after 9999 do not occur in the item's FILETIME values and are not written.</para>
 /// <para>Codes in the report: <c>NoVCardMapping</c>, <c>StoreBookkeeping</c>, <c>DerivedValue</c>, <c>NotInThisVersion</c>, <c>AdditionalValuesNotCarried</c>,
-/// <c>ExchangeAddressNotExported</c>, <c>UnsupportedPhotoType</c>, <c>AttachmentNotCarried</c>, <c>MemberNotCarried</c>.</para>
+/// <c>ExchangeAddressNotExported</c>, <c>EmptyValueNotWritten</c>, <c>PhoneSlotChanged</c>, <c>EmailSlotChanged</c>, <c>DefaultValueNotWritten</c>, <c>UnsupportedPhotoType</c>, <c>AttachmentNotCarried</c>, <c>MemberNotCarried</c>.</para>
 /// </remarks>
 public sealed class ContactToVCardConverter : IItemConversion<MapiMessage, Component>
 {
@@ -286,6 +286,11 @@ public sealed class ContactToVCardConverter : IItemConversion<MapiMessage, Compo
                 Add("X-MS-INTERESTS", E(hobbies));
             }
 
+            if (_c.MailingAddress == ContactMailingAddress.None && m.Properties.Get(new MapiNamedProperty(MapiPropertySets.Address, 0x8022u)) is { } none)
+            {
+                report.Add(OxVCardTables.MapiFamily, OxVCardTables.Label(none), LossKind.Internal, "DefaultValueNotWritten", "No mailing address is selected; the card has no property for that and import leaves the selection unset.");
+            }
+
             if (_c.MailingAddress != ContactMailingAddress.None)
             {
                 Add("X-MS-OL-DEFAULT-POSTAL-ADDRESS", ((int)_c.MailingAddress).ToString(CultureInfo.InvariantCulture));
@@ -454,6 +459,14 @@ public sealed class ContactToVCardConverter : IItemConversion<MapiMessage, Compo
                     ContactPhoneKind.Primary => [],
                     _ => null,
                 };
+                if (p.Kind is ContactPhoneKind.Business2 or ContactPhoneKind.Home2 && _c.Phone(p.Kind == ContactPhoneKind.Business2 ? ContactPhoneKind.Business : ContactPhoneKind.Home) is null)
+                {
+                    // Import numbers the first work (home) telephone as the business (home) one and the second as the second, so a lone second number moves up.
+                    ushort id = ContactTags.PhoneTags.First(t => t.Kind == p.Kind).Id;
+                    report.Add(OxVCardTables.MapiFamily, MapiPropertyNames.GetName(id) ?? "0x" + id.ToString("X4", CultureInfo.InvariantCulture), LossKind.Approximated, "PhoneSlotChanged",
+                        "The contact has a second number but no first one of its type; a vCard has no order to keep, so import files it as the first.");
+                }
+
                 if (types is not null)
                 {
                     Add("TEL", E(p.Number), Typed(p.Kind == ContactPhoneKind.Primary, types));
@@ -484,22 +497,44 @@ public sealed class ContactToVCardConverter : IItemConversion<MapiMessage, Compo
         private void ExportEmails()
         {
             bool first = true;
+            int written = 0;
             foreach (ContactElectronicAddress e in _c.EmailAddresses)
             {
                 if (e.SmtpAddress is not { } smtp)
                 {
                     if (e.Address is not null)
                     {
-                        Drop("Email" + e.Slot.ToString(CultureInfo.InvariantCulture) + "EmailAddress", "ExchangeAddressNotExported",
-                            "The address type is " + (e.AddressType ?? "unknown") + ", and the item has no SMTP form of it.");
+                        string why = "The address type is " + (e.AddressType ?? "unknown") + ", and the item has no SMTP form of it.";
+                        Drop("Email" + e.Slot.ToString(CultureInfo.InvariantCulture) + "EmailAddress", "ExchangeAddressNotExported", why);
+                        ReportSlot(e.Slot, LossKind.Dropped, "ExchangeAddressNotExported", why);
                     }
 
                     continue;
                 }
 
+                // Import fills the email slots in card order, so an address whose slot is not its place among the written ones moves.
+                written++;
+                if (e.Slot != written)
+                {
+                    ReportSlot(e.Slot, LossKind.Approximated, "EmailSlotChanged", "An earlier slot is empty or holds an address that is not written, and a vCard has no slot order, so import files this address in slot " + written.ToString(CultureInfo.InvariantCulture) + ".");
+                }
+
                 // 2.1.3.4.2: TYPE=internet; the first address is the preferred one.
                 Add("EMAIL", E(smtp), Typed(first, "internet"));
                 first = false;
+            }
+        }
+
+        // The address type and address properties of an email slot (MS-OXOCNTC: 0x8082/0x8083, 0x8092/0x8093, 0x80A2/0x80A3).
+        private void ReportSlot(int slot, LossKind kind, string code, string reason)
+        {
+            uint b = 0x8080u + (uint)((slot - 1) * 0x10);
+            foreach (uint lid in new[] { b + 2, b + 3 })
+            {
+                if (m.Properties.Get(new MapiNamedProperty(MapiPropertySets.Address, lid)) is { } p)
+                {
+                    report.Add(OxVCardTables.MapiFamily, OxVCardTables.Label(p), kind, code, reason);
+                }
             }
         }
 
@@ -510,6 +545,14 @@ public sealed class ContactToVCardConverter : IItemConversion<MapiMessage, Compo
             var phoneIds = new HashSet<ushort>(ContactTags.PhoneTags.Select(t => t.Id));
             foreach (MapiProperty p in m.Properties)
             {
+                // An empty text value and an absent one mean the same to a vCard, so no empty property is written. The report says so, because
+                // the property comes back absent rather than empty.
+                if (p.Type is MapiType.UnicodeString or MapiType.String8 && !p.IsMultiValued && (p.AsString(m.String8Encoding) ?? string.Empty).Length == 0)
+                {
+                    report.Add(OxVCardTables.MapiFamily, OxVCardTables.Label(p), LossKind.Internal, "EmptyValueNotWritten", "The value is the empty string; a vCard property is not written for it, and the property is absent after import.");
+                    continue;
+                }
+
                 if (p.Name is { } name)
                 {
                     ReportNamed(p, name, fn, isList);

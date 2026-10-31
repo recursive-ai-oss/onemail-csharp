@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:李雷;Anna;Zoë;;
+FN:Anna 李雷
+ORG:Acme\\Corp;Dept 38
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-7132
+TEL;TYPE=pager;VALUE=uri:tel:+1-555-7550
+ADR;TYPE=work:;;597 Main St\nSuite 38;Town\, Hills;ST;75448;Country
+ADR;TYPE=postal:;;555 Main St\nSuite 38;Town\, Hills;ST;37677;Country
+EMAIL;TYPE=internet;PREF=1:anna38.0@example.com
+EMAIL;TYPE=internet:anna38.1@example.com
+BDAY:--0322
+ANNIVERSARY:20100605
+GENDER:F;she
+LANG;PREF=1:en
+GEO:geo:-42.80710,-6.33828
+IMPP:xmpp:anna@example.com
+CATEGORIES:Dan,Smith
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/38
+PHOTO:https://example.com/p.jpg
+REV:20240918T101010Z
+UID:urn:uuid:1f087c16-1111-4222-8333-444444444444
+X-CUSTOM-38:value
+END:VCARD

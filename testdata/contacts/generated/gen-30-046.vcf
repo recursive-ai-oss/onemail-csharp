@@ -1,0 +1,25 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Fennell;Müller;O'Brien;Dr.;
+FN:Müller Fennell
+NICKNAME:Åsa,Åsa
+ORG:Fabrikam;Dept 46
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=fax:+1-555-3645
+TEL;TYPE=work:+1-555-9291
+ADR;TYPE=work:;;411 Main St\nSuite 46;Town\, Hills;ST;88440;Country
+ADR;TYPE=home:;;413 Main St\nSuite 46;Town\, Hills;ST;60054;Country
+EMAIL;TYPE=internet;TYPE=pref:müller46.0@example.com
+EMAIL;TYPE=internet:müller46.1@example.com
+EMAIL;TYPE=internet:müller46.2@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 46
+X-MS-IMADDRESS:müller@im.example
+CATEGORIES:Ünal,Fennell
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/46
+REV:20240804T101010Z
+UID:urn:uuid:9b5a30d9-1111-4222-8333-444444444444
+X-CUSTOM-46:value
+END:VCARD

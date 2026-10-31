@@ -1,0 +1,24 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Müller;O'Brien;Anna;;
+FN:O'Brien Müller
+NICKNAME:Müller,Müller
+ORG:Acme\\Corp;Dept 34
+TITLE:Dr
+TEL;TYPE=voice:+1-555-1507
+ADR;TYPE=work:;;902 Main St\nSuite 34;Town\, Hills;ST;78187;Country
+ADR;TYPE=home:;;379 Main St\nSuite 34;Town\, Hills;ST;25726;Country
+EMAIL;TYPE=internet;TYPE=pref:o'brien34.0@example.com
+BDAY:1980-03-22T10:20:30Z
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 34
+X-MS-IMADDRESS:o'brien@im.example
+CATEGORIES:Fennell,Anna
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/34
+PHOTO;ENCODING=b;TYPE=JPEG:aZ8xUIoo3nMvGT2bALueQOvpSXI6C/IUBQQv84ztXC7rOAS3
+ MW0HntpCIVMP4gOwDbsBDB0l1NQjOypf
+REV:20240714T101010Z
+UID:urn:uuid:75531bfe-1111-4222-8333-444444444444
+X-CUSTOM-34:value
+END:VCARD

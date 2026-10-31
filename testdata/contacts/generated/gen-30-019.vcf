@@ -1,0 +1,21 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Zoë;O'Brien;O'Brien;;
+FN:O'Brien Zoë
+ORG:Fabrikam;Dept 19
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=pager:+1-555-4181
+ADR;TYPE=postal:;;462 Main St\nSuite 19;Town\, Hills;ST;14241;Country
+EMAIL;TYPE=internet;TYPE=pref:o'brien19.0@example.com
+EMAIL;TYPE=internet:o'brien19.1@example.com
+BDAY:1980-03-22
+X-MS-ANNIVERSARY:2010-06-05
+X-MS-TEXT:user field 19
+X-MS-IMADDRESS:o'brien@im.example
+CATEGORIES:Dan,Åsa
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/19
+REV:20241023T101010Z
+UID:urn:uuid:3507cc90-1111-4222-8333-444444444444
+X-CUSTOM-19:value
+END:VCARD

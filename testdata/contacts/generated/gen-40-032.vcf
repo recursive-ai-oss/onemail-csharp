@@ -1,0 +1,26 @@
+BEGIN:VCARD
+VERSION:4.0
+N:Anna;Smith;Dan;Dr.;
+FN:Smith Anna
+NICKNAME:Müller,Müller
+ORG:Fabrikam;Dept 32
+TITLE:R\;D Lead\, EMEA
+TEL;TYPE=cell;VALUE=uri:tel:+1-555-4474
+ADR;TYPE=home:;;334 Main St\nSuite 32;Town\, Hills;ST;82799;Country
+ADR;TYPE=work:;;583 Main St\nSuite 32;Town\, Hills;ST;88158;Country
+EMAIL;TYPE=internet;PREF=1:smith32.0@example.com
+BDAY:--0322
+ANNIVERSARY:20100605
+GENDER:F;she
+LANG;PREF=1:fr
+GEO:geo:-17.99383,-60.88510
+IMPP:xmpp:smith@example.com
+CATEGORIES:Dan,Zoë
+NOTE:Line one\nwith\; punctuation\, and \\ slash
+URL;TYPE=work:https://example.com/32
+PHOTO:data:image/jpeg;base64,ORogLpFxoJHLS3yrBm/8FlYS02zdj22R5DA1MCZCImk2+D
+ FDf4iAd5rUvlh2btiqzhy++AWIvdwtyLn2
+REV:20240318T101010Z
+UID:urn:uuid:6af14485-1111-4222-8333-444444444444
+X-CUSTOM-32:value
+END:VCARD
