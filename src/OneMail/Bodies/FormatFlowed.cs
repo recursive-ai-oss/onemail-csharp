@@ -248,6 +248,27 @@ public static class FormatFlowed
                     break;
                 }
 
+                // RFC 3676 §4.3: a line that is exactly "-- " is a signature separator and does not flow. A chunk that would end up as that line
+                // (the word "--" and its soft-break space) takes the next character, or the next word, with it.
+                if (content.AsSpan(pos, take).TrimEnd(' ').SequenceEqual("--") && (delSp ? take == 2 : take == 3))
+                {
+                    if (delSp)
+                    {
+                        take++;
+                    }
+                    else
+                    {
+                        int next = content.IndexOf(' ', pos + take);
+                        take = next < 0 ? remaining : next + 1 - pos;
+                    }
+
+                    if (take >= remaining)
+                    {
+                        WriteLine(sb, depth, content.Substring(pos), stuff, soft: false);
+                        break;
+                    }
+                }
+
                 // Without DelSp the chunk's own trailing space is the soft break; with it a space is added that the reader deletes.
                 string chunk = content.Substring(pos, take);
                 WriteLine(sb, depth, chunk, stuff, soft: delSp);

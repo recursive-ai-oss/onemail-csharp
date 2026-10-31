@@ -126,4 +126,25 @@ public class FormatFlowedTests
         Assert.NotNull(FormatFlowed.Encode(new string('x', 50_000) + " " + new string('y', 50_000), 78, true));
         Assert.NotNull(FormatFlowed.Encode(">>>>>>>>>>" + new string('x', 5000), 20, false));
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BreakNeverLeavesALineThatReadsAsASignatureSeparator(bool delSp)
+    {
+        // Found by fuzzing: "--" and its soft-break space on a line of their own is the signature separator, which does not flow.
+        foreach (int depth in new[] { 0, 1, 32 })
+        {
+            foreach (int width in new[] { 20, 21, 35, 36, 40 })
+            {
+                FlowedParagraph[] input =
+                [
+                    new FlowedParagraph(depth, new string('-', 120)),
+                    new FlowedParagraph(depth, "aaa bbb ccc ddd eee fff ggg -- hhh iii jjj kkk lll mmm nnn ooo ppp -- qqq"),
+                ];
+                string enc = FormatFlowed.Encode(input, width, delSp);
+                Assert.Equal(Texts(input), Texts(FormatFlowed.Parse(enc, delSp)));
+            }
+        }
+    }
 }
