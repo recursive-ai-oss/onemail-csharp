@@ -204,6 +204,6 @@ public sealed class FormWriteResult
     /// <summary>The document as a string.</summary>
     public string Text => Encoding.UTF8.GetString(Bytes);
 
-    /// <summary>Everything the conversion could not carry, aggregated per kind and path. Empty means nothing but folding and name case was lost... and those are listed too, so empty means lossless.</summary>
+    /// <summary>Everything the conversion could not carry, aggregated per kind and path. Folding and name case are listed too, so an empty list means the text and the form carry exactly the same data.</summary>
     public IReadOnlyList<FormLoss> Losses { get; }
 }

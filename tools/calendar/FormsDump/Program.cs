@@ -13,7 +13,7 @@ return args.Length >= 2 ? Run(args) : Usage();
 
 static int Usage()
 {
-    Console.Error.WriteLine("usage: FormsDump to json|xml <file> | from json|xml <file> | check <root>... | emit <root> <outdir>");
+    Console.Error.WriteLine("usage: FormsDump to json|xml <file> | from json|xml <file> | check <root>... | emit <root> <outdir> | alloc <root>... | reread <indir> <outdir> json|xml");
     return 2;
 }
 
@@ -25,6 +25,10 @@ static int Run(string[] args)
             return Check.Run(args[1..]);
         case "emit":
             return Check.Emit(args[1], args[2]);
+        case "alloc":
+            return Check.Alloc(args[1..]);
+        case "reread" when args.Length >= 4:
+            return Check.Reread(args[1], args[2], args[3]);
         case "to" or "from" when args.Length >= 3:
             return Convert(args);
         default:
@@ -100,6 +104,84 @@ internal static partial class Check
         internal int Files, Documents, Properties, Parameters, Values, Mismatch, Explained, JsonStable, XmlStable, XmlFiles, JsonDefects, XmlDefects, JsonBytes, XmlBytes;
         internal Dictionary<string, int> Losses = [];
         internal List<string> Problems = [];
+    }
+
+    // Bytes allocated per property by each direction, over every text file under the roots (one warm-up pass first). The input is
+    // parsed once up front, so only the form conversion is measured.
+    internal static int Alloc(string[] roots)
+    {
+        List<(ContentDocument Doc, bool Card, byte[] Json, byte[] Xml, int Props)> docs = [];
+        foreach (string root in roots)
+        {
+            foreach (string f in TextFiles(root))
+            {
+                ContentDocument d = ContentDocument.Parse(File.ReadAllBytes(f));
+                Totals t = new();
+                Count(d.Root, t);
+                bool card = IsCard(d);
+                docs.Add((d, card, JsonForms.ToJson(d).Bytes, (card ? XmlForms.ToXCard(d) : XmlForms.ToXCal(d)).Bytes, t.Properties));
+            }
+        }
+
+        long props = docs.Sum(static x => (long)x.Props);
+        long jsonBytes = docs.Sum(static x => (long)x.Json.Length);
+        long xmlBytes = docs.Sum(static x => (long)x.Xml.Length);
+        string[] names = ["ToJson", "FromJson", "ToXml", "FromXml"];
+        long[] bytes = new long[4];
+        for (int pass = 0; pass < 2; pass++)
+        {
+            for (int k = 0; k < 4; k++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                foreach ((ContentDocument doc, bool card, byte[] json, byte[] xml, int _) in docs)
+                {
+                    switch (k)
+                    {
+                        case 0: _ = JsonForms.ToJson(doc); break;
+                        case 1: _ = JsonForms.FromJson(json); break;
+                        case 2: _ = card ? XmlForms.ToXCard(doc) : XmlForms.ToXCal(doc); break;
+                        default: _ = XmlForms.FromXml(xml); break;
+                    }
+                }
+
+                bytes[k] = GC.GetAllocatedBytesForCurrentThread() - before;
+            }
+        }
+
+        Console.WriteLine($"{docs.Count} documents, {props} properties, jCal/jCard {jsonBytes} bytes, xCal/xCard {xmlBytes} bytes");
+        for (int k = 0; k < 4; k++)
+        {
+            long inBytes = k < 2 ? jsonBytes : xmlBytes;
+            Console.WriteLine($"{names[k],-9} {bytes[k] / (double)props,9:F0} B/property  {bytes[k] / (double)inBytes,6:F1} B allocated per byte of form text");
+        }
+
+        return 0;
+    }
+
+    // Reads every JSON or XML file of a directory (another library's output) and writes it again with ours: one file per input, same name.
+    internal static int Reread(string inDir, string outDir, string form)
+    {
+        int n = 0;
+        bool json = form == "json";
+        foreach (string f in Directory.EnumerateFiles(inDir, "*." + form, SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            byte[] data = File.ReadAllBytes(f);
+            if (data.AsSpan().StartsWith("ERROR"u8))
+            {
+                continue;
+            }
+
+            FormReadResult r = json ? JsonForms.FromJson(data) : XmlForms.FromXml(data);
+            bool card = IsCard(r.Document);
+            byte[] o = json ? JsonForms.ToJson(r.Document).Bytes : (card ? XmlForms.ToXCard(r.Document) : XmlForms.ToXCal(r.Document)).Bytes;
+            string dest = Path.Combine(outDir, Path.GetRelativePath(inDir, f));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.WriteAllBytes(dest, o);
+            n++;
+        }
+
+        Console.WriteLine("reread " + n + " files");
+        return 0;
     }
 
     internal static int Emit(string root, string outDir)
@@ -452,6 +534,12 @@ internal static partial class Check
 
         string value = ContentValues.Unescape(v1, v21 ? TextEscapeStyle.VCard21 : TextEscapeStyle.Rfc5545);
         value = value.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (owner.IsNamed("VCARD"))
+        {
+            // Producers escape the colon in URLs (http\://); the forms read it as a plain colon.
+            value = value.Replace("\\:", ":", StringComparison.Ordinal);
+        }
+
         string name = p.Name.ToUpperInvariant();
         if (name == "GEO" && !value.StartsWith("geo:", StringComparison.Ordinal))
         {

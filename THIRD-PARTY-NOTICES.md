@@ -70,3 +70,18 @@ The recurrence and calendar checks in `tools/calendar` run these released packag
 | vobject (PyPI) | 0.9.9 | Apache-2.0 |
 | Ical.Net (NuGet) | 5.2.3 | MIT |
 | FolkerKinzel.VCards (NuGet) | 8.2.0 | MIT |
+
+## jCal, jCard, xCal and xCard
+
+`testdata/calendar/forms/rfc` holds the examples printed in RFC 6321, 6351, 7095 and 7265, with the corrections listed in `ERRATA.txt` (the IETF documents are © IETF Trust and the persons identified as the document authors; used under the IETF Trust Legal Provisions, which license code components extracted from RFCs under the Revised BSD License).
+
+The differential run in `tools/calendar/oracles/forms` runs these released builds as separate processes (never linked or shipped). Their test files that the corpus check reads are fetched, not committed (see `tools/calendar/README.md`).
+
+| Program | Version | Licence |
+|---|---|---|
+| ical.js (npm) | 2.2.1 | MPL-2.0 |
+| ez-vcard (Maven Central) | 0.12.2 | BSD-2-Clause |
+| biweekly (Maven Central) | 0.6.8 | BSD-2-Clause |
+| vinnie, jackson-core, jackson-databind, jackson-annotations, commons-codec, freemarker, jsoup (their dependencies) | 2.0.2, 2.16.1, 2.16.1, 2.16.1, 1.10, 2.3.32, 1.17.2 | Apache-2.0 (vinnie BSD-2-Clause, jsoup MIT) |
+| Node.js | 22.22.1 | MIT and bundled licences |
+| Eclipse Temurin JDK | 21 | GPL-2.0 with Classpath Exception |

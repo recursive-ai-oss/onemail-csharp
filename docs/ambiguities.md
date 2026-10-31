@@ -224,6 +224,30 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
 | K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |
 
+### JSON and XML forms (jCal, jCard, xCal, xCard)
+
+Observed black-box on ical.js 2.2.1, Python `icalendar` 7.3.0, biweekly 0.6.8 and ez-vcard 0.12.2 (`tools/calendar/oracles/forms`); the rows say how we resolve what the RFCs leave open or what the oracles do differently. Reasons and the full class list: [`jcal-xcal.md`](jcal-xcal.md) and `explained.tsv`.
+
+| ID | Case | Oracles | Resolution | Defect or loss | Basis |
+|---|---|---|---|---|---|
+| J1 | Value that does not fit its type (`DTSTAMP:19970901T1300Z`, `TRIGGER:19980403T120000`) | ical.js, biweekly print a guessed, often garbled typed value | Carried as `unknown` with the raw text; the declared `VALUE` stays as a parameter, so the text writes back as read | `ValueNotRepresentable` | lossless |
+| J2 | `DTSTART:19971102` with no `VALUE=DATE` | ical.js, biweekly: date-time with a garbled time | A date (RFC 7265 Appendix B.1 shows it) | `AmbiguousValueType` | RFC example |
+| J3 | `ENCODING=BASE64` without `VALUE=BINARY` on `ATTACH` or an extension property; `VALUE=BINARY` without `ENCODING` | n/a | Both are `binary`; `ENCODING=BASE64` is added in the second case | `AmbiguousValueType` | RFC 5545 §3.3.1 |
+| J4 | `TZ:-0500` | ical.js text | `utc-offset` (RFC 7095 Appendix B.1); `VALUE` is not written back | none | RFC example |
+| J5 | Parameter with no value (`ATTENDEE;MAILTO:`) | ical.js, icalendar drop it | One empty value, in JSON and XML | none | lossless |
+| J6 | Parameter given twice | ical.js, icalendar keep the last | Values merged in order | `DuplicateParameterMerged` | lossless |
+| J7 | Same JSON object key twice | n/a | Both kept | `DuplicateKey` | lossless |
+| J8 | `TYPE`, `PID`, `SORT-AS` values, also a quoted `"a,b"` | ez-vcard keeps one string | Split into arrays (RFC 7095 §3.3.1.1) | none | RFC |
+| J9 | Inline vCard base64 (`PHOTO`, `KEY`) | ical.js keeps `binary` and `ENCODING` | `data:` URI; media type from `TYPE`, else `application/octet-stream` | `InlineBinaryAsDataUri` | RFC 7095 §3.5, RFC 2397 |
+| J10 | Backslash escapes in a vCard URI value (`URL:http\://x`) | ical.js and ez-vcard unescape | Unescaped (`\\ \, \; \:`); a backslash cannot occur in a URI | none | 2 of 2 |
+| J11 | vCard 2.1/3.0 data in xCard | ez-vcard writes 4.0 everywhere | 4.0 forms for `GEO`, `TYPE=pref`; `VERSION` dropped. jCard keeps the source version and type names | `VersionNotCarried`, `VersionSpecificForm` | RFC 6351 |
+| J12 | Group prefix on iCalendar data | ical.js keeps `GROUP.NAME` as the name | Split into the `group` parameter | `GroupNotCarried` in XML | RFC 7095 §3.3.1.2 |
+| J13 | Property, parameter, component or type name that is not an XML name | biweekly, ez-vcard drop or rename | Left out of xCal/xCard (JSON carries it) | `PropertyNotCarried`, `ParameterNotCarried`, `ComponentNotCarried`, `TypeNameNotCarried` | XML 1.0 |
+| J14 | Character XML cannot hold (U+000C, NUL, lone surrogate) | n/a | U+FFFD | `InvalidXmlCharacter` | XML 1.0 |
+| J15 | vCard 2.1 quoted-printable `=0D=0A` | ez-vcard keeps CR LF in `LABEL` | Line feed in the form; the text writer uses quoted-printable again and never folds a line after `=` | none | RFC 6350 §3.4 |
+| J16 | Components outside a `VCALENDAR` (bare `VEVENT` examples) | biweekly writes calendars only | Carried at the top level of the form | none | lossless |
+| J17 | Durations, UTC offsets, `TZID` values, repeated `FREEBUSY` periods, URI scheme case, local times with `TZID` | icalendar, biweekly normalise (`P7W` to `P49D`, `-00:00` to `+00:00`, local to UTC, `MAILTO:` to `mailto:`) | Kept as written | none | lossless |
+
 ## Recurrence and time zones
 
 Ours against `recurring-ical-events` 3.8.2 on `icalendar` 7.3.0 (**rec**), `python-dateutil` 2.9.0.post0 `rrule` through our glue (**du**) and Ical.Net 5.2.3 (**ical**), black-box, over every recurring component of the public calendar corpus plus our generated fixtures: 2,384 components, each in a fixed window (`tools/calendar/run_expand_diff.sh`; method in `docs/recurrence.md`). A component is *identical* when the sorted start lists are equal, *differing* otherwise, *not expanded* when the oracle errors or times out (330 libical components have an invalid DTSTART that every oracle rejects). Counts are components. Each difference gets exactly one id, the first cause that applies; the id is the entry below. Basis as in the other sections: all agree, 2 of 3, or provisional (our default).

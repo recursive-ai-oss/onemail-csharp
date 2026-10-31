@@ -309,7 +309,8 @@ internal static class FormCodec
 
         if (t is null)
         {
-            return string.Empty;
+            // RFC 2397: with no media type a data: URI means text/plain, which is wrong for binary.
+            return "application/octet-stream";
         }
 
         if (t.Contains('/', StringComparison.Ordinal))
@@ -533,6 +534,10 @@ internal static class FormCodec
         {
             case "text":
                 return FormValue.Str(ContentValues.Unescape(raw, d.Style()));
+            case "uri" when d.IsVCard() && raw.Contains('\\', StringComparison.Ordinal):
+                // vCard 2.1 and 3.0 text-escape every value, and producers write URL:http\://example.org in
+                // every version. A backslash cannot occur in a URI, so the escapes are removed, as the other readers do.
+                return FormValue.Str(ContentValues.Unescape(raw.Replace("\\:", ":", StringComparison.Ordinal), d.Style()));
             case "uri" or "cal-address" or "language-tag" or "unknown":
                 return FormValue.Str(raw);
             case "binary":

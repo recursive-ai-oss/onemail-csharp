@@ -271,8 +271,28 @@ internal static class Program
             && Mail.Open(new MemorySource(tnefBytes)).Format == MailFormat.Tnef;
         Console.WriteLine("tnef: " + (tnefOk ? "ok" : "FAILED"));
 
+        // jCal, jCard, xCal and xCard: both directions, in memory, and the sniffer.
+        ContentDocument formsIcs = ContentDocument.Parse("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a@b\r\nDTSTART:20260328T023000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE\r\nSUMMARY:Caf\u00e9\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"u8.ToArray());
+        ContentDocument formsCard = ContentDocument.Parse("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Jane Doe\r\nN:Doe;Jane;;;\r\nTEL;TYPE=work:tel:+1-555-0100\r\nEND:VCARD\r\n"u8.ToArray());
+        RecursiveAI.OneMail.Calendar.Forms.FormWriteResult jcal = RecursiveAI.OneMail.Calendar.Forms.JsonForms.ToJson(formsIcs);
+        RecursiveAI.OneMail.Calendar.Forms.FormWriteResult jcard = RecursiveAI.OneMail.Calendar.Forms.JsonForms.ToJson(formsCard);
+        RecursiveAI.OneMail.Calendar.Forms.FormWriteResult xcal = RecursiveAI.OneMail.Calendar.Forms.XmlForms.ToXCal(formsIcs);
+        RecursiveAI.OneMail.Calendar.Forms.FormWriteResult xcard = RecursiveAI.OneMail.Calendar.Forms.XmlForms.ToXCard(formsCard);
+        RecursiveAI.OneMail.Calendar.Forms.FormReadResult jcalBack = RecursiveAI.OneMail.Calendar.Forms.JsonForms.FromJson(jcal.Bytes);
+        RecursiveAI.OneMail.Calendar.Forms.FormReadResult jcardBack = RecursiveAI.OneMail.Calendar.Forms.JsonForms.FromJson(jcard.Bytes);
+        RecursiveAI.OneMail.Calendar.Forms.FormReadResult xcalBack = RecursiveAI.OneMail.Calendar.Forms.XmlForms.FromXml(xcal.Bytes);
+        RecursiveAI.OneMail.Calendar.Forms.FormReadResult xcardBack = RecursiveAI.OneMail.Calendar.Forms.XmlForms.FromXml(xcard.Bytes);
+        bool jxformsOk = jcalBack.Defects.Count == 0 && jcardBack.Defects.Count == 0 && xcalBack.Defects.Count == 0 && xcardBack.Defects.Count == 0
+            && System.Text.Encoding.UTF8.GetString(jcalBack.Document.ToArray()).Contains("RRULE:FREQ=WEEKLY;BYDAY=MO,WE", StringComparison.Ordinal)
+            && System.Text.Encoding.UTF8.GetString(xcalBack.Document.ToArray()).Contains("SUMMARY:Caf\u00e9", StringComparison.Ordinal)
+            && System.Text.Encoding.UTF8.GetString(jcardBack.Document.ToArray()).Contains("N:Doe;Jane;;;", StringComparison.Ordinal)
+            && System.Text.Encoding.UTF8.GetString(xcardBack.Document.ToArray()).Contains("TEL;TYPE=work:tel:+1-555-0100", StringComparison.Ordinal)
+            && MailFormatSniffer.Sniff(new MemorySource(jcal.Bytes)) == MailFormat.JCal && MailFormatSniffer.Sniff(new MemorySource(jcard.Bytes)) == MailFormat.JCard
+            && MailFormatSniffer.Sniff(new MemorySource(xcal.Bytes)) == MailFormat.XCal && MailFormatSniffer.Sniff(new MemorySource(xcard.Bytes)) == MailFormat.XCard;
+        Console.WriteLine("jxforms: " + (jxformsOk ? "ok" : "FAILED"));
 
 
-        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+        return pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && jxformsOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
