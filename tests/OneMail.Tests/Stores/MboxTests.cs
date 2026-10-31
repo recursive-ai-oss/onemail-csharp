@@ -123,6 +123,21 @@ public class MboxReaderTests
     }
 
     [Fact]
+    public void OverlongEnvelopeLineIsKeptWholeInAnyMode()
+    {
+        string envelope = "From " + new string('x', 300) + "\n";
+        string data = envelope + "Subject: 1\n\nbody\n";
+        var options = new MboxReaderOptions { FromLineMode = MboxFromLineMode.Any, MaxEnvelopeLineBytes = 64 };
+        List<MboxEntry> e = Read(data, options);
+        Assert.Single(e);
+        Assert.Equal(envelope.Length, e[0].EnvelopeLength);
+        Assert.Equal(StoreDefects.OverlongEnvelopeLine, e[0].Defects);
+
+        // In strict mode the same line is text, so the file has no message at all.
+        Assert.Empty(Read(data, new MboxReaderOptions { MaxEnvelopeLineBytes = 64 }));
+    }
+
+    [Fact]
     public void CrlfFilesStripTheCrlfSeparator()
     {
         string data = (Env + "Subject: 1\n\nhello\n\n" + Env + "Subject: 2\n\nbye\n\n").Replace("\n", "\r\n");

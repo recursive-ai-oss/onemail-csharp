@@ -111,6 +111,20 @@ public class MaildirTests
     }
 
     [Fact]
+    public void MalformedControlFilesAreReportedAndSkipped()
+    {
+        MemoryStoreFileSystem fs = new();
+        fs.SetFile("cur/1.M1P1.h:2,Sa", B("x"));
+        fs.SetFile("dovecot-keywords", B("garbage\n0 $Junk\n"));
+        fs.SetFile("dovecot-uidlist", B("3 V1 N4\nnot a uid line\n7 :1.M1P1.h:2,Sa\n"));
+        List<StoreDefect> defects = [];
+        MaildirEntry e = new MaildirStore(fs, "", new MaildirStoreOptions { DefectHandler = defects.Add }).Enumerate().Single();
+        Assert.Equal(["$Junk"], e.Keywords);
+        Assert.Equal(7, e.Uid);
+        Assert.Equal(2, defects.Count(d => d.Kind == StoreDefects.MalformedControlFile));
+    }
+
+    [Fact]
     public void CourierKeywordListIsRead()
     {
         MemoryStoreFileSystem fs = new();
