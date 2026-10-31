@@ -273,6 +273,22 @@ public class DocumentTests
         Assert.Contains(d.Defects, x => x.Kind == CalendarDefectKind.UnknownCharset);
     }
 
+    [Theory]
+    [InlineData("UTF-7")]
+    [InlineData("utf-7")]
+    [InlineData("65000")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("\u00e9\u00e9")]
+    public void CharsetsTheRuntimeRefusesAreUnknownNotFatal(string charset)
+    {
+        // Found by fuzzing: a CHARSET naming UTF-7 made Encoding.GetEncoding throw NotSupportedException.
+        byte[] data = [.. B("BEGIN:VCARD\r\nFN;CHARSET=" + charset + ":J"), 0xC3, 0xBC, .. B("\r\nEND:VCARD\r\n")];
+        ContentDocument d = ContentDocument.Parse(data);
+        Assert.Equal("J\u00fc", d.Components.Single().FindProperty("FN")!.Value);
+        Assert.Equal(data, d.ToArray());
+    }
+
     [Fact]
     public void QuotedPrintableValueDecodesWithItsCharset()
     {

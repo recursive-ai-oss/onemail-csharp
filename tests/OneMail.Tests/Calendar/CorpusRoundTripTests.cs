@@ -11,10 +11,10 @@ namespace RecursiveAI.OneMail.Tests.Calendar;
 public class CorpusRoundTripTests
 {
     private static string DataRoot([CallerFilePath] string here = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "..", "testdata", "calendar"));
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "..", "testdata"));
 
     public static IEnumerable<object[]> Files() =>
-        Directory.EnumerateFiles(DataRoot(), "*", SearchOption.AllDirectories)
+        new[] { "calendar", "fuzz/calendar" }.SelectMany(d => Directory.EnumerateFiles(Path.Combine(DataRoot(), d), "*", SearchOption.AllDirectories))
             .Where(f => f.EndsWith(".ics", StringComparison.Ordinal) || f.EndsWith(".vcf", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .Select(f => new object[] { Path.GetRelativePath(DataRoot(), f).Replace('\\', '/') });

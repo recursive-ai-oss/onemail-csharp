@@ -96,11 +96,13 @@ public static class ContentCharsets
             return Encoding.UTF8;
         }
 
+        // UTF-7 is disabled in .NET (and unsafe); a name that maps to it is treated as unknown, like any name the runtime
+        // refuses. The runtime throws NotSupportedException for it and ArgumentException for unknown names.
         try
         {
             return Encoding.GetEncoding(name);
         }
-        catch (ArgumentException)
+        catch (Exception e) when (e is ArgumentException or NotSupportedException)
         {
             // Fall through: the code-page provider knows the single- and double-byte Windows and ISO sets.
         }
@@ -109,7 +111,7 @@ public static class ContentCharsets
         {
             return CodePagesEncodingProvider.Instance.GetEncoding(name);
         }
-        catch (ArgumentException)
+        catch (Exception e) when (e is ArgumentException or NotSupportedException)
         {
             return null;
         }
