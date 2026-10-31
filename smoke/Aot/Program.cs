@@ -122,6 +122,16 @@ internal static class Program
             && StoreSniffer.Sniff(mboxSource) == StoreFormat.Mbox && StoreSniffer.Sniff(emlxSource) == StoreFormat.Emlx;
         Console.WriteLine("stores: " + (storesOk ? "ok" : "FAILED"));
 
-        return textOk && mimeOk && ndbOk && structuredOk && storesOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        // The shared view and Mail.Open: sniff, enumerate an mbox through the view, read bodies, attachments and defects.
+        byte[] viewMbox = "From a@b.c Mon Jan  1 00:00:00 2024\nSubject: =?utf-8?B?Y2Fmw6k=?=\nFrom: A <a@b.c>\nDate: Mon, 1 Jan 2024 00:00:00 +0000\nContent-Type: multipart/mixed; boundary=b\n\n--b\nContent-Type: text/plain\n\nhi\n--b\nContent-Type: application/pdf; name=x.pdf\nContent-Transfer-Encoding: base64\n\nAAEC\n--b--\n\nFrom d@e.f Tue Jan  2 00:00:00 2024\nSubject: y\n\nz\n"u8.ToArray();
+        using MailContainer opened = Mail.Open(new MemorySource(viewMbox));
+        IMailItem[] viewed = opened.Enumerate().ToArray();
+        bool viewOk = opened.Format == MailFormat.Mbox && viewed.Length == 2 && viewed[0].Subject == "caf\u00e9" && viewed[0].From[0].Address == "a@b.c"
+            && viewed[0].TextBody!.ReadText().StartsWith("hi", StringComparison.Ordinal) && viewed[0].Attachments[0].FileName == "x.pdf" && viewed[0].Attachments[0].Size == 3
+            && viewed[1].Subject == "y" && Mail.Parse("Subject: q\r\n\r\n"u8.ToArray()).Subject == "q"
+            && MailFormatSniffer.Sniff(new MemorySource("BEGIN:VCALENDAR\r\n"u8.ToArray())) == MailFormat.Ics;
+        Console.WriteLine("view: " + (viewOk ? "ok" : "FAILED"));
+
+        return textOk && mimeOk && ndbOk && structuredOk && storesOk && viewOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }

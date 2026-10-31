@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>$(PackagePrefix).OneMail.Samples.Reading</AssemblyName>
+    <RootNamespace>$(PackagePrefix).OneMail.Samples</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>

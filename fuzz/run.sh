@@ -44,6 +44,7 @@ case "$target" in
   ndb) maxlen=8192 ;;
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;
+  mail-open) maxlen=65536 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

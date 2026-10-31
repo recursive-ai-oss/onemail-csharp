@@ -132,9 +132,26 @@ internal static class Program
                     }
                 }
 
-                _ = msg.GetMessageId(structured);
-                _ = msg.GetReferences(structured);
-                _ = msg.GetInReplyTo(structured);
+                string? messageId = msg.GetMessageId(structured);
+                IReadOnlyList<string> references = msg.GetReferences(structured);
+                IReadOnlyList<string> inReplyTo = msg.GetInReplyTo(structured);
+                w.WriteStartObject("ids");
+                w.WriteString("messageId", messageId is null ? null : Clean(messageId));
+                w.WriteStartArray("inReplyTo");
+                foreach (string rid in inReplyTo)
+                {
+                    w.WriteStringValue(Clean(rid));
+                }
+
+                w.WriteEndArray();
+                w.WriteStartArray("references");
+                foreach (string rid in references)
+                {
+                    w.WriteStringValue(Clean(rid));
+                }
+
+                w.WriteEndArray();
+                w.WriteEndObject();
                 foreach (MimeDefect d in structured)
                 {
                     defects.Add("part0:" + d.Kind);
