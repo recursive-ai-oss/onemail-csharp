@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Not packed until it has content: an empty package would only reserve the name. -->
-    <IsPackable>false</IsPackable>
-    <Description>Renders an email message to PDF or an image in one call, on OneRender.</Description>
+    <Description>Renders an email message to a tagged PDF or PNG pages in one call, on OneRender. Native platforms only (not browser WebAssembly).</Description>
     <PackageTags>$(PackageTags);pdf;png;render</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup Label="This package's own readme replaces the shared one">
+    <None Remove="../../PACKAGE.md" />
+    <None Include="PACKAGE.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../OneMail/OneMail.csproj" />

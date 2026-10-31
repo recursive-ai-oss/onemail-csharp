@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool for the render checks (tools/render/README.md): renders messages from any reader to PDF and PNG, extracts the PDF text
+       with poppler's pdftotext and compares it with the display HTML's text. Nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>RenderTool</AssemblyName>
+    <RootNamespace>RenderTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OneArchive" />
+    <ProjectReference Include="../../../src/OneMail.Render/OneMail.Render.csproj" />
+  </ItemGroup>
+
+  <!-- Build with -p:WithFonts=true to add the optional font packages; they register themselves when referenced. -->
+  <ItemGroup Condition="'$(WithFonts)' == 'true'">
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Cjk" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Emoji" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Arabic" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Hebrew" />
+  </ItemGroup>
+
+</Project>
