@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Oracle driver: runs the released MimeKit package's mbox parsing mode as a black box and prints, for each message,
+       the byte offsets it reports. It is a tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MailboxDump</AssemblyName>
+    <RootNamespace>OneMail.Oracles.MailboxDump</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+
+</Project>

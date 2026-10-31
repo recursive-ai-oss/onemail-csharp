@@ -223,3 +223,26 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K18 | Properties inside `VCALENDAR` after `BEGIN:VCARD` junk, stray lines around components | n/a | n/a | Kept as items of the document root, in order. | `MissingColon`, `UnmatchedEnd` | lossless |
 | K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
 | K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |
+
+## Mailbox files (mbox, Maildir, EMLX)
+
+Black-box runs of Python 3.13.17 `mailbox` (mbox and Maildir) and MimeKit 4.18.2's mbox mode (`MimeParser` with `MimeFormat.Mbox`;
+`tools/oracles/mailbox-driver`) over small probes (`tools/mailbox/gen_mboxes.py`, `gen_stores.py`) and the dovecot-crlf file
+(3,240 `From ` lines). Go has no mbox reader. Neither oracle is a mail client, so every row that is not "agree" is provisional.
+The reader's behaviour is in [`mailboxes.md`](mailboxes.md). MK = MimeKit, Py = Python.
+
+| ID | Case | Py | MK | Resolution | Defect | Basis |
+|---|---|---|---|---|---|---|
+| S1 | A line starting `From ` that is not an envelope line (`From the desk of x`, `From maildir-storage.c, line 325:`), unquoted in the body | splits | splits, then often fails on the next "message" | Only a line with a sender and a date after `From ` (RFC 4155) starts a message; the rest is text. `MboxFromLineMode.Any` splits like both oracles. dovecot-crlf has three such lines: Py 3,240 messages, OneMail 3,237, MK raises at message 556 | `AmbiguousFromLine` | prov.; real-world file |
+| S2 | A `Content-Length` header (mboxcl/mboxcl2, or in any file) | ignored | ignored | Used when the file's variant is unknown, mboxcl or mboxcl2 and the length ends exactly at an envelope line or the end of the file (a blank line may sit between). Otherwise ignored. mboxo and mboxrd ignore it. Two different values: the first | `ContentLengthMismatch`, `AmbiguousContentLength` | prov. |
+| S3 | A CRLF file: the empty line after a message | keeps the `CR LF` in the message | the message runs to the next envelope line | The empty line (LF or CRLF) before the next envelope line or the end of the file is the separator, not message text | none | prov. |
+| S4 | A body that the oracle's split leaves unparseable | n/a | raises `FormatException` | The tree is OneMail's job, not the splitter's: a message is never rejected | none | oracle limit |
+| S5 | A line that is only `From ` (no sender or date) | splits | does not split | Not an envelope line in strict mode; a delimiter in `Any` mode | `AmbiguousFromLine` | 1 of 2 |
+| S6 | mboxcl2 (unquoted bodies, `Content-Length` only) | splits inside messages that hold envelope-looking lines | same | Read correctly through `Content-Length`; OneMail writes it only when asked for the variant | none | oracle limit |
+| S7 | Bytes before the first envelope line | skipped | skipped | Kept as the store's preamble, so entries plus preamble tile the file | `PreambleBeforeFirstMessage` | all agree |
+| S8 | An envelope line with no empty line before it | splits | splits | Splits; the previous message keeps its last line | `MissingSeparatorLine` | all agree |
+| S9 | Unquoting a stored body when the variant is not known | n/a | n/a | mboxrd's rule (every `>+From ` loses one `>`); an entry that a `Content-Length` delimited is returned as stored, because mboxcl and mboxcl2 differ | none | agent default |
+| S10 | Maildir info flags not in ASCII order or repeated (`:2,SF`) | read as written | n/a | Read as written, reported; written back sorted | `UnsortedFlags` | agent default |
+| S11 | Maildir file in `new` | subdir `new`, no flags | n/a | Flags from the name, plus `Recent` | none | all agree |
+| S12 | Mail's `flags` word and `date-sent`/`date-received` reals in EMLX plists | n/a | n/a | Bits 0, 1, 2, 4, 6, 8 map to seen, deleted, answered, flagged, draft, forwarded; the raw word is always kept. A real is Unix seconds from 1e9, otherwise seconds since 2001-01-01. **No real Mail store has been inspected**, so this is a default to check against one | none | agent default |
+| S13 | Courier `courierimapkeywords/:list` | n/a | n/a | Keyword names, an empty line, then `unique:n n` rows with zero-based positions. Written from Courier's published description of the directory; the line format inside the files is not in that document, so this is unchecked against Courier | `MalformedControlFile` | agent default |
