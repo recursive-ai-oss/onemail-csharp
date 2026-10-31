@@ -1,0 +1,353 @@
+# The tagged properties and named properties the MAPI readers use, from MS-OXPROPS (section numbers are in the spec; the names are the
+# canonical names defined there). One row per property. tools/mapi/gen_properties.py turns this file into
+# src/OneMail/Mapi/MapiPid.g.cs; edit this file, never the generated one.
+#
+# tag <TAB> id (hex) <TAB> canonical name
+# named <TAB> property set (name in MapiPropertySets) <TAB> LID (hex) <TAB> canonical name
+tag	0002	PidTagAlternateRecipientAllowed
+tag	0017	PidTagImportance
+tag	001A	PidTagMessageClass
+tag	0023	PidTagOriginatorDeliveryReportRequested
+tag	0025	PidTagParentKey
+tag	0026	PidTagPriority
+tag	0029	PidTagReadReceiptRequested
+tag	002B	PidTagRecipientReassignmentProhibited
+tag	002E	PidTagOriginalSensitivity
+tag	0030	PidTagReplyTime
+tag	0031	PidTagReportTag
+tag	0032	PidTagReportTime
+tag	0036	PidTagSensitivity
+tag	0037	PidTagSubject
+tag	0039	PidTagClientSubmitTime
+tag	003A	PidTagReportName
+tag	003B	PidTagSentRepresentingSearchKey
+tag	003D	PidTagSubjectPrefix
+tag	003F	PidTagReceivedByEntryId
+tag	0040	PidTagReceivedByName
+tag	0041	PidTagSentRepresentingEntryId
+tag	0042	PidTagSentRepresentingName
+tag	0043	PidTagReceivedRepresentingEntryId
+tag	0044	PidTagReceivedRepresentingName
+tag	0045	PidTagReportEntryId
+tag	0046	PidTagReadReceiptEntryId
+tag	0047	PidTagMessageSubmissionId
+tag	0049	PidTagOriginalSubject
+tag	004B	PidTagOriginalMessageClass
+tag	004C	PidTagOriginalAuthorEntryId
+tag	004D	PidTagOriginalAuthorName
+tag	004E	PidTagOriginalSubmitTime
+tag	004F	PidTagReplyRecipientEntries
+tag	0050	PidTagReplyRecipientNames
+tag	0051	PidTagReceivedBySearchKey
+tag	0052	PidTagReceivedRepresentingSearchKey
+tag	0053	PidTagReadReceiptSearchKey
+tag	0054	PidTagReportSearchKey
+tag	0055	PidTagOriginalDeliveryTime
+tag	0057	PidTagMessageToMe
+tag	0058	PidTagMessageCcMe
+tag	0059	PidTagMessageRecipientMe
+tag	005A	PidTagOriginalSenderName
+tag	005B	PidTagOriginalSenderEntryId
+tag	005C	PidTagOriginalSenderSearchKey
+tag	005D	PidTagOriginalSentRepresentingName
+tag	005E	PidTagOriginalSentRepresentingEntryId
+tag	005F	PidTagOriginalSentRepresentingSearchKey
+tag	0060	PidTagStartDate
+tag	0061	PidTagEndDate
+tag	0062	PidTagOwnerAppointmentId
+tag	0063	PidTagResponseRequested
+tag	0064	PidTagSentRepresentingAddressType
+tag	0065	PidTagSentRepresentingEmailAddress
+tag	0066	PidTagOriginalSenderAddressType
+tag	0067	PidTagOriginalSenderEmailAddress
+tag	0068	PidTagOriginalSentRepresentingAddressType
+tag	0069	PidTagOriginalSentRepresentingEmailAddress
+tag	0070	PidTagConversationTopic
+tag	0071	PidTagConversationIndex
+tag	0072	PidTagOriginalDisplayBcc
+tag	0073	PidTagOriginalDisplayCc
+tag	0074	PidTagOriginalDisplayTo
+tag	0075	PidTagReceivedByAddressType
+tag	0076	PidTagReceivedByEmailAddress
+tag	0077	PidTagReceivedRepresentingAddressType
+tag	0078	PidTagReceivedRepresentingEmailAddress
+tag	0079	PidTagOriginalAuthorAddressType
+tag	007A	PidTagOriginalAuthorEmailAddress
+tag	007B	PidTagOriginallyIntendedRecipientAddressType
+tag	007D	PidTagTransportMessageHeaders
+tag	007E	PidTagDelegation
+tag	007F	PidTagTnefCorrelationKey
+tag	0C15	PidTagRecipientType
+tag	0C19	PidTagSenderEntryId
+tag	0C1A	PidTagSenderName
+tag	0C1D	PidTagSenderSearchKey
+tag	0C1E	PidTagSenderAddressType
+tag	0C1F	PidTagSenderEmailAddress
+tag	0E02	PidTagDisplayBcc
+tag	0E03	PidTagDisplayCc
+tag	0E04	PidTagDisplayTo
+tag	0E06	PidTagMessageDeliveryTime
+tag	0E07	PidTagMessageFlags
+tag	0E08	PidTagMessageSize
+tag	0E09	PidTagParentEntryId
+tag	0E12	PidTagMessageRecipients
+tag	0E13	PidTagMessageAttachments
+tag	0E1B	PidTagHasAttachments
+tag	0E1D	PidTagNormalizedSubject
+tag	0E1F	PidTagRtfInSync
+tag	0E20	PidTagAttachSize
+tag	0E21	PidTagAttachNumber
+tag	0E28	PidTagPrimarySendAccount
+tag	0E29	PidTagNextSendAcct
+tag	0E62	PidTagUrlCompNameSet
+tag	0E69	PidTagRead
+tag	0E79	PidTagTrustSender
+tag	0FF4	PidTagAccess
+tag	0FF5	PidTagRowType
+tag	0FF6	PidTagInstanceKey
+tag	0FF7	PidTagAccessLevel
+tag	0FF8	PidTagMappingSignature
+tag	0FF9	PidTagRecordKey
+tag	0FFA	PidTagStoreRecordKey
+tag	0FFB	PidTagStoreEntryId
+tag	0FFE	PidTagObjectType
+tag	0FFF	PidTagEntryId
+tag	1000	PidTagBody
+tag	1001	PidTagReportText
+tag	1006	PidTagRtfSyncBodyCrc
+tag	1007	PidTagRtfSyncBodyCount
+tag	1008	PidTagRtfSyncBodyTag
+tag	1009	PidTagRtfCompressed
+tag	1010	PidTagRtfSyncPrefixCount
+tag	1011	PidTagRtfSyncTrailingCount
+tag	1012	PidTagOriginallyIntendedRecipientEntryId
+tag	1013	PidTagHtml
+alias	1013	PidTagBodyHtml
+tag	1014	PidTagBodyContentLocation
+tag	1015	PidTagBodyContentId
+tag	1016	PidTagNativeBody
+tag	1035	PidTagInternetMessageId
+tag	1039	PidTagInternetReferences
+tag	1042	PidTagInReplyToId
+tag	1043	PidTagListHelp
+tag	1044	PidTagListSubscribe
+tag	1045	PidTagListUnsubscribe
+tag	1046	PidTagInternetReturnPath
+tag	1080	PidTagIconIndex
+tag	1081	PidTagLastVerbExecuted
+tag	1082	PidTagLastVerbExecutionTime
+tag	1090	PidTagFlagStatus
+tag	1095	PidTagFollowupIcon
+tag	1096	PidTagBlockStatus
+tag	3000	PidTagRowid
+tag	3001	PidTagDisplayName
+tag	3002	PidTagAddressType
+tag	3003	PidTagEmailAddress
+tag	3004	PidTagComment
+tag	3005	PidTagDepth
+tag	3007	PidTagCreationTime
+tag	3008	PidTagLastModificationTime
+tag	300B	PidTagSearchKey
+tag	3013	PidTagChangeKey
+tag	340D	PidTagStoreSupportMask
+tag	3701	PidTagAttachDataBinary
+tag	3702	PidTagAttachEncoding
+tag	3703	PidTagAttachExtension
+tag	3704	PidTagAttachFilename
+tag	3705	PidTagAttachMethod
+tag	3707	PidTagAttachLongFilename
+tag	3708	PidTagAttachPathname
+tag	3709	PidTagAttachRendering
+tag	370A	PidTagAttachTag
+tag	370B	PidTagRenderingPosition
+tag	370C	PidTagAttachTransportName
+tag	370D	PidTagAttachLongPathname
+tag	370E	PidTagAttachMimeTag
+tag	370F	PidTagAttachAdditionalInformation
+tag	3710	PidTagAttachMimeSequence
+tag	3711	PidTagAttachContentBase
+tag	3712	PidTagAttachContentId
+tag	3713	PidTagAttachContentLocation
+tag	3714	PidTagAttachFlags
+tag	3900	PidTagDisplayType
+tag	3902	PidTagTemplateid
+tag	39FE	PidTagSmtpAddress
+tag	3A00	PidTagAccount
+tag	3A06	PidTagGivenName
+tag	3A08	PidTagBusinessTelephoneNumber
+tag	3A09	PidTagHomeTelephoneNumber
+tag	3A0A	PidTagInitials
+tag	3A0B	PidTagKeyword
+tag	3A0C	PidTagLanguage
+tag	3A0D	PidTagLocation
+tag	3A11	PidTagSurname
+tag	3A15	PidTagPostalAddress
+tag	3A16	PidTagCompanyName
+tag	3A17	PidTagTitle
+tag	3A18	PidTagDepartmentName
+tag	3A19	PidTagOfficeLocation
+tag	3A1A	PidTagPrimaryTelephoneNumber
+tag	3A1B	PidTagBusiness2TelephoneNumber
+tag	3A1C	PidTagMobileTelephoneNumber
+tag	3A1D	PidTagRadioTelephoneNumber
+tag	3A1E	PidTagCarTelephoneNumber
+tag	3A1F	PidTagOtherTelephoneNumber
+tag	3A20	PidTagTransmittableDisplayName
+tag	3A21	PidTagPagerTelephoneNumber
+tag	3A23	PidTagPrimaryFaxNumber
+tag	3A24	PidTagBusinessFaxNumber
+tag	3A25	PidTagHomeFaxNumber
+tag	3A26	PidTagBusinessAddressCountry
+tag	3A27	PidTagBusinessAddressCity
+tag	3A28	PidTagBusinessAddressStateOrProvince
+tag	3A29	PidTagBusinessAddressStreet
+tag	3A2A	PidTagBusinessAddressPostalCode
+tag	3A2B	PidTagBusinessAddressPostOfficeBox
+tag	3A2C	PidTagTelexNumber
+tag	3A2D	PidTagIsdnNumber
+tag	3A2E	PidTagAssistantTelephoneNumber
+tag	3A2F	PidTagHome2TelephoneNumber
+tag	3A30	PidTagAssistant
+tag	3A40	PidTagSendRichInfo
+tag	3A41	PidTagWeddingAnniversary
+tag	3A42	PidTagBirthday
+tag	3A43	PidTagHobbies
+tag	3A44	PidTagMiddleName
+tag	3A45	PidTagDisplayNamePrefix
+tag	3A46	PidTagProfession
+tag	3A47	PidTagReferredByName
+tag	3A48	PidTagSpouseName
+tag	3A49	PidTagComputerNetworkName
+tag	3A4A	PidTagCustomerId
+tag	3A4B	PidTagTelecommunicationsDeviceForDeafTelephoneNumber
+tag	3A4C	PidTagFtpSite
+tag	3A4D	PidTagGender
+tag	3A4E	PidTagManagerName
+tag	3A4F	PidTagNickname
+tag	3A50	PidTagPersonalHomePage
+tag	3A51	PidTagBusinessHomePage
+tag	3A57	PidTagCompanyMainTelephoneNumber
+tag	3A58	PidTagChildrensNames
+tag	3A59	PidTagHomeAddressCity
+tag	3A5A	PidTagHomeAddressCountry
+tag	3A5B	PidTagHomeAddressPostalCode
+tag	3A5C	PidTagHomeAddressStateOrProvince
+tag	3A5D	PidTagHomeAddressStreet
+tag	3A5E	PidTagHomeAddressPostOfficeBox
+tag	3A5F	PidTagOtherAddressCity
+tag	3A60	PidTagOtherAddressCountry
+tag	3A61	PidTagOtherAddressPostalCode
+tag	3A62	PidTagOtherAddressStateOrProvince
+tag	3A63	PidTagOtherAddressStreet
+tag	3A64	PidTagOtherAddressPostOfficeBox
+tag	3A71	PidTagSendInternetEncoding
+tag	3FDE	PidTagInternetCodepage
+tag	3FF1	PidTagMessageLocaleId
+tag	3FF8	PidTagCreatorName
+tag	3FF9	PidTagCreatorEntryId
+tag	3FFA	PidTagLastModifierName
+tag	3FFB	PidTagLastModifierEntryId
+tag	3FFD	PidTagMessageCodepage
+tag	4022	PidTagCreatorAddressType
+tag	4023	PidTagCreatorEmailAddress
+tag	4030	PidTagSenderSimpleDisplayName
+tag	4038	PidTagCreatorSimpleDisplayName
+tag	4039	PidTagLastModifierSimpleDisplayName
+tag	5902	PidTagInternetMailOverrideFormat
+tag	5909	PidTagMessageEditorFormat
+tag	5D01	PidTagSenderSmtpAddress
+tag	5D02	PidTagSentRepresentingSmtpAddress
+tag	5D07	PidTagReceivedBySmtpAddress
+tag	5D08	PidTagReceivedRepresentingSmtpAddress
+tag	5FDF	PidTagRecipientOrder
+tag	5FE1	PidTagRecipientProposed
+tag	5FE3	PidTagRecipientProposedStartTime
+tag	5FE4	PidTagRecipientProposedEndTime
+tag	5FF6	PidTagRecipientDisplayName
+tag	5FF7	PidTagRecipientEntryId
+tag	5FFB	PidTagRecipientTrackStatusTime
+tag	5FFD	PidTagRecipientFlags
+tag	5FFF	PidTagRecipientTrackStatus
+tag	664A	PidTagHasNamedProperties
+tag	66A1	PidTagLocaleId
+tag	7FFA	PidTagAttachmentLinkId
+tag	7FFB	PidTagExceptionStartTime
+tag	7FFC	PidTagExceptionEndTime
+tag	7FFD	PidTagAttachmentFlags
+tag	7FFE	PidTagAttachmentHidden
+tag	7FFF	PidTagAttachmentContactPhoto
+named	Common	8501	PidLidReminderDelta
+named	Common	8502	PidLidReminderTime
+named	Common	8503	PidLidReminderSet
+named	Common	8506	PidLidPrivate
+named	Common	8510	PidLidSideEffects
+named	Common	8516	PidLidCommonStart
+named	Common	8517	PidLidCommonEnd
+named	Common	8530	PidLidFlagRequest
+named	Common	8534	PidLidMileage
+named	Common	8535	PidLidBilling
+named	Common	8539	PidLidCompanies
+named	Common	8552	PidLidCurrentVersion
+named	Common	8554	PidLidCurrentVersionName
+named	Common	8560	PidLidReminderSignalTime
+named	Common	8580	PidLidInternetAccountName
+named	Common	8581	PidLidInternetAccountStamp
+named	Common	8585	PidLidContactLinkEntry
+named	Common	8586	PidLidContactLinkName
+named	Appointment	820D	PidLidAppointmentStartWhole
+named	Appointment	820E	PidLidAppointmentEndWhole
+named	Appointment	8208	PidLidLocation
+named	Appointment	8205	PidLidBusyStatus
+named	Appointment	8213	PidLidAppointmentDuration
+named	Appointment	8214	PidLidAppointmentColor
+named	Appointment	8215	PidLidAppointmentSubType
+named	Appointment	8216	PidLidAppointmentRecur
+named	Appointment	8217	PidLidAppointmentStateFlags
+named	Appointment	8218	PidLidResponseStatus
+named	Appointment	8223	PidLidRecurring
+named	Appointment	8231	PidLidRecurrenceType
+named	Appointment	8232	PidLidRecurrencePattern
+named	Appointment	8233	PidLidTimeZoneStruct
+named	Appointment	8234	PidLidTimeZoneDescription
+named	Appointment	8235	PidLidClipStart
+named	Appointment	8236	PidLidClipEnd
+named	Appointment	823A	PidLidAllAttendeesString
+named	Appointment	823B	PidLidToAttendeesString
+named	Appointment	823C	PidLidCcAttendeesString
+named	Meeting	0003	PidLidGlobalObjectId
+named	Meeting	0023	PidLidCleanGlobalObjectId
+named	Task	8101	PidLidTaskStatus
+named	Task	8102	PidLidPercentComplete
+named	Task	8104	PidLidTaskStartDate
+named	Task	8105	PidLidTaskDueDate
+named	Task	810F	PidLidTaskDateCompleted
+named	Task	8110	PidLidTaskActualEffort
+named	Task	8111	PidLidTaskEstimatedEffort
+named	Task	8113	PidLidTaskState
+named	Task	811C	PidLidTaskComplete
+named	Task	811F	PidLidTaskOwner
+named	Address	8005	PidLidFileUnder
+named	Address	801A	PidLidHomeAddress
+named	Address	801B	PidLidWorkAddress
+named	Address	801C	PidLidOtherAddress
+named	Address	8022	PidLidPostalAddressId
+named	Address	8062	PidLidInstantMessagingAddress
+named	Address	8080	PidLidEmail1DisplayName
+named	Address	8082	PidLidEmail1AddressType
+named	Address	8083	PidLidEmail1EmailAddress
+named	Address	8084	PidLidEmail1OriginalDisplayName
+named	Address	8090	PidLidEmail2DisplayName
+named	Address	8092	PidLidEmail2AddressType
+named	Address	8093	PidLidEmail2EmailAddress
+named	Address	80A0	PidLidEmail3DisplayName
+named	Address	80A2	PidLidEmail3AddressType
+named	Address	80A3	PidLidEmail3EmailAddress
+named	Note	8B00	PidLidNoteColor
+named	Note	8B02	PidLidNoteWidth
+named	Note	8B03	PidLidNoteHeight
+named	Note	8B04	PidLidNoteX
+named	Note	8B05	PidLidNoteY
+named	Log	8700	PidLidLogType
+named	Log	8706	PidLidLogStart
+named	Log	8707	PidLidLogDuration
+named	Log	8708	PidLidLogEnd

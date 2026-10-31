@@ -6,6 +6,8 @@
     <RootNamespace>$(PackagePrefix).OneMail.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- OneArchive's compound file writer builds the MSG fixtures; its preview opt-in as in the library project. -->
+    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
