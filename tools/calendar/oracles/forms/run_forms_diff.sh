@@ -3,7 +3,7 @@
 #
 #   run_forms_diff.sh <work dir> [corpus dir] [oracle dir]
 #
-# Defaults: corpus $ONEMAIL_CORPUS/calendar or $HOME/onemail/corpus/calendar, oracles $HOME/onemail/u18/oracles
+# Defaults: corpus $ONEMAIL_CORPUS/calendar or $HOME/onemail/corpus/calendar, oracles $HOME/onemail/work/oracles
 # (see setup_forms.sh). Needs a built tools/calendar/FormsDump (dotnet on PATH) and the checkout's testdata.
 #
 # For every iCalendar/vCard text file of the corpus and the committed fixtures, four comparisons per oracle that has the form:
@@ -16,7 +16,7 @@ work="${1:?work dir}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../../.." && pwd)"
 corpus="${2:-${ONEMAIL_CORPUS:-$HOME/onemail/corpus}/calendar}"
-orc="${3:-$HOME/onemail/u18/oracles}"
+orc="${3:-$HOME/onemail/work/oracles}"
 export PATH="$orc/node/bin:$orc/jdk/bin:$PATH"
 dump="dotnet $FORMS_DUMP"
 mkdir -p "$work"

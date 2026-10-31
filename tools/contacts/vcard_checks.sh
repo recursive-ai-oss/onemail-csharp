@@ -2,13 +2,13 @@
 # vCard checks on the worker: the typed view against vobject and FolkerKinzel.VCards, over the fetched corpus, the generated vCards and the
 # vCards the contact conversion produces; and the byte-identical round trip of the untouched files.
 #   vcard_checks.sh            needs the corpora (tools/calendar/corpus.py fetch) and run.sh's export stage first
-# State goes under $WORK (default ~/onemail/u20). Prints one summary block per root.
+# State goes under $WORK (default ~/onemail/work). Prints one summary block per root.
 set -euo pipefail
 export PATH=~/dotnet10:$PATH DOTNET_ROOT=~/dotnet10 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 here="$(cd "$(dirname "$0")/../.." && pwd)"
-WORK="${WORK:-$HOME/onemail/u20}"
+WORK="${WORK:-$HOME/onemail/work}"
 CORPUS="${CORPUS:-$HOME/onemail/corpus}"
-VENV="${VENV:-$HOME/onemail/u5/venv-cal}"
+VENV="${VENV:-$HOME/onemail/work/venv-cal}"
 export ONEMAIL_ARTIFACTS="$WORK/artifacts" TMPDIR="$WORK/tmp"
 mkdir -p "$WORK/facts" "$TMPDIR"
 tool() { dotnet "$ONEMAIL_ARTIFACTS/bin/ContactTool/release/ContactTool.dll" "$@"; }

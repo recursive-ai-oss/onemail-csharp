@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Contact checks on the worker: reads every contact and distribution list item of the MSG/PST/OST corpora, converts them to vCards and back.
 #   run.sh [stage]       stages: build gen dump rt-contact extract-msg export all (default all)
-# State goes under $WORK (default ~/onemail/u20); corpora are the ones tools/corpus fetches into ~/onemail/corpus.
+# State goes under $WORK (default ~/onemail/work); corpora are the ones tools/corpus fetches into ~/onemail/corpus.
 set -euo pipefail
 export PATH=~/dotnet10:$PATH DOTNET_ROOT=~/dotnet10 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 here="$(cd "$(dirname "$0")/../.." && pwd)"
-WORK="${WORK:-$HOME/onemail/u20}"
+WORK="${WORK:-$HOME/onemail/work}"
 CORPUS="${CORPUS:-$HOME/onemail/corpus}"
 export ONEMAIL_ARTIFACTS="$WORK/artifacts" TMPDIR="$WORK/tmp"
 mkdir -p "$WORK/out" "$TMPDIR"
@@ -14,7 +14,7 @@ tool() { dotnet "$ONEMAIL_ARTIFACTS/bin/ContactTool/release/ContactTool.dll" "$@
 if [[ $stage == build || $stage == all ]]; then
   dotnet build "$here/tools/contacts/ContactTool" -c Release -v quiet -clp:NoSummary
 fi
-VENV_MSG="${VENV_MSG:-$HOME/onemail/u14/venv-msg}"
+VENV_MSG="${VENV_MSG:-$HOME/onemail/work/venv-msg}"
 inputs=("$CORPUS/msg" "$CORPUS/pst" "$WORK/gen")
 if [[ $stage == gen || $stage == all ]]; then
   rm -rf "$WORK/gen"; tool gen "$WORK/gen" 20261031 64
