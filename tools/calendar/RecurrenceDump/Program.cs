@@ -9,6 +9,7 @@ using RecursiveAI.OneMail.Calendar.TimeZones;
 // RecurrenceDump cases <out.jsonl> <root>...     one line per recurring component: the case id, file, UID, window and cap
 // RecurrenceDump expand <cases.jsonl> <out.jsonl> [--no-runtime-zones]  our occurrences for every case
 // RecurrenceDump zones <root>...                  how every TZID in the corpus resolves, with counts
+// RecurrenceDump ratepure                        expansion alone: three rules of 100,000 occurrences each, parsed once, expanded repeatedly
 // RecurrenceDump rate <root>...                   expansion throughput (occurrences per second) and allocated bytes per occurrence
 return args.Length > 0 ? args[0] switch
 {
@@ -16,6 +17,7 @@ return args.Length > 0 ? args[0] switch
     "expand" => Expand(args[1], args[2], args.Contains("--no-runtime-zones")),
     "zones" => Zones(args[1..]),
     "rate" => Rate(args[1..]),
+    "ratepure" => RatePure(),
     "offset" => Offset(args[1], args[2], args[3]),
     _ => Usage(),
 } : Usage();
@@ -264,6 +266,46 @@ static int Zones(string[] roots)
     }
 
     Console.WriteLine($"{files} files");
+    return 0;
+}
+
+// Expansion without parsing: each calendar is parsed once, then expanded to the 100,000-occurrence cap several times.
+static int RatePure()
+{
+    (string Name, string Dtstart, string Rule)[] rules =
+    [
+        ("daily, UTC", "DTSTART:20200101T090000Z", "FREQ=DAILY"),
+        ("weekly BYDAY=MO,WE,FR, floating", "DTSTART:20200101T090000", "FREQ=WEEKLY;BYDAY=MO,WE,FR"),
+        ("daily, zoned (America/New_York)", "DTSTART;TZID=America/New_York:20200101T090000", "FREQ=DAILY"),
+    ];
+    foreach ((string name, string dtstart, string rule) in rules)
+    {
+        string ics = $"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\n{dtstart}\r\nRRULE:{rule}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        IcsComponent cal = IcsDocument.Calendars(ContentDocument.Parse(System.Text.Encoding.UTF8.GetBytes(ics))).Single();
+        ExpansionOptions options = new() { MaxOccurrences = 100_000 };
+        for (int i = 0; i < 3; i++)
+        {
+            foreach (Occurrence _ in CalendarRecurrence.Expand(cal, OccurrenceWindow.All, options))
+            {
+            }
+        }
+
+        long n = 0;
+        long alloc0 = GC.GetAllocatedBytesForCurrentThread();
+        Stopwatch sw = Stopwatch.StartNew();
+        for (int i = 0; i < 10; i++)
+        {
+            foreach (Occurrence _ in CalendarRecurrence.Expand(cal, OccurrenceWindow.All, options))
+            {
+                n++;
+            }
+        }
+
+        sw.Stop();
+        long bytes = GC.GetAllocatedBytesForCurrentThread() - alloc0;
+        Console.WriteLine($"{name}: {n} occurrences in {sw.Elapsed.TotalSeconds:F3}s = {n / sw.Elapsed.TotalSeconds:F0}/s, {(double)bytes / n:F1} bytes per occurrence");
+    }
+
     return 0;
 }
 

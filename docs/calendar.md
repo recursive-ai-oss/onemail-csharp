@@ -28,6 +28,10 @@ Nothing is lost when a limit applies: untouched documents still write back ident
 
 UTF-8 is the format. A `CHARSET` parameter (vCard 2.1) selects the charset for that value from the encodings the .NET runtime ships (including the Windows and ISO code pages through the runtime's code-page provider); an unknown name is a defect and the bytes are read as UTF-8 or Windows-1252. Changed lines with a `CHARSET` are written in that charset.
 
+## Recurrence and time zones
+
+Expanding RRULE/RDATE/EXDATE/EXRULE and overrides into occurrences, and resolving `TZID`s (VTIMEZONE, IANA, Windows names): `docs/recurrence.md`.
+
 ## Checks
 
 `tools/calendar/README.md` describes the corpus, the round-trip check, the oracle comparison and the fuzz targets (`contentlines`, `calendar`).

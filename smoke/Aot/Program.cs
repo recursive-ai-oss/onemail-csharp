@@ -184,8 +184,10 @@ internal static class Program
         Occurrence[] recOccurrences = CalendarRecurrence.Expand(recCal, OccurrenceWindow.All,
             new ExpansionOptions { MaxIterationsWithoutHit = 20000, TimeZones = new TimeZoneResolverOptions { UseRuntimeDatabase = false } }, recReport).ToArray();
         IcsTimeZone? recZone = new TimeZoneResolver(null).Resolve("Eastern Standard Time");
-        bool recurrenceOk = recOccurrences.Length == 4 && recOccurrences[0].StartUtc == new DateTime(2026, 3, 7, 14, 30, 0, DateTimeKind.Utc)
-            && recOccurrences[1].StartUtc == new DateTime(2026, 3, 8, 13, 30, 0, DateTimeKind.Utc) && recOccurrences[2].StartUtc == new DateTime(2026, 3, 10, 13, 30, 0, DateTimeKind.Utc)
+        // COUNT=4 counts the excluded 9 March too, so three remain; the hostile rule still yields its DTSTART (RFC 5545 3.8.5.3).
+        Occurrence[] march = recOccurrences.Where(o => o.StartUtc?.Month == 3).OrderBy(o => o.StartUtc).ToArray();
+        bool recurrenceOk = recOccurrences.Length == 4 && march.Length == 3 && march[0].StartUtc == new DateTime(2026, 3, 7, 14, 30, 0, DateTimeKind.Utc)
+            && march[1].StartUtc == new DateTime(2026, 3, 8, 13, 30, 0, DateTimeKind.Utc) && march[2].StartUtc == new DateTime(2026, 3, 10, 13, 30, 0, DateTimeKind.Utc)
             && recReport.CountOf(RecurrenceDefectKind.IterationLimit) == 1 && (recZone is null || recZone.Source == ZoneSource.WindowsName);
         Console.WriteLine("recurrence: " + (recurrenceOk ? "ok" : "FAILED"));
 

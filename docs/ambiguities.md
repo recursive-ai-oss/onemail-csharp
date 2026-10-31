@@ -224,6 +224,43 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | K19 | A date-time with a `TZID` and a `Z` suffix | UTC | UTC | UTC wins; the `TZID` stays a parameter. | none | all agree |
 | K20 | Nesting beyond 32 levels | unlimited | unlimited | Deeper `BEGIN`/`END` lines are kept as ordinary properties. | `DepthLimitExceeded` | limit |
 
+## Recurrence and time zones
+
+Ours against `recurring-ical-events` 3.8.2 on `icalendar` 7.3.0 (**rec**), `python-dateutil` 2.9.0.post0 `rrule` through our glue (**du**) and Ical.Net 5.2.3 (**ical**), black-box, over every recurring component of the public calendar corpus plus our generated fixtures: 2,384 components, each in a fixed window (`tools/calendar/run_expand_diff.sh`; method in `docs/recurrence.md`). A component is *identical* when the sorted start lists are equal, *differing* otherwise, *not expanded* when the oracle errors or times out (330 libical components have an invalid DTSTART that every oracle rejects). Counts are components. Each difference gets exactly one id, the first cause that applies; the id is the entry below. Basis as in the other sections: all agree, 2 of 3, or provisional (our default).
+
+| Oracle | Compared | Identical | Differing | Explained | Unexplained | Not expanded |
+|---|---|---|---|---|---|---|
+| rec | 2,372 | 2,233 | 139 | 139 | 0 | 12 (2 broken property, 8 timeout, 2 value error) |
+| du | 2,378 | 2,238 | 140 | 140 | 0 | 6 (1 broken property, 3 type error, 2 value error) |
+| ical | 2,188 | 1,409 | 779 | 779 | 0 | 196 (130 timeout, 33 argument, 30 out of range, 3 other) |
+
+| ID | Case | Oracles | Resolution | Defect | Differences (rec / du / ical) | Basis |
+|---|---|---|---|---|---|---|
+| R1 | `BYWEEKNO` with no `BYDAY`, `BYMONTHDAY` or `BYYEARDAY` | rec and du: every day of the week; Ical.Net: the weekday of DTSTART | The weekday of DTSTART (RFC 5545 §3.3.10: a finer part that is absent takes DTSTART's value). | none | 32 / 32 / 0 | prov. (RFC; Ical.Net agrees) |
+| R2 | A part the §3.3.10 table marks N/A for the frequency (`BYWEEKNO` with MONTHLY, `BYYEARDAY` with DAILY/WEEKLY/MONTHLY, `BYMONTHDAY` with WEEKLY, `BYSETPOS` alone, ordinal `BYDAY` where §3.3.10 forbids it) | the three disagree with each other and with us on some; 3 of the Python differences are one occurrence at the COUNT boundary of `WEEKLY;BYMONTHDAY;BYSETPOS;COUNT` | The part filters, never expands. | none | 102 / 102 / 449 | prov. (the table gives no result) |
+| R3 | DTSTART does not fit its own rule (§3.8.5.3: undefined) | rec and du include DTSTART; Ical.Net omits it | DTSTART is always the first instance and counts toward COUNT. | `AmbiguousUnsynchronizedStart` | 0 / 0 / 75 (rec and du give our list on all 94 such components, apart from those with an R1 or R2 part) | 2 of 3 |
+| R4 | `UNTIL` of another value type than DTSTART (DATE vs date-time, UTC vs floating) | the oracles differ with each other | A UTC UNTIL is an instant for zoned and UTC series and a wall-clock value for floating ones; a DATE UNTIL covers its whole day. | `AmbiguousUntilType` | 2 / 1 / 1 | prov. (§3.3.10 requires equal types) |
+| R5 | Wall times in a clock change: the skipped hour and the repeated hour | rec and du: skipped shifted, repeated first; Ical.Net differs | Skipped: shifted by the offset before the gap (RFC 5545 §3.3.5), or dropped with `SkippedTimePolicy.Skip`. Repeated: the first. | `AmbiguousSkippedLocalTime`, `AmbiguousRepeatedLocalTime` | 0 / 0 / 57 (rec and du give our list on all 85 components that hit a clock change; ical on 26 of 83) | 2 of 3 |
+| R6 | `EXDATE` as a DATE on a date-time series | not in the corpus | The whole day is removed. | `AmbiguousExdateType` | 0 / 0 / 0 (unit test only) | prov. (clients treat a date as a day) |
+| R7 | `WEEKLY` with `BYSETPOS` in the first, partial week | rec and du position inside the part of the week after DTSTART | Positions count in the whole week (§3.3.10), so an earlier instant of the first week takes a position and is then dropped as before DTSTART. | none | 1 / 1 / 0 | prov. (RFC) |
+| Z1 | A `TZID` named both by a VTIMEZONE in the file and by the runtime's database | not compared (the oracles resolve zones in their own way; the zone fixtures use one or the other) | The VTIMEZONE wins. | none | n/a | prov. |
+| Z2 | A vendor-prefixed `TZID` (`/softwarestudio.org/Olson_20011030_5/America/New_York`) | not compared | The longest tail of up to three segments that names a zone. | `AmbiguousZoneName` | n/a | prov. |
+| Z3 | A Windows zone name with no VTIMEZONE | not compared; instants checked for 5 names (`W. Europe`, `Eastern`, `AUS Eastern`, `New Zealand`, `Pacific`) | The CLDR default-territory IANA zone. | `AmbiguousWindowsZone` | n/a | prov. (CLDR) |
+| Z4 | A `TZID` that resolves nowhere | not compared | The values stay floating; no instant is claimed. | `UnknownTimeZone` | n/a | prov. |
+
+Limits of one oracle (not ambiguities; no entry in the resolution column):
+
+| ID | Oracle | Behaviour | Differences |
+|---|---|---|---|
+| L-oracle-ignores-exrule | rec, du | EXRULE is not applied | 1 / 1 / n/a |
+| L-du-glue-has-no-overrides | du | our glue expands the master only, so RECURRENCE-ID components are not applied | 0 / 3 / n/a |
+| L-ical-duplicate-instants | ical | an instant produced by several BYxxx combinations is returned several times; the set of instants is ours | n/a / n/a / 10 |
+| L-ical-window-wall-clock | ical | the window start is compared with the wall time of a zoned instant, so in zones east of UTC an instant before the window gets through; without those instants the lists are equal | n/a / n/a / 102 |
+| L-ical-weekno-interval | ical | `YEARLY` with `BYWEEKNO` and `INTERVAL` above 1 lands off the interval grid (2026, 2029, 2031 for `INTERVAL=2`) | n/a / n/a / 8 |
+| L-outvoted-by-the-other-two | any | the oracle differs and at least one other oracle gives our list | 1 / 0 / 77 |
+
+The `AmbiguousUntilType` and `AmbiguousExdateType` resolutions are the ones most likely to change when Outlook is observed (the Outlook oracle, before Outlook writing). Counts come from one run of the 2,384 components; `tools/calendar/run_expand_diff.sh` repeats it. Zone behaviour is checked in the DST subset instead: 108 `dst.ics` components in America/New_York, Europe/Berlin, Australia/Sydney and Pacific/Auckland (both transitions each) and 9 with Windows names give our list on 108/108 and 9/9 for rec and du.
+
 ## Mailbox files (mbox, Maildir, EMLX)
 
 Black-box runs of Python 3.13.17 `mailbox` (mbox and Maildir) and MimeKit 4.18.2's mbox mode (`MimeParser` with `MimeFormat.Mbox`;
