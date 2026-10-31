@@ -200,8 +200,8 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
                 }
 
                 DateTime day = first ?? sd;
-                start = day.AddMinutes(r.StartTimeOffset);
-                end = day.AddMinutes(r.EndTimeOffset);
+                start = OutlookMinutes.AddMinutes(day, r.StartTimeOffset);
+                end = OutlookMinutes.AddMinutes(day, r.EndTimeOffset);
                 List<CalendaringDefect> ds = [];
                 string? rule = OutlookRecurrence.ToRRule(r.Pattern, r.StartTimeOffset, UntilText, ds);
                 foreach (CalendaringDefect d in ds)
@@ -216,7 +216,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
 
                 foreach (DateTime d in a.DeletedInstances)
                 {
-                    DateTime t = d.Date.AddMinutes(r.StartTimeOffset);
+                    DateTime t = OutlookMinutes.AddMinutes(d.Date, r.StartTimeOffset);
                     AddTimeList(e, "EXDATE", t);
                 }
             }
@@ -230,7 +230,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
                 e.SetTime("DTSTART", AsIcs(s));
                 if (end is { } en)
                 {
-                    DateTime endv = _allDay && en.Date <= s.Date ? s.Date.AddDays(1) : en;
+                    DateTime endv = _allDay && en.Date <= s.Date ? OutlookMinutes.AddDays(s.Date, 1) : en;
                     e.SetTime("DTEND", AsIcs(endv));
                 }
             }
@@ -491,7 +491,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
             e.SetTime("DTSTAMP", new IcsTime(DateTime.SpecifyKind((a.Start ?? new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero)).UtcDateTime, DateTimeKind.Utc), IcsTimeKind.Utc));
             e.SetTime("RECURRENCE-ID", AsIcs(x.OriginalStart));
             e.SetTime("DTSTART", AsIcs(x.Start));
-            e.SetTime("DTEND", AsIcs(_allDay && x.End.Date <= x.Start.Date ? x.Start.Date.AddDays(1) : x.End));
+            e.SetTime("DTEND", AsIcs(_allDay && x.End.Date <= x.Start.Date ? OutlookMinutes.AddDays(x.Start.Date, 1) : x.End));
             MapiMessage? em = x.Message;
             string? subject = em?.Subject ?? x.Info.Subject;
             string? location = em is null ? x.Info.Location : em.Properties.Get(OutlookNames.Location)?.AsString(em.String8Encoding) ?? x.Info.Location;

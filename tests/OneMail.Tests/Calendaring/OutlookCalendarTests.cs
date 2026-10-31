@@ -302,6 +302,18 @@ public class OutlookCalendarTests
         Assert.NotNull(new TimeZoneDefinition("Far", [far]).ToVTimeZone("Far"));
     }
 
+    // Found by fuzzing: an end date at the top of the range once overflowed DateTime when the UNTIL value was made.
+    [Fact]
+    public void DatesBeyondYear9999AreClampedNotThrown()
+    {
+        byte[] blob = Convert.FromBase64String("AAQwBDAKIAAAAACgBQAA4BAAAAAAAAAhIAAADAAAAAAAAAACAAAAoMHcDIDS3AwAAAAAIH7cDDAA/////////yYA4AEAAP4BAAAAAAD/AAAAAAAAAA==")[1..];
+        if (AppointmentRecurrencePattern.TryParse(blob, out AppointmentRecurrencePattern? r) && r is not null)
+        {
+            _ = OutlookRecurrence.ToRRule(r.Pattern, r.StartTimeOffset, d => d.ToString("yyyyMMdd"));
+            _ = OutlookRecurrence.Days(r.Pattern, 2000).Count();
+        }
+    }
+
     [Fact]
     public void MonthlyDay30IsAnAmbiguityNotASilentChange()
     {

@@ -20,6 +20,20 @@ public static class OutlookMinutes
         return new DateTime(Math.Min(ticks, DateTime.MaxValue.Ticks), DateTimeKind.Unspecified);
     }
 
+    /// <summary>Adds minutes to a date and time, stopping at <see cref="DateTime.MinValue"/> and <see cref="DateTime.MaxValue"/> instead of throwing: blobs can name dates past year 9999.</summary>
+    internal static DateTime AddMinutes(DateTime value, long minutes)
+    {
+        long ticks = value.Ticks + (Math.Clamp(minutes, -(1L << 32), 1L << 32) * TimeSpan.TicksPerMinute);
+        return new DateTime(Math.Clamp(ticks, 0, DateTime.MaxValue.Ticks), DateTimeKind.Unspecified);
+    }
+
+    /// <summary>Adds a span with the same saturation as <see cref="AddMinutes"/>.</summary>
+    internal static DateTime Add(DateTime value, TimeSpan span) =>
+        new(Math.Clamp(value.Ticks + Math.Clamp(span.Ticks, -DateTime.MaxValue.Ticks, DateTime.MaxValue.Ticks), 0, DateTime.MaxValue.Ticks), DateTimeKind.Unspecified);
+
+    /// <summary>Adds days with the same saturation as <see cref="AddMinutes"/>.</summary>
+    internal static DateTime AddDays(DateTime value, long days) => AddMinutes(value, Math.Clamp(days, -(1L << 30), 1L << 30) * 1440);
+
     /// <summary>The minute count of a local date and time.</summary>
     /// <param name="value">A date and time; its kind is ignored. Seconds are dropped.</param>
     /// <returns>Minutes since 1601-01-01 00:00, or 0 for earlier values.</returns>

@@ -101,7 +101,7 @@ public static class OutlookRecurrence
         long count = 0;
         for (int i = 0; i < maxDays; i++)
         {
-            DateTime day = start.AddDays(i);
+            DateTime day = OutlookMinutes.AddDays(start, i);
             if (last is { } l && day > l)
             {
                 yield break;
@@ -234,7 +234,7 @@ public static class OutlookRecurrence
         else if (p.EndType == RecurrencePattern.EndAfterDate)
         {
             // MS-OXCICAL 2.1.3.2.2.1: UNTIL is EndDate plus StartTimeOffset, converted to UTC.
-            sb.Append(";UNTIL=").Append(untilFormat(OutlookMinutes.ToDateTime(p.EndDate).Date.AddMinutes(startOffsetMinutes)));
+            sb.Append(";UNTIL=").Append(untilFormat(OutlookMinutes.AddMinutes(OutlookMinutes.ToDateTime(p.EndDate).Date, startOffsetMinutes)));
         }
 
         return sb.ToString();

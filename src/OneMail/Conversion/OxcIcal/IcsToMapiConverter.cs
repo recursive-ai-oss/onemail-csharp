@@ -164,7 +164,7 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
         // The rule is read off the zone in the year of the item: offsets by hour, then the two changes (MS-OXOCAL 2.2.1.39 describes the result).
         public static ItemZone From(string id, IcsTimeZone zone, int year)
         {
-            DateTime t = new(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            DateTime t = new(Math.Clamp(year, 1, 9998), 1, 1, 0, 0, 0, DateTimeKind.Utc);   // the year after must exist
             DateTime end = t.AddYears(1);
             TimeSpan prev = zone.GetUtcOffset(t);
             TimeSpan lo = prev;
@@ -298,11 +298,11 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             }
             else if (ev.Duration is { } du)
             {
-                endLocal = startLocal + du.ToTimeSpan();
+                endLocal = OutlookMinutes.Add(startLocal, du.ToTimeSpan());
             }
             else
             {
-                endLocal = s.IsDate ? startLocal.AddDays(1) : startLocal;
+                endLocal = s.IsDate ? OutlookMinutes.AddDays(startLocal, 1) : startLocal;
             }
 
             string cls = method switch
@@ -596,7 +596,7 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
 
                 DateTime orig = LocalOf(rid, _zone);
                 DateTime s = LocalOf(os, _zone);
-                DateTime e = o.End is { } oe ? LocalOf(oe, _zone) : o.Duration is { } od ? s + od.ToTimeSpan() : s;
+                DateTime e = o.End is { } oe ? LocalOf(oe, _zone) : o.Duration is { } od ? OutlookMinutes.Add(s, od.ToTimeSpan()) : s;
                 if (!OutlookRecurrence.IsValidDay(r.Pattern, orig.Date))
                 {
                     report.Add("ics", "RECURRENCE-ID", LossKind.Dropped, "OverrideNotOnPattern", "An override replaces a day the series does not occupy; it was not converted.");
