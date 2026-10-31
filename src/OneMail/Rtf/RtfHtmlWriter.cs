@@ -234,7 +234,7 @@ internal sealed class RtfHtmlWriter
         }
 
         _sb.Append("<li");
-        AppendStyle(ParagraphDeclarations(p, includeMargins: false));
+        ParagraphStyle(p, includeMargins: false);
         _sb.Append('>');
         liOpen[level] = true;
         WriteSegs(p);
@@ -242,52 +242,62 @@ internal sealed class RtfHtmlWriter
 
     // ---- paragraphs ----
 
-    private static List<string> ParagraphDeclarations(Paragraph p, bool includeMargins)
+    // ---- style attributes: declarations are written as they come; the attribute opens with the first one ----
+
+    private bool _styleOpen;
+
+    private void Decl(string name, string value)
     {
-        var d = new List<string>(6);
+        _sb.Append(_styleOpen ? ';' : " style=\"").Append(name).Append(':').Append(value);
+        _styleOpen = true;
+    }
+
+    private void EndStyle()
+    {
+        if (_styleOpen)
+        {
+            _sb.Append('"');
+            _styleOpen = false;
+        }
+    }
+
+    private void ParagraphStyle(Paragraph p, bool includeMargins)
+    {
         if (p.Align != Align.Left)
         {
-            d.Add("text-align:" + p.Align switch { Align.Center => "center", Align.Right => "right", _ => "justify" });
+            Decl("text-align", p.Align switch { Align.Center => "center", Align.Right => "right", _ => "justify" });
         }
 
         if (includeMargins)
         {
-            d.Add("margin-top:" + Length(p.SpaceBefore));
-            d.Add("margin-bottom:" + Length(p.SpaceAfter));
+            Decl("margin-top", Length(p.SpaceBefore));
+            Decl("margin-bottom", Length(p.SpaceAfter));
             if (p.Left != 0)
             {
-                d.Add("margin-left:" + Length(p.Left));
+                Decl("margin-left", Length(p.Left));
             }
 
             if (p.Right != 0)
             {
-                d.Add("margin-right:" + Length(p.Right));
+                Decl("margin-right", Length(p.Right));
             }
 
             if (p.FirstLine != 0)
             {
-                d.Add("text-indent:" + Length(p.FirstLine));
+                Decl("text-indent", Length(p.FirstLine));
             }
         }
 
         if (p.LineSpacing > 0 && p.LineSpacingMultiple)
         {
-            d.Add("line-height:" + (p.LineSpacing / 240.0).ToString("0.##", CultureInfo.InvariantCulture)); // \slmult1: 240 = single spacing
+            Decl("line-height", (p.LineSpacing / 240.0).ToString("0.##", CultureInfo.InvariantCulture)); // \slmult1: 240 = single spacing
         }
         else if (p.LineSpacing != 0 && !p.LineSpacingMultiple)
         {
-            d.Add("line-height:" + Length(Math.Abs(p.LineSpacing)));
+            Decl("line-height", Length(Math.Abs(p.LineSpacing)));
         }
 
-        return d;
-    }
-
-    private void AppendStyle(List<string> declarations)
-    {
-        if (declarations.Count > 0)
-        {
-            _sb.Append(" style=\"").Append(string.Join(';', declarations)).Append('"');
-        }
+        EndStyle();
     }
 
     private void WriteParagraph(Paragraph p)
@@ -309,7 +319,7 @@ internal sealed class RtfHtmlWriter
 
         string tag = p.Heading > 0 ? "h" + p.Heading.ToString(CultureInfo.InvariantCulture) : "p";
         _sb.Append('<').Append(tag);
-        AppendStyle(ParagraphDeclarations(p, includeMargins: true));
+        ParagraphStyle(p, includeMargins: true);
         _sb.Append('>');
         if (p.Segs.Count == 0)
         {
@@ -367,7 +377,9 @@ internal sealed class RtfHtmlWriter
         switch (s.Kind)
         {
             case SegKind.Text:
-                WriteStyled(st, () => AppendText(_doc.Text.ToString(s.Start, s.Length)));
+                bool span = OpenRun(st);
+                AppendText(s.Start, s.Length);
+                CloseRun(st, span);
                 break;
             case SegKind.Tab:
                 _sb.Append("<span style=\"white-space:pre\">\t</span>");
@@ -386,63 +398,59 @@ internal sealed class RtfHtmlWriter
         }
     }
 
-    private void WriteStyled(RunStyle st, Action content)
+    // Fixed nesting order: span, b, i, u, s, sup/sub.
+    private bool OpenRun(RunStyle st)
     {
-        var decl = new List<string>(4);
-        if (st.Color >= 0)
+        bool span = false;
+        void Open(string name, string value)
         {
-            decl.Add("color:" + Hex(st.Color));
+            if (!span)
+            {
+                _sb.Append("<span");
+                span = true;
+            }
+
+            Decl(name, value);
         }
 
-        if (st.Background >= 0)
-        {
-            decl.Add("background-color:" + Hex(st.Background));
-        }
-
+        if (st.Color >= 0) { Open("color", Hex(st.Color)); }
+        if (st.Background >= 0) { Open("background-color", Hex(st.Background)); }
         if (st.Font != _domFont)
         {
             string family = FontFamily(st.Font);
             if (family.Length > 0)
             {
-                decl.Add("font-family:" + family);
+                Open("font-family", family);
             }
         }
 
-        if (st.HalfPoints != _domHalfPoints)
+        if (st.HalfPoints != _domHalfPoints) { Open("font-size", Points(st.HalfPoints / 2.0) + "pt"); }
+        if (st.Caps) { Open("text-transform", "uppercase"); }
+        if (st.SmallCaps) { Open("font-variant", "small-caps"); }
+        if (span)
         {
-            decl.Add("font-size:" + Points(st.HalfPoints / 2.0) + "pt");
+            EndStyle();
+            _sb.Append('>');
         }
 
-        if (st.Caps)
-        {
-            decl.Add("text-transform:uppercase");
-        }
-
-        if (st.SmallCaps)
-        {
-            decl.Add("font-variant:small-caps");
-        }
-
-        if (decl.Count > 0)
-        {
-            _sb.Append("<span style=\"").Append(string.Join(';', decl)).Append("\">");
-        }
-
-        // Fixed nesting order: b, i, u, s, sub/sup.
         if (st.Bold) { _sb.Append("<b>"); }
         if (st.Italic) { _sb.Append("<i>"); }
         if (st.Underline != 0) { _sb.Append("<u>"); }
         if (st.Strike) { _sb.Append("<s>"); }
         if (st.Script == 1) { _sb.Append("<sup>"); }
         if (st.Script == 2) { _sb.Append("<sub>"); }
-        content();
+        return span;
+    }
+
+    private void CloseRun(RunStyle st, bool span)
+    {
         if (st.Script == 2) { _sb.Append("</sub>"); }
         if (st.Script == 1) { _sb.Append("</sup>"); }
         if (st.Strike) { _sb.Append("</s>"); }
         if (st.Underline != 0) { _sb.Append("</u>"); }
         if (st.Italic) { _sb.Append("</i>"); }
         if (st.Bold) { _sb.Append("</b>"); }
-        if (decl.Count > 0)
+        if (span)
         {
             _sb.Append("</span>");
         }
@@ -511,35 +519,22 @@ internal sealed class RtfHtmlWriter
                     _sb.Append(" rowspan=\"").Append(c.RowSpan.ToString(CultureInfo.InvariantCulture)).Append('"');
                 }
 
-                var decl = new List<string>(4);
                 if (c.Width > 0)
                 {
-                    decl.Add("width:" + Length(c.Width));
+                    Decl("width", Length(c.Width));
                 }
 
-                if (c.VAlign == 1)
-                {
-                    decl.Add("vertical-align:middle");
-                }
-                else if (c.VAlign == 2)
-                {
-                    decl.Add("vertical-align:bottom");
-                }
-                else
-                {
-                    decl.Add("vertical-align:top");
-                }
-
+                Decl("vertical-align", c.VAlign == 1 ? "middle" : c.VAlign == 2 ? "bottom" : "top");
                 if (c.Shading >= 0)
                 {
-                    decl.Add("background-color:" + Hex(c.Shading));
+                    Decl("background-color", Hex(c.Shading));
                 }
 
-                AddBorder(decl, "top", c.Top);
-                AddBorder(decl, "right", c.Right_);
-                AddBorder(decl, "bottom", c.Bottom);
-                AddBorder(decl, "left", c.Left);
-                AppendStyle(decl);
+                AddBorder("top", c.Top);
+                AddBorder("right", c.Right_);
+                AddBorder("bottom", c.Bottom);
+                AddBorder("left", c.Left);
+                EndStyle();
                 _sb.Append('>');
                 WriteBlocks(c.Blocks);
                 _sb.Append("</").Append(tag).Append('>');
@@ -551,20 +546,21 @@ internal sealed class RtfHtmlWriter
         _sb.Append("</table>\n");
     }
 
-    private static void AddBorder(List<string> decl, string side, Border b)
+    private void AddBorder(string side, Border b)
     {
         if (b.Width > 0)
         {
-            decl.Add("border-" + side + ":" + Length(b.Width) + " solid " + (b.Color >= 0 ? Hex(b.Color) : "#000000"));
+            Decl("border-" + side, Length(b.Width) + " solid " + (b.Color >= 0 ? Hex(b.Color) : "#000000"));
         }
     }
 
     // ---- text and formatting helpers ----
 
-    private void AppendText(string text)
+    private void AppendText(int start, int length)
     {
-        foreach (char c in text)
+        for (int k = start; k < start + length; k++)
         {
+            char c = _doc.Text[k];
             switch (c)
             {
                 case ' ':

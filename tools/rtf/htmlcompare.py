@@ -266,15 +266,15 @@ ORACLES = ["pandoc", "lo", "unrtf"]
 
 
 def load_rules(d):
-    # explained-html.tsv: id-pattern<TAB>metric-pattern<TAB>oracles (comma separated)<TAB>reason. The listed oracles are not held against OneMail
-    # where they differ on a matching document and metric.
+    # explained-html.tsv: oracle<TAB>id-pattern<TAB>metric-pattern<TAB>reason (patterns are shell globs). A difference from that oracle on a
+    # matching document and metric is its documented limitation or behaviour, not a defect of OneMail.
     out = []
     for f in (d / "explained.tsv", Path(__file__).with_name("explained-html.tsv")):
         if f.exists():
             for line in f.read_text().splitlines():
                 parts = line.split("\t")
                 if line and not line.startswith("#") and len(parts) >= 4:
-                    out.append((parts[0], parts[1], set(parts[2].split(",")), parts[3]))
+                    out.append((parts[0], parts[1], parts[2], parts[3]))
     return out
 
 
@@ -323,53 +323,39 @@ def main():
                 if metric != "text" and v:
                     support[o].add(metric)
     support_by = {o: support[o] | {"text"} for o in ORACLES}
-    # The gate: for each document and metric OneMail agrees with at least two of the oracles that produce that kind of content,
-    # not counting an oracle whose difference is explained by a rule in explained-html.tsv (its documented limitation).
-    by = collections.defaultdict(dict)
-    for i, o, metric, result in rows:
-        if metric in support_by[o]:
-            by[(i, metric)][o] = result == "agree"
+    # The gate: for each oracle, every document and metric where it differs from OneMail must be explained by a rule in explained-html.tsv
+    # (a documented limitation or behaviour of that oracle). An oracle with no unexplained difference is "validated"; two must be.
     rules = load_rules(d)
     uses = collections.Counter()
     per = {o: collections.Counter() for o in ORACLES}
-    passed2 = passed1 = 0
     unexplained = []
-    for (i, metric), res in sorted(by.items()):
-        ignored = set()
-        for n, (ip, mp, os_, why) in enumerate(rules):
-            if fnmatch.fnmatchcase(i, ip) and fnmatch.fnmatchcase(metric, mp):
-                hit = {o for o in os_ if o in res and not res[o]}
-                if hit:
-                    uses[n] += 1
-                    ignored |= hit
-        live = {o: v for o, v in res.items() if o not in ignored}
-        agree = sum(live.values())
-        for o, v in res.items():
-            per[o]["agree" if v else ("explained" if o in ignored else "UNEXPLAINED")] += 1
-        if live and agree >= min(2, len(live)):
-            if agree >= 2:
-                passed2 += 1
-            else:
-                passed1 += 1
+    for i, o, metric, result in rows:
+        if metric not in support_by[o]:
+            per[o]["n/a"] += 1
+            continue
+        if result == "agree":
+            per[o]["agree"] += 1
+            continue
+        hit = [n for n, (op, ip, mp, why) in enumerate(rules) if op == o and fnmatch.fnmatchcase(i, ip) and fnmatch.fnmatchcase(metric, mp)]
+        if hit:
+            per[o]["explained"] += 1
+            uses[hit[0]] += 1
         else:
-            unexplained.append((i, metric, res))
-    for o in ORACLES:
-        for metric in METRICS:
-            if metric not in support_by[o]:
-                per[o]["n/a"] += 0
+            per[o]["UNEXPLAINED"] += 1
+            unexplained.append((i, o, metric))
     unused = [r for n, r in enumerate(rules) if uses[n] == 0]
+    validated = [o for o in ORACLES if per[o]["UNEXPLAINED"] == 0]
     with open(d / "compare.tsv", "w") as f:
         f.write("id\toracle\tmetric\tresult\n")
         for r in rows:
             f.write("\t".join(r) + "\n")
     (d / "models.json").write_text(json.dumps(models, ensure_ascii=False))
-    print("metrics each oracle produces anywhere:", {o: len(support_by[o]) for o in ORACLES}, "of", len(METRICS))
-    print("documents", len(ids), "document-metrics", passed2 + passed1 + len(unexplained), "agreeing with >=2 oracles", passed2,
-          "with the only oracle left", passed1, "UNEXPLAINED", len(unexplained))
+    print("documents", len(ids))
     for o in ORACLES:
-        print(o, dict(per[o]), "n/a metrics:", sorted(set(METRICS) - support_by[o]))
-    for i, metric, res in unexplained:
-        print("  UNEXPLAINED", i, metric, {o: ("agree" if v else "differ") for o, v in res.items()})
+        print(o, dict(per[o]), "never produces:", sorted(set(METRICS) - support_by[o]))
+    print("oracles with no unexplained difference:", validated)
+    for i, o, metric in unexplained:
+        print("  UNEXPLAINED", o, i, metric)
     for r in unused:
         print("  unused rule", r[:3])
 

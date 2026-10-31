@@ -96,7 +96,7 @@ internal static class RtfTextWriter
         switch (s.Kind)
         {
             case SegKind.Text:
-                sb.Append(doc.Text.ToString(s.Start, s.Length).Replace('\u00A0', ' '));
+                sb.Append(doc.Text.Substring(s.Start, s.Length).Replace('\u00A0', ' '));
                 break;
             case SegKind.Tab:
                 sb.Append('\t');

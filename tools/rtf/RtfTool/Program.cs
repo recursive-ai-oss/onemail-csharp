@@ -15,6 +15,7 @@ using RecursiveAI.OneMail.Rtf.Compression;
 // native <out-dir> <path>... opens each MSG, TNEF, PST or OST (a file, or a directory searched recursively) and writes the RTF body of every item
 // whose RTF is not an HTML or text encapsulation to <out-dir>/<id>.rtf, with native.tsv (id, source, items, RTF bodies, encapsulated).
 // html <dir> converts every <id>.rtf in <dir> with RtfHtmlConverter and writes <id>.ours.html, <id>.ours.txt and html.tsv.
+// alloc <dir> reports the bytes RtfHtmlConverter allocates per KB of RTF (HTML, then HTML and text) over every <id>.rtf in <dir>.
 // decompress-all decompresses every *.rtfz in <dir> (used for damaged streams) and writes <name>.ours.rtf and ours.tsv.
 // roundtrip encapsulates the de-encapsulated bodies and the messages' own HTML and text bodies and takes them back out.
 // throughput times decompression, compression and de-encapsulation over the extracted bodies (a light check, not a benchmark).
@@ -26,6 +27,7 @@ return args.Length >= 1 ? await (args[0] switch
     "run" when args.Length == 2 => Task.FromResult(Run(args[1])),
     "native" when args.Length >= 3 => Native(args[1], args[2..]),
     "html" when args.Length == 2 => Task.FromResult(Html(args[1])),
+    "alloc" when args.Length == 2 => Task.FromResult(Alloc(args[1])),
     "verify" when args.Length == 2 => Task.FromResult(Verify(args[1])),
     "decompress-all" when args.Length == 2 => Task.FromResult(DecompressAll(args[1])),
     "roundtrip" when args.Length == 2 => Task.FromResult(RoundTrip(args[1])),
@@ -353,5 +355,48 @@ static int Html(string dir)
     }
 
     File.WriteAllText(Path.Combine(dir, "html.tsv"), tsv.ToString());
+    return 0;
+}
+
+static int Alloc(string dir)
+{
+    var files = Directory.EnumerateFiles(dir, "*.rtf").Where(f => !f.EndsWith(".ours.rtf", StringComparison.Ordinal)).OrderBy(f => f, StringComparer.Ordinal).Select(File.ReadAllBytes).ToList();
+    long inputBytes = files.Sum(f => (long)f.Length);
+    foreach (byte[] f in files)
+    {
+        RtfHtmlConverter.Convert(f).Text.GetHashCode(); // warm up, including the text writer
+    }
+
+    long htmlOnly = 0, withText = 0, outputChars = 0, plainInput = 0, plainText = 0, plainHtml = 0;
+    foreach (byte[] f in files)
+    {
+        long best = long.MaxValue, bestText = long.MaxValue;
+        for (int rep = 0; rep < 5; rep++)
+        {
+            long a = GC.GetAllocatedBytesForCurrentThread();
+            RtfHtmlResult r = RtfHtmlConverter.Convert(f);
+            long b = GC.GetAllocatedBytesForCurrentThread();
+            _ = r.Text;
+            long c = GC.GetAllocatedBytesForCurrentThread();
+            best = Math.Min(best, b - a);
+            bestText = Math.Min(bestText, c - a);
+            outputChars = rep == 0 ? outputChars + r.Html.Length : outputChars;
+        }
+
+        htmlOnly += best;
+        withText += bestText;
+        if (RtfHtmlConverter.Convert(f).Images.Count == 0)
+        {
+            plainInput += f.Length;
+            plainHtml += best;
+            plainText += bestText;
+        }
+    }
+
+    double kb = inputBytes / 1024.0;
+    Console.WriteLine($"{files.Count} documents, {kb:F1} KB of RTF, {outputChars / 1024.0:F1} K characters of HTML");
+    Console.WriteLine($"allocated per KB of RTF: HTML {htmlOnly / kb:F0} B, HTML and text {withText / kb:F0} B");
+    double pkb = plainInput / 1024.0;
+    Console.WriteLine($"documents without pictures: {pkb:F1} KB of RTF, HTML {plainHtml / pkb:F0} B per KB, HTML and text {plainText / pkb:F0} B per KB");
     return 0;
 }

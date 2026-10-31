@@ -150,7 +150,10 @@ internal sealed class RtfDocument
 {
     public List<Block> Blocks { get; } = [];
 
-    public StringBuilder Text { get; } = new();
+    public StringBuilder TextBuilder { get; } = new();
+
+    // The text of all segments, set once parsing is done (indexing a StringBuilder is slow).
+    public string Text { get; set; } = "";
 
     public List<RunStyle> Styles { get; } = [];
 

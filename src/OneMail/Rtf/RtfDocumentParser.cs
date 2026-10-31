@@ -82,6 +82,8 @@ internal sealed class RtfDocumentParser
         "ffformat", "ffhelptext", "ffstattext", "ffentrymcr", "ffexitmcr", "formfield",
     };
 
+    private static readonly HashSet<string>.AlternateLookup<ReadOnlySpan<char>> SkipLookup = SkipDestinations.GetAlternateLookup<ReadOnlySpan<char>>();
+
     private readonly RtfHtmlOptions _options;
     private readonly RtfDefectList _defects;
     private readonly RtfDocument _doc = new();
@@ -581,7 +583,7 @@ internal sealed class RtfDocumentParser
             return false;
         }
 
-        if (name.Length > 0 && SkipDestinations.Contains(new string(name)))
+        if (name.Length > 0 && SkipLookup.Contains(name))
         {
             _cur.Dest = Dest.Skip;
             return true;
@@ -1213,7 +1215,7 @@ internal sealed class RtfDocumentParser
 
     private void AddText(char c)
     {
-        if (_doc.Text.Length >= _options.MaxOutputChars)
+        if (_doc.TextBuilder.Length >= _options.MaxOutputChars)
         {
             if (!_stopped)
             {
@@ -1228,10 +1230,10 @@ internal sealed class RtfDocumentParser
         if (_segs.Count > 0)
         {
             Seg last = _segs[^1];
-            if (last.Kind == SegKind.Text && last.Style == style && last.Start + last.Length == _doc.Text.Length)
+            if (last.Kind == SegKind.Text && last.Style == style && last.Start + last.Length == _doc.TextBuilder.Length)
             {
                 _segs[^1] = last with { Length = last.Length + 1 };
-                _doc.Text.Append(c);
+                _doc.TextBuilder.Append(c);
                 return;
             }
         }
@@ -1241,8 +1243,8 @@ internal sealed class RtfDocumentParser
             return;
         }
 
-        _segs.Add(new Seg(SegKind.Text, _doc.Text.Length, 1, style));
-        _doc.Text.Append(c);
+        _segs.Add(new Seg(SegKind.Text, _doc.TextBuilder.Length, 1, style));
+        _doc.TextBuilder.Append(c);
     }
 
     private void AddSeg(SegKind kind, int start, int length)
@@ -1898,6 +1900,7 @@ internal sealed class RtfDocumentParser
             _doc.Blocks.RemoveAt(_doc.Blocks.Count - 1);
         }
 
+        _doc.Text = _doc.TextBuilder.ToString();
         ResolveLists(_doc.Blocks, []);
     }
 
