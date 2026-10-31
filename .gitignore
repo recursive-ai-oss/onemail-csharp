@@ -21,6 +21,7 @@
 !/bench/
 !/fuzz/
 !/smoke/
+!/samples/
 !/tools/
 !/docs/
 !/testdata/

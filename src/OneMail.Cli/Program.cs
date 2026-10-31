@@ -13,8 +13,15 @@ internal static class Program
             return 0;
         }
 
+        if (args.Length > 0 && args[0] == "inspect")
+        {
+            using StreamWriter stdout = new(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false), 1 << 16) { AutoFlush = false };
+            return Inspect.Run(args[1..], stdout, Console.Error);
+        }
+
         Console.Error.WriteLine("onemail " + Version());
         Console.Error.WriteLine("usage: onemail --version");
+        Console.Error.WriteLine("       onemail inspect [--json] [--sizes] [--defects] <file-or-directory>...");
         return args.Length == 0 || args[0] == "--help" ? 0 : 2;
     }
 
