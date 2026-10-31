@@ -283,6 +283,25 @@ public class DbxTests
         }
     }
 
+    [Fact]
+    public void ItemsReadLikeTheSameMessagesFromEml()
+    {
+        List<DbxTestMessage> m = Messages(6, 150, 4000);
+        using MemoryStream stream = new(DbxTestBuilder.MessageDatabase(m, new DbxBuild { ShuffleSeed = 2 }));
+        using MailContainer c = Mail.Open(stream);
+        IMailItem[] items = [.. c.Enumerate()];
+        Assert.Equal(6, items.Length);
+        for (int i = 0; i < items.Length; i++)
+        {
+            IMailItem eml = Mail.Parse(m[i].Text);
+            Assert.Equal(eml.Subject, items[i].Subject);
+            Assert.Equal(eml.MessageId, items[i].MessageId);
+            Assert.Equal(eml.From.Select(a => a.Address), items[i].From.Select(a => a.Address));
+            Assert.Equal(eml.TextBody?.ReadText(), items[i].TextBody?.ReadText());
+            Assert.Equal(eml.Defects.Select(d => d.Code).Order(), items[i].Defects.Select(d => d.Code).Where(c => !c.StartsWith("Dbx", StringComparison.Ordinal)).Order());
+        }
+    }
+
     // ---- hostile input ----
 
     private static void Drain(byte[] file)
