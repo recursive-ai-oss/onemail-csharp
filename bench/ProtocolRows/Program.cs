@@ -5,7 +5,7 @@
 //          imap-full      full BODY[] of the first ROWS_FULL messages, one FETCH each, into memory
 //          smtp-small     ROWS_SMALL messages of about 4 KB over one authenticated connection
 //          smtp-big       ROWS_BIG messages of about 1 MB over one connection
-//   sides: ours | mailkit | mailkit-nodelay (SMTP only: MailKit on a socket we connected with TCP_NODELAY set)
+//   sides: ours | mailkit | mailkit-nodelay (SMTP only: MailKit on a socket we connected with TCP_NODELAY set) | ours-data (SMTP only: DATA, no BDAT)
 //
 // Environment: ROWS_HOST (127.0.0.1), ROWS_PORT, ROWS_USER, ROWS_PASS, ROWS_SECURITY (implicit | starttls), ROWS_REPS (3),
 // ROWS_CORPUS (a maildir for the IMAP sample), ROWS_MAILBOX (rows), ROWS_COUNT (5000), ROWS_FULL (1000), ROWS_SMALL (1000), ROWS_BIG (100).
@@ -40,6 +40,7 @@ switch (row)
     case "imap-prepare": await ImapPrepare(); break;
     case "imap-summary": await ImapSummary(); break;
     case "imap-full": await ImapFull(); break;
+    case "smtp-wire": await SmtpWire(); break;
     case "smtp-small": await Smtp(int.Parse(Env("ROWS_SMALL", "1000")), 4 * 1024); break;
     case "smtp-big": await Smtp(int.Parse(Env("ROWS_BIG", "100")), 1024 * 1024); break;
     default: throw new ArgumentException("unknown row " + row);
@@ -201,10 +202,11 @@ async Task Smtp(int count, int size)
     var date = new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero);
     string name = size > 64 * 1024 ? "smtp-big" : "smtp-small";
     int serial = 0;
-    if (side == "ours")
+    if (side is "ours" or "ours-data")
     {
         await using OMSmtp.SmtpClient c = await OMSmtp.SmtpClient.ConnectAsync(new OMSmtp.SmtpClientOptions
         {
+            UseChunking = side == "ours",
             Host = host, Port = port, Security = implicitTls ? OMSmtp.SmtpSecurity.ImplicitTls : OMSmtp.SmtpSecurity.StartTls,
             Credentials = new RecursiveAI.OneMail.Client.Sasl.SaslCredentials { UserName = user, Password = pass },
             Connection = new ProtocolConnectionOptions { ServerCertificateValidationCallback = AcceptAll },
@@ -258,5 +260,72 @@ async Task Smtp(int count, int size)
             return ok;
         });
         await c.DisconnectAsync(true);
+    }
+}
+
+// ---- the wire pattern of one message ----
+
+// Sends one 4 KB message with each side to a loopback server that logs every read as one flight, so the number of round trips and
+// writes per message is visible. The server speaks PIPELINING, CHUNKING, SIZE, 8BITMIME, SMTPUTF8, as the Postfix guest does.
+async Task SmtpWire()
+{
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    listener.Start();
+    int p = ((IPEndPoint)listener.LocalEndpoint).Port;
+    foreach (string who in new[] { "ours", "mailkit" })
+    {
+        Task server = Task.Run(() =>
+        {
+            using Socket s = listener.AcceptSocket();
+            s.NoDelay = true;
+            void Say(string t) { s.Send(System.Text.Encoding.ASCII.GetBytes(t)); Console.WriteLine("    server -> " + t.Replace("\r\n", " | ")); }
+            Say("220 wire ESMTP\r\n");
+            byte[] buf = new byte[65536];
+            long skip = 0;
+            bool inData = false;
+            while (true)
+            {
+                int n = s.Receive(buf);
+                if (n == 0) { return; }
+                string text = System.Text.Encoding.Latin1.GetString(buf, 0, n);
+                string head = string.Join(" | ", text.Split("\r\n").Take(6).Select(l => l.Length > 40 ? l[..40] + "..." : l));
+                Console.WriteLine($"  client flight, {n} bytes: {head}");
+                foreach (string line in text.Split("\r\n"))
+                {
+                    if (inData) { if (line == ".") { inData = false; Say("250 queued\r\n"); } continue; }
+                    if (skip > 0) { continue; }
+                    if (line.StartsWith("EHLO", StringComparison.Ordinal)) { Say("250-wire\r\n250-PIPELINING\r\n250-SIZE 52428800\r\n250-8BITMIME\r\n250-CHUNKING\r\n250 SMTPUTF8\r\n"); }
+                    else if (line.StartsWith("MAIL", StringComparison.Ordinal) || line.StartsWith("RCPT", StringComparison.Ordinal)) { Say("250 ok\r\n"); }
+                    else if (line.StartsWith("DATA", StringComparison.Ordinal)) { Say("354 go\r\n"); inData = true; }
+                    else if (line.StartsWith("BDAT", StringComparison.Ordinal)) { Say("250 chunk\r\n"); }
+                    else if (line.StartsWith("QUIT", StringComparison.Ordinal)) { Say("221 bye\r\n"); return; }
+                    else if (line.StartsWith("RSET", StringComparison.Ordinal) || line.StartsWith("NOOP", StringComparison.Ordinal)) { Say("250 ok\r\n"); }
+                }
+            }
+        });
+        Console.WriteLine("== " + who);
+        string body = BodyOf(4096);
+        if (who == "ours")
+        {
+            await using OMSmtp.SmtpClient c = await OMSmtp.SmtpClient.ConnectAsync(new OMSmtp.SmtpClientOptions { Host = "127.0.0.1", Port = p, Security = OMSmtp.SmtpSecurity.None });
+            Console.WriteLine("  -- message");
+            await c.SendAsync(OMSmtp.SmtpMessage.FromEntity(new OutgoingMessage { From = "a@example.com", To = ["b@example.com"], Subject = "x", Text = body }.ToEntity()));
+            await c.QuitAsync();
+        }
+        else
+        {
+            using var c = new MKSmtp.SmtpClient();
+            await c.ConnectAsync("127.0.0.1", p, MKSec.SecureSocketOptions.None);
+            Console.WriteLine("  -- message");
+            var m = new MimeMessage();
+            m.From.Add(new MailboxAddress("", "a@example.com"));
+            m.To.Add(new MailboxAddress("", "b@example.com"));
+            m.Subject = "x";
+            m.Body = new TextPart("plain") { Text = body };
+            await c.SendAsync(m);
+            await c.DisconnectAsync(true);
+        }
+
+        await server;
     }
 }

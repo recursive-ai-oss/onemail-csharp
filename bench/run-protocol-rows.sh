@@ -22,7 +22,7 @@ if [ "${1:-}" = "--inner" ]; then
     for r in imap-summary imap-full; do for s in ours mailkit; do rows $r $s; done; done
   else
     export ROWS_HOST=127.0.0.1 ROWS_PORT=$ONEMAIL_POSTFIX_SUBMISSION_PORT ROWS_USER=$ONEMAIL_POSTFIX_USER ROWS_PASS=$ONEMAIL_POSTFIX_PASSWORD ROWS_SECURITY=starttls
-    for r in smtp-small smtp-big; do for s in ours mailkit mailkit-nodelay; do rows $r $s; done; done
+    for r in smtp-small smtp-big; do for s in ${ROWS_SMTP_SIDES:-ours ours-data mailkit mailkit-nodelay}; do rows $r $s; done; done
   fi
   exit 0
 fi
