@@ -255,6 +255,52 @@ internal static class DisplayHtmlBuilder
         }
 #pragma warning restore CA1031
 
+        private Dictionary<string, int>? _byId;
+        private Dictionary<string, int>? _byIdFold;
+        private List<(int Index, string Location)>? _locations;
+        private long _locationBudget = 20_000_000;
+
+        // Reads each part's ContentId and ContentLocation once (for a stored message each read can mean decoding a property).
+        private void BuildIndex(IReadOnlyList<IMailAttachment> atts)
+        {
+            if (_byId is not null)
+            {
+                return;
+            }
+
+            _byId = new Dictionary<string, int>(StringComparer.Ordinal);
+            _byIdFold = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _locations = [];
+            for (int i = 0; i < atts.Count; i++)
+            {
+                string? id = ReadOrNull(() => atts[i].ContentId);
+                if (id is not null)
+                {
+                    _byId.TryAdd(id, i);
+                    _byIdFold.TryAdd(id, i);
+                }
+
+                if (ReadOrNull(() => atts[i].ContentLocation) is { Length: > 0 } loc)
+                {
+                    _locations.Add((i, loc));
+                }
+            }
+        }
+
+#pragma warning disable CA1031 // A part whose properties cannot be read has no id or location.
+        private static string? ReadOrNull(Func<string?> read)
+        {
+            try
+            {
+                return read();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+#pragma warning restore CA1031
+
         public bool WasUsed(IMailAttachment a)
         {
             for (int i = 0; i < Attachments.Count; i++)
@@ -270,23 +316,35 @@ internal static class DisplayHtmlBuilder
 
         public string? Resolve(ContentReference r)
         {
-            int found = -1;
             IReadOnlyList<IMailAttachment> atts = Attachments;
-            for (int pass = 0; pass < 2 && found < 0; pass++)
+            BuildIndex(atts);
+            int found = -1;
+            if (r.IsContentId)
             {
-                for (int i = 0; i < atts.Count && found < 0; i++)
+                // First part with that id, exact match before case-insensitive, as before; one dictionary lookup instead of a scan per reference.
+                if (!_byId!.TryGetValue(r.Value, out found) && !_byIdFold!.TryGetValue(r.Value, out found))
                 {
-                    if (r.IsContentId)
+                    found = -1;
+                }
+            }
+            else
+            {
+                // Locations match by suffix, so they are scanned; the scan is over the parts that have one and has a total budget, so a message
+                // with thousands of parts and thousands of references cannot spend unbounded time here.
+                for (int pass = 0; pass < 2 && found < 0; pass++)
+                {
+                    foreach ((int index, string loc) in _locations!)
                     {
-                        string? id = atts[i].ContentId;
-                        if (id is not null && string.Equals(id, r.Value, pass == 0 ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
+                        if (--_locationBudget < 0)
                         {
-                            found = i;
+                            break;
                         }
-                    }
-                    else if (atts[i].ContentLocation is { Length: > 0 } loc && MatchesLocation(loc, r.Value, pass == 1))
-                    {
-                        found = i;
+
+                        if (MatchesLocation(loc, r.Value, pass == 1))
+                        {
+                            found = index;
+                            break;
+                        }
                     }
                 }
             }

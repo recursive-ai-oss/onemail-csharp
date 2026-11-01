@@ -8,6 +8,9 @@ namespace RecursiveAI.OneMail.Fuzz;
 // The display-HTML sanitiser on hostile markup. Byte 0 picks the options (policy allow or block, a rewrite policy, tight limits); the rest is HTML.
 //   sanitizer:           nothing may throw or hang, and the output may hold only what the allowlists permit: no script-bearing element, no
 //                        event-handler attribute, no URL scheme beyond http(s), mailto, tel, data images and fragments.
+//   sanitizer-display:   the whole display path on a message built from the bytes: byte 0 picks plain text, format=flowed text or an HTML body, the
+//                        rest is the body. The plain-text path (links, quote depth) and the attachment resolver get no time to spend: the fuzzer's
+//                        per-input timeout catches a slow path, and the output is held to the same allowlists.
 //   sanitizer-reparse:   the output is parsed and written back with OneHtml's own spec serialiser, twice; the two strings must be equal, which is
 //                        the property a browser relies on when it copies the markup through innerHTML (mutation XSS needs it to fail).
 internal static class SanitizerTargets
@@ -71,6 +74,28 @@ internal static class SanitizerTargets
             throw new InvalidOperationException(r.Changes.First(c => c.Detail.StartsWith("internal", StringComparison.Ordinal) || c.Detail.StartsWith("unstable", StringComparison.Ordinal)).Detail);
         }
 
+        Check(r.Html);
+    }
+
+    public static void Display(ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0)
+        {
+            return;
+        }
+
+        string type = (data[0] & 3) switch
+        {
+            0 => "text/plain",
+            1 => "text/plain; format=flowed",
+            2 => "text/plain; format=flowed; delsp=yes",
+            _ => "text/html",
+        };
+        // One attachment with a content id and a location, so cid: and relative references have something to find.
+        byte[] head = Encoding.UTF8.GetBytes("Subject: f\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: " + type + "; charset=utf-8\r\n\r\n");
+        byte[] tail = Encoding.UTF8.GetBytes("\r\n--b\r\nContent-Type: image/gif\r\nContent-ID: <a>\r\nContent-Location: x.gif\r\nContent-Transfer-Encoding: base64\r\n\r\nR0lGODlhAQABAAAAACwAAAAAAQABAAACAkQBADs=\r\n--b--\r\n");
+        byte[] raw = [.. head, .. data[1..], .. tail];
+        DisplayResult r = Mail.Parse(raw).ToDisplayHtml(new DisplayOptions { Sanitizer = Options((byte)(data[0] >> 2)) });
         Check(r.Html);
     }
 
@@ -148,8 +173,11 @@ internal static class SanitizerTargets
             {
                 // String literals are text, whatever they say; only the rest of the sheet is looked at.
                 string css = System.Text.RegularExpressions.Regex.Replace((n.TextContent ?? string.Empty).ToLowerInvariant(), "\"(\\\\.|[^\"\\\\])*\"", "\"\"");
-                if (css.Contains("@import", StringComparison.Ordinal) || css.Contains("expression", StringComparison.Ordinal)
-                    || css.Contains("javascript", StringComparison.Ordinal) || css.Contains('<'))
+                // A backslash escape is part of an identifier or string, never the start of an at-rule or a function ("red\@import" is one identifier).
+                css = System.Text.RegularExpressions.Regex.Replace(css, "\\\\[\\s\\S]", "");
+                // "expression(" and "javascript:" are what act; the words alone are legal identifiers (a font may be called javascript).
+                if (css.Contains("@import", StringComparison.Ordinal) || css.Contains("expression(", StringComparison.Ordinal)
+                    || css.Contains("javascript:", StringComparison.Ordinal) || css.Contains('<'))
                 {
                     throw new InvalidOperationException("style content");
                 }

@@ -84,7 +84,7 @@ public static class HtmlSanitizer
         for (int round = 0; round < 3 && !stable; round++)
 
         {
-            SanitizerContext vx = new(options, verify: true);
+            SanitizerContext vx = new(options, verify: true, cx.Emitted);
             string again = Write(output, vx);
             stable = string.Equals(again, output, StringComparison.Ordinal);
             output = again;
@@ -220,11 +220,21 @@ public static class HtmlSanitizer
                 case '&': sb.Append("&amp;"); break;
                 case '<': sb.Append("&lt;"); break;
                 case '>': sb.Append("&gt;"); break;
-                case '\0': break;
-                default: sb.Append(c); break;
+                default:
+                    if (!IsDroppedChar(c))
+                    {
+                        sb.Append(c);
+                    }
+
+                    break;
             }
         }
     }
+
+    // Control characters mean nothing in a mail body and are only ever useful against the layers around the markup: an ESC starts a
+    // character-set switch if a page is mislabelled ISO-2022-JP, and the non-characters are what some decoders treat as an end mark. Tab, line
+    // feed and form feed are kept; the carriage return is not (the parser has already folded it into a line feed).
+    private static bool IsDroppedChar(char c) => c < ' ' ? c is not ('\t' or '\n' or '\f') : c is '\u007f' or '\ufffe' or '\uffff';
 
     internal static void EscapeAttribute(ReadOnlySpan<char> s, StringBuilder sb)
     {
@@ -236,8 +246,13 @@ public static class HtmlSanitizer
                 case '<': sb.Append("&lt;"); break;
                 case '>': sb.Append("&gt;"); break;
                 case '"': sb.Append("&quot;"); break;
-                case '\0': break;
-                default: sb.Append(c); break;
+                default:
+                    if (!IsDroppedChar(c))
+                    {
+                        sb.Append(c);
+                    }
+
+                    break;
             }
         }
     }
@@ -806,7 +821,7 @@ public static class HtmlSanitizer
                         return null;
                     }
 
-                    return cx.Verify ? SanitizerContext.AbsoluteRemote(n, f) : cx.ApplyPolicy(SanitizerContext.AbsoluteRemote(n, f), RemoteContentKind.Link, "a[href]");
+                    return cx.Verify ? cx.Track(SanitizerContext.AbsoluteRemote(n, f)) : cx.ApplyPolicy(SanitizerContext.AbsoluteRemote(n, f), RemoteContentKind.Link, "a[href]");
                 case UrlForm.Mailto:
                 case UrlForm.Tel:
                     return n;

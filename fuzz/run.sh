@@ -62,7 +62,7 @@ case "$target" in
   oxocal) maxlen=4096 ;;
   calcard) maxlen=8192 ;;
   htmltext) maxlen=16384 ;;
-  sanitizer|sanitizer-reparse) maxlen=16384 ;;
+  sanitizer|sanitizer-reparse|sanitizer-display) maxlen=16384 ;;
   olm) maxlen=65536 ;;
   render) maxlen=8192 ;;
   render-datauri) maxlen=65536 ;;

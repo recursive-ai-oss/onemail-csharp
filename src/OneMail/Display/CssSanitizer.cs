@@ -203,6 +203,7 @@ internal sealed class CssSanitizer(SanitizerContext cx)
         }
 
         bool lastSpace = true;
+        CssTokenKind previous = CssTokenKind.Delim;
         foreach (ComponentValue cv in list)
         {
             if (cv.IsWhitespace)
@@ -216,8 +217,17 @@ internal sealed class CssSanitizer(SanitizerContext cx)
                 continue;
             }
 
+            // A parenthesis right after a number, dimension or hash ("0url(x)") reads as a function name to a parser that tokenises
+            // differently from the spec; it is never legitimate in a property value, so the declaration goes.
+            if (cv.Kind == ComponentValueKind.SimpleBlock && !lastSpace
+                && previous is CssTokenKind.Number or CssTokenKind.Percentage or CssTokenKind.Dimension or CssTokenKind.Hash or CssTokenKind.Ident or CssTokenKind.QuotedString)
+            {
+                return false;
+            }
+
             lastSpace = false;
             CssToken t = cv.Token;
+            previous = cv.Kind == ComponentValueKind.Token ? t.Kind : CssTokenKind.Delim;
             if (cv.Kind == ComponentValueKind.Function)
             {
                 string fn = t.Value.ToLowerInvariant();

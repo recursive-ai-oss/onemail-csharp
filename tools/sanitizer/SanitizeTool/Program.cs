@@ -12,6 +12,7 @@ return args.Length == 0 ? Usage() : args[0] switch
 {
     "show" => Show(),
     "pages" when args.Length >= 4 => Pages(args[1], args[2], args[3]),
+    "structure" when args.Length >= 4 => Structure(args[1], args[2], args[3]),
     "corpus" when args.Length >= 2 => Corpus(args[1..]),
     "display" when args.Length >= 2 => DisplayOne(args[1]),
     "json" when args.Length >= 4 => Json(args[1], args[2], args[3]),
@@ -78,6 +79,13 @@ static int Show()
 
 static List<(string Name, string Html)> ReadVectors(string path, string host)
 {
+    if (path.EndsWith(".json", StringComparison.Ordinal))
+    {
+        // A JSON array of strings (tools/sanitizer/mutate.py writes one): the vectors are named by position.
+        System.Text.Json.Nodes.JsonArray docs = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsArray();
+        return [.. docs.Select((d, i) => ($"g{i}", d!.GetValue<string>()))];
+    }
+
     List<(string, string)> list = [];
     string name = "";
     StringBuilder body = new();
@@ -121,8 +129,10 @@ static int Pages(string vectors, string outDir, string host)
     // The frame's alert/confirm/prompt/write stand-ins report to the page, which prints the count; the frame's fragment is parsed by the browser's
     // document parser exactly as it would be in a mail view.
     const string Head = "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title><script>window.__fired=[];</script></head><body>";
-    const string Tail = "<pre id=\"result\">pending</pre><script>setTimeout(function(){document.getElementById('result').textContent="
-        + "'FIRED='+window.__fired.length+' '+JSON.stringify(window.__fired.slice(0,40));},4000);</script></body></html>";
+    // The result is shown in the page (for --dump-dom) and also posted to the logging server, for browsers that cannot dump the DOM.
+    string Tail = "<pre id=\"result\">pending</pre><script>setTimeout(function(){var t="
+        + "'FIRED='+window.__fired.length+' '+JSON.stringify(window.__fired.slice(0,40));document.getElementById('result').textContent=t;"
+        + "try{fetch('http://" + host + "/__result',{method:'POST',mode:'no-cors',body:t});}catch(e){}},4000);</script></body></html>";
     const string FrameHead = "<!doctype html><html><head><meta charset=\"utf-8\"><script>(function(){var n=NAME;var f=function(k){return function(x){parent.__fired.push(n+':'+k+':'+String(x));};};"
         + "window.alert=f('alert');window.confirm=f('confirm');window.prompt=f('prompt');window.write=f('write');window.msgbox=f('msgbox');})();</script></head><body>";
     foreach ((string file, Func<string, string> render) in new (string, Func<string, string>)[]
@@ -154,7 +164,43 @@ static int Pages(string vectors, string outDir, string host)
         File.WriteAllText(Path.Combine(outDir, file == "page-raw.html" ? $"page-raw-{piece:D2}.html" : file), sb.ToString());
     }
 
+    // What the allow policy lets through, as the request paths a browser may legitimately send to the logging server.
+    HashSet<string> allowedPaths = new(StringComparer.Ordinal);
+    foreach ((_, string html) in vs)
+    {
+        foreach (RemoteReference r in HtmlSanitizer.Sanitize(html, new SanitizerOptions { RemoteContent = RemoteContentAction.Allow }).RemoteReferences)
+        {
+            if (r.Outcome == RemoteContentOutcome.Allowed && Uri.TryCreate(r.Url, UriKind.Absolute, out Uri? u))
+            {
+                allowedPaths.Add(u.PathAndQuery);
+            }
+        }
+    }
+
+    File.WriteAllLines(Path.Combine(outDir, "allowed-paths.txt"), allowedPaths.Order(StringComparer.Ordinal));
     Console.WriteLine($"vectors: {vs.Count}");
+    return 0;
+}
+
+// SanitizeTool structure VECTORS OUTDIR HOST: page-structure.html holds every vector's sanitised output (block and allow) and a script that parses
+// each one in the browser (innerHTML, template, DOMParser, a range fragment) and reports anything outside the allowlists, any difference between
+// the parses, and any output that changes when serialised and parsed again. The tree check does not depend on OneHtml's parser.
+static int Structure(string vectors, string outDir, string host)
+{
+    Directory.CreateDirectory(outDir);
+    System.Text.Json.Nodes.JsonArray arr = [];
+    foreach ((string name, string html) in ReadVectors(vectors, host))
+    {
+        arr.Add(new System.Text.Json.Nodes.JsonObject { ["name"] = name + ":block", ["html"] = HtmlSanitizer.Sanitize(html).Html });
+        arr.Add(new System.Text.Json.Nodes.JsonObject { ["name"] = name + ":allow", ["html"] = HtmlSanitizer.Sanitize(html, new SanitizerOptions { RemoteContent = RemoteContentAction.Allow }).Html });
+    }
+
+    string json = arr.ToJsonString().Replace("<", "\\u003c", StringComparison.Ordinal);
+    string script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "structure-check.js"));
+    string page = "<!doctype html><html><head><meta charset=\"utf-8\"><title>s</title></head><body><pre id=\"result\">pending</pre><script>var OUTPUTS=" + json + ";</script><script>" + script + "</script>"
+        + "<script>setTimeout(function(){var t=window.__structure;document.getElementById('result').textContent=t;try{fetch('http://" + host + "/__result',{method:'POST',mode:'no-cors',body:t});}catch(e){}},1500);</script></body></html>";
+    File.WriteAllText(Path.Combine(outDir, "page-structure.html"), page);
+    Console.WriteLine($"outputs: {arr.Count}");
     return 0;
 }
 

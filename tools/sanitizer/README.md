@@ -6,8 +6,12 @@ Tools for the sanitiser and display HTML (`docs/display-html.md`).
   (sanitised with remote content blocked, sanitised with it allowed, and the raw control). `seeds VECTORS OUTDIR` writes the vectors as fuzz seeds.
   `corpus PATH...` sanitises the HTML bodies of `.html` and mail files (directories are walked) and reports how many keep their visible text
   word for word, how many outputs are unstable, and the remote references and tracking indications found. `display FILE` prints a message's display HTML.
-- `browser-check.sh OUTDIR` loads the pages in headless Chromium against a request-logging server and counts script executions and requests;
-  the raw page is the control and must show both.
+- `browser-check.sh OUTDIR` loads the pages in a headless browser (Chrome/Chromium with `--dump-dom`, or Firefox, which posts its result to the logging
+  server; `BROWSER=` picks one) against a request-logging server and counts script executions and requests; the raw page is the control and must show
+  both. `VECTORS=` picks the vector file. The structure page (`structure-check.js`, written by `SanitizeTool structure VECTORS OUTDIR HOST`) parses every output
+  in the browser and fails on anything outside the allowlists; on the allow page every request must be for a URL in `allowed-paths.txt`.
+  `STRUCTURE_ONLY=1` runs only the structure page. `run-browsers.sh WORKDIR [VECTORS...]` runs the vector files in every installed browser.
+- `mutate.py SEED COUNT OUT.json` writes random tag soup (a JSON array of strings, accepted wherever a vector file is); `stress.py DIR` writes hostile-size inputs.
 - `compare-dompurify.sh OUTDIR` runs the released DOMPurify (npm, version pinned in the script) over the same vectors in headless Chromium
   and lists the vectors where it keeps a construct this sanitiser removes and the reverse. DOMPurify is run, never read.
-- Vectors: `testdata/sanitizer/xss.txt`, our own, one record per `# name` line, separated by `====`.
+- Vectors: `testdata/sanitizer/xss.txt` and `review.txt`, our own, one record per `# name` line, separated by `====`.

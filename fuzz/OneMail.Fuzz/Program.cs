@@ -42,6 +42,7 @@ internal static class Program
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,
             ["render"] = RenderTarget.Run,
             ["render-datauri"] = RenderTarget.DataUri,
+            ["sanitizer-display"] = SanitizerTargets.Display,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

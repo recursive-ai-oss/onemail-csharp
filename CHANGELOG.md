@@ -10,6 +10,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `onemail inspect` reads ICS, vCard, jCal, jCard, xCal and xCard files: the number of calendars or cards, the kinds of components in them and the reader's defects (`--json` and `--defects` supported).
 - Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.
 
+### Security
+
+- Display HTML had its independent review (see `docs/display-html.md`, *Review*): no script execution, no fetch under the Block policy and no escape from the scope box in Chrome or Firefox. Fixed on the way: quadratic link-bracket trimming in plain-text display and per-reference part scans in `cid:`/location resolution (both denial of service on crafted input); control characters are no longer written; `format=flowed` quote depth is capped at 32; verify passes keep only URLs the first pass wrote; a parenthesis glued to a CSS value token is refused.
+
 ## [0.3.0-preview.2]
 
 A fix release for 0.2.0-preview.2, on top of 0.3.0-preview.1.

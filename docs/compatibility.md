@@ -33,8 +33,7 @@ Calendar and contacts, the other stores and the Outlook item semantics on read a
 hold each format's numbers. Fuzzing, 600 s per target with 0 findings: `dbx` 8.1M executions, `olm` 17.5M, `oxocal` 0.3M,
 `rtf-html` 5.0M, `jcal-jcard` 12.8M, `xcal-xcard` 19.7M, `contentlines` 20.4M, `calendar` 11.2M, `vcard-view` 11.7M,
 `recurrence` 2.1M, plus the display, bodies and composition targets in their sections. Known gaps: no Outlook-produced
-calendar, contact or distribution-list fixtures yet (needs Outlook), and the display sanitiser has not had its independent
-review.
+calendar, contact or distribution-list fixtures yet (needs Outlook).
 
 ## 0.2.0-preview.1
 
@@ -179,7 +178,7 @@ conversation-index choices. Real Outlook conversation indexes carry the FILETIME
 ## Display HTML (sanitiser, remote-content policy)
 
 Added after 0.2.0-preview.2. Vectors are our own, written from the categories of public evasion lists (no text copied). DOMPurify 3.4.17 (npm) is run as a released program
-only. What the code does is in [`display-html.md`](display-html.md); the sanitiser has not had its independent review yet.
+only. What the code does is in [`display-html.md`](display-html.md); the sanitiser's independent review passed (see its *Review* section).
 
 | Area | Checked against | Result | Known gaps |
 |---|---|---|---|
