@@ -4,7 +4,7 @@
 #   fuzz/run.sh <target> <seconds> [corpus dir] [extra libFuzzer flags...]
 #   fuzz/run.sh replay <target> <file>...      # run saved inputs once, without libFuzzer (reproduce a finding)
 #
-# Targets: imap-response, smtp-reply, sasl-challenge, pop3-response, pop3-listings (protocol response readers), dkim-tags, dkim-key, dns-reply (DKIM/ARC headers, key records, DNS replies), text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
+# Targets: imap-response, imap-fetch, smtp-reply, sasl-challenge, pop3-response, pop3-listings (protocol response readers), dkim-tags, dkim-key, dns-reply (DKIM/ARC headers, key records, DNS replies), text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
 #
 # Environment (nothing is baked into the script):
 #   ONEMAIL_FUZZ_WORK    required: where builds, corpora and findings go. Keep it outside the checkout.
@@ -77,6 +77,7 @@ case "$target" in
   dns-reply) maxlen=2048 ;;
   smime-structure) maxlen=8192 ;;
   imap-response) maxlen=16384 ;;
+  imap-fetch) maxlen=2048 ;;
   smtp-reply|pop3-response|pop3-listings|sasl-challenge) maxlen=4096 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
