@@ -445,6 +445,12 @@ internal static class Program
                     string outp = Path.Combine(work, "out-" + cell.Replace('/', '_') + ".txt");
                     var r = Run(openssl, ["cms", "-verify", "-in", path, "-CAfile", rootPem, "-out", outp]);
                     bool ok = r.Exit == 0 && File.ReadAllText(outp).Contains(Marker, StringComparison.Ordinal);
+                    // OpenSSL 3.0 refuses an Ed25519 CMS signer that names a digest; later releases accept it. Not ours to fix.
+                    if (!ok && r.Err.Contains("eddsa_digest_signverify_init:invalid digest", StringComparison.Ordinal))
+                    {
+                        return (false, "oracle cannot: " + r.Err.Trim().Split('\n')[0]);
+                    }
+
                     return (ok, ok ? "" : $"exit {r.Exit}: {r.Err.Trim()}");
                 });
             }

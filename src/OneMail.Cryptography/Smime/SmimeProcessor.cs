@@ -765,10 +765,18 @@ public static class SmimeProcessor
 
         if (r.Certificate is { } cert)
         {
-            if (cert.ExtendedKeyUsage is { } eku && !eku.Allows(EmailProtectionOid))
+            try
             {
-                // RFC 8550 §4.4.4: when the extended key usage is present it has to allow e-mail protection.
-                weak.Add("eku:no-emailProtection");
+                if (cert.ExtendedKeyUsage is { } eku && !eku.Allows(EmailProtectionOid))
+                {
+                    // RFC 8550 §4.4.4: when the extended key usage is present it has to allow e-mail protection.
+                    weak.Add("eku:no-emailProtection");
+                }
+            }
+            catch (X509ParseException)
+            {
+                // A certificate inside a message can carry a damaged extension value; report it rather than fail the layer.
+                weak.Add("eku:malformed");
             }
 
             s.CertificateAddresses = AddressesOf(cert);

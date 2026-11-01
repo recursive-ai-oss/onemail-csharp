@@ -531,7 +531,7 @@ public sealed class SmimeTests : IDisposable
         foreach (MapiMessage m in new[] { item, ThroughMsg(item) })
         {
             SmimeResult r = SmimeOutlook.Open(m);
-            Assert.True(r.Succeeded, r.Layers.FirstOrDefault()?.Detail);
+            Assert.True(r.Succeeded, r.Layers.Count > 0 ? r.Layers[0].Detail : null);
             Assert.Equal(SmimeLayerKind.SignedDetached, r.Layers[0].Kind);
             Assert.Contains("outlook clear", r.InnerItem!.TextBody!.ReadText());
         }
@@ -550,7 +550,7 @@ public sealed class SmimeTests : IDisposable
         // Without the named Content-Type property the media type comes from the attachment's MIME tag and name (MS-OXOSMIME 2.1.3.2.2.3).
         MapiMessage encItem = OutlookItem("IPM.Note.SMIME", enc.GetDecodedContent(), "application/pkcs7-mime", null);
         SmimeResult er = SmimeOutlook.Open(ThroughMsg(encItem), new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
-        Assert.True(er.Succeeded, er.Layers.FirstOrDefault()?.Detail);
+        Assert.True(er.Succeeded, er.Layers.Count > 0 ? er.Layers[0].Detail : null);
         Assert.Contains("outlook secret", er.InnerItem!.TextBody!.ReadText());
         Assert.Contains(SmimeIssue.SmimeTypeMissing, er.Layers[0].Issues);
     }
