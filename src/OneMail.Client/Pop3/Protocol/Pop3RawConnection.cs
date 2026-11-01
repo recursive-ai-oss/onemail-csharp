@@ -237,10 +237,12 @@ public sealed class Pop3RawConnection : IAsyncDisposable, IDisposable
         {
             foreach (string line in await ReadTextLinesAsync(body, cancellationToken).ConfigureAwait(false))
             {
-                string[] w = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-                if (w.Length == 2 && int.TryParse(w[0], NumberStyles.None, CultureInfo.InvariantCulture, out int n))
+                // "number SP value" (RFC 1939 §5, §7): read in place, so a listing of thousands of messages makes one string per entry and no arrays.
+                ReadOnlySpan<char> text = line.AsSpan().TrimStart(' ');
+                int space = text.IndexOf(' ');
+                if (space > 0 && int.TryParse(text[..space], NumberStyles.None, CultureInfo.InvariantCulture, out int n) && text[(space + 1)..].Trim() is { Length: > 0 } value)
                 {
-                    entries.Add(new Pop3ListEntry(n, w[1].Trim()));
+                    entries.Add(new Pop3ListEntry(n, value.ToString()));
                 }
             }
         }

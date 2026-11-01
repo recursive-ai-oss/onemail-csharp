@@ -331,3 +331,89 @@ Edits hold state only for the changes since the last commit, the touched tables'
 
 **Suite.** Checked build, full suite 3,294 passed, 10 skipped by design (server tests), 0 failed; fuzz targets build; NativeAOT publish with warnings as errors runs all smoke checks including `pst-edit`; browser WebAssembly smoke (headless Chromium) passes with the in-memory writable store; all packages pack with package validation.
 
+
+# Benchmarks: protocol rows (IMAP fetch, SMTP send)
+
+`bench/ProtocolRows` compares the IMAP and SMTP clients with MailKit 4.18.2 (a released NuGet package, referenced only from `bench/`)
+over a real connection to local servers: IMAP against Dovecot 2.4.5 (implicit TLS), SMTP submission against Postfix 3.7 in its
+guest (STARTTLS, authenticated). `bench/run-protocol-rows.sh OUTDIR [imap|smtp]` starts the servers in a private network namespace
+(`tools/servers`), runs every side in its own process and prints three timed repetitions after a warm-up with their median. Run it
+alone on the machine. The ratio is our median / MailKit's median; below 1 is faster. The bar is a geometric mean ≤ 1.0 across rows
+and no row above 1.25.
+
+## Inputs
+
+- IMAP: the first 5,000 messages of the CMU Enron maildir appended to a Dovecot mailbox (`imap-prepare`).
+  `imap-summary` fetches UID, FLAGS, INTERNALDATE, RFC822.SIZE and ENVELOPE of all 5,000 in one command. `imap-full` fetches
+  `BODY[]` of the first 1,000, one FETCH each, into memory.
+- SMTP: `smtp-small` is 1,000 generated messages of about 4 KB and `smtp-big` 100 of about 1 MB, each over one connection to one
+  recipient. Messages differ only in Subject and Message-ID.
+
+## What each side does
+
+- Ours: `ImapClient.FetchAsync` enumerating the results; `SmtpClient.SendAsync` with CHUNKING (BDAT) as the guest offers it.
+  `ours-data` is the same with DATA, to show the transfer command does not matter.
+- MailKit: `IMailFolder.FetchAsync` with the same items (summary); `GetStreamAsync(uid, "")` copied into a `MemoryStream`, ours
+  `DownloadAsync(uid, "", stream)` (full body, one FETCH per message); `SmtpClient.SendAsync`.
+- **SMTP times the send of messages that are already built, on both sides.** Building (our `OutgoingMessage.ToEntity`, MailKit's
+  `MimeMessage`) is outside the timed region, and each repetition sends the same prepared messages again. Allocation per message
+  is therefore the send's alone.
+- **Two MailKit variants.** `mailkit` is MailKit as it ships: it connects its own socket without `TCP_NODELAY` and writes the
+  command and the message in several small segments, so each message waits out Nagle's algorithm against the server's delayed ACK:
+  about 42 ms per message on this path (the 42 s for 1,000 messages below). Setting `TCP_NODELAY` removes it, which is why we
+  attribute it to Nagle against delayed ACK. It is real MailKit behaviour on this path, not a harness fault, but it measures TCP timers, so the
+  gate comparator is `mailkit-nodelay`: the same MailKit calls on a socket we connect with `TCP_NODELAY` set, which is how our
+  connections are opened. Both are reported.
+- The Postfix guest relays every accepted message to a sink on the host; the harness waits (outside the timed region) until the
+  sink has everything and clears it between repetitions, so a long row cannot fill the guest's disk.
+
+## Results (x64)
+
+| Row | Ours | MailKit (gate: `mailkit-nodelay` for SMTP) | Ratio | Alloc/msg ours | Alloc/msg MailKit | Peak ours / MailKit |
+|---|---|---|---|---|---|---|
+| imap-summary, 5,000 messages | 144.4 ms | 248.0 ms | **0.58** | 2,494 B | 16,922 B | 68 / 130 MiB |
+| imap-full, 1,000 messages | 187.9 ms | 190.1 ms | **0.99** | 11,296 B | 12,482 B | 64 / 70 MiB |
+| smtp-small, 1,000 x 4 KB | 1,050 ms | 1,555 ms | **0.68** | 9,874 B | 30,889 B | 104 / 119 MiB |
+| smtp-big, 100 x 1 MB | 684 ms | 1,038 ms | **0.66** | 12,590 B | 212,814 B | 298 / 194 MiB |
+
+Geometric mean 0.71, worst row 0.99: the bar is met. MailKit as it ships (Nagle on): smtp-small 42,427 ms (ours 0.025x), smtp-big
+2,931 ms (0.23x). `ours-data`: 911 ms and 697 ms. Ours holds more at the 1 MB peak because the prepared messages are held as an
+entity tree plus the converted SMTP message. `imap-full` is dominated by the server and the copy of each body, so the two sides land together.
+
+### Allocation per message in enumeration and download
+
+Measured by `ImapMemoryTests` (opt-in, `ONEMAIL_IMAP_PERF=1`) against the real servers, 10,000 results of
+`UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE`, second pass, before (through the generic response tree, which is also what the old
+code did) and after (plain lines decoded in place):
+
+| Server | Before | After |
+|---|---|---|
+| Dovecot 2.4.5 | 6,909 B | 960 B |
+
+The same test passes on Stalwart 1.0.1 and Cyrus 3.13 (Stalwart refuses the 100 MB message: its request limit is 50 MB); their byte counts were not captured.
+
+The item itself (`ImapMessage`, its data, flags, envelope, strings and addresses) is about 900 B of that for these envelopes. The
+download of a 1 MB and a 100 MB message from Dovecot allocates 38 KiB and 153 KiB (before: about 127 B per read, about 12 MB for 100 MB at 16 KB reads);
+the remaining growth is about 24 B per read, against about 127 B before.
+
+## Tuning
+
+Before this work (same machine, indicative): imap-full 170 ms against 142 ms (1.20x), smtp-small 1.2 to 1.5x of `mailkit-nodelay`, FETCH
+8.8 KB per message. What changed: a coarse timer instead of a timer per read, pooled async state machines on the hot reads,
+plain FETCH lines decoded in place, SMTP scan buffers pooled, `CopyToAsync` on the literal stream.
+
+## Machines and runs
+
+| | x64 |
+|---|---|
+| CPU | AMD Ryzen 9 7950X3D, 32 logical cores |
+| SDK | .NET 10.0.402, Release build |
+| Servers | Dovecot `docker.io/dovecot/dovecot@sha256:1b3041c0...db4c6`; Postfix 3.7 in the Debian 12 guest (`tools/servers/guest-*.sh`) |
+| Jobs | `wq` bench 001941 (IMAP rows, 17:29 to 17:30 UTC) and 001960 (SMTP rows, 18:45 to 18:51 UTC), 2026-11-01 |
+| Load before (1/5/15 min) | IMAP 8.93 / 8.00 / 8.99 (the previous job's tail); SMTP 2.05 / 3.67 / 6.89 |
+| Load during | IMAP: the job ran 50 s, no sample; SMTP 1.9 to 2.9 (every minute) |
+| Load after | IMAP 6.86 / 7.68 / 8.83; SMTP 3.30 / 2.97 / 5.43 |
+
+MailKit 4.18.2. The first SMTP attempt (job 001942) ran out of the guest's disk in the fourth side and was discarded; the sink
+drain above came from it. arm64: no host here runs the servers (the Mac has no container or VM runtime), so there are no arm64
+protocol rows yet; the client side alone could run from the Mac against these servers over the LAN, and would be indicative only.

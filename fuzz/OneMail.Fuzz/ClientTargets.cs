@@ -1,3 +1,5 @@
+using System.Text;
+using RecursiveAI.OneMail.Client.Imap;
 using RecursiveAI.OneMail.Client.Imap.Protocol;
 using RecursiveAI.OneMail.Client.Pop3.Protocol;
 using RecursiveAI.OneMail.Client.Protocol;
@@ -74,6 +76,68 @@ internal static class ClientTargets
         catch (MailProtocolException)
         {
             // Closed connection or a limit: the expected end of hostile input.
+        }
+    }
+
+    /// <summary>
+    /// One FETCH line through the client's enumeration (which decodes plain lines without the generic tree) and through the general
+    /// parser: where both produce a message they must agree on every decoded value. A difference is a finding.
+    /// </summary>
+    public static void ImapFetch(ReadOnlySpan<byte> data)
+    {
+        var line = new StringBuilder("* 1 FETCH (");
+        foreach (byte b in data)
+        {
+            if (b is not ((byte)'\r' or (byte)'\n' or (byte)'{')) { line.Append((char)b); }
+        }
+
+        line.Append(")\r\n");
+        byte[] wire = Encoding.Latin1.GetBytes(line.ToString());
+        ImapFetchData? expected = null;
+        try
+        {
+            using ProtocolConnection general = ProtocolConnection.FromStream(new InputStream(wire), "localhost", Options);
+            ImapResponse tree = new ImapResponseReader(general.Reader).ReadResponse();
+            _ = tree.TryGetFetch(out expected);
+        }
+        catch (MailProtocolException)
+        {
+        }
+
+        byte[] script = Encoding.Latin1.GetBytes("* OK [CAPABILITY IMAP4rev1] ready\r\n" + line + "A0001 OK done\r\n");
+        ImapMessage? actual = null;
+        try
+        {
+            using ProtocolConnection conn = ProtocolConnection.FromStream(new InputStream(script), "localhost", Options);
+            ImapClient c = ImapClient.FromConnectionAsync(conn).AsTask().GetAwaiter().GetResult();
+            IAsyncEnumerator<ImapMessage> e = c.FetchAsync(ImapSet.All, new ImapFetchQuery { Uid = true }).GetAsyncEnumerator();
+            while (e.MoveNextAsync().AsTask().GetAwaiter().GetResult()) { actual = e.Current; }
+        }
+        catch (Exception ex) when (ex is MailProtocolException or ImapCommandException)
+        {
+        }
+
+        if (expected is null || actual is null)
+        {
+            return;
+        }
+
+        ImapFetchData a = actual.Data;
+        bool same = expected.Uid == a.Uid && expected.Rfc822Size == a.Rfc822Size && expected.ModSeq == a.ModSeq && expected.EmailId == a.EmailId
+            && expected.ThreadId == a.ThreadId && expected.InternalDateText == a.InternalDateText && expected.InternalDate == a.InternalDate
+            && (expected.Flags ?? []).SequenceEqual(a.Flags ?? []) && expected.Defects.Count == a.Defects.Count
+            && expected.Other.Count == a.Other.Count && expected.Sections.Count == a.Sections.Count
+            && (expected.Envelope is null) == (a.Envelope is null);
+        if (same && expected.Envelope is { } x && a.Envelope is { } y)
+        {
+            same = x.Date == y.Date && x.Subject == y.Subject && x.InReplyTo == y.InReplyTo && x.MessageId == y.MessageId
+                && x.From.SequenceEqual(y.From) && x.Sender.SequenceEqual(y.Sender) && x.ReplyTo.SequenceEqual(y.ReplyTo)
+                && x.To.SequenceEqual(y.To) && x.Cc.SequenceEqual(y.Cc) && x.Bcc.SequenceEqual(y.Bcc);
+        }
+
+        if (!same)
+        {
+            throw new InvalidOperationException("The fast FETCH path and the general parser disagree on: " + line);
         }
     }
 

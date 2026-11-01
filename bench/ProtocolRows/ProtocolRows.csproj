@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The protocol rows: this library's IMAP and SMTP clients against the released MailKit package on one local server, the same work
+       on both sides (docs/benchmarks.md, "Protocol rows"). MailKit is run as a released binary and appears nowhere under src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ProtocolRows</AssemblyName>
+    <RootNamespace>RecursiveAI.OneMail.Benchmarks.ProtocolRows</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CA1303;CA1062;CA2007;CA1822;CA1031;NU1902;NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.18.2" />
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />
+  </ItemGroup>
+
+</Project>

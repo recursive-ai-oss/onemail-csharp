@@ -25,14 +25,41 @@ internal static class SmtpContent
 
     public static bool HasHighBit(ReadOnlySpan<byte> s) => s.IndexOfAnyExceptInRange((byte)0, (byte)0x7F) >= 0;
 
+    // Scans a part's stored (not decoded) bytes for 8-bit data through a pooled buffer, stopping at the first one.
+    private static bool HasHighBit(MimePart part)
+    {
+        using Stream s = part.OpenRawContent();
+        byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(16 * 1024);
+        try
+        {
+            int n;
+            while ((n = s.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                if (HasHighBit(buffer.AsSpan(0, n)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     public static ContentFacts Inspect(MimeEntity root)
     {
         var facts = new ContentFacts();
         foreach (MimeHeader h in root.Headers)
         {
-            if (SigningHeaders.Any(n => h.IsNamed(n)))
+            foreach (string n in SigningHeaders)
             {
-                facts.Signed = true;
+                if (h.IsNamed(n))
+                {
+                    facts.Signed = true;
+                }
             }
         }
 
@@ -67,16 +94,7 @@ internal static class SmtpContent
 
                 if (cte is not (ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable) && part.RawContentLength > 0)
                 {
-                    using Stream s = part.OpenRawContent();
-                    byte[] buffer = new byte[16 * 1024];
-                    int n;
-                    while (!facts.BodyNonAscii && (n = s.Read(buffer)) > 0)
-                    {
-                        if (HasHighBit(buffer.AsSpan(0, n)))
-                        {
-                            facts.BodyNonAscii = true;
-                        }
-                    }
+                    facts.BodyNonAscii |= HasHighBit(part);
                 }
 
                 break;
@@ -168,13 +186,7 @@ internal static class SmtpContent
                 bool needs = cte is ContentTransferEncoding.EightBit or ContentTransferEncoding.Binary;
                 if (!needs && cte is not (ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable) && part.RawContentLength > 0)
                 {
-                    using Stream s = part.OpenRawContent();
-                    byte[] buffer = new byte[16 * 1024];
-                    int n;
-                    while (!needs && (n = s.Read(buffer)) > 0)
-                    {
-                        needs = HasHighBit(buffer.AsSpan(0, n));
-                    }
+                    needs = HasHighBit(part);
                 }
 
                 if (needs)

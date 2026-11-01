@@ -1,0 +1,1 @@
+UID 9 ENVELOPE ("Tue, 03 Nov 2026 10:00:00 +0000" "a \"quoted\" subject" (("Zoe" NIL "zoe" "example.com")) NIL NIL ((NIL NIL "undisclosed" NIL)(NIL NIL NIL NIL)) NIL NIL "<r@x>" "<m@x>")

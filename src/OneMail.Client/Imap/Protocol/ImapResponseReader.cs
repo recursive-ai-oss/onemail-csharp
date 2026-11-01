@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using RecursiveAI.OneMail.Client.Protocol;
 
@@ -16,6 +17,7 @@ namespace RecursiveAI.OneMail.Client.Imap.Protocol;
 public sealed class ImapResponseReader
 {
     private readonly ProtocolReader _reader;
+    private readonly ImapFetchFast.StringCache _cache = new();
 
     /// <summary>Creates a reader over the connection's reader.</summary>
     /// <param name="reader">Where lines come from.</param>
@@ -42,7 +44,27 @@ public sealed class ImapResponseReader
 
     internal enum Shape { Tagged, Continuation, Status, Data, Fetch }
 
-    private async ValueTask<ImapResponse> ReadCore(bool sync, ImapLiteralHandler? asyncHandler, ImapLiteralHandlerSync? syncHandler, CancellationToken ct)
+    /// <summary>
+    /// Reads the next response for a FETCH enumeration. A plain single-line <c>n FETCH (...)</c> of the items the typed model
+    /// knows is decoded straight from the line into the second result with no generic tree; anything else (a literal, a
+    /// BODYSTRUCTURE, an unknown item, a malformed line) is parsed as <see cref="ReadResponseAsync"/> would, so the result is the same.
+    /// </summary>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    internal async ValueTask<(ImapResponse? Response, ImapFetchData? Fetch)> ReadFetchAsync(CancellationToken ct)
+    {
+        ReadOnlyMemory<byte> line = await _reader.ReadLineAsync(ct).ConfigureAwait(false);
+        if (!_reader.LastLineWasBareLf && line.Length <= _reader.Limits.MaxResponseSize
+            && Sniff(line.Span, out long number) == Shape.Fetch && !TryFindLiteralMarker(line.Span, out _, out _, out _)
+            && ImapFetchFast.TryParse(line.Span, number, _cache, out ImapFetchData? data))
+        {
+            return (null, data);
+        }
+
+        return (await ReadCore(false, null, null, ct, line).ConfigureAwait(false), null);
+    }
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<ImapResponse> ReadCore(bool sync, ImapLiteralHandler? asyncHandler, ImapLiteralHandlerSync? syncHandler, CancellationToken ct, ReadOnlyMemory<byte>? preRead = null)
     {
         ProtocolLimits limits = _reader.Limits;
         var segments = new List<Segment>(2);
@@ -54,7 +76,8 @@ public sealed class ImapResponseReader
         bool first = true;
         while (true)
         {
-            ReadOnlyMemory<byte> line = sync ? _reader.ReadLine() : await _reader.ReadLineAsync(ct).ConfigureAwait(false);
+            ReadOnlyMemory<byte> line = preRead ?? (sync ? _reader.ReadLine() : await _reader.ReadLineAsync(ct).ConfigureAwait(false));
+            preRead = null;
             if (_reader.LastLineWasBareLf)
             {
                 defects.Add(new ProtocolDefect(ProtocolDefectKind.BareLineFeed, (int)Math.Min(total, int.MaxValue), "A line ended in LF without CR."));

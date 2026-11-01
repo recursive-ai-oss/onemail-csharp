@@ -1,0 +1,6 @@
+<Project>
+  <!-- The comparison library is pinned in the project file, apart from the shipped packages' central versions. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

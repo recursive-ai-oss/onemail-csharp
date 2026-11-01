@@ -40,7 +40,13 @@ public sealed partial class ImapClient
             await _raw.SendAsync(cmd, cancellationToken).ConfigureAwait(false);
             while (true)
             {
-                ImapResponse r = await _raw.ReadResponseAsync(null, cancellationToken).ConfigureAwait(false);
+                (ImapResponse? r, ImapFetchData? plain) = await _raw.ReadFetchAsync(cancellationToken).ConfigureAwait(false);
+                if (r is null)
+                {
+                    yield return new ImapMessage(plain!, null);
+                    continue;
+                }
+
                 if (r.Kind == ImapResponseKind.Tagged)
                 {
                     if (r.Tag != cmd.Tag)

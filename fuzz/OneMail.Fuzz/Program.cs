@@ -55,6 +55,7 @@ internal static class Program
             ["dns-reply"] = DkimTargets.DnsReply,
             ["smime-structure"] = SmimeTargets.Run,
             ["imap-response"] = ClientTargets.Imap,
+            ["imap-fetch"] = ClientTargets.ImapFetch,
             ["smtp-reply"] = ClientTargets.Smtp,
             ["sasl-challenge"] = ClientTargets.Sasl,
             ["pop3-response"] = ClientTargets.Pop3,

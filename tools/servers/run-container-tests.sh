@@ -5,7 +5,8 @@
 #   tools/servers/run-container-tests.sh [servers]      servers: comma list, default dovecot,stalwart,cyrus
 #
 # Environment: ONEMAIL_ARTIFACTS (build output), DOTNET_ROOT/PATH for the .NET SDK, ONEMAIL_CAPTURE_DIR (keep the server side of
-# each session as a parser test input), ONEMAIL_TEST_FILTER (xunit query filter; default the container tests).
+# each session as a parser test input), ONEMAIL_TEST_FILTER (xunit query filter; default the container tests),
+# ONEMAIL_TEST_ARGS (extra arguments for dotnet test, e.g. --output Detailed to print diagnostic lines).
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$D/../.." && pwd)"
@@ -20,6 +21,6 @@ for s in ${servers//,/ }; do
   # Every server runs in its own private network namespace, so runs of different checkouts on one machine never share ports; the
   # Postfix guest's forwarded ports and the SMTP sink live inside it too.
   "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
-    dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
+    dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" ${ONEMAIL_TEST_ARGS:-} || rc=1
 done
 exit $rc

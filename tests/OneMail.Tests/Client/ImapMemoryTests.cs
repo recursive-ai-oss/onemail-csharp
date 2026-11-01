@@ -49,9 +49,23 @@ public class ImapMemoryTests
             }
 
             Assert.Equal(count, seen);
+
+            // For comparison: the same FETCH read the way FetchAsync did before plain lines were decoded in place, through the raw layer's
+            // generic response tree and the typed decoder.
+            long general = 0;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int tree = 0;
+                GC.Collect();
+                long before = GC.GetTotalAllocatedBytes(true);
+                await c.Raw.ExecuteAsync(RecursiveAI.OneMail.Client.Imap.Protocol.ImapCommand.Create("FETCH").SequenceSet("1:*").Raw("(UID FLAGS RFC822.SIZE INTERNALDATE ENVELOPE)"), null,
+                    r => { if (r.TryGetFetch(out _)) { tree++; } }, Ct);
+                general = (GC.GetTotalAllocatedBytes(true) - before) / Math.Max(1, tree);
+            }
+
             if (Environment.GetEnvironmentVariable("ONEMAIL_IMAP_REPORT") is { } path)
             {
-                File.AppendAllText(path, $"[{s.Name}] fetch of {count}: {perMessage} B allocated per message (second pass)\n");
+                File.AppendAllText(path, $"[{s.Name}] fetch of {count}: {perMessage} B allocated per message (second pass); through the generic response tree: {general} B\n");
             }
         }
         finally
@@ -66,7 +80,15 @@ public class ImapMemoryTests
     {
         ServerHarness.RequireServer(s);
         Assert.SkipUnless(Environment.GetEnvironmentVariable("ONEMAIL_IMAP_PERF") == "1", "ONEMAIL_IMAP_PERF is not set");
-        long size = (long.TryParse(Environment.GetEnvironmentVariable("ONEMAIL_IMAP_BIG_MB"), out long mb0) ? mb0 : 100) * 1024 * 1024;
+        // ONEMAIL_IMAP_BIG_MB is a comma-separated list of sizes in MB (default 100): the allocation must not grow with the size.
+        foreach (string part in (Environment.GetEnvironmentVariable("ONEMAIL_IMAP_BIG_MB") ?? "100").Split(','))
+        {
+            await BigMessageAsync(s, long.Parse(part, System.Globalization.CultureInfo.InvariantCulture) * 1024 * 1024);
+        }
+    }
+
+    private static async Task BigMessageAsync(ServerInfo s, long size)
+    {
         await using ImapClient c = await ImapClientServerTests.ConnectAsync(s);
         string mb = await ImapClientServerTests.NewMailboxAsync(c);
         try
