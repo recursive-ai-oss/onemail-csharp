@@ -1,3 +1,4 @@
+using RecursiveAI.OneMail.Conversion.Stores;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Pst.Messaging;
 using RecursiveAI.OneMail.Pst.Ndb;
@@ -344,6 +345,83 @@ public sealed class PstWritableStoreTests
         finally
         {
             File.Delete(path);
+        }
+    }
+}
+
+/// <summary>The happy path: add converted mail to a PST that already exists.</summary>
+public sealed class PstAddToExistingTests
+{
+    [Fact]
+    public async Task ConvertingIntoAnExistingPstAddsInPlaceAndCommitsOnCompletion()
+    {
+        string pst = NdbEditorTests.Build(4);
+        string dir = Path.Combine(Path.GetTempPath(), "onemail-add-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                await File.WriteAllTextAsync(Path.Combine(dir, $"m{i}.eml"), $"From: a@example.com\r\nTo: b@example.com\r\nSubject: added {i}\r\nDate: Mon, 06 May 2024 07:08:09 +0000\r\nMessage-ID: <{i}@example.com>\r\n\r\nbody {i}\r\n", TestContext.Current.CancellationToken);
+            }
+
+            var report = await Mail.ConvertAsync(dir, ConvertFormat.Pst, pst, new StoreConversionOptions { AddToExistingPst = true }, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Equal(3, report.ItemsWritten);
+            NdbEditorTests.AssertClean(pst);
+            Assert.True(PstStore.TryOpen(pst, out PstStore? s, out _));
+            using PstStore store = s!;
+            Assert.Equal([], StoreChecks.Consistency(store));
+            Assert.Equal(3, store.EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Count(m => m.GetString(0x0037)?.StartsWith("added ", StringComparison.Ordinal) == true));
+        }
+        finally
+        {
+            File.Delete(pst);
+            Directory.Delete(dir, true);
+        }
+    }
+}
+
+/// <summary>Compaction after deletes.</summary>
+public sealed class PstCompactionTests
+{
+    [Fact]
+    public async Task ACompactedStoreHoldsTheSameItemsAndIsSmallerAfterDeletes()
+    {
+        string path = NdbEditorTests.Build(150, attachments: 2, folders: 2);
+        string compact = NdbEditorTests.TempFile();
+        try
+        {
+            using (PstWritableStore w = PstStore.OpenForWriting(path))
+            {
+                foreach (PstFolder f in w.View.EnumerateFolders(TestContext.Current.CancellationToken).Where(f => f.Name!.StartsWith("Folder ", StringComparison.Ordinal)).ToList())
+                {
+                    foreach (Nid id in f.EnumerateMessageIds(cancellationToken: TestContext.Current.CancellationToken).Where((_, i) => i % 3 != 0).ToList())
+                    {
+                        w.DeleteMessage(id);
+                    }
+                }
+
+                w.Commit();
+            }
+
+            await PstCompaction.CompactAsync(path, compact, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(new FileInfo(compact).Length < new FileInfo(path).Length);
+            Assert.True(PstStore.TryOpen(path, out PstStore? live, out _));
+            Assert.True(PstStore.TryOpen(compact, out PstStore? packed, out _));
+            using (live)
+            using (packed)
+            {
+                PstStoreCompare.Result r = PstStoreCompare.Compare(live!.EnumerateMessages(PstMessageSet.All, TestContext.Current.CancellationToken).ToList(), packed!);
+                Assert.Equal(0, r.Unmatched);
+                Assert.Equal(0, r.PropertiesNotCarried);
+                Assert.Equal(r.Source, r.Written);
+                Assert.Equal(100, packed!.EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Count());
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(compact);
         }
     }
 }
