@@ -471,6 +471,9 @@ public sealed class SmtpRawConnection : IAsyncDisposable, IDisposable
         return (r, r.Code == 354 ? new SmtpDataStream(Connection, _replies, normalizeLineEndings) : null);
     }
 
+    // For callers that sent DATA inside a pipelined group and have read its 354 themselves.
+    internal SmtpDataStream OpenDataStream(bool normalizeLineEndings) => new(Connection, _replies, normalizeLineEndings);
+
     /// <summary>Synchronous twin of <see cref="BeginDataAsync"/>.</summary>
     /// <param name="normalizeLineEndings">Turn bare LF and bare CR into CRLF.</param>
     /// <returns>The reply to DATA and the stream.</returns>

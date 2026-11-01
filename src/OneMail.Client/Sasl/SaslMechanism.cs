@@ -22,6 +22,13 @@ public abstract class SaslMechanism
     public virtual bool RequiresEncryption => false;
 
     /// <summary>
+    /// Whether the mechanism is kept only for old servers: its exchange is weak by today's standards (a replayable or offline-guessable
+    /// proof). Selection prefers every other mechanism, and the mechanism is never chosen over TLS-protected PLAIN-style alternatives
+    /// unless nothing else is offered. Default false.
+    /// </summary>
+    public virtual bool IsLegacy => false;
+
+    /// <summary>
     /// Whether the client speaks first. When true the response from <see cref="GetInitialResponse"/> can ride on the command
     /// (IMAP SASL-IR, RFC 4959; SMTP and POP3 initial response). Default true.
     /// </summary>
