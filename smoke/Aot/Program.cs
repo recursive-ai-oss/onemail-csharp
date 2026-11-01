@@ -541,11 +541,11 @@ internal static class Program
                 new RecursiveAI.OneMail.Client.Protocol.ProtocolConnectionOptions { AllowInsecureAuthentication = true });
             var pop = RecursiveAI.OneMail.Client.Pop3.Pop3Client.ConnectAsync(popConn, new RecursiveAI.OneMail.Client.Pop3.Pop3ClientOptions()).AsTask().GetAwaiter().GetResult();
             pop.Login("u", "p");
-            var (count, size) = pop.Stat();
-            var message = pop.GetMessage(1);
+            var (popCount, popSize) = pop.Stat();
+            var popMessage = pop.GetMessage(1);
             pop.Quit();
-            bool popOk = count == 1 && size == 40 && message.Headers.GetFirst("Subject")?.Value == "x"
-                && message.ToArray().AsSpan().IndexOf("\r\n.dot\r\n"u8) > 0;
+            bool popOk = popCount == 1 && popSize == 40 && popMessage.Headers.GetFirst("Subject")?.Value == "x"
+                && popMessage.ToArray().AsSpan().IndexOf("\r\n.dot\r\n"u8) > 0;
             typedClientOk = imapOk && popOk;
         }
 
