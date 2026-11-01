@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using RecursiveAI.OneMail.Recovery;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores;
 using RecursiveAI.OneMail.Stores.Dbx;
@@ -33,6 +34,11 @@ internal static class Program
                 return Dump(args[1]);
             case "summary":
                 return Summary(args[1]);
+            case "gen-deleted":
+                GenDeleted(args[1]);
+                return 0;
+            case "recover-check":
+                return RecoverCheck(args[1], args.Length > 2 ? args[2] : null);
             default:
                 Console.Error.WriteLine("unknown command " + args[0]);
                 return 2;
@@ -143,6 +149,157 @@ internal static class Program
         }
 
         return l;
+    }
+
+    // ---- deletion and recovery ----
+
+    // Stores whose messages are deleted the way Outlook Express deletes them (DbxBuild.Deleted: the tree entry and record go, the segments are
+    // freed onto the deleted-message list, each losing its first four text bytes to the link) or only unlinked from the tree (DbxBuild.Unlinked:
+    // the chain stays whole). manifest.tsv lists what recovery must find: file, position, kind, length and sha256 of the bytes expected back.
+    private static void GenDeleted(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        Random rng = new(2026);
+        using StreamWriter manifest = new(Path.Combine(dir, "manifest.tsv"));
+        manifest.WriteLine("file\tposition\tkind\tlength\tsha256");
+        (string Name, int Count, int Delete, int Unlink, int Shuffle)[] plan =
+        [
+            ("Inbox", 60, 12, 5, 0), ("Sent Items", 30, 30, 0, 3), ("Drafts", 25, 0, 6, 0), ("Projects", 200, 80, 20, 11), ("Everything", 10, 9, 0, 0), ("Untouched", 40, 0, 0, 5),
+        ];
+        foreach ((string name, int count, int del, int unlink, int shuffle) in plan)
+        {
+            List<DbxTestMessage> msgs = Messages(rng, name, count, false);
+            // Header-only and tiny messages cannot be told apart from nothing once freed; keep every message at least one segment long.
+            int[] order = Enumerable.Range(0, count).OrderBy(_ => rng.Next()).ToArray();
+            HashSet<int> deleted = [.. order.Take(del)];
+            HashSet<int> unlinked = [.. order.Skip(del).Take(unlink)];
+            byte[] file = DbxTestBuilder.MessageDatabase(msgs, new DbxBuild { Deleted = deleted, Unlinked = unlinked, ShuffleSeed = shuffle });
+            File.WriteAllBytes(Path.Combine(dir, name + ".dbx"), file);
+            foreach (int i in deleted.Order())
+            {
+                byte[] want = AfterDeletion(msgs[i].Text);
+                manifest.WriteLine($"{name}.dbx\t{i}\tdeleted\t{want.Length}\t{Convert.ToHexString(SHA256.HashData(want)).ToLowerInvariant()}");
+            }
+
+            foreach (int i in unlinked.Order())
+            {
+                manifest.WriteLine($"{name}.dbx\t{i}\tunlinked\t{msgs[i].Text.Length}\t{Convert.ToHexString(SHA256.HashData(msgs[i].Text)).ToLowerInvariant()}");
+            }
+        }
+    }
+
+    // What a freed message keeps: every 0x200-byte segment loses its first four bytes (the list link replaced them).
+    private static byte[] AfterDeletion(byte[] text)
+    {
+        List<byte> o = [];
+        for (int at = 0; at < text.Length; at += 0x200)
+        {
+            int len = Math.Min(0x200, text.Length - at);
+            if (len > 4)
+            {
+                o.AddRange(text.AsSpan(at + 4, len - 4).ToArray());
+            }
+        }
+
+        return [.. o];
+    }
+
+    // recover-check <file or folder of .dbx> [manifest.tsv]: runs deleted-message recovery on every message database, prints the count per tag, and
+    // checks (1) joining the segment ranges read back from the file gives the recovered bytes, (2) no range overlaps a live message's segments, (3)
+    // no recovered message equals a live one, and with a manifest (4) every expected message was found. Exit status = number of violations.
+    private static int RecoverCheck(string path, string? manifestPath)
+    {
+        IEnumerable<string> files = Directory.Exists(path) ? Directory.EnumerateFiles(path, "*.dbx").Order(StringComparer.Ordinal) : [path];
+        Dictionary<string, HashSet<string>> found = [];
+        Dictionary<string, int> total = [];
+        int bad = 0;
+        foreach (string f in files)
+        {
+            byte[] file = File.ReadAllBytes(f);
+            using MemorySource src = new(file);
+            DbxReader r = new(src);
+            if (r.Kind != DbxFileKind.MessageDatabase)
+            {
+                continue;
+            }
+
+            List<(long, long)> live = [];
+            HashSet<string> liveHashes = [];
+            foreach (DbxMessageEntry e in r.EnumerateMessages())
+            {
+                liveHashes.Add(Convert.ToHexString(SHA256.HashData(r.ReadMessage(e, out _))));
+                long p = e.ChainOffset;
+                int guard = 0;
+                while (p != 0 && p + 16 <= file.Length && guard++ < file.Length / 16)
+                {
+                    live.Add((p, p + 0x210));
+                    p = BitConverter.ToUInt32(file, (int)p + 12);
+                }
+            }
+
+            Dictionary<string, int> counts = [];
+            HashSet<string> hashes = [];
+            foreach (DbxRecoveredMessage m in r.RecoverDeleted())
+            {
+                string tag = m.Provenance.Status.ToString();
+                counts[tag] = counts.GetValueOrDefault(tag) + 1;
+                MemoryStream joined = new();
+                foreach (ByteRange br in m.SegmentRanges)
+                {
+                    joined.Write(file, (int)br.Offset, (int)br.Length);
+                    if (live.Exists(l => br.Offset < l.Item2 && br.End > l.Item1))
+                    {
+                        bad++;
+                        Console.WriteLine($"VIOLATION {Path.GetFileName(f)}: range {br} overlaps a live segment");
+                    }
+                }
+
+                if (!joined.ToArray().AsSpan().SequenceEqual(m.Content.Span))
+                {
+                    bad++;
+                    Console.WriteLine($"VIOLATION {Path.GetFileName(f)}: ranges re-read from the file differ from the recovered bytes (segment {m.Segments[0]})");
+                }
+
+                string h = Convert.ToHexString(SHA256.HashData(m.Content.Span));
+                if (m.Provenance.Status == RecoveryStatus.Live || liveHashes.Contains(h))
+                {
+                    bad++;
+                    Console.WriteLine($"VIOLATION {Path.GetFileName(f)}: recovered message {m.Segments[0]} is live or a copy of a live message");
+                }
+
+                hashes.Add(h.ToLowerInvariant());
+            }
+
+            found[Path.GetFileName(f)] = hashes;
+            string line = string.Join(", ", counts.OrderBy(kv => kv.Key).Select(kv => kv.Key + " " + kv.Value));
+            Console.WriteLine($"{Path.GetFileName(f)}: live {liveHashes.Count} (distinct), recovered {(line.Length == 0 ? "none" : line)}");
+            foreach (KeyValuePair<string, int> kv in counts)
+            {
+                total[kv.Key] = total.GetValueOrDefault(kv.Key) + kv.Value;
+            }
+        }
+
+        Console.WriteLine("total: " + string.Join(", ", total.OrderBy(kv => kv.Key).Select(kv => kv.Key + " " + kv.Value)));
+        if (manifestPath is not null)
+        {
+            int expected = 0, missed = 0;
+            foreach (string line in File.ReadLines(manifestPath).Skip(1))
+            {
+                string[] c = line.Split('\t');
+                expected++;
+                if (!found.TryGetValue(c[0], out HashSet<string>? hs) || !hs.Contains(c[4]))
+                {
+                    missed++;
+                    Console.WriteLine($"MISSED {c[0]} message {c[1]} ({c[2]})");
+                }
+            }
+
+            Console.WriteLine($"recall: {expected - missed}/{expected}");
+            bad += missed;
+        }
+
+        Console.WriteLine(bad == 0 ? "OK" : $"{bad} violation(s)");
+        return bad;
     }
 
     // ---- extract ----

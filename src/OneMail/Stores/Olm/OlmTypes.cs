@@ -75,7 +75,37 @@ public enum OlmDefectKind
 
     /// <summary>Ambiguity: the plain-text and HTML body elements hold the same text. Raised only when the message carries no HTML flag; with the flag, the element is the HTML body without a defect.</summary>
     AmbiguousBodyKind,
+
+    /// <summary>Recovery mode: the zip directory was damaged or missing and the archive was read through its local headers, or bytes between entries were skipped. <see cref="OlmArchive.Damage"/> lists the places.</summary>
+    ArchiveRecovered,
+
+    /// <summary>Recovery mode: an entry's data is damaged or cut short. The records read before the damage are kept and tagged <see cref="RecursiveAI.OneMail.Recovery.RecoveryStatus.Partial"/>.</summary>
+    EntryDamaged,
 }
+
+/// <summary>What <see cref="OlmDamage"/> describes. Mirrors what the zip reader's recovery mode reports.</summary>
+public enum OlmDamageKind
+{
+    /// <summary>Bytes that belong to no entry were skipped to reach the next local header.</summary>
+    SkippedBytes = 0,
+
+    /// <summary>The end record or central directory is missing or unusable; entries were found through their local headers.</summary>
+    DirectoryUnusable = 1,
+
+    /// <summary>An entry's data does not decode, or its size or CRC-32 is wrong.</summary>
+    DamagedEntry = 2,
+
+    /// <summary>The archive ends inside an entry, or before the central directory.</summary>
+    Truncated = 3,
+}
+
+/// <summary>One place where a damaged OLM archive was skipped over or found unreadable (<see cref="OlmReaderOptions.Recovery"/>).</summary>
+/// <param name="Kind">What happened.</param>
+/// <param name="Offset">Where it starts in the file (the entry's local header for a damaged entry).</param>
+/// <param name="Length">The bytes it covers; zero when it marks a place.</param>
+/// <param name="Entry">The zip entry involved, or null.</param>
+/// <param name="Reason">A short description from the zip reader.</param>
+public readonly record struct OlmDamage(OlmDamageKind Kind, long Offset, long Length, string? Entry, string Reason);
 
 /// <summary>One defect found while reading an OLM archive.</summary>
 /// <param name="Kind">What was found.</param>
@@ -127,6 +157,14 @@ public sealed record OlmReaderOptions
 
     /// <summary>When true (the default) entry data is checked against the zip CRC-32 as it is read; a mismatch is an <see cref="OlmDefectKind.EntryUnreadable"/> defect.</summary>
     public bool VerifyChecksums { get; init; } = true;
+
+    /// <summary>
+    /// Opt-in recovery of damaged archives (default false). Opens through OneArchive's zip recovery mode: a missing or unusable directory is replaced by a scan
+    /// of the local headers, garbage between entries is skipped, and damaged or truncated entries yield what decodes. Nothing throws; every loss is an
+    /// <see cref="OlmDamage"/> and a defect, and items from damaged entries carry <see cref="IMailItem.Recovery"/> tagged <see cref="RecursiveAI.OneMail.Recovery.RecoveryStatus.Partial"/>.
+    /// The archive costs a verification read of each record entry (and of the attachments an item lists, on first use of its <c>Recovery</c>).
+    /// </summary>
+    public bool Recovery { get; init; }
 }
 
 /// <summary>A folder of the archive: a message folder, or one of the per-kind folders (<c>Calendar</c>, <c>Address Book</c> …).</summary>

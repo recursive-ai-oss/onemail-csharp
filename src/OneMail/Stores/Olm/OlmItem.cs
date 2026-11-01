@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using RecursiveAI.OneMail.Recovery;
 using RecursiveAI.OneArchive;
 
 namespace RecursiveAI.OneMail.Stores.Olm;
@@ -55,6 +56,28 @@ public sealed class OlmItem : IMailItem
 
     /// <summary>The record's position among the records of its entry.</summary>
     public int IndexInEntry { get; }
+
+    /// <summary>
+    /// Recovery mode only (<see cref="OlmReaderOptions.Recovery"/>): <see cref="RecoveryStatus.Live"/> when the zip entry holding the record, and the
+    /// attachment entries it lists, read clean; <see cref="RecoveryStatus.Partial"/> when one is damaged or cut short, or an attachment is missing from a
+    /// damaged archive. Null when recovery is off. Evaluated on first use: it reads the record's entry and its attachments once to check them.
+    /// </summary>
+    public RecoveryProvenance? Recovery
+    {
+        get
+        {
+            if (_recovery is null)
+            {
+                Attached();
+                bool missing = _defects?.Exists(d => d.Kind == OlmDefectKind.AttachmentMissing) ?? false;
+                _recovery = _archive.RecoveryOf(Entry, _attachments!.Select(a => a.EntryName).OfType<string>(), missing);
+            }
+
+            return _recovery;
+        }
+    }
+
+    private RecoveryProvenance? _recovery;
 
     /// <summary>The raw MIME source, when the record carries one (<c>OPFMessageCopySource</c>, written by older Outlook for Mac versions), exactly as the XML text decodes; otherwise null.</summary>
     public string? MimeSource => OlmKind == OlmItemKind.Email ? Text("OPFMessageCopySource") : null;
@@ -509,6 +532,8 @@ internal sealed class OlmAttachment(OlmItem owner, OlmElement element, ArchiveEn
     public string? ContentId => element.Attribute("OPFAttachmentContentID") is { Length: > 0 } c ? c.Trim('<', '>') : null;
 
     public bool IsInline => ContentId is not null;
+
+    public string? EntryName => entry?.Name;
 
     public long Size => entry?.Size ?? 0;
 

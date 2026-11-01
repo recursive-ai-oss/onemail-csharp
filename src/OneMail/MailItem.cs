@@ -1,3 +1,4 @@
+using RecursiveAI.OneMail.Recovery;
 namespace RecursiveAI.OneMail;
 
 /// <summary>What kind of thing an item is. MIME messages are always <see cref="Message"/>; the other kinds come with the Outlook item classes.</summary>
@@ -265,4 +266,10 @@ public interface IMailItem
 
     /// <summary>Where the item came from.</summary>
     MailProvenance Provenance { get; }
+
+    /// <summary>
+    /// How a forensic reader found the item: its tag, source byte ranges and qualifying defects (<c>docs/recovery.md</c>). Null for items read in the
+    /// ordinary way; only items handed out by a recovery reader carry one.
+    /// </summary>
+    RecoveryProvenance? Recovery => null;
 }
