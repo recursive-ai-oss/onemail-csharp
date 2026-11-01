@@ -390,6 +390,8 @@ code did) and after (plain lines decoded in place):
 |---|---|---|
 | Dovecot 2.4.5 | 6,909 B | 960 B |
 
+The same test passes on Stalwart 1.0.1 and Cyrus 3.13 (Stalwart refuses the 100 MB message: its request limit is 50 MB); their byte counts were not captured.
+
 The item itself (`ImapMessage`, its data, flags, envelope, strings and addresses) is about 900 B of that for these envelopes. The
 download of a 1 MB and a 100 MB message from Dovecot allocates 38 KiB and 153 KiB (before: about 127 B per read, about 12 MB for 100 MB at 16 KB reads);
 the remaining growth is about 24 B per read, against about 127 B before.
