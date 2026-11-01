@@ -214,7 +214,7 @@ The output is a fragment of HTML (not XHTML: `&` inside the style element is lit
 
 A second engineer, who did not write the sanitiser, reviewed it on 2026-10-31 as an attacker and a reader of the code: the threat model above, 134 new vectors
 (`review.txt`), 12 encoded-body messages, 30 hostile callback results through every URL-bearing place, 40,000 generated tag-soup documents (80,000 outputs, each parsed four ways in both browsers), 32 hostile-size
-inputs, and a read of every file in `src/OneMail/Display/`. Chrome 155 and Firefox 158 were run headless on Linux x64. Verdict: **no open exploitable finding**.
+inputs, a read of every file in `src/OneMail/Display/`, and fuzzing of the final code (`sanitizer` 7.4 million executions, `sanitizer-reparse` 7.5 million and `sanitizer-display` 6.2 million, 600 s each, no findings). Chrome 155 and Firefox 158 were run headless on Linux x64. Verdict: **no open exploitable finding**.
 
 | # | Severity | Finding | Status |
 |---|---|---|---|
