@@ -498,7 +498,7 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         return Build(partial, ranges, damage, defects);
     }
 
-    private static RecoveryProvenance Build(bool partial, List<ByteRange> ranges, List<OlmDamage> damage, List<MailDefect> defects)
+    private RecoveryProvenance Build(bool partial, List<ByteRange> ranges, List<OlmDamage> damage, List<MailDefect> defects)
     {
         foreach (OlmDamage d in damage)
         {
@@ -512,6 +512,17 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             {
                 lost.Add(new ByteRange(d.Offset, d.Length));
             }
+        }
+
+        // A damaged directory can name offsets past the end of the file; ranges are kept inside it.
+        for (int i = 0; i < ranges.Count; i++)
+        {
+            ranges[i] = Clamp(ranges[i]);
+        }
+
+        for (int i = 0; i < lost.Count; i++)
+        {
+            lost[i] = Clamp(lost[i]);
         }
 
         return new RecoveryProvenance(partial ? RecoveryStatus.Partial : RecoveryStatus.Live)
@@ -536,6 +547,13 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         int i = Array.BinarySearch(_sortedOffsets, e.LocalHeaderOffset);
         long end = i >= 0 && i + 1 < _sortedOffsets.Length ? _sortedOffsets[i + 1] : _source.Length;
         return new ByteRange(e.LocalHeaderOffset, Math.Max(0, end - e.LocalHeaderOffset));
+    }
+
+    private ByteRange Clamp(ByteRange r)
+    {
+        long start = Math.Clamp(r.Offset, 0, _source.Length);
+        long end = Math.Clamp(r.Offset + r.Length, start, _source.Length);
+        return new ByteRange(start, end - start);
     }
 
     private long[]? _sortedOffsets;

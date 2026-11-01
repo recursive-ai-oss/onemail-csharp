@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using RecursiveAI.OneMail.Recovery;
@@ -183,6 +184,33 @@ public class OlmRecoveryTests
             Assert.All(partial, p => Assert.Contains("F2", p.Entry));
             Assert.Equal(Messages - 1, items.Count(i => i.Recovery!.Status == RecoveryStatus.Live));
             Assert.Contains(a.Damage, d => d.Kind == OlmDamageKind.DamagedEntry && d.Entry!.Contains("F2", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void RangesStayInsideTheFileWhateverTheDirectoryClaims()
+    {
+        // A directory that puts entries far past the end of the file (found by the fuzzer: testdata/fuzz/olm-recovery-range-past-end.bin).
+        byte[] zip = Archive();
+        int cd = zip.AsSpan().IndexOf("PK\x01\x02"u8);
+        for (int k = 0; k < 3; k++)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(zip.AsSpan(cd + 42), 0x7FFFFFF0u);
+            int nameLen = zip[cd + 28] | (zip[cd + 29] << 8);
+            int extraLen = zip[cd + 30] | (zip[cd + 31] << 8);
+            int commentLen = zip[cd + 32] | (zip[cd + 33] << 8);
+            cd += 46 + nameLen + extraLen + commentLen;
+        }
+
+        (List<OlmItem> items, OlmArchive a) = Read(zip.AsSpan(0, zip.Length - 50).ToArray());
+        using (a)
+        {
+            foreach (OlmItem i in items)
+            {
+                Assert.All(i.Recovery!.Ranges.Concat(i.Recovery.Lost), r => Assert.True(r.Offset >= 0 && r.Length >= 0 && r.End <= zip.Length - 50));
+            }
+
+            Assert.All(a.Damage, _ => { });
         }
     }
 
