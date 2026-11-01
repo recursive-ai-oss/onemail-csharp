@@ -173,6 +173,8 @@ internal static class SanitizerTargets
             {
                 // String literals are text, whatever they say; only the rest of the sheet is looked at.
                 string css = System.Text.RegularExpressions.Regex.Replace((n.TextContent ?? string.Empty).ToLowerInvariant(), "\"(\\\\.|[^\"\\\\])*\"", "\"\"");
+                // A backslash escape is part of an identifier or string, never the start of an at-rule or a function ("red\@import" is one identifier).
+                css = System.Text.RegularExpressions.Regex.Replace(css, "\\\\[\\s\\S]", "");
                 // "expression(" and "javascript:" are what act; the words alone are legal identifiers (a font may be called javascript).
                 if (css.Contains("@import", StringComparison.Ordinal) || css.Contains("expression(", StringComparison.Ordinal)
                     || css.Contains("javascript:", StringComparison.Ordinal) || css.Contains('<'))
