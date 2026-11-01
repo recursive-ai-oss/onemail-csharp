@@ -113,11 +113,11 @@ public class ClientAllocationTests
 
             perMessage = (GC.GetTotalAllocatedBytes(true) - before) / count;
             Assert.Equal(count, seen);
-            TestContext.Current.SendDiagnosticMessage($"fetch pass {pass}: {perMessage} B per message");
+            TestContext.Current.SendDiagnosticMessage($"fetch pass {pass}: {perMessage} B per message\n");
         }
 
         // What is left is the item itself: ImapMessage, ImapFetchData, the flags, the envelope with its strings and five addresses (about 1 KB).
-        Assert.True(perMessage < 1500, $"{perMessage} B per message");
+        Assert.True(perMessage < 1500, $"{perMessage} B per message\n");
     }
 
     [Theory]
@@ -339,5 +339,33 @@ public class ClientAllocationTests
         // The send is the envelope, the size check and the framing; the 4 KB message needs none of it copied. The build (the sender's text to a MIME tree) is counted apart.
         Assert.True(send / count < 20_000, $"{send / count} B per send");
         await c.QuitAsync(Ct);
+    }
+
+    [Fact]
+    public async Task DownloadCpuAndAllocationPerMessage()
+    {
+        Assert.SkipUnless(Measure, MeasureHint);
+        const int count = 3000;
+        byte[] msg = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("Header: value\r\n", 3)) + "\r\n" + new string('x', 4000));
+        var sb = new MemoryStream();
+        sb.Write(Encoding.ASCII.GetBytes(Greeting + Login + "* 1 EXISTS\r\nA0002 OK [READ-ONLY] done\r\n"));
+        for (int i = 0; i < count * 2; i++)
+        {
+            sb.Write(Encoding.ASCII.GetBytes($"* 1 FETCH (UID {i + 1} BODY[] {{{msg.Length}}}\r\n"));
+            sb.Write(msg);
+            sb.Write(Encoding.ASCII.GetBytes($")\r\nA{i + 3:D4} OK done\r\n"));
+        }
+
+        await using ImapClient c = await OpenAsync(sb.ToArray(), 16 * 1024);
+        await c.SelectAsync("INBOX", cancellationToken: Ct);
+        var sink = new CountingSink();
+        for (int pass = 0; pass < 2; pass++)
+        {
+            GC.Collect();
+            long before = GC.GetTotalAllocatedBytes(true);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < count; i++) { await c.DownloadAsync(i + 1 + (pass * count), "", sink, cancellationToken: Ct); }
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "u51-dl.txt"), $"download pass {pass}: {sw.Elapsed.TotalMilliseconds * 1000 / count:F1} us and {(GC.GetTotalAllocatedBytes(true) - before) / count} B per message\n");
+        }
     }
 }

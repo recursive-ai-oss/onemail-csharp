@@ -36,11 +36,12 @@ public sealed class ProtocolConnectionOptions
 
     /// <summary>
     /// Time allowed for one read to make progress. Default 2 minutes; <see cref="Timeout.InfiniteTimeSpan"/> disables it.
-    /// Can be changed on the open connection (IDLE waits much longer).
+    /// Can be changed on the open connection (IDLE waits much longer). The limit is checked four times per period, so a stalled read
+    /// fails after between one and 1.25 times this time (no timer is armed per read).
     /// </summary>
     public TimeSpan ReadTimeout { get; init; } = TimeSpan.FromMinutes(2);
 
-    /// <summary>Time allowed for one write to make progress. Default 2 minutes.</summary>
+    /// <summary>Time allowed for one write to make progress. Default 2 minutes; checked like <see cref="ReadTimeout"/>.</summary>
     public TimeSpan WriteTimeout { get; init; } = TimeSpan.FromMinutes(2);
 
     /// <summary>The limits the readers enforce. Default <see cref="ProtocolLimits.Default"/>.</summary>
