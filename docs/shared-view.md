@@ -19,7 +19,7 @@ mail depends on the view; code that needs every byte and every defect goes to th
 | `BestBody` | The body to show, chosen by `Bodies.BodySelector` ([`bodies.md`](bodies.md)): HTML, else plain text (flowed text joined), else RTF; `BodySelector.GetText` / `GetHtml` always give text or HTML, converting when the item has only the other. |
 | `Attachments` | `IMailAttachment`: `FileName`, `ContentType`, `ContentId`, `IsInline`, `Size` (decoded; computed on first use by decoding once), `Open()`, `Embedded` (an `IMailItem` for `message/rfc822`). Built on first use. Resolving `cid:` references plugs in here, against `ContentId`/`IsInline`. |
 
-| `TextBody`, `HtmlBody`, `RtfBody` | `MailBody`: `ContentType`, `Charset`, `Open()` (decoded bytes), `ReadText()`. **Raw candidates, not the best body**: choosing between them and converting one to another is later work. MIME has no RTF. |
+| `TextBody`, `HtmlBody`, `RtfBody` | `MailBody`: `ContentType`, `Charset`, `Open()` (decoded bytes), `ReadText()`. **Raw candidates, not the best body**: `BestBody` and `Bodies` choose between them and convert one to another (below). MIME has no RTF. |
 | `Attachments` | `IMailAttachment`: `FileName`, `ContentType`, `ContentId`, `IsInline`, `Size` (decoded; computed on first use by decoding once), `Open()`, `Embedded` (an `IMailItem` for `message/rfc822`). Built on first use. `ContentLocation` (`Content-Location`, or `PidTagAttachContentLocation`) is the other name HTML can use for a part (RFC 2557). `cid:` and location references are resolved against `ContentId`/`ContentLocation` by `ToDisplayHtml` ([`display-html.md`](display-html.md)). |
 | `Defects` | One shape (`MailDefect`: family, code, offset, ambiguity flag) over each family's type: `mime` (the tree's defects, then those of the structured headers read), `mailbox` (the store reader's bits for this message). Evaluated on each enumeration. |
 | `Provenance` | Format of the container, location, folder, byte offset and length of the item in its container file (-1 when not a range), index. |
@@ -62,7 +62,7 @@ unquoted line shift by the removed `>` bytes).
 | `Sent`, `TryGetDate` | `PidTagClientSubmitTime` (`ClientSubmit`), `PidTagMessageDeliveryTime` (`Delivery`), `PidTagCreationTime` (`Creation`). FILETIME in UTC, so `ZoneKnown` is false. |
 | `MessageId`, `InReplyTo`, `References` | `PidTagInternetMessageId` (0x1035), `PidTagInReplyToId` (0x1042), `PidTagInternetReferences` (0x1039), angle brackets removed; when the property is absent, the same-named field of `PidTagTransportMessageHeaders`. |
 | `ConversationIndex`, `ConversationTopic` | the two properties. |
-| `TextBody` | `PidTagBody`; when absent and the RTF body is a plain-text encapsulation (MS-OXRTFEX), the text from the RTF (UTF-8). `HtmlBody`: `PidTagHtml` (binary) or `PidTagBodyHtml` (string); when absent and the RTF body encapsulates HTML, the HTML from the RTF (UTF-8). `RtfBody`: `PidTagRtfCompressed` **decompressed** (MS-OXRTFCP), absent when it does not decompress. A body is absent when nothing gives it. |
+| `TextBody` | `PidTagBody`; when absent and the RTF body is a plain-text encapsulation (MS-OXRTFEX), the text from the RTF (UTF-8). `HtmlBody`: `PidTagHtml` (binary) or `PidTagBodyHtml` (string); when absent and the RTF body encapsulates HTML, the HTML from the RTF (UTF-8); when absent and the RTF was authored as RTF, the HTML the native converter makes from it (`BodyOrigin.RtfConverted`), whether or not the item also has a plain-text body, because the converted HTML keeps the formatting the plain text lacks (`bodies.md`). `RtfBody`: `PidTagRtfCompressed` **decompressed** (MS-OXRTFCP), absent when it does not decompress. A body is absent when nothing gives it. |
 | body text and charset | A string property is UTF-16LE (`Charset` utf-16le). An 8-bit text body uses the message's code page rule (`docs/msg.md`); binary HTML uses `PidTagInternetCodepage` (1200 means UTF-16LE), else the same rule; RTF has no charset. |
 | `Attachments` | the attachment table in order. `FileName` long name, else short name, else display name. `ContentType` `PidTagAttachMimeTag` lower-cased, `message/rfc822` for an embedded message, else `application/octet-stream` unless the file name's extension is in the built-in table (see Attachment content types). `ContentId` without angle brackets. `IsInline`: has a content ID and `PidTagAttachContentDisposition` is not `attachment`. `Size`: length of `PidTagAttachDataBinary`, else `PidTagAttachSize`. `Embedded`: the embedded message as a `MapiMailItem`. |
 | `Defects` | the model's `MapiDefect`s (message, recipients, attachments, embedded messages), family `mapi`; ambiguity flag from the kind. |
@@ -103,9 +103,9 @@ async enumeration (mbox messages are loaded before the item is yielded).
 | directory: `cur` and `new`; dot-prefixed Maildir subfolders; `Messages` directories of `.emlx` | `MaildirFolder`, `MaildirRoot`, `AppleMailBundle` |
 
 A message with no header block (starts with a blank line or with text that is not a header field) cannot be told from any text
-file and is `Unknown`; `Mail.Parse` still reads it. A recognised format whose reader is not in the library yet (`Ics`, `VCard`,
-`CompoundFile`) makes `Open` throw `UnsupportedMailFormatException` with its `Format`; `Unknown`
-throws the same exception with `Format == Unknown`. DBX and OLM are not yet recognised.
+file and is `Unknown`; `Mail.Parse` still reads it. A recognised format that is not a mail container (`Ics`, `VCard`, `JCal`, `JCard`, `XCal`, `XCard` and compound files that are not MSG) makes `Open` throw
+`UnsupportedMailFormatException` with its `Format`; `Unknown` throws the same exception with `Format == Unknown`. DBX files and stores and OLM archives
+are recognised and read (`Dbx`, `DbxStore`, `Olm`).
 
 ## The CLI: `onemail inspect`
 

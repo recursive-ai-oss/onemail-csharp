@@ -26,6 +26,7 @@
     <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
     <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />
+    <ProjectReference Include="../../src/OneMail.Cli/OneMail.Cli.csproj" />
     <ProjectReference Include="../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
     <ProjectReference Include="../../src/OneMail.Render/OneMail.Render.csproj" />
   </ItemGroup>

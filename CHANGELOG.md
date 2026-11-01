@@ -6,6 +6,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `onemail inspect` reads ICS, vCard, jCal, jCard, xCal and xCard files: the number of calendars or cards, the kinds of components in them and the reader's defects (`--json` and `--defects` supported).
+
 - Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.
 
 ## [0.3.0-preview.2]
