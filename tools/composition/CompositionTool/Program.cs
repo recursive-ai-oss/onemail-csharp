@@ -8,6 +8,7 @@ using RecursiveAI.OneMail.Mime;
 
 // CompositionTool: makes replies, reply-alls and forwards of every item under IN and checks them.
 //   CompositionTool sweep IN [OUT] [--limit N] [--sample N]
+//   CompositionTool names OUT [--count N] [--seed S]   (see Names.cs)
 // IN is a file or a directory (read recursively; the content decides what each file is). With OUT the messages are written as
 // OUT/eml/NNNNNN.eml with the expected header values in OUT/expected/NNNNNN.json and OUT/manifest.tsv, for check_compose.py
 // to compare against what the black-box parsers read. Without OUT only the in-process checks run.
@@ -39,6 +40,11 @@ internal static class Program
         if (args.Length >= 2 && args[0] == "peek")
         {
             return Peek(args[1], args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 3);
+        }
+
+        if (args.Length >= 2 && args[0] == "names")
+        {
+            return Names.Run(args);
         }
 
         if (args.Length < 2 || args[0] != "sweep")

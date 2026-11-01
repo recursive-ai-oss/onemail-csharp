@@ -51,4 +51,17 @@ public class CalendarViewTests
             "--a\nContent-Type: text/calendar; method=REQUEST\n\nBEGIN:VCALENDAR\nEND:VCALENDAR\n--a--\n"));
         Assert.Single(m.CalendarParts);
     }
+
+    [Fact]
+    public void AnIcsAttachmentTypedApplicationIcsIsACalendarPartAndGivesACard()
+    {
+        var m = (MimeMailItem)Mail.Parse(B(
+            "Subject: Event\nMIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=a\n\n" +
+            "--a\nContent-Type: text/plain\n\nSee attached.\n" +
+            "--a\nContent-Type: application/ics; name=event.ics\nContent-Disposition: attachment; filename=event.ics\n\n" +
+            "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//x//y//EN\nBEGIN:VEVENT\nUID:1@example.org\nDTSTAMP:20260101T000000Z\nDTSTART:20260105T100000Z\nDTEND:20260105T110000Z\nSUMMARY:Planning\nEND:VEVENT\nEND:VCALENDAR\n" +
+            "--a--\n"));
+        Assert.Single(m.CalendarParts);
+        Assert.Equal("Planning", Assert.Single(RecursiveAI.OneMail.Display.CalendarCard.FromItem(m)).Summary);
+    }
 }

@@ -111,6 +111,13 @@ public sealed class CompositionOptions
 
     /// <summary>The most bytes of attachments and embedded originals carried in total; what does not fit is skipped with a defect. Default: 64 MiB.</summary>
     public long MaxCarriedBytes { get; init; } = 64L << 20;
+
+    /// <summary>
+    /// False (the default) writes display names, the subject, the conversation topic and file names as ASCII: RFC 2047 encoded-words and RFC 2231 extended
+    /// parameters. True writes them as raw UTF-8 (RFC 6532), which only an SMTPUTF8 transport (RFC 6531) or a store that keeps bytes can carry.
+    /// Addresses are never converted either way: a non-ASCII local part or domain is written as given.
+    /// </summary>
+    public bool Utf8Headers { get; init; }
 }
 
 /// <summary>What the composer repaired, skipped or could not do.</summary>

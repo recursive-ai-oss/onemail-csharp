@@ -151,7 +151,8 @@ internal sealed class StreamEditorIo(Stream stream, bool leaveOpen) : EditorIo
 
     public override int Read(long offset, Span<byte> buffer)
     {
-        if (offset >= stream.Length)
+        // An offset taken from a header or tree entry can be anything, a 64-bit value above the signed range included; a read there finds nothing.
+        if (offset < 0 || offset >= stream.Length)
         {
             return 0;
         }
@@ -187,4 +188,41 @@ internal sealed class StreamEditorIo(Stream stream, bool leaveOpen) : EditorIo
             stream.Dispose();
         }
     }
+}
+
+/// <summary>Why an edit to an open PST was refused.</summary>
+public enum PstEditFailure
+{
+    /// <summary>There is no folder with the given NID.</summary>
+    FolderNotFound,
+
+    /// <summary>There is no item with the given NID.</summary>
+    ItemNotFound,
+
+    /// <summary>The folder cannot be moved or deleted: it is the root, or the move would put a folder inside itself.</summary>
+    InvalidFolderOperation,
+
+    /// <summary>
+    /// Every NID index of a type is taken. The 27-bit nidIndex space of that NID type (MS-PST 2.2.2.1) is full, so no new node of the type can be created.
+    /// </summary>
+    NidSpaceExhausted,
+}
+
+/// <summary>
+/// Thrown when an edit to an open PST is refused. The refusal is decided before the edit changes anything the committed state depends on:
+/// nothing was written to the committed tree, the file still holds the last commit, and the store stays usable.
+/// </summary>
+public sealed class PstEditException : InvalidOperationException
+{
+    /// <summary>Creates the exception.</summary>
+    /// <param name="reason">Why the edit was refused.</param>
+    /// <param name="message">A description with the NID or property involved.</param>
+    public PstEditException(PstEditFailure reason, string message)
+        : base(message)
+    {
+        Reason = reason;
+    }
+
+    /// <summary>Why the edit was refused.</summary>
+    public PstEditFailure Reason { get; }
 }

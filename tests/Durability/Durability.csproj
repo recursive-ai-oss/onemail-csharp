@@ -19,6 +19,7 @@
   <ItemGroup>
     <Compile Include="../OneMail.Tests/Pst/StoreChecks.cs" />
     <Compile Include="../OneMail.Tests/Pst/PstStoreCompare.cs" />
+    <Compile Include="../OneMail.Tests/Pst/NdbChecker.cs" />
   </ItemGroup>
 
   <ItemGroup>

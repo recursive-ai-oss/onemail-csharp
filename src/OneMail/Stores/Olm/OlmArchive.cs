@@ -201,13 +201,15 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         foreach (ArchiveEntry entry in _records)
         {
             ThrowIfDisposed();
-            if (_options.Recovery && !VerifyEntry(entry))
+            // Recovery judges the whole entry before its records are handed out; the bytes read for that are kept, so the entry is decompressed once.
+            Stream? data = null;
+            if (_options.Recovery && !Verify(entry, keep: true, out data))
             {
                 Report(OlmDefectKind.EntryDamaged, entry.Name, "records before the damage are kept");
             }
 
             // On failure OpenEntry has already put the defect on the archive.
-            Stream? data = OpenEntry(entry, out _);
+            data ??= OpenEntry(entry, out _);
             if (data is null)
             {
                 continue;
@@ -400,10 +402,15 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         }
     }
 
-    // Reads an entry to its end and throws the bytes away, so that damage, a short entry or a bad CRC is known before the records of the entry
-    // are handed out. Cached by name. Returns true when the entry reads clean.
-    internal bool VerifyEntry(ArchiveEntry entry)
+    // Reads an entry to its end so that damage, a short entry or a bad CRC is known before the records of the entry are handed out. Cached by name.
+    // Returns true when the entry reads clean.
+    internal bool VerifyEntry(ArchiveEntry entry) => Verify(entry, keep: false, out _);
+
+    // With keep, the bytes read are returned in kept (replaying the damage at the point it was met) so the caller does not decompress the entry again.
+    // kept stays null when the entry was verified before or could not be opened; the caller then opens it the ordinary way.
+    private bool Verify(ArchiveEntry entry, bool keep, out Stream? kept)
     {
+        kept = null;
         if (_verified.TryGetValue(entry.Name, out bool known))
         {
             return known;
@@ -417,6 +424,12 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             if (s is null)
             {
                 ok = false;
+            }
+            else if (keep)
+            {
+                OlmEntrySpool spool = OlmEntrySpool.Fill(s, OlmPaths.IsReadFailure, out Exception? failure);
+                ok = failure is null;
+                kept = spool;
             }
             else
             {

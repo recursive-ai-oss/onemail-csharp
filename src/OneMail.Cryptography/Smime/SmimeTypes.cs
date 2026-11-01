@@ -33,7 +33,7 @@ public enum SmimeLayerKind
 /// </summary>
 public enum SmimeStatus
 {
-    /// <summary>Signer or signed layer: every signature check passed (and the chain check, when it was asked for).</summary>
+    /// <summary>Signer: every signature check passed (and the chain check, when it was asked for). Signed layer: the same, and every signer's chain was built to a caller-supplied anchor (or <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> is set).</summary>
     Valid,
 
     /// <summary>Signer: the signature value does not verify over the signed attributes.</summary>
@@ -45,7 +45,7 @@ public enum SmimeStatus
     /// <summary>Signer: no certificate in the message or the supplied collection matches the signer identifier.</summary>
     CertificateNotFound,
 
-    /// <summary>Signer: the signature is sound but the certificate did not validate to a trust anchor.</summary>
+    /// <summary>Signer: the signature is sound but the certificate did not validate to a trust anchor. Signed layer: also when no chain was asked for and <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> is off.</summary>
     UntrustedChain,
 
     /// <summary>Signer or decryption: the algorithm or key is refused by the crypto policy the caller supplied.</summary>
@@ -94,7 +94,7 @@ public enum SmimeSenderMatch
     /// <summary>The certificate carries no e-mail address (no rfc822Name and no emailAddress in the subject).</summary>
     NoCertificateAddress,
 
-    /// <summary>An address of the certificate equals an address of <c>From</c>, ignoring case.</summary>
+    /// <summary>Every address of <c>From</c> (or of <c>Sender</c> when there is no <c>From</c>) is an address of the certificate, ignoring case. A header that also names someone else is a <see cref="Mismatch"/>.</summary>
     Match,
 
     /// <summary>Both sides have addresses and none is shared.</summary>
@@ -213,8 +213,15 @@ public sealed class SmimeSignerResult
     /// <summary>The summary status; see <see cref="SmimeStatus"/>.</summary>
     public SmimeStatus Status { get; internal set; }
 
-    /// <summary>True when <see cref="Status"/> is <see cref="SmimeStatus.Valid"/>.</summary>
+    /// <summary>True when <see cref="Status"/> is <see cref="SmimeStatus.Valid"/>. This says the signature is sound for the certificate that came with it, not that the certificate belongs to who it names: see <see cref="IsTrusted"/>.</summary>
     public bool IsValid => Status == SmimeStatus.Valid;
+
+    /// <summary>
+    /// True when the signature is sound and the certificate chain was built to a trust anchor the caller supplied (<see cref="Chain"/> is
+    /// <see cref="SmimeChainStatus.Passed"/> or <see cref="SmimeChainStatus.Warning"/>). False when no trust options were given, however good the signature:
+    /// anyone can sign with a certificate they made themselves and put any address in it. Compare <see cref="SenderMatch"/> only for a trusted signer.
+    /// </summary>
+    public bool IsTrusted => IsValid && Chain is SmimeChainStatus.Passed or SmimeChainStatus.Warning;
 
     /// <summary>The signer's certificate, or null when none matched the identifier.</summary>
     public Certificate? Certificate => Report.Certificate;
@@ -314,6 +321,9 @@ public sealed class SmimeSignedLayer : SmimeLayer
 
     /// <inheritdoc/>
     public override bool Succeeded => Status == SmimeStatus.Valid;
+
+    /// <summary>True when the layer succeeded and every signer is trusted (<see cref="SmimeSignerResult.IsTrusted"/>); with <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> a layer can succeed without this.</summary>
+    public bool IsTrusted => Succeeded && Signers.Count > 0 && Signers.All(static s => s.IsTrusted);
 }
 
 /// <summary>An enveloped, authEnveloped or compressed layer.</summary>
@@ -377,8 +387,15 @@ public sealed class SmimeResult
     /// <summary>True when at least one layer was found.</summary>
     public bool IsSmime => Layers.Count > 0;
 
-    /// <summary>True when every layer succeeded (and at least one exists): each signature is sound for its certificate and each wrapper was opened. Trust is separate; see <see cref="SmimeSignerResult.Chain"/>.</summary>
-    public bool Succeeded => Layers.Count > 0 && Layers.All(static l => l.Succeeded);
+    /// <summary>True when every layer succeeded (and at least one exists): each signature is sound for its certificate and each wrapper was opened. False when the signed entity was found inside an unsigned wrapper (<see cref="SmimeIssue.SignedPartInUnsignedWrapper"/>), since the rest of the message is not signed. Trust is separate; see <see cref="IsTrusted"/>.</summary>
+    public bool Succeeded => Layers.Count > 0 && Layers.All(static l => l.Succeeded) && !Issues.Contains(SmimeIssue.SignedPartInUnsignedWrapper);
+
+    /// <summary>
+    /// True when <see cref="Succeeded"/>, at least one layer is signed, and every signed layer is trusted (<see cref="SmimeSignedLayer.IsTrusted"/>), which needs
+    /// <see cref="SmimeOpenOptions.Chain"/>. This is the property to act on; <see cref="Succeeded"/> alone also holds for a message signed with a certificate
+    /// nobody vouched for.
+    /// </summary>
+    public bool IsTrusted => Succeeded && Layers.OfType<SmimeSignedLayer>().Any() && Layers.OfType<SmimeSignedLayer>().All(static l => l.IsTrusted);
 
     /// <summary>All signers of all signed layers, outermost first.</summary>
     public IEnumerable<SmimeSignerResult> Signers => Layers.OfType<SmimeSignedLayer>().SelectMany(static l => l.Signers);

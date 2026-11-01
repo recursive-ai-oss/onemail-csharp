@@ -39,7 +39,8 @@ public sealed class PstWriteOptions
 /// <see cref="Commit"/>; disposing without committing drops them. <see cref="View"/> shows the file as of the last commit.
 /// </summary>
 /// <remarks>
-/// In-place writing is new and has not been through an independent review of its commit path. Keep a copy of files you cannot lose.
+/// The commit path has had an independent review (see <c>docs/pst-writing.md</c>), but edited files have not been opened in Outlook or checked by
+/// <c>scanpst.exe</c>. Keep a copy of files you cannot lose.
 /// Search folders' criteria and update queues are not maintained: a client rebuilds a search folder when it opens it (MS-PST 2.4.8).
 /// </remarks>
 public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
@@ -101,7 +102,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <param name="message">The item as a property bag, with its recipients and attachments.</param>
     /// <param name="associated">True for a folder-associated item (a rule, view or setting).</param>
     /// <returns>The new item's NID.</returns>
-    /// <exception cref="ArgumentException">There is no such folder.</exception>
+    /// <exception cref="PstEditException">There is no such folder (<see cref="PstEditFailure.FolderNotFound"/>), or every NID index of the item type is taken (<see cref="PstEditFailure.NidSpaceExhausted"/>). A property whose value does not fit its type is not an error: it is left out and reported in <see cref="Defects"/>. Nothing was written: the file still holds the last commit.</exception>
     /// <exception cref="ObjectDisposedException">The store is disposed.</exception>
     public Nid AddMessage(Nid folder, MapiMessage message, bool associated = false)
     {
@@ -120,7 +121,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <summary>Replaces an item's content, keeping its NID and folder. Its old blocks are freed at commit.</summary>
     /// <param name="message">The item's NID.</param>
     /// <param name="replacement">The new content.</param>
-    /// <exception cref="ArgumentException">There is no such item.</exception>
+    /// <exception cref="PstEditException">There is no such item. Nothing was written: the file still holds the last commit.</exception>
     public void ReplaceMessage(Nid message, MapiMessage replacement)
     {
         ThrowIfDisposed();
@@ -129,8 +130,9 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         NodeEntry node = MessageNodeOrThrow(message);
         bool associated = message.Type == NidType.AssocMessage;
         FolderState f = FolderOrThrow(node.Parent);
-        f.RemoveCommittedRow(this, associated, message.Value);
+        // Write first: if the item cannot be written, the folder's committed row is still in place.
         PstWrittenMessage w = _items.WriteMessage(replacement, message, node.Parent, associated, "message " + message);
+        f.RemoveCommittedRow(this, associated, message.Value);
         byte[]?[] row = PstItemWriter.MakeRow(replacement, f.Columns(associated), w.Effective);
         f.AddRow(associated, message.Value, row, unread: !associated && (w.Flags & 1) == 0);
         _touched.Add(message.Value);
@@ -139,7 +141,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
 
     /// <summary>Deletes an item, freeing its blocks (and zeroing them, unless the options say not to) at commit. There is no Deleted Items step: it is gone.</summary>
     /// <param name="message">The item's NID.</param>
-    /// <exception cref="ArgumentException">There is no such item.</exception>
+    /// <exception cref="PstEditException">There is no such item. Nothing was written: the file still holds the last commit.</exception>
     public void DeleteMessage(Nid message)
     {
         ThrowIfDisposed();
@@ -159,7 +161,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <summary>Moves an item to another folder: the item's node keeps its blocks, and only the two folders' tables and its parent change.</summary>
     /// <param name="message">The item's NID.</param>
     /// <param name="destination">The destination folder's NID.</param>
-    /// <exception cref="ArgumentException">There is no such item or folder.</exception>
+    /// <exception cref="PstEditException">There is no such item or folder. Nothing was written: the file still holds the last commit.</exception>
     public void MoveMessage(Nid message, Nid destination)
     {
         ThrowIfDisposed();
@@ -198,7 +200,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <param name="name">The display name.</param>
     /// <param name="containerClass">The container class (such as <c>IPF.Note</c>), or null for none.</param>
     /// <returns>The new folder's NID.</returns>
-    /// <exception cref="ArgumentException">There is no such parent.</exception>
+    /// <exception cref="PstEditException">There is no such parent. Nothing was written: the file still holds the last commit.</exception>
     public Nid CreateFolder(Nid parent, string name, string? containerClass = "IPF.Note")
     {
         ThrowIfDisposed();
@@ -217,7 +219,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <summary>Changes a folder's display name.</summary>
     /// <param name="folder">The folder's NID.</param>
     /// <param name="name">The new name.</param>
-    /// <exception cref="ArgumentException">There is no such folder.</exception>
+    /// <exception cref="PstEditException">There is no such folder. Nothing was written: the file still holds the last commit.</exception>
     public void RenameFolder(Nid folder, string name)
     {
         ThrowIfDisposed();
@@ -231,7 +233,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// <summary>Moves a folder, with everything in it, under another: only the folder's parent and the two hierarchy tables change.</summary>
     /// <param name="folder">The folder's NID.</param>
     /// <param name="destination">The new parent's NID.</param>
-    /// <exception cref="ArgumentException">There is no such folder, or the destination is the folder itself or inside it.</exception>
+    /// <exception cref="PstEditException">There is no such folder, or the destination is the folder itself or inside it. Nothing was written: the file still holds the last commit.</exception>
     public void MoveFolder(Nid folder, Nid destination)
     {
         ThrowIfDisposed();
@@ -239,14 +241,14 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         FolderState to = FolderOrThrow(destination);
         if (f.Parent == folder)
         {
-            throw new ArgumentException("the root folder cannot be moved", nameof(folder));
+            throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root folder cannot be moved");
         }
 
         for (Nid at = destination; ; )
         {
             if (at == folder)
             {
-                throw new ArgumentException("a folder cannot be moved into itself", nameof(destination));
+                throw new PstEditException(PstEditFailure.InvalidFolderOperation, "a folder cannot be moved into itself");
             }
 
             Nid up = FolderOrThrow(at).Parent;
@@ -301,7 +303,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     /// the items are then freed in batches, each committed.
     /// </summary>
     /// <param name="folder">The folder's NID.</param>
-    /// <exception cref="ArgumentException">There is no such folder, or it is the root.</exception>
+    /// <exception cref="PstEditException">There is no such folder, or it is the root. Nothing was written: the file still holds the last commit.</exception>
     public void DeleteFolder(Nid folder)
     {
         ThrowIfDisposed();
@@ -309,12 +311,12 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         FolderState f = FolderOrThrow(folder);
         if (f.Parent == folder)
         {
-            throw new ArgumentException("the root folder cannot be deleted", nameof(folder));
+            throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root folder cannot be deleted");
         }
 
         FolderState parent = FolderOrThrow(f.Parent);
         var orphans = new List<Nid>();
-        UnlinkFolder(folder, orphans);
+        UnlinkFolder(folder, orphans, []);
         parent.RemovedChildren.Add(folder.Value);
         parent.ChildrenChanged = true;
         Commit();
@@ -332,8 +334,14 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     }
 
     // Removes a folder's own nodes and, recursively, its subfolders'; collects the items (and leaves them for the caller to free after the commit).
-    private void UnlinkFolder(Nid folder, List<Nid> orphans)
+    // A folder that names itself or an ancestor as a child (a damaged hierarchy table) is unlinked once and not followed again.
+    private void UnlinkFolder(Nid folder, List<Nid> orphans, HashSet<uint> seen)
     {
+        if (!seen.Add(folder.Value))
+        {
+            return;
+        }
+
         using var contents = OldTable.Open(_ed.Committed, TableNid(folder, NidType.ContentsTable), PstItemWriter.ContentsColumns);
         using var assoc = OldTable.Open(_ed.Committed, TableNid(folder, NidType.AssocContentsTable), PstItemWriter.AssocColumns);
         using var hierarchy = OldTable.Open(_ed.Committed, TableNid(folder, NidType.HierarchyTable), PstItemWriter.HierarchyColumns);
@@ -341,7 +349,11 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         orphans.AddRange(assoc.RowIds().Select(static id => new Nid(id)));
         foreach (uint child in hierarchy.RowIds().ToList())
         {
-            UnlinkFolder(new Nid(child), orphans);
+            // Only a folder whose own node says it is a child of this one: a row naming some other folder (a damaged table) must not take that folder with it.
+            if (_ed.TryGetNode(new Nid(child), out NodeEntry childNode) && childNode.Parent == folder)
+            {
+                UnlinkFolder(new Nid(child), orphans, seen);
+            }
         }
 
         foreach (NidType t in new[] { NidType.HierarchyTable, NidType.ContentsTable, NidType.AssocContentsTable, NidType.SearchContentsTable })
@@ -430,7 +442,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
 
         if (nid.Type != NidType.NormalFolder || !_ed.TryGetNode(nid, out NodeEntry node))
         {
-            throw new ArgumentException($"there is no folder {nid}", nameof(nid));
+            throw new PstEditException(PstEditFailure.FolderNotFound, $"there is no folder {nid}");
         }
 
         f = new FolderState(this, nid, node.Parent, isNew: false);
@@ -442,7 +454,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     {
         if (nid.Type is not (NidType.NormalMessage or NidType.AssocMessage) || !_ed.TryGetNode(nid, out NodeEntry node))
         {
-            throw new ArgumentException($"there is no item {nid}", nameof(nid));
+            throw new PstEditException(PstEditFailure.ItemNotFound, $"there is no item {nid}");
         }
 
         return node;

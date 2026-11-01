@@ -30,6 +30,13 @@ public sealed class SmimeOpenOptions
     /// <summary>The instant <see cref="Policy"/> is asked about; required with it. The library never reads a clock.</summary>
     public DateTimeOffset? ReferenceTime { get; init; }
 
+    /// <summary>
+    /// Let a signed layer succeed although no signer's certificate chain was built to an anchor the caller supplied (<see cref="Chain"/> unset).
+    /// Default false: such a layer ends as <see cref="SmimeStatus.UntrustedChain"/> and <see cref="SmimeResult.Succeeded"/> is false, because anyone can
+    /// sign with a certificate they made themselves and put any address in it. When true the layer can succeed, and <see cref="SmimeResult.IsTrusted"/> stays false.
+    /// </summary>
+    public bool AllowUntrustedSigner { get; init; }
+
     /// <summary>Decrypt Triple-DES content. Default false: such a layer ends as <see cref="SmimeStatus.Unsupported"/>.</summary>
     public bool AllowLegacyCiphers { get; init; }
 
@@ -39,8 +46,8 @@ public sealed class SmimeOpenOptions
     /// <summary>The most S/MIME layers unwrapped one inside another. Default 8; deeper nesting stops with <see cref="SmimeIssue.DepthLimitReached"/>.</summary>
     public int MaxDepth { get; init; } = 8;
 
-    /// <summary>Limits for the CMS parsers. Default <see cref="CmsLimits.Default"/>.</summary>
-    public CmsLimits Limits { get; init; } = CmsLimits.Default;
+    /// <summary>Limits for the CMS parsers. Default: <see cref="CmsLimits.Default"/> with content and decompressed output cut to 256 MiB, which is more than mail carries.</summary>
+    public CmsLimits Limits { get; init; } = new() { MaxContentBytes = 256L << 20, MaxDecompressedBytes = 256L << 20 };
 }
 
 /// <summary>
@@ -275,6 +282,16 @@ public static class SmimeProcessor
         name.StartsWith("Content-", StringComparison.OrdinalIgnoreCase) || name.Equals("MIME-Version", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsMessageLike(MimeEntity e) => e.Headers.Any(static h => !IsContentHeader(h.Name));
+
+    private static MimeEntity? SignedSender(MimeEntity? signed)
+    {
+        if (signed is MimeMessagePart { Message: { } inner } && HasSender(inner))
+        {
+            return inner;
+        }
+
+        return signed is not null && HasSender(signed) ? signed : null;
+    }
 
     private static bool HasSender(MimeEntity e) => e.Headers.GetFirst("From") is not null || e.Headers.GetFirst("Sender") is not null;
 
@@ -583,7 +600,13 @@ public static class SmimeProcessor
                 detail = e.Message;
                 layer.Policy = e.Report;
             }
-            catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or NotSupportedException or InvalidOperationException or ArgumentException or FormatException or AlgorithmNotSupportedException)
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                // A padding or tag failure from the platform must look like every other failure after a recipient matched.
+                status = SmimeStatus.DecryptionFailed;
+                detail = "A recipient matched, but the message could not be decrypted.";
+            }
+            catch (Exception e) when (e is NotSupportedException or InvalidOperationException or ArgumentException or FormatException or AlgorithmNotSupportedException)
             {
                 status = SmimeStatus.Unsupported;
                 detail = e.GetType().Name + ": " + e.Message;
@@ -652,7 +675,9 @@ public static class SmimeProcessor
     {
         layer.Report = report;
         layer.Certificates = sd.Certificates;
-        List<string> senders = Senders(senderSource);
+        // RFC 8551 §3.2.2: the address to check is the one in the signed message. When the signed entity carries its own From, that is the one;
+        // the headers around a multipart/signed are not covered, so they are only used when the signed entity has none.
+        List<string> senders = Senders(SignedSender(layer.SignedEntity) ?? senderSource);
         var signers = new List<SmimeSignerResult>(report.Signers.Count);
         foreach (SignerReport r in report.Signers)
         {
@@ -668,7 +693,16 @@ public static class SmimeProcessor
         }
         else if (signers.All(static s => s.IsValid) && report.Checks.All(static c => c.Status is not (CmsCheckStatus.Failed or CmsCheckStatus.Unsupported)))
         {
-            layer.Status = SmimeStatus.Valid;
+            if (!options.AllowUntrustedSigner && !signers.All(static s => s.IsTrusted))
+            {
+                // The signature is sound, but nothing vouches for the certificate: not a success unless the caller said it may be.
+                layer.Status = SmimeStatus.UntrustedChain;
+                layer.Detail = "The signature is sound but no certificate chain to a trust anchor was built (SmimeOpenOptions.Chain); the signer is untrusted.";
+            }
+            else
+            {
+                layer.Status = SmimeStatus.Valid;
+            }
         }
         else
         {
@@ -784,7 +818,7 @@ public static class SmimeProcessor
                 ? SmimeSenderMatch.NoSenderAddress
                 : s.CertificateAddresses.Count == 0
                     ? SmimeSenderMatch.NoCertificateAddress
-                    : s.CertificateAddresses.Any(a => senders.Contains(a, StringComparer.OrdinalIgnoreCase)) ? SmimeSenderMatch.Match : SmimeSenderMatch.Mismatch;
+                    : senders.All(a => s.CertificateAddresses.Contains(a, StringComparer.OrdinalIgnoreCase)) ? SmimeSenderMatch.Match : SmimeSenderMatch.Mismatch;
         }
         else
         {

@@ -101,7 +101,7 @@ public static class MessageComposer
                 headers.Add(("Cc", string.Join(", ", cc.Select(a => FormatMailbox(a.Name, a.Address)))));
             }
 
-            headers.Add(("Subject", subject));
+            headers.Add(("Subject", HeaderText.Unstructured(subject, options.Utf8Headers)));
             headers.Add(("Date", FormatDate(_now)));
             if (NewMessageId() is { } mid)
             {
@@ -118,7 +118,7 @@ public static class MessageComposer
             int at = 0;
             foreach ((string n, string v) in headers)
             {
-                root.Headers.Insert(at++, new MimeHeader(n, v));
+                root.Headers.Insert(at++, HeaderText.Header(n, v, options.Utf8Headers));
             }
 
             MapiMessage? mapi = null;
@@ -453,7 +453,7 @@ public static class MessageComposer
 
             if (topic.Length > 0)
             {
-                headers.Add(("Thread-Topic", topic));
+                headers.Add(("Thread-Topic", HeaderText.Unstructured(topic, options.Utf8Headers)));
             }
 
             headers.Add(("Thread-Index", Convert.ToBase64String(next)));
@@ -558,7 +558,7 @@ public static class MessageComposer
             {
                 var mp = new MimeMessagePart("message/rfc822");
                 mp.Message = embedded;
-                mp.Headers.Add("Content-Disposition", "attachment" + MimeHeaderValue.Parameter("filename", AttachmentName()));
+                mp.Headers.Add("Content-Disposition", "attachment" + HeaderText.Parameter("filename", AttachmentName(), options.Utf8Headers));
                 mixed.Add(mp);
             }
 
@@ -851,7 +851,7 @@ public static class MessageComposer
             string type = a.ContentType.Contains('/', StringComparison.Ordinal) && Ascii.IsValid(a.ContentType) && a.ContentType.AsSpan().IndexOfAny(" \t\r\n;,\"()<>@[]\\=?".AsSpan()) < 0
                 ? a.ContentType : "application/octet-stream";
             string? name = a.FileName is { } fn ? Clean(fn) : null;
-            string disposition = (inline ? "inline" : "attachment") + (name is { Length: > 0 } ? MimeHeaderValue.Parameter("filename", name) : string.Empty);
+            string disposition = (inline ? "inline" : "attachment") + (name is { Length: > 0 } ? HeaderText.Parameter("filename", name, options.Utf8Headers) : string.Empty);
             MimeEntity part;
             if (type == "message/rfc822")
             {
@@ -861,7 +861,7 @@ public static class MessageComposer
             }
             else
             {
-                var p = new MimePart(type + (name is { Length: > 0 } ? MimeHeaderValue.Parameter("name", name) : string.Empty));
+                var p = new MimePart(type + (name is { Length: > 0 } ? HeaderText.Parameter("name", name, options.Utf8Headers) : string.Empty));
                 p.SetDecodedContent(data);
                 part = p;
             }
@@ -956,7 +956,7 @@ public static class MessageComposer
                         p.Headers.Add("To", string.Join(", ", parent.ToRecipients.Where(a => Usable(a.Address)).Select(a => FormatMailbox(a.Name, a.Address))));
                     }
 
-                    p.Headers.Add("Subject", Clean(parent.Subject ?? string.Empty));
+                    p.Headers.Add(HeaderText.Header("Subject", Clean(parent.Subject ?? string.Empty), options.Utf8Headers));
                     if (parent.Sent is { } d)
                     {
                         p.Headers.Add("Date", FormatDate(d.Value));
@@ -995,86 +995,6 @@ public static class MessageComposer
             return sb.ToString();
         }
 
-        private static string FormatMailbox(string? name, string address)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return address;
-            }
-
-            string display = Clean(name).Trim();
-            string phrase;
-            if (display.AsSpan().ContainsAnyExceptInRange((char)0x20, (char)0x7E))
-            {
-                // RFC 2047 §5(3): in a phrase every word is an atom or an encoded-word, so the whole name is encoded; plain stretches left in
-                // between could hold specials such as "@" or a quote that would corrupt the address list.
-                phrase = EncodeWords(display);
-            }
-            else if (IsAtomText(display))
-            {
-                phrase = display;
-            }
-            else
-            {
-                phrase = "\"" + display.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
-            }
-
-            return phrase + " <" + address + ">";
-        }
-
-        // The text as B encoded-words of UTF-8, each at most 75 characters (RFC 2047 §2), never cutting a character.
-        private static string EncodeWords(string text)
-        {
-            var words = new List<string>();
-            var chunk = new List<byte>();
-            Span<byte> buf = new byte[4];
-            foreach (Rune r in text.EnumerateRunes())
-            {
-                int n = r.EncodeToUtf8(buf);
-                if (chunk.Count + n > 42)
-                {
-                    words.Add(Word(chunk));
-                    chunk.Clear();
-                }
-
-                chunk.AddRange(buf[..n].ToArray());
-            }
-
-            if (chunk.Count > 0)
-            {
-                words.Add(Word(chunk));
-            }
-
-            return string.Join(' ', words);
-
-            static string Word(List<byte> bytes) => "=?utf-8?B?" + Convert.ToBase64String([.. bytes]) + "?=";
-        }
-
-        private static bool IsAtomText(string s)
-        {
-            bool word = false;
-            foreach (char c in s)
-            {
-                if (c == ' ')
-                {
-                    if (!word)
-                    {
-                        return false;
-                    }
-
-                    word = false;
-                    continue;
-                }
-
-                if (!(char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-/=?^_`{|}~".Contains(c, StringComparison.Ordinal)))
-                {
-                    return false;
-                }
-
-                word = true;
-            }
-
-            return word;
-        }
+        private string FormatMailbox(string? name, string address) => HeaderText.Mailbox(name is null ? null : Clean(name), address, options.Utf8Headers);
     }
 }

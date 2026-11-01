@@ -168,6 +168,9 @@ internal sealed class Recording
 
     /// <summary>Snapshot hashes: the starting state, then the state after each commit.</summary>
     public required List<string> States { get; init; }
+
+    /// <summary>What the independent node database checker already says about the base file (messages), so only new findings count.</summary>
+    public HashSet<string> Baseline { get; init; } = [];
 }
 
 internal static class Harness
@@ -210,7 +213,7 @@ internal static class Harness
             w.Commit();
             states.Add(SnapshotHash(w));
         });
-        return new Recording { Base = baseImage, Ops = io.Ops, States = states };
+        return new Recording { Base = baseImage, Ops = io.Ops, States = states, Baseline = [.. NdbChecker.Check(baseImage).Errors] };
     }
 
     private static string SnapshotHash(PstWritableStore w) => Hash(StoreChecks.Snapshot(w.View));
@@ -243,6 +246,28 @@ internal static class Harness
                     }
 
                     ReadOnlySpan<byte> data = op.Data;
+                    if (open && variant >= 3)
+                    {
+                        // Every write since the last barrier reaches the disk in whole 512-byte sectors, in any subset. The 564-byte header write is kept whole
+                        // unless variant 4 asks to tear it too (it fits one 4 KiB physical sector, which is the assumption the commit rests on).
+                        bool header = op.Offset == 0 && op.Data.Length == 564;
+                        if (!header || variant == 4)
+                        {
+                            for (int at = 0; at < data.Length;)
+                            {
+                                int piece = Math.Min(data.Length - at, 512 - (int)((op.Offset + at) % 512));    // up to the next absolute sector boundary
+                                if (rng.Next(2) == 0)
+                                {
+                                    RecordingIo.Apply(file, op.Offset + at, data.Slice(at, piece));
+                                }
+
+                                at += piece;
+                            }
+
+                            break;
+                        }
+                    }
+
                     if (open && variant == 2 && i == cut - 1 && data.Length > 512 && !(op.Offset == 0 && data.Length == 564))
                     {
                         data = data[..(512 * rng.Next(1, data.Length / 512))];
@@ -251,7 +276,7 @@ internal static class Harness
                     RecordingIo.Apply(file, op.Offset, data);
                     break;
                 case OpKind.SetLength:
-                    if (!(open && variant == 1 && rng.Next(2) == 0))
+                    if (!(open && (variant == 1 || variant >= 3) && rng.Next(2) == 0))
                     {
                         file.SetLength(op.Offset);
                     }
@@ -290,6 +315,13 @@ internal static class Harness
             if (s.Defects.Count > 0)
             {
                 return ("messaging defect: " + s.Defects[0], -1, invalid);
+            }
+
+            NdbChecker.Report rep = NdbChecker.Check(file, expectValidMaps: !invalid);
+            string? fresh = rep.Errors.FirstOrDefault(e => !r.Baseline.Contains(e));
+            if (fresh is not null)
+            {
+                return ("node database checker: " + fresh, -1, invalid);
             }
 
             string hash = Hash(StoreChecks.Snapshot(s));

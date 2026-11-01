@@ -24,6 +24,9 @@ internal sealed class EditorPageStore(EditorIo io, EditorMaps maps, ulong nextPa
 
     public ulong TakePageBid() => NextPageBid++;
 
+    /// <summary>Makes sure the next page BID is at least <paramref name="minimum"/>.</summary>
+    public void RaiseNextBid(ulong minimum) => NextPageBid = Math.Max(NextPageBid, minimum);
+
     public int DirtyCount => _dirty.Count;
 
     public bool IsOwned(long ib) => _dirty.ContainsKey(ib);
@@ -48,6 +51,14 @@ internal sealed class EditorPageStore(EditorIo io, EditorMaps maps, ulong nextPa
             || BinaryPrimitives.ReadUInt64LittleEndian(page.AsSpan(504)) != at.Bid.Value)
         {
             throw new InvalidDataException($"the B-tree page at 0x{ib:x} fails its trailer checks");
+        }
+
+        // MS-PST 2.2.2.7.7.1: BTENTRY and BBTENTRY are 24 bytes, NBTENTRY 32, and the entries fit in the 488 bytes before the footer. A page whose footer says
+        // otherwise would send the editor's index arithmetic outside the page.
+        int stride = ptype == 0x81 && page[491] == 0 ? 32 : 24;
+        if (page[490] != stride || page[488] > 488 / stride || page[491] > 8)
+        {
+            throw new InvalidDataException($"the B-tree page at 0x{ib:x} has an impossible footer (cEnt {page[488]}, cbEnt {page[490]}, cLevel {page[491]})");
         }
 
         return page;
