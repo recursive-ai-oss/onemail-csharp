@@ -48,6 +48,8 @@ switch (args[0])
         return Campaign.Child(args[1], args[2], I(args[3]), I(args[4]));
     case "make":
         return Campaign.Make(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), corpus);
+    case "memory":
+        return Memory.Run(args[1], I(args[2]), I(args[3]));
     case "pff":
         return Campaign.Pff(args[1]);
     default:
