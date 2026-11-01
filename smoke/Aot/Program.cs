@@ -31,7 +31,10 @@ namespace RecursiveAI.OneMail.AotSmoke;
 /// <summary>Touches every package under NativeAOT with trimming; the publish must produce no trim or AOT warning.</summary>
 internal static class Program
 {
-    private static int Main()
+    private static int Main() => Run();
+
+    /// <summary>Runs every check and returns 0 when all pass. The mobile smoke apps call this too, so the three share one set of checks.</summary>
+    internal static int Run()
     {
         string[] lines =
         [
