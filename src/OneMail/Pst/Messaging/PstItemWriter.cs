@@ -63,6 +63,7 @@ internal sealed class PstItemWriter
     private readonly List<PstWriteDefect> _defects;
     private readonly Dictionary<MapiNamedProperty, ushort> _nameIds = [];
     private readonly List<MapiNamedProperty> _names = [];
+    private bool _string8Seen;   // set while collecting: some property of the message being written is a PtypString8
 
     private sealed class Prop
     {
@@ -133,6 +134,18 @@ internal sealed class PstItemWriter
 
     private LtpNodeResult BuildNameMap()
     {
+        // libpff refuses a map whose entry, GUID or string stream is empty, so a store that lacks a kind of name gets one (a numbered name in
+        // the Common set, the public string "Keywords"). Nothing refers to them.
+        if (!_names.Exists(static n => n.PropertySet != MapiPropertySets.Mapi && n.PropertySet != MapiPropertySets.PublicStrings))
+        {
+            NameId(new MapiNamedProperty(MapiPropertySets.Common, 0x8503u));
+        }
+
+        if (!_names.Exists(static n => n.IsString))
+        {
+            NameId(new MapiNamedProperty(MapiPropertySets.PublicStrings, "Keywords"));
+        }
+
         var guids = new List<Guid>();
         var strings = new List<byte>();
         const int Buckets = 251;
@@ -303,6 +316,11 @@ internal sealed class PstItemWriter
                     Report(PstWriteDefectKind.NamedPropertyLimit, location, $"{name} does not fit: a store holds {MaxNamedProperties} named properties at most");
                     continue;
                 }
+            }
+
+            if ((type & ~LtpPropertyTypes.MultiValueFlag) == 0x001E)
+            {
+                _string8Seen = true;
             }
 
             if (!IsSupportedType(type))
@@ -527,6 +545,8 @@ internal sealed class PstItemWriter
     private WrittenObject WriteMessageObject(MapiMessage m, uint key, Ctx ctx, int depth, string location)
     {
         NdbBlockBuilder blocks = _file.Blocks;
+        bool outerString8 = _string8Seen;
+        _string8Seen = false;
         List<Prop> props = Collect(m, location, skipObject: false);
         long size = 0;
         var extra = new List<SubnodeEntry>();
@@ -580,6 +600,14 @@ internal sealed class PstItemWriter
             Ensure(props, 0x3007, 0x40, created, location);
             Ensure(props, 0x3008, 0x40, created, location);
             Ensure(props, 0x300B, 0x102, SearchKey(key, props), location);
+
+            // MS-PST 2.4.5.1.1: PidTagMessageCodepage tells a reader how to decode the item's PtypString8 values. An item that took its code page
+            // from somewhere else (an MSG's PidTagInternetCodepage, a locale, the enclosing message) would otherwise be read as windows-1252.
+            if (_string8Seen && Find(props, 0x3FFD) is null && m.String8EncodingSource is not (MapiCodePageSource.MessageCodepage or MapiCodePageSource.Default)
+                && m.String8Encoding.CodePage > 0)
+            {
+                Ensure(props, 0x3FFD, 3, I32(m.String8Encoding.CodePage), location);
+            }
         }
 
         if (Find(props, 0x3008) is { } lmp && lmp.Type == 0x40 && ValueLength(lmp) == 8)
@@ -600,6 +628,7 @@ internal sealed class PstItemWriter
 
         LtpNodeResult r = pc.Build();
         Bid sub = r.WriteSubnodes(blocks, extra);
+        _string8Seen = outerString8;
         return new WrittenObject(r.Data, sub, size, flags, status, lastModified);
     }
 

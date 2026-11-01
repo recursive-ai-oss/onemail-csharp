@@ -89,6 +89,25 @@ public sealed class PstBuilderTests
     }
 
     [Fact]
+    public void String8TextTakesItsCodePageFromTheItemAndTheNameMapIsNeverEmpty()
+    {
+        var m = new MapiMessage();
+        m.Properties.Add(Str(0x001A, "IPM.Note"));
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x0037, MapiType.String8), Encoding.GetEncoding("iso-8859-1").GetBytes("caf\u00e9")));
+        m.Properties.Add(Int(0x3FDE, 28592));   // PidTagInternetCodepage only: the item names no message code page
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(m));
+        using (store)
+        {
+            PstMessage written = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(28592, written.Properties.Get(0x3FFD)?.AsInt32());
+            Assert.Equal(28592, written.String8Encoding.CodePage);
+            Assert.True(store.NamedPropertyCount >= 2);   // libpff refuses a map with no numbered, no string or no GUID entries
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
     public void MessagesRecipientsAndAttachmentsReadBackExactly()
     {
         MapiMessage m1 = Message("first", recipients: 3, attachments: 2, body: "hello");

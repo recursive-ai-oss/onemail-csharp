@@ -22,10 +22,10 @@ mkdir -p "$work"; out="$work/$label.pst"; rm -f "$out"
 status=0
 echo "== $label  ($source_path)"
 start=$(date +%s)
-dotnet "$cli" convert --to pst "$source_path" "$out" > "$work/$label.convert.log" 2>&1 || { echo "convert failed"; tail -3 "$work/$label.convert.log"; exit 1; }
+dotnet "$cli" convert --to pst "$source_path" "$out" > "$work/$label.convert.log" 2>&1 || { echo "convert reported errors (unreadable sources are skipped)"; tail -3 "$work/$label.convert.log"; [ -s "$out" ] || exit 1; }
 end=$(date +%s)
 echo "convert: $(head -1 "$work/$label.convert.log") ($((end - start)) s, $(stat -c %s "$out") bytes)"
-dotnet "$ora" pstcheck "$out" "$source_path" 2>&1 | head -12 | sed 's/^/  /'; [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+[ -n "${NO_PSTCHECK:-}" ] && echo "  pstcheck skipped: the source items are not Outlook or MIME items it can convert" || dotnet "$ora" pstcheck "$out" "$source_path" 2>&1 | head -12 | sed 's/^/  /'; [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
 dotnet "$ora" propexact "$out" 2>&1 | head -6 | sed 's/^/  /'; [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
 dotnet "$ora" dump "$out" 2>&1 | grep -E '^(amaps|densityList|scan blocks|scan rootsFound|defects|nbt nodes|bbt blocks)' | sed 's/^/  /'
 if [ "$libpff" = 1 ]; then

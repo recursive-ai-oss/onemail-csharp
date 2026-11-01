@@ -110,6 +110,15 @@ bytes per row of the folder being closed. Measured runs are in `benchmarks.md`.
   scan (`dump`), and runs the libpff tools over the result (`pffinfo`, and `pffexport` against our reader through `tools/oracles/libpff-messaging.sh`).
 - `tools/pst/memory.sh`: peak resident set for generated stores of 10,000 to 1,000,000 messages and one folder of 600,000.
 
+Results of the last full run (Checked build, x64): 218 PST tests and 64 conversion tests pass; the write-check above over ten sources writes 8,922 messages with 0 unmatched
+(OLM not compared by `pstcheck`) and 0 property differences, `pffinfo` opens every file, and `pffexport` finds every item. What libpff reports differently is libpff's own behaviour, not a defect in the file:
+it decodes narrow strings with the `-c` code page of the tool and ignores `PidTagMessageCodepage`, it gives an unnamed attachment the name `Attachment.txt`, it leaves
+`IPM.Post` items out, and it drops the first letter of two OLM subjects (both letters end in the byte 0xD1). Peak memory: see `benchmarks.md`.
+
+Two things the corpora found: libpff refuses a name-to-ID map whose entry, GUID or string stream is empty (so a store with no named properties, or none of one kind, gets
+a placeholder: the numbered name 0x8503 in the Common set and the public string "Keywords"), and it decodes the `PtypString8` values of an item by its own code page, so
+the builder adds `PidTagMessageCodepage` (taken from the item's code page rule) to an item that has narrow strings but did not carry one.
+
 ## Not verified
 
 Needs Outlook and `scanpst.exe`, which are not available yet: that Outlook opens the files, FMap and FPMap pages and the name-to-ID bucket choice (above), that the

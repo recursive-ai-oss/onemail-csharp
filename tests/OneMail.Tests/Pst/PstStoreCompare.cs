@@ -15,7 +15,7 @@ namespace RecursiveAI.OneMail.Tests.Pst;
 public static class PstStoreCompare
 {
     // The properties MS-PST says every message (2.4.5.1.1) and attachment (2.4.6.2.1) must have; the builder adds them when the source lacks them.
-    private static readonly HashSet<ushort> AddedOnMessages = [0x001A, 0x0E07, 0x0E08, 0x0E17, 0x3007, 0x3008, 0x300B];
+    private static readonly HashSet<ushort> AddedOnMessages = [0x001A, 0x0E07, 0x0E08, 0x0E17, 0x3007, 0x3008, 0x300B, 0x3FFD];
     private static readonly HashSet<ushort> AddedOnAttachments = [0x0E20, 0x3705, 0x370B];
 
     public sealed class Result

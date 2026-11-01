@@ -103,6 +103,7 @@ internal sealed partial class MessagingCompare
                 Message(m, q.Dequeue(), logical + "#" + m.Nid);
             }
             else if (assoc) _assocUnexported++;
+            else if (m.MessageClass is { } mc && mc.StartsWith("IPM.Post", StringComparison.OrdinalIgnoreCase)) { }   // pffexport leaves posts out
             else Diff($"{logical}: item {m.Nid} \"{Trunc(m.Subject)}\" is not in the export (key {k})");
         }
 
@@ -230,7 +231,9 @@ internal sealed partial class MessagingCompare
     private void Bodies(PstMessage m, MapiMailItem view, string dir, string where)
     {
         string txt = Path.Combine(dir, "Message.txt"), html = Path.Combine(dir, "Message.html"), rtf = Path.Combine(dir, "Message.rtf");
-        MailBody? tb = view.TextBody, hb = view.HtmlBody;
+        // libpff exports only the bodies stored in the item; the view also derives a body from another one (HTML from RTF, text from HTML),
+        // so a derived body is not compared.
+        MailBody? tb = m.Properties.Get(0x1000) is null ? null : view.TextBody, hb = m.Properties.Get(0x1013) is null ? null : view.HtmlBody;
         _fields += 3;
         if ((tb is not null) != File.Exists(txt)) Diff($"{where}: text body present ours {tb is not null} libpff {File.Exists(txt)}");
         else if (tb is not null)
@@ -310,7 +313,9 @@ internal sealed partial class MessagingCompare
             }
 
             string prefix = $"{i + 1}_";
-            string? file = files.FirstOrDefault(f => Path.GetFileName(f).StartsWith(prefix, StringComparison.Ordinal));
+            // libpff zero-pads the number when a message has ten or more attachments, and a name is "<number>_<file name>".
+            string? file = files.FirstOrDefault(f => Path.GetFileName(f).StartsWith(prefix, StringComparison.Ordinal))
+                ?? (string.IsNullOrEmpty(a.FileName) ? null : files.FirstOrDefault(f => Regex.IsMatch(Path.GetFileName(f), @"^0*\d+_" + Regex.Escape(a.FileName) + "$")));
             if (file is null) { Diff($"{aw}: file {prefix}* not exported (name {a.FileName})"); continue; }
             _fields += 2;
             using Stream s = a.Open();
