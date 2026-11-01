@@ -16,7 +16,7 @@ namespace RecursiveAI.OneMail.Pst.Ndb;
 /// This is the node database layer: blocks and nodes. <c>RecursiveAI.OneMail.Pst.Messaging.PstWritableStore</c> builds folders and items on it. The
 /// commit path has not been through an independent review yet; treat it as preview quality.
 /// </remarks>
-public sealed class NdbEditor : IBidAllocator, INdbBlockSink, IDisposable
+public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDisposable
 {
     private const int HeaderSize = 564;
 
@@ -251,7 +251,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, IDisposable
         _pages = new EditorPageStore(_io, _maps, h.NextPageBid);
         _nbt = new EditorBTree(_pages, isNbt: true, root.NodeBTree);
         _bbt = new EditorBTree(_pages, isNbt: false, root.BlockBTree);
-        Blocks = new NdbBlockBuilder(this, this, h.Encryption);
+        Blocks ??= new NdbBlockBuilder(this, this, h.Encryption);
         _changed = false;
         _absoluteFree = false;
 
@@ -303,6 +303,8 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, IDisposable
 
     /// <summary>The file as of the last commit (or as opened). It is replaced by each <see cref="Commit"/>; do not keep it across one.</summary>
     public NdbFile Committed => _reader;
+
+    internal EditorIo Source => _io;
 
     /// <summary>True when something has been changed since the last commit.</summary>
     public bool HasChanges => _changed;
@@ -501,6 +503,9 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, IDisposable
             }
         }
     }
+
+    /// <inheritdoc/>
+    void INdbNodeSink.AddNode(NodeEntry entry) => UpsertNode(entry);
 
     /// <summary>Changes a node's parent NID without touching its blocks.</summary>
     /// <returns>False when there is no such node.</returns>

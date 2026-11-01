@@ -54,7 +54,7 @@ internal sealed class PstPropertySet : MapiObject
 /// <para>Search folders are read (their properties and result list) but never evaluated, and are skipped by
 /// <see cref="EnumerateMessages"/> because their results are messages that live in other folders.</para>
 /// </remarks>
-public sealed class PstStore : IDisposable
+public sealed partial class PstStore : IDisposable
 {
     /// <summary>NID_MESSAGE_STORE (MS-PST 2.4.3).</summary>
     internal const uint NidMessageStore = 0x21;
@@ -70,6 +70,8 @@ public sealed class PstStore : IDisposable
         _file = file;
         _ctx = ctx;
     }
+
+    internal PstContext Context => _ctx;
 
     /// <summary>The node database underneath, for callers that want the pages, blocks and nodes themselves.</summary>
     public NdbFile Database => _file;
