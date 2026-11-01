@@ -2,7 +2,7 @@
 # Runs the protocol rows (bench/ProtocolRows: this library's IMAP and SMTP clients against MailKit 4.18.2) on local servers started in a
 # private network namespace (tools/servers): IMAP against Dovecot, SMTP against the Postfix guest.
 #
-#   run-protocol-rows.sh OUTDIR [imap|smtp|all] [extra env as VAR=value ...]
+#   run-protocol-rows.sh OUTDIR [imap|smtp|all|smtptrace] [extra env as VAR=value ...]
 #
 # Inputs: the CMU Enron maildir that tools/corpus fetches put under ONEMAIL_CORPUS (default ~/onemail/corpus/enron-cmu/maildir) for
 # the IMAP sample; the SMTP messages are generated. Every side runs in its own process; each prints three timed repetitions after a
@@ -20,6 +20,9 @@ if [ "${1:-}" = "--inner" ]; then
     export ROWS_CORPUS=${ROWS_CORPUS:-${ONEMAIL_CORPUS:-$HOME/onemail/corpus}/enron-cmu/maildir}
     rows imap-prepare ours
     for r in imap-summary imap-full; do for s in ours mailkit; do rows $r $s; done; done
+  elif [ "$kind" = smtptrace ]; then
+    export ROWS_HOST=127.0.0.1 ROWS_PORT=$ONEMAIL_POSTFIX_SUBMISSION_PORT ROWS_USER=$ONEMAIL_POSTFIX_USER ROWS_PASS=$ONEMAIL_POSTFIX_PASSWORD ROWS_SECURITY=starttls
+    for s in ours mailkit-nodelay; do rows smtp-trace $s; done
   else
     export ROWS_HOST=127.0.0.1 ROWS_PORT=$ONEMAIL_POSTFIX_SUBMISSION_PORT ROWS_USER=$ONEMAIL_POSTFIX_USER ROWS_PASS=$ONEMAIL_POSTFIX_PASSWORD ROWS_SECURITY=starttls
     for r in smtp-small smtp-big; do for s in ${ROWS_SMTP_SIDES:-ours ours-data mailkit mailkit-nodelay}; do rows $r $s; done; done
@@ -46,6 +49,9 @@ trap 'kill $mon 2>/dev/null || true' EXIT
 cd "$root"
 if [ "$what" = imap ] || [ "$what" = all ]; then
   "$root/tools/servers/userns.sh" -n "$root/tools/servers/servers.sh" --servers dovecot -- "$here/run-protocol-rows.sh" --inner imap "$out" "$dll"
+fi
+if [ "$what" = smtptrace ]; then
+  "$root/tools/servers/userns.sh" -n "$root/tools/servers/servers.sh" --servers postfix -- "$here/run-protocol-rows.sh" --inner smtptrace "$out" "$dll"
 fi
 if [ "$what" = smtp ] || [ "$what" = all ]; then
   "$root/tools/servers/userns.sh" -n "$root/tools/servers/servers.sh" --servers postfix -- "$here/run-protocol-rows.sh" --inner smtp "$out" "$dll"
