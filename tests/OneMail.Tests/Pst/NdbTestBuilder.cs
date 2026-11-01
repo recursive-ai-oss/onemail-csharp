@@ -18,6 +18,10 @@ public sealed class TestNode
     public IReadOnlyList<TestNode> Subnodes { get; init; } = [];
     /// <summary>When set, the node's data blocks exactly as given (one block each, under an XBLOCK when there are several) and <see cref="Data"/> is ignored; for heaps, whose blocks are meaningful.</summary>
     public IReadOnlyList<byte[]>? Blocks { get; init; }
+    /// <summary>When set, the node's bidData as written by the block builder (see <see cref="TestBuild.Prebuilt"/>); <see cref="Data"/> and <see cref="Blocks"/> are ignored.</summary>
+    public ulong? DataBid { get; init; }
+    /// <summary>When set, the node's bidSub as written by the block builder; <see cref="Subnodes"/> is ignored.</summary>
+    public ulong? SubBid { get; init; }
 }
 
 /// <summary>Knobs for <see cref="NdbTestBuilder"/>.</summary>
@@ -29,6 +33,8 @@ public sealed class TestBuild
     public byte Crypt { get; init; }
     /// <summary>4 KiB files only: deflate data blocks that get smaller.</summary>
     public bool Compress { get; init; }
+    /// <summary>Unicode files only: blocks made by <see cref="NdbBlockBuilder"/>, placed as they are (the BIDs are theirs) before any block of the nodes' own data.</summary>
+    public IReadOnlyList<NdbBlock>? Prebuilt { get; init; }
 }
 
 /// <summary>
@@ -103,6 +109,21 @@ public static class NdbTestBuilder
         ulong nextPage = 0x100;
         var blocks = new SortedDictionary<ulong, (long Ib, int Cb)>();
         var offsets = new Dictionary<ulong, long>();
+
+        if (options.Prebuilt is { } prebuilt)
+        {
+            foreach (NdbBlock pb in prebuilt)
+            {
+                Wedge(pb.TotalLength);
+                long pib = file.Count;
+                var image = new byte[pb.TotalLength];
+                pb.WriteTo(image, (ulong)pib);
+                file.AddRange(image);
+                blocks[pb.Bid.Value] = (pib, pb.DataLength);
+                offsets[pb.Bid.Value] = pib;
+                nextBlock = Math.Max(nextBlock, ((pb.Bid.Value >> 2) + 1) << 2);
+            }
+        }
 
         ulong WriteBlock(byte[] data, bool isInternal)
         {
@@ -197,7 +218,7 @@ public static class NdbTestBuilder
         var nbtEntries = new List<(ulong Key, byte[] Entry)>();
         foreach (TestNode n in nodes.OrderBy(n => n.Nid))
         {
-            ulong d = WriteNodeData(n), sub = WriteSubnodes(n.Subnodes);
+            ulong d = n.DataBid ?? WriteNodeData(n), sub = n.SubBid ?? WriteSubnodes(n.Subnodes);
             int sz = g.Ansi ? 16 : 32;
             var e = new byte[sz];
             PutId(e, n.Nid); PutId(e.AsSpan(g.IdSize), d); PutId(e.AsSpan(2 * g.IdSize), sub);
