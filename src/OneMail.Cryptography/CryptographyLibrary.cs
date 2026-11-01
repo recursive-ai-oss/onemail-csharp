@@ -1,6 +1,6 @@
 namespace RecursiveAI.OneMail.Cryptography;
 
-/// <summary>Identifies the OneMail.Cryptography package: DKIM, ARC, S/MIME and OpenPGP.</summary>
+/// <summary>Identifies the OneMail.Cryptography package: DKIM and ARC signing and verification with a DNS TXT client.</summary>
 public static class CryptographyLibrary
 {
     /// <summary>The package ID.</summary>

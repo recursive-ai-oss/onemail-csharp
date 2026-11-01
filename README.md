@@ -38,7 +38,7 @@ All packages target `net10.0` and share one version.
 | `RecursiveAI.OneMail` | the formats, the models and the one-line entry points | `.Calendar`, `RecursiveAI.OneArchive`, `RecursiveAI.OneHtml` |
 | `RecursiveAI.OneMail.Cli` | the `onemail` command-line tool | `RecursiveAI.OneMail` |
 
-These three are on nuget.org. `RecursiveAI.OneMail.Client` (SMTP, IMAP, POP3, SASL), `.Cryptography` (DKIM, ARC, S/MIME, OpenPGP) and `.Render` (a message to PDF or an image) come in later previews.
+These three are on nuget.org. `RecursiveAI.OneMail.Client` (SMTP, IMAP, POP3, SASL), `.Cryptography` (DKIM and ARC now in preview; S/MIME and OpenPGP later) and `.Render` (a message to PDF or an image) come in later previews.
 
 ## Clean room
 

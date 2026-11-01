@@ -400,4 +400,33 @@ public class DnsTests
         TxtLookupResult r = await stub.Client().LookupTxtAsync(new string('a', 64) + ".example.com", TestContext.Current.CancellationToken);
         Assert.Equal(TxtLookupStatus.NameNotFound, r.Status);
     }
+
+    // Talks to the system's resolver; runs only when ONEMAIL_DNS_LIVE=1 (set on the machine that has DNS).
+    [Fact]
+    public async Task SystemResolverFindsARealKeyAndAMissingName()
+    {
+        if (Environment.GetEnvironmentVariable("ONEMAIL_DNS_LIVE") != "1")
+        {
+            return;
+        }
+
+        var client = new DnsTxtClient();
+        Assert.NotEmpty(client.Servers);
+        // A retired selector is published with an empty p=: a real revoked key.
+        TxtLookupResult retired = await client.LookupTxtAsync("20230601._domainkey.gmail.com", TestContext.Current.CancellationToken);
+        Assert.Equal(TxtLookupStatus.Success, retired.Status);
+        Assert.True(DkimKeyRecord.TryParse(retired.Records[0], out DkimKeyRecord? revoked, out _, out _));
+        Assert.True(revoked!.Revoked);
+        // A selector that is a CNAME to another provider's TXT record: the chain is followed.
+        TxtLookupResult ok = await client.LookupTxtAsync("s1._domainkey.github.com", TestContext.Current.CancellationToken);
+        Assert.Equal(TxtLookupStatus.Success, ok.Status);
+        Assert.True(DkimKeyRecord.TryParse(ok.Records[0], out DkimKeyRecord? key, out _, out _));
+        Assert.True(key!.KeyBits >= 2048, key.KeyBits.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        TxtLookupResult none = await client.LookupTxtAsync("no-such-selector-onemail._domainkey.gmail.com", TestContext.Current.CancellationToken);
+        Assert.Equal(TxtLookupStatus.NameNotFound, none.Status);
+        // A TXT answer that does not fit a UDP datagram comes back over TCP.
+        TxtLookupResult big = await client.LookupTxtAsync("google.com", TestContext.Current.CancellationToken);
+        Assert.Equal(TxtLookupStatus.Success, big.Status);
+        Assert.True(big.Records.Count > 3);
+    }
 }

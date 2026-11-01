@@ -33,6 +33,9 @@ internal static class Program
             case "verify": return await Verify(dir, args[2], args[3]);
             case "compare": return Compare(dir, args[2..]);
             case "arcsuite": return await ArcSuite(dir);
+            case "arcgen": return await ArcGen(dir);
+            case "arcverify": return await ArcVerify(dir, args[2], args[3]);
+            case "arcover": return await ArcOver(dir, args[2], args[3]);
             default: return 2;
         }
     }
@@ -149,6 +152,87 @@ internal static class Program
 
         File.WriteAllText(output, result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"verified {result.Count} messages -> {output}");
+        return 0;
+    }
+
+    private static InMemoryTxtResolver ArcResolver(string dir, out DkimSigningKey rsaKey, out DkimSigningKey edKey)
+    {
+        rsaKey = DkimSigningKey.FromPem(File.ReadAllText(Path.Combine(dir, "keys", "rsa.pem")));
+        edKey = DkimSigningKey.FromEd25519Seed(Convert.FromBase64String(File.ReadAllText(Path.Combine(dir, "keys", "ed.seed"))));
+        return new InMemoryTxtResolver().Add("arc._domainkey.example.net", rsaKey.ToKeyRecord()).Add("arced._domainkey.example.org", edKey.ToKeyRecord());
+    }
+
+    private static string ArcDns(DkimSigningKey rsaKey, DkimSigningKey edKey) =>
+        new JsonObject { ["arc._domainkey.example.net"] = new JsonArray(rsaKey.ToKeyRecord()), ["arced._domainkey.example.org"] = new JsonArray(edKey.ToKeyRecord()) }.ToJsonString();
+
+    // Messages sealed by this library: one to three hops with both algorithms, and a hop that edits the body after validating the chain.
+    private static async Task<int> ArcGen(string dir)
+    {
+        string outDir = Path.Combine(dir, "arc");
+        foreach (string sub in new[] { "unsigned", "ours-sealed" })
+        {
+            Directory.CreateDirectory(Path.Combine(outDir, sub));
+        }
+
+        InMemoryTxtResolver dns = ArcResolver(dir, out DkimSigningKey rsa, out DkimSigningKey ed);
+        File.WriteAllText(Path.Combine(outDir, "dns.json"), ArcDns(rsa, ed));
+        var verification = new DkimVerifierOptions { Resolver = dns };
+        byte[] baseMsg = Message("ascii");
+        File.WriteAllBytes(Path.Combine(outDir, "unsigned", "base.eml"), baseMsg);
+        async Task<byte[]> Hop(byte[] m, DkimSigningKey k, string domain, string sel, ArcChainStatus? cv = null) =>
+            (await new ArcSealer(k, new ArcSealerOptions { Domain = domain, Selector = sel, Verification = verification }).SealAsync(m, $"mx.{domain}; spf=pass smtp.mailfrom=joe@example.com", cv)).Message;
+        byte[] r1 = await Hop(baseMsg, rsa, "example.net", "arc");
+        byte[] e1 = await Hop(baseMsg, ed, "example.org", "arced");
+        byte[] re = await Hop(r1, ed, "example.org", "arced");
+        byte[] er = await Hop(e1, rsa, "example.net", "arc");
+        byte[] rer = await Hop(re, rsa, "example.net", "arc");
+        byte[] edited = await Hop(Encoding.Latin1.GetBytes(Encoding.Latin1.GetString(r1).Replace("Last line.", "Last line, edited.", StringComparison.Ordinal)), ed, "example.org", "arced", ArcChainStatus.Pass);
+        foreach ((string n, byte[] m) in new[] { ("rsa1", r1), ("ed1", e1), ("rsa-ed", re), ("ed-rsa", er), ("rsa-ed-rsa", rer), ("edited", edited) })
+        {
+            File.WriteAllBytes(Path.Combine(outDir, "ours-sealed", n + ".eml"), m);
+        }
+
+        Console.WriteLine("6 sealed messages");
+        return 0;
+    }
+
+    private static async Task<int> ArcVerify(string dir, string sub, string output)
+    {
+        string arcDir = Path.Combine(dir, "arc");
+        var dnsDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(arcDir, "dns.json")))!.AsObject();
+        var resolver = new InMemoryTxtResolver();
+        foreach (KeyValuePair<string, JsonNode?> kv in dnsDoc)
+        {
+            resolver.Add(kv.Key, kv.Value!.AsArray().Select(x => x!.GetValue<string>()).ToArray());
+        }
+
+        var result = new JsonObject();
+        foreach (string f in Directory.EnumerateFiles(Path.Combine(arcDir, sub), "*.eml").Order(StringComparer.Ordinal))
+        {
+            ArcVerificationResult r = await new ArcVerifier(new DkimVerifierOptions { Resolver = resolver }).VerifyAsync(File.ReadAllBytes(f));
+            result[Path.GetFileNameWithoutExtension(f)] = r.Status.ToString().ToLowerInvariant() + (r.Status == ArcChainStatus.Fail ? " (" + r.Detail + ")" : " n=" + r.InstanceCount + " oldest-pass=" + r.OldestPass);
+        }
+
+        File.WriteAllText(output, result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine(string.Join(Environment.NewLine, result.Select(kv => $"  ours on {sub}/{kv.Key}: {kv.Value}")));
+        return 0;
+    }
+
+    // Seals the messages another implementation sealed, one more hop on top (RSA with the first key).
+    private static async Task<int> ArcOver(string dir, string sub, string outSub)
+    {
+        string arcDir = Path.Combine(dir, "arc");
+        Directory.CreateDirectory(Path.Combine(arcDir, outSub));
+        InMemoryTxtResolver dns = ArcResolver(dir, out DkimSigningKey rsa, out DkimSigningKey ed);
+        foreach (string f in Directory.EnumerateFiles(Path.Combine(arcDir, sub), "*.eml").Order(StringComparer.Ordinal))
+        {
+            DkimSigningKey k = Path.GetFileName(f).Contains("ed", StringComparison.Ordinal) ? rsa : ed;
+            string domain = k == rsa ? "example.net" : "example.org";
+            ArcSealResult r = await new ArcSealer(k, new ArcSealerOptions { Domain = domain, Selector = k == rsa ? "arc" : "arced", Verification = new DkimVerifierOptions { Resolver = dns } }).SealAsync(File.ReadAllBytes(f), "mx." + domain + "; arc=pass");
+            File.WriteAllBytes(Path.Combine(arcDir, outSub, Path.GetFileName(f)), r.Message);
+            Console.WriteLine($"  sealed {sub}/{Path.GetFileName(f)}: sealed={r.Sealed} i={r.Instance} cv={r.ChainStatus}");
+        }
+
         return 0;
     }
 
