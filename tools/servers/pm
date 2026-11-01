@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# podman with the user-local config. Run it inside `userns.sh` (the host has subuid ranges but no newuidmap, so podman
+# works in a one-id user namespace where it is "root").
+. "$(dirname "$0")/env.sh"
+exec podman --log-level=error --runtime-flag "root=$R/run/crun" --cgroup-manager=cgroupfs --events-backend=file --tmpdir "$R/run/tmp" "$@"

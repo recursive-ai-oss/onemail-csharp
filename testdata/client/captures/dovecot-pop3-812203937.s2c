@@ -1,0 +1,54 @@
++OK Dovecot ready.
++OK
+CAPA
+TOP
+UIDL
+RESP-CODES
+PIPELINING
+AUTH-RESP-CODE
+USER
+SASL PLAIN
+.
++OK
++OK Logged in.
++OK 1 594
++OK 1 messages:
+1 594
+.
++OK
+1 000000016ae6c4ff
+.
++OK 594 octets
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= pop64408b818
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <pop64408b818@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+--bnd
+Content-Type: text/plain; charset=utf-8
+
+Hello from the container tests.
+..A line that starts with a period.
+
+--bnd
+Content-Type: application/octet-stream; name="data.bin"
+Content-Disposition: attachment; filename="data.bin"
+Content-Transfer-Encoding: base64
+
+BcwAA7ehHpKxyZYQ+hfyTwSCoW+UZknKZCiVOHz3ZlY=
+--bnd--
+.
++OK
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= pop64408b818
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <pop64408b818@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+.
++OK Logging out.

@@ -48,6 +48,10 @@ internal static class Program
             ["dkim-key"] = DkimTargets.KeyRecord,
             ["dns-reply"] = DkimTargets.DnsReply,
             ["smime-structure"] = SmimeTargets.Run,
+            ["imap-response"] = ClientTargets.Imap,
+            ["smtp-reply"] = ClientTargets.Smtp,
+            ["pop3-response"] = ClientTargets.Pop3,
+            ["pop3-listings"] = ClientTargets.Pop3Listings,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);
