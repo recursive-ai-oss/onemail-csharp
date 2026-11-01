@@ -38,7 +38,7 @@ internal static class Soak
         int adds = 0, deletes = 0, moves = 0, replaces = 0, folderOps = 0, commits = 0;
         var problems = new List<string>();
 
-        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0 }))
+        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0, TableUpdates = Scenarios.TableUpdates }))
         {
             foreach (PstFolder f in w.View.EnumerateFolders().Where(f => !f.IsSearchFolder))
             {

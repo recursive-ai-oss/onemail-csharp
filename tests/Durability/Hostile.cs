@@ -166,6 +166,7 @@ internal static class Hostile
             {
                 Timestamp = Scenarios.Stamp,
                 AutoCommitRows = 0,
+                TableUpdates = Scenarios.TableUpdates,
                 Allow = permissive ? NdbOpenRisks.HeaderChecksum | NdbOpenRisks.AllocationMaps | NdbOpenRisks.DensityList | NdbOpenRisks.Damage : NdbOpenRisks.None,
             };
             using PstWritableStore w = PstStore.OpenForWriting(ms, leaveOpen: true, opts);

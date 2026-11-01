@@ -72,7 +72,15 @@ internal static class Scenarios
 
     private static readonly Guid NamedSet = Guid.Parse("00020329-0000-0000-c000-000000000046");
 
-    public static PstWriteOptions Options => new() { Timestamp = Stamp, AutoCommitRows = 0 };
+    /// <summary>How commits change tables: ONEMAIL_TABLE_UPDATES is auto (default), incremental or rewrite, so every campaign can run in either mode.</summary>
+    public static PstTableUpdates TableUpdates => Environment.GetEnvironmentVariable("ONEMAIL_TABLE_UPDATES")?.ToLowerInvariant() switch
+    {
+        "incremental" => PstTableUpdates.Incremental,
+        "rewrite" => PstTableUpdates.Rewrite,
+        _ => PstTableUpdates.Auto,
+    };
+
+    public static PstWriteOptions Options => new() { Timestamp = Stamp, AutoCommitRows = 0, TableUpdates = TableUpdates };
 
     public static MapiMessage Message(string subject, int recipients, int attachments, int attachmentBytes, bool read, string body, string? named = null)
     {

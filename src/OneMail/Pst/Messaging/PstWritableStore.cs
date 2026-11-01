@@ -32,6 +32,22 @@ public sealed class PstWriteOptions
 
     /// <summary>Limits for the node database reader; null for the defaults.</summary>
     public NdbOptions? Ndb { get; init; }
+
+    // How a commit changes a folder's tables: Auto changes big tables row by row and writes small ones whole. The other two exist so tests and the durability runs can pin one.
+    internal PstTableUpdates TableUpdates { get; init; }
+}
+
+/// <summary>How a commit changes the rows of a table that exists already.</summary>
+internal enum PstTableUpdates
+{
+    /// <summary>Row by row when the table is big and few rows change; otherwise the table is written whole.</summary>
+    Auto = 0,
+
+    /// <summary>Row by row whenever the table allows it.</summary>
+    Incremental = 1,
+
+    /// <summary>Always written whole.</summary>
+    Rewrite = 2,
 }
 
 /// <summary>
@@ -88,9 +104,20 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
             _options.Timestamp ?? DateTimeOffset.UtcNow, _defects);
         _items.SeedNames(_view.Context.Names.Entries);
         _seededNames = _items.NameCount;
-        _folders.Clear();
+        ReleaseFolders();
         _touched.Clear();
         _pendingRows = 0;
+    }
+
+    // Forgets what the transaction knew about folders, closing the committed tables it kept open.
+    private void ReleaseFolders()
+    {
+        foreach (FolderState f in _folders.Values)
+        {
+            f.Dispose();
+        }
+
+        _folders.Clear();
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
@@ -418,6 +445,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         }
 
         _disposed = true;
+        ReleaseFolders();
         _view?.Dispose();
         _ed.Dispose();
     }
