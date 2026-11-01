@@ -41,6 +41,7 @@ switch (row)
     case "imap-summary": await ImapSummary(); break;
     case "imap-full": await ImapFull(); break;
     case "smtp-wire": await SmtpWire(); break;
+    case "smtp-trace": await SmtpTrace(); break;
     case "smtp-small": await Smtp(int.Parse(Env("ROWS_SMALL", "1000")), 4 * 1024); break;
     case "smtp-big": await Smtp(int.Parse(Env("ROWS_BIG", "100")), 1024 * 1024); break;
     default: throw new ArgumentException("unknown row " + row);
@@ -328,4 +329,98 @@ async Task SmtpWire()
 
         await server;
     }
+}
+
+// ---- timed trace of a few messages against the real server ----
+
+// Prints each command and reply with the time since the previous line, for ROWS_TRACE (5) messages after the first, so a gap such as
+// a delayed acknowledgement shows up as a round trip that takes tens of milliseconds.
+async Task SmtpTrace()
+{
+    int n = int.Parse(Env("ROWS_TRACE", "5"));
+    var clock = Stopwatch.StartNew();
+    long last = 0;
+    void Line(string who, string text)
+    {
+        long now = clock.ElapsedTicks * 1000000 / Stopwatch.Frequency;
+        Console.WriteLine($"{side,-16} +{(now - last) / 1000.0,7:F2} ms  {who} {(text.Length > 70 ? text[..70] : text).Replace("\r", "").Replace("\n", " | ")}");
+        last = now;
+    }
+
+    var body = BodyOf(4096);
+    if (side == "ours")
+    {
+        var trace = new ClockTrace(Line);
+        await using OMSmtp.SmtpClient c = await OMSmtp.SmtpClient.ConnectAsync(new OMSmtp.SmtpClientOptions
+        {
+            Host = host, Port = port, Security = implicitTls ? OMSmtp.SmtpSecurity.ImplicitTls : OMSmtp.SmtpSecurity.StartTls,
+            Credentials = new RecursiveAI.OneMail.Client.Sasl.SaslCredentials { UserName = user, Password = pass },
+            Connection = new ProtocolConnectionOptions { ServerCertificateValidationCallback = AcceptAll, Trace = trace },
+        });
+        for (int i = 0; i < n + 1; i++)
+        {
+            if (i == 1) { Console.WriteLine("-- traced messages"); }
+            var m = new OutgoingMessage { From = "sender@example.com", To = ["test@example.test"], Subject = "t" + i, Text = body, MessageId = "t" + i + "@rows.test" };
+            trace.On = i > 0;
+            await c.SendAsync(OMSmtp.SmtpMessage.FromEntity(m.ToEntity()));
+            if (i > 0) { Line("--", "message done"); }
+        }
+
+        await c.QuitAsync();
+    }
+    else
+    {
+        var sink = new ClockStream(Line);
+        using var c = new MKSmtp.SmtpClient(new MK.ProtocolLogger(sink)) { ServerCertificateValidationCallback = AcceptAll };
+        var opts = implicitTls ? MKSec.SecureSocketOptions.SslOnConnect : MKSec.SecureSocketOptions.StartTls;
+        if (side == "mailkit-nodelay")
+        {
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            await socket.ConnectAsync(new IPEndPoint(IPAddress.Parse(host), port));
+            await c.ConnectAsync(socket, host, port, opts);
+        }
+        else
+        {
+            await c.ConnectAsync(host, port, opts);
+        }
+
+        await c.AuthenticateAsync(user, pass);
+        for (int i = 0; i < n + 1; i++)
+        {
+            if (i == 1) { Console.WriteLine("-- traced messages"); }
+            var m = new MimeMessage();
+            m.From.Add(new MailboxAddress("", "sender@example.com"));
+            m.To.Add(new MailboxAddress("", "test@example.test"));
+            m.Subject = "t" + i;
+            m.MessageId = "t" + i + "@rows.test";
+            m.Body = new TextPart("plain") { Text = body };
+            sink.On = i > 0;
+            await c.SendAsync(m);
+            if (i > 0) { Line("--", "message done"); }
+        }
+
+        await c.DisconnectAsync(true);
+    }
+}
+
+sealed class ClockTrace(Action<string, string> line) : IProtocolTrace
+{
+    public bool On;
+    public void Sent(ReadOnlySpan<byte> data) { if (On) { foreach (string l in System.Text.Encoding.Latin1.GetString(data).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Take(4)) { line("C:", l); } } }
+    public void Received(ReadOnlySpan<byte> data) { if (On) { foreach (string l in System.Text.Encoding.Latin1.GetString(data).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Take(4)) { line("S:", l); } } }
+}
+
+sealed class ClockStream(Action<string, string> line) : Stream
+{
+    public bool On;
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) { if (On) { foreach (string l in System.Text.Encoding.Latin1.GetString(buffer, offset, count).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Take(3)) { line("", l); } } }
 }
