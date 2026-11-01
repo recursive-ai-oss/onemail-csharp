@@ -161,6 +161,7 @@ public class ClientAllocationTests
         "* 10 FETCH (UID abc)",
         "* 11 FETCH (uid 4 flags (\\SEEN) rfc822.size 5)",
         "* 12 FETCH (UID 6  FLAGS (\\Seen))",
+        "* 13 FETCH (INTERNALDATE \"800\" UID 5 FLAGS (NIL nil \\Seen))",
     ];
 
     [Theory]

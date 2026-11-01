@@ -189,7 +189,8 @@ internal static class ImapFetchFast
 
             int start = i;
             while (i < s.Length && IsAtomChar(s[i])) { i++; }
-            if (i == start) { return false; }
+            // The general parser reads an atom NIL as no text (an empty flag), so leave that to it.
+            if (i == start || (i - start == 3 && Ascii.EqualsIgnoreCase(s[start..i], "NIL"u8))) { return false; }
             flags[n] = FlagText(s[start..i]);
         }
 

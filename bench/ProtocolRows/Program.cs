@@ -212,13 +212,21 @@ async Task Smtp(int count, int size)
             Credentials = new RecursiveAI.OneMail.Client.Sasl.SaslCredentials { UserName = user, Password = pass },
             Connection = new ProtocolConnectionOptions { ServerCertificateValidationCallback = AcceptAll },
         });
+        // The rows time the send of messages that are already built, on both sides: building is separate work and is not what the
+        // protocol rows compare. Each repetition sends the same prepared messages again.
+        var prepared = new OMSmtp.SmtpMessage[count];
+        for (int i = 0; i < count; i++)
+        {
+            var m = new OutgoingMessage { From = "sender@example.com", To = [recipient], Subject = "row " + i, Text = body, MessageId = "ours-" + (serial++) + "@rows.test", Date = date };
+            prepared[i] = OMSmtp.SmtpMessage.FromEntity(m.ToEntity());
+        }
+
         await Measure(name, count, async () =>
         {
             int ok = 0;
             for (int i = 0; i < count; i++)
             {
-                var m = new OutgoingMessage { From = "sender@example.com", To = [recipient], Subject = "row " + i, Text = body, MessageId = "ours-" + (serial++) + "@rows.test", Date = date };
-                if ((await c.SendAsync(OMSmtp.SmtpMessage.FromEntity(m.ToEntity()))).Delivered) { ok++; }
+                if ((await c.SendAsync(prepared[i])).Delivered) { ok++; }
             }
 
             return ok;
@@ -242,19 +250,25 @@ async Task Smtp(int count, int size)
         }
 
         await c.AuthenticateAsync(user, pass);
+        var prepared = new MimeMessage[count];
+        for (int i = 0; i < count; i++)
+        {
+            var m = new MimeMessage();
+            m.From.Add(new MailboxAddress("", "sender@example.com"));
+            m.To.Add(new MailboxAddress("", recipient));
+            m.Subject = "row " + i;
+            m.MessageId = "mailkit-" + (serial++) + "@rows.test";
+            m.Date = date;
+            m.Body = new TextPart("plain") { Text = body };
+            prepared[i] = m;
+        }
+
         await Measure(name, count, async () =>
         {
             int ok = 0;
             for (int i = 0; i < count; i++)
             {
-                var m = new MimeMessage();
-                m.From.Add(new MailboxAddress("", "sender@example.com"));
-                m.To.Add(new MailboxAddress("", recipient));
-                m.Subject = "row " + i;
-                m.MessageId = "mailkit-" + (serial++) + "@rows.test";
-                m.Date = date;
-                m.Body = new TextPart("plain") { Text = body };
-                await c.SendAsync(m);
+                await c.SendAsync(prepared[i]);
                 ok++;
             }
 
