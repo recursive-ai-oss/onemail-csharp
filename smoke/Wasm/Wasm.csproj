@@ -23,6 +23,7 @@
     <Compile Include="../../tests/OneMail.Tests/Pst/PstFixtures.cs" />
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgModelComparer.cs" />
     <Compile Include="../../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" />
   </ItemGroup>
 

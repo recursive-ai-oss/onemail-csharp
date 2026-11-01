@@ -86,6 +86,8 @@ public static class StoreSinks
             ConvertFormat.Maildir => new MaildirSink(destination, options),
             ConvertFormat.AppleMail => new AppleMailSink(destination, options),
             ConvertFormat.Eml => new EmlSink(destination),
+            // An MSG file keeps an Outlook item's flags in its properties, so only items that came from somewhere else lose them.
+            ConvertFormat.Msg => new DirectorySink(destination, requireEmpty: true, e => e.Item is not MapiMailItem),
             _ => new DirectorySink(destination, requireEmpty: true),
         };
     }
@@ -223,10 +225,12 @@ internal sealed class DirectorySink : IStoreSink
 {
     private readonly string _root;
     private readonly Dictionary<string, int> _counters = new(StringComparer.Ordinal);
+    private readonly Func<StoreEntry, bool> _reportFlags;
 
-    public DirectorySink(string root, bool requireEmpty)
+    public DirectorySink(string root, bool requireEmpty, Func<StoreEntry, bool>? reportFlags = null)
     {
         _root = root;
+        _reportFlags = reportFlags ?? (_ => true);
         if (requireEmpty && Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
         {
             throw new IOException("The destination directory is not empty: " + root);
@@ -255,7 +259,11 @@ internal sealed class DirectorySink : IStoreSink
         }
 
         StorePaths.SetTime(path, entry.Received);
-        StorePaths.ReportFlagsDropped(entry);
+        if (_reportFlags(entry))
+        {
+            StorePaths.ReportFlagsDropped(entry);
+        }
+
         return new ValueTask<string?>(path);
     }
 

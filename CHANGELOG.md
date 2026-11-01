@@ -6,6 +6,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `MsgWriter` (`RecursiveAI.OneMail.Msg`): writes MSG and OFT files from the MAPI model (named properties, recipients, attachments, embedded messages, OLE storages), Unicode or code page strings, limits checked before the first byte, large attachment data copied from the caller's stream (`MapiStreamValue`). Outlook opening the files is not yet verified.
+- `ConvertFormat.Msg`, `StoreConverter` and `onemail convert --to msg`: any readable store to MSG files with loss reports.
+- `MapiDistributionList.Create` and `Notes.MapiNote`: builders for distribution list and sticky note items.
 - `RecursiveAI.OneMail.Render`: `ToPdfAsync` and `ToPngAsync` on any item render the display HTML to a tagged PDF or PNG pages through OneRender, with page size and margins, header and attachment-list switches, fonts, PNG scale and page range, limits on pages and time, and a loader that decodes `data:` URIs and fetches nothing else. See `docs/render.md`.
 - `onemail inspect` reads ICS, vCard, jCal, jCard, xCal and xCard files: the number of calendars or cards, the kinds of components in them and the reader's defects (`--json` and `--defects` supported).
 - Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.

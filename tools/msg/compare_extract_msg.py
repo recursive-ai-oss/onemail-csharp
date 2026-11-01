@@ -231,7 +231,15 @@ def compare_message(d, where, mine, theirs, names, tally):
         tally["objects"] += 1
     a_ours, a_theirs = mine["attachments"], list(theirs.attachments)
     if len(a_ours) != len(a_theirs):
-        d.add(where, "attachment-count", f"ours {len(a_ours)} theirs {len(a_theirs)}")
+        # Observed black-box: the oracle lists no attachments for a message whose transport headers say multipart/signed (the
+        # attachment is the signature part, e.g. an application/pgp-signature); we list every attachment the file holds.
+        signed = False
+        try:
+            signed = str(theirs.header.get("content-type", "")).lower().startswith("multipart/signed") and len(a_theirs) == 0
+        except Exception:
+            pass
+        d.add(where, "attachment-count", f"ours {len(a_ours)} theirs {len(a_theirs)}",
+              "the oracle lists no attachments of a multipart/signed message (signature part)" if signed else None)
     for i, (a, b) in enumerate(zip(a_ours, a_theirs)):
         # Some attachment classes of the oracle (signed attachments) wrap the attachment and expose no properties or streams.
         if not hasattr(b, "props"):
