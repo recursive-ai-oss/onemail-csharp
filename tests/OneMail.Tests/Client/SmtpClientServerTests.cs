@@ -178,10 +178,39 @@ public class SmtpClientServerTests
         Assert.True((await c.SendAsync(m, Ct)).Complete);
         AssertArrivedIntact(s, sent, await FindDelivered(s, marker));
 
-        // With no encryption the credentials are never sent: PLAIN/LOGIN are skipped and the connection fails instead of leaking the password.
-        var ex = await Assert.ThrowsAnyAsync<Exception>(async () => await SmtpClient.ConnectAsync(Options(s, SmtpSecurity.None), Ct));
-        Assert.True(ex is SmtpAuthenticationException or SmtpClientException, ex.GetType().Name);
-        Report(s, "plain-text connect with credentials refused: " + ex.Message);
+        // With no encryption the password is never sent in the clear: PLAIN and LOGIN are skipped. A server that offers CRAM-MD5 or SCRAM
+        // still authenticates (those do not reveal the password); one that offers only PLAIN/LOGIN makes the connection fail.
+        var wire = new SentText();
+        SmtpClientOptions plain = Options(s, SmtpSecurity.None);
+        plain = new SmtpClientOptions
+        {
+            Host = plain.Host, Port = plain.Port, Security = SmtpSecurity.None, Credentials = plain.Credentials, ClientDomain = plain.ClientDomain,
+            Connection = new ProtocolConnectionOptions { Trace = wire, ReadTimeout = TimeSpan.FromSeconds(60) },
+        };
+        try
+        {
+            await using SmtpClient p = await SmtpClient.ConnectAsync(plain, Ct);
+            Assert.False(p.IsEncrypted);
+            Report(s, "plain-text connection authenticated without sending the password: " + wire.Text.Split("\r\n").First(l => l.StartsWith("AUTH ", StringComparison.Ordinal)).Split(' ')[1]);
+        }
+        catch (SmtpAuthenticationException ex)
+        {
+            Report(s, "plain-text connect with credentials refused: " + ex.Message);
+        }
+
+        Assert.DoesNotContain("AUTH PLAIN", wire.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("AUTH LOGIN", wire.Text, StringComparison.Ordinal);
+    }
+
+    private sealed class SentText : IProtocolTrace
+    {
+        private readonly StringBuilder _sb = new();
+
+        public string Text { get { lock (_sb) { return _sb.ToString(); } } }
+
+        public void Sent(ReadOnlySpan<byte> data) { lock (_sb) { _sb.Append(Encoding.ASCII.GetString(data)); } }
+
+        public void Received(ReadOnlySpan<byte> data) { }
     }
 
     [Theory]

@@ -8,9 +8,12 @@
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$D/images.env"
-STATE=${ONEMAIL_SERVER_STATE:-$HOME/onemail/containers/state}
+# Runs on one machine must not touch each other: the state directory and the container names carry this run's process id.
+RUN=$$
+STATE=${ONEMAIL_SERVER_STATE:-$HOME/onemail/containers/state/run-$RUN}
 LOGS=${ONEMAIL_SERVER_LOGS:-$STATE/logs}
 mkdir -p "$STATE" "$LOGS"
+export ONEMAIL_GUEST_PIDFILE="$STATE/qemu.pid"
 PODMAN="$D/pm"
 PIDS=()
 UP=()
@@ -20,11 +23,12 @@ if [ "${1:-}" = "--servers" ]; then want=$2; shift 2; fi
 [ "${1:-}" = "--" ] && shift
 
 cleanup() {
-  for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c" >/dev/null 2>&1; done
+  for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c-$RUN" >/dev/null 2>&1; done
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
   wait 2>/dev/null
   "$D/guest-run.sh" stop
   "$D/cleanup.sh" >/dev/null
+  [ -n "${ONEMAIL_SERVER_STATE:-}" ] || rm -rf "$STATE"
 }
 trap cleanup EXIT
 
@@ -53,7 +57,7 @@ start_dovecot() {
   python3 "$D/oauth-introspect.py" 2526 >"$LOGS/oauth.log" 2>&1 &
   PIDS+=($!)
   wait_port 2526 10 || return 1
-  "$PODMAN" run --rm --name onemail-dovecot --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
+  "$PODMAN" run --rm --name "onemail-dovecot-$RUN" --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
     -e USER_PASSWORD='{PLAIN}onemail-test' \
     -v "$STATE/dovecot/vmail:/srv/vmail" -v "$D/conf/dovecot-onemail.conf:/etc/dovecot/conf.d/90-onemail.conf:ro" \
     --tmpfs /run/dovecot:rw,mode=1777 "$DOVECOT_IMAGE" >"$LOGS/dovecot.log" 2>&1 &
@@ -69,7 +73,7 @@ start_stalwart() {
   echo '{"@type":"RocksDb","path":"/var/lib/stalwart/"}' > "$S/etc/config.json"
   local common=(--rm --network=host --uidmap 2000:0:1 --gidmap 2000:0:1 --user 2000:2000 -v "$S/etc:/etc/stalwart" -v "$S/data:/var/lib/stalwart")
   # First run in recovery mode: only the management listener, so the domain and account can be provisioned before any mail service starts.
-  "$PODMAN" run --name onemail-stalwart "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
+  "$PODMAN" run --name "onemail-stalwart-$RUN" "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
   local pid=$!
   wait_port 8080 30 || { kill $pid; return 1; }
   cat > "$S/plan.ndjson" <<'PLAN'
@@ -85,8 +89,8 @@ PLAN
     sleep 2
   done
   [ -n "$ok" ] || { cat "$LOGS/stalwart-apply.log" >&2; kill $pid; return 1; }
-  "$PODMAN" stop -t 5 onemail-stalwart >/dev/null 2>&1; wait $pid 2>/dev/null
-  "$PODMAN" run --name onemail-stalwart "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
+  "$PODMAN" stop -t 5 "onemail-stalwart-$RUN" >/dev/null 2>&1; wait $pid 2>/dev/null
+  "$PODMAN" run --name "onemail-stalwart-$RUN" "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
   PIDS+=($!)
   wait_port 143 40 || return 1
   export ONEMAIL_STALWART_IMAP_PORT=143 ONEMAIL_STALWART_IMAPS_PORT=993 ONEMAIL_STALWART_POP3_PORT=110 ONEMAIL_STALWART_POP3S_PORT=995 \
@@ -103,7 +107,7 @@ start_cyrus() {
   PIDS+=($!)
   sleep 0.5
   # The image's /var/imap is copied out so the container's one user owns a writable copy (an anonymous volume would need a chown).
-  "$PODMAN" run --rm --name onemail-cyrus --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
+  "$PODMAN" run --rm --name "onemail-cyrus-$RUN" --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
     -v "$S/log.sock:/dev/log" -v "$S/tls:/onemail:ro" -v "$D/conf/cyrus-start.sh:/onemail/start.sh:ro" --tmpfs /run:rw,mode=1777 --tmpfs /tmp:rw,mode=1777 \
     --entrypoint /bin/bash "$CYRUS_IMAGE" /onemail/start.sh >"$LOGS/cyrus.log" 2>&1 &
   PIDS+=($!)
