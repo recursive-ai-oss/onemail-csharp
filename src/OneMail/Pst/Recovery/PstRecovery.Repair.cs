@@ -103,7 +103,7 @@ public sealed partial class PstRecovery
                 catch (Exception e) when (e is InvalidOperationException or InvalidDataException or IOException or ArgumentException or NotSupportedException or OverflowException)
                 {
                     failed++;
-                    error = e.GetType().Name + ": " + e.Message + " @ " + string.Join(" <- ", (e.StackTrace ?? "").Split((char)10).Take(6).Select(x => x.Trim()));
+                    error = e.GetType().Name + ": " + e.Message;
                 }
 
                 if (w is not null)
