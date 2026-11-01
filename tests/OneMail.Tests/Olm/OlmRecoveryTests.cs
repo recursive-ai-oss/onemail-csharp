@@ -38,6 +38,48 @@ public class OlmRecoveryTests
         return a.Build(CompressionLevel.Optimal);
     }
 
+    private sealed class CountingSource(byte[] data) : IRandomAccessSource
+    {
+        private readonly MemorySource _inner = new(data);
+        public long BytesRead { get; private set; }
+        public long Length => _inner.Length;
+        public bool SupportsSyncRead => true;
+        public int Read(long offset, Span<byte> buffer)
+        {
+            int n = _inner.Read(offset, buffer);
+            BytesRead += n;
+            return n;
+        }
+
+        public async ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            int n = await _inner.ReadAsync(offset, buffer, cancellationToken);
+            BytesRead += n;
+            return n;
+        }
+
+        public void Dispose() => _inner.Dispose();
+    }
+
+    [Fact]
+    public void RecoveryReadsEachRecordEntryOnceNotTwice()
+    {
+        // Recovery judges an entry for damage before handing out its records. That used to be a second pass over the compressed bytes.
+        byte[] zip = Archive();
+        long Bytes(bool recovery)
+        {
+            var src = new CountingSource(zip);
+            using OlmArchive a = OlmArchive.Open(src, false, null, new OlmReaderOptions { Recovery = recovery });
+            int n = a.Enumerate().Count();
+            Assert.Equal(Messages, n);
+            return src.BytesRead;
+        }
+
+        long plain = Bytes(false);
+        long recovered = Bytes(true);
+        Assert.True(recovered < plain * 1.3, $"recovery read {recovered} bytes, a plain read {plain}");
+    }
+
     private static List<long> HeaderOffsets(byte[] zip)
     {
         var l = new List<long>();

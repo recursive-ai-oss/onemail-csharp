@@ -68,6 +68,69 @@ public sealed class PstWritableStoreTests
     }
 
     [Fact]
+    public void RefusedEditsThrowTypedExceptionsAndLeaveTheFileAsCommitted()
+    {
+        string path = NdbEditorTests.Build(3);
+        try
+        {
+            using (PstWritableStore w = PstStore.OpenForWriting(path))
+            {
+                Nid folder = FolderNamed(w.View, "Folder 0");
+                Nid item = w.View.EnumerateFolders(TestContext.Current.CancellationToken).First(x => x.Nid == folder).EnumerateMessageIds(cancellationToken: TestContext.Current.CancellationToken).First();
+                int count = w.View.EnumerateFolders(TestContext.Current.CancellationToken).First(x => x.Nid == folder).ContentCount ?? 0;
+
+                Assert.Equal(PstEditFailure.FolderNotFound, Assert.Throws<PstEditException>(() => w.AddMessage(new Nid((0x7FFFu << 5) | 2), Msg("x"))).Reason);
+                Assert.Equal(PstEditFailure.ItemNotFound, Assert.Throws<PstEditException>(() => w.DeleteMessage(new Nid((0x7FFFu << 5) | 4))).Reason);
+                Assert.Equal(PstEditFailure.InvalidFolderOperation, Assert.Throws<PstEditException>(() => w.MoveFolder(folder, folder)).Reason);
+
+                string before = w.View.TryOpenMessage(item, out PstMessage? m) ? m!.GetString(0x0037)! : "";
+                // A value that does not fit its type is not an error: the property is left out and reported.
+                MapiMessage bad = Msg("bad value");
+                bad.Properties.Add(MapiProperty.Create(new MapiTag(0x3FF1, MapiType.Integer32), [1, 2]));
+                w.AddMessage(folder, bad);
+                Assert.Contains(w.Defects, d => d.Kind == PstWriteDefectKind.UnsupportedType);
+                count++;
+
+                // The store is still usable, and the refused edits left nothing behind.
+                w.AddMessage(folder, Msg("fine"));
+                count++;
+                w.Commit();
+                Assert.True(w.View.TryOpenMessage(item, out PstMessage? after));
+                Assert.Equal(before, after!.GetString(0x0037));
+                Assert.Equal(count, w.View.EnumerateFolders(TestContext.Current.CancellationToken).First(x => x.Nid == folder).ContentCount ?? 0);
+            }
+
+            AssertSound(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TheBuilderWritesTheLastAllocatedIndexAsTheHeaderCounter()
+    {
+        // MS-PST 2.2.2.6: rgnid[type] is the last nidIndex allocated. The first allocation after it gets the next index, so no item is handed a used NID.
+        string path = NdbEditorTests.Build(7, folders: 3);
+        try
+        {
+            byte[] header = File.ReadAllBytes(path);
+            Assert.True(PstStore.TryOpen(path, out PstStore? s, out _));
+            using PstStore store = s!;
+            var folders = store.EnumerateFolders(TestContext.Current.CancellationToken).ToList();
+            uint lastFolder = folders.Where(f => f.Nid.Index >= 0x400).Max(f => f.Nid.Index);
+            uint lastMessage = folders.SelectMany(f => f.EnumerateMessageIds(cancellationToken: TestContext.Current.CancellationToken)).Max(n => n.Index);
+            Assert.Equal(lastFolder, System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(44 + ((int)NidType.NormalFolder * 4))));
+            Assert.Equal(lastMessage, System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(44 + ((int)NidType.NormalMessage * 4))));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void ADeletedItemIsGoneItsSpaceIsZeroAndTheCountsFollow()
     {
         string path = NdbEditorTests.Build(30, attachments: 2);

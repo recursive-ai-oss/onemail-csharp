@@ -52,8 +52,15 @@ public sealed class OutgoingMessage
     /// <summary>The <c>Message-ID</c> without angle brackets. Null: a random one at the sender's domain. Empty string: none.</summary>
     public string? MessageId { get; init; }
 
-    /// <summary>Extra header fields, written after the standard ones. Values must be ASCII or already RFC 2047 encoded and contain no line breaks.</summary>
+    /// <summary>Extra header fields, written after the standard ones. Values must be ASCII (or already RFC 2047 encoded, or UTF-8 with <see cref="Utf8Headers"/>) and contain no line breaks.</summary>
     public IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; } = [];
+
+    /// <summary>
+    /// False (the default) writes display names, the subject and file names as ASCII: RFC 2047 encoded-words and RFC 2231 extended parameters.
+    /// True writes them as raw UTF-8 (RFC 6532), for an SMTPUTF8 transport (RFC 6531) or a store that keeps bytes. Addresses are never converted:
+    /// a non-ASCII local part or domain is written as given, and needs an SMTPUTF8 transport.
+    /// </summary>
+    public bool Utf8Headers { get; init; }
 
     /// <summary>Builds the MIME tree.</summary>
     /// <returns>The top-level entity, ready to write or send.</returns>
@@ -83,8 +90,8 @@ public sealed class OutgoingMessage
             foreach (OutgoingAttachment a in Attachments)
             {
                 var part = new MimePart(a.MediaType ?? "application/octet-stream");
-                part.Headers.Set("Content-Type", (a.MediaType ?? "application/octet-stream") + MimeHeaderValue.Parameter("name", a.FileName));
-                part.Headers.Add("Content-Disposition", "attachment" + MimeHeaderValue.Parameter("filename", a.FileName));
+                part.Headers.Set("Content-Type", (a.MediaType ?? "application/octet-stream") + HeaderText.Parameter("name", a.FileName, Utf8Headers));
+                part.Headers.Add("Content-Disposition", "attachment" + HeaderText.Parameter("filename", a.FileName, Utf8Headers));
                 part.SetDecodedContent(a.Content.Span);
                 mixed.Add(part);
             }
@@ -95,18 +102,18 @@ public sealed class OutgoingMessage
         // Standard fields first, in the order clients write them; the body's own Content-* fields follow.
         var headers = new List<(string, string)>
         {
-            ("From", Format(From)),
+            ("From", Format(From, Utf8Headers)),
         };
-        if (To.Count > 0) { headers.Add(("To", string.Join(", ", To.Select(Format)))); }
-        if (Cc.Count > 0) { headers.Add(("Cc", string.Join(", ", Cc.Select(Format)))); }
-        if (Bcc.Count > 0) { headers.Add(("Bcc", string.Join(", ", Bcc.Select(Format)))); }
+        if (To.Count > 0) { headers.Add(("To", string.Join(", ", To.Select(a => Format(a, Utf8Headers))))); }
+        if (Cc.Count > 0) { headers.Add(("Cc", string.Join(", ", Cc.Select(a => Format(a, Utf8Headers))))); }
+        if (Bcc.Count > 0) { headers.Add(("Bcc", string.Join(", ", Bcc.Select(a => Format(a, Utf8Headers))))); }
         if (To.Count + Cc.Count + Bcc.Count == 0)
         {
             throw new ArgumentException("A message needs at least one recipient in To, Cc or Bcc.");
         }
 
-        if (ReplyTo is not null) { headers.Add(("Reply-To", Format(ReplyTo))); }
-        if (!string.IsNullOrEmpty(Subject)) { headers.Add(("Subject", Clean(Rfc2047.Encode(Subject)))); }
+        if (ReplyTo is not null) { headers.Add(("Reply-To", Format(ReplyTo, Utf8Headers))); }
+        if (!string.IsNullOrEmpty(Subject)) { headers.Add(("Subject", Clean(HeaderText.Unstructured(Subject, Utf8Headers)))); }
         headers.Add(("Date", MessageComposer.FormatDate(Date ?? DateTimeOffset.Now)));
         if (MessageId != string.Empty)
         {
@@ -122,7 +129,7 @@ public sealed class OutgoingMessage
         int at = 0;
         foreach ((string name, string value) in headers)
         {
-            top.Headers.Insert(at++, new MimeHeader(name, value));
+            top.Headers.Insert(at++, HeaderText.Header(name, value, Utf8Headers));
         }
 
         return top;
@@ -151,7 +158,7 @@ public sealed class OutgoingMessage
     }
 
     // Parses one address (or a list), then writes each mailbox with its display name quoted or RFC 2047 encoded.
-    private static string Format(string address)
+    private static string Format(string address, bool utf8)
     {
         ArgumentNullException.ThrowIfNull(address);
         List<MimeMailbox> boxes = AddressParser.Flatten(AddressParser.Parse(Encoding.UTF8.GetBytes(Clean(address))));
@@ -160,20 +167,7 @@ public sealed class OutgoingMessage
             throw new ArgumentException("Not an address: " + address);
         }
 
-        return string.Join(", ", boxes.Select(b =>
-        {
-            if (string.IsNullOrWhiteSpace(b.Name))
-            {
-                return b.Address;
-            }
-
-            string name = b.Name.Trim();
-            string phrase = name.Any(c => c > 0x7E || c < 0x20)
-                ? Rfc2047.Encode(name)
-                : name.All(c => char.IsAsciiLetterOrDigit(c) || c == ' ') ? name
-                : "\"" + name.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
-            return phrase + " <" + b.Address + ">";
-        }));
+        return string.Join(", ", boxes.Select(b => HeaderText.Mailbox(b.Name, b.Address, utf8)));
     }
 
     private static MimePart TextPart(string type, string text)

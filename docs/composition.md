@@ -71,6 +71,20 @@ header time has 2^16 FILETIME ticks (6.5 ms) of resolution. The spec's delta rul
   No recipient at all raises `NoReplyTarget`; the message is still made so the caller can address it.
 - Display names are written as atoms, quoted strings or RFC 2047 encoded words as needed; control characters become spaces.
 
+## Non-ASCII text
+
+`OutgoingMessage` and the reply and forward builders write display names, the subject, the conversation topic and file names the same way:
+
+- **Default (`Utf8Headers` false): nothing outside ASCII reaches the header block.** A display name with any non-ASCII character is written as
+  RFC 2047 B encoded-words of UTF-8 *as a whole* (RFC 2047 §5(3): in a phrase every word is an atom or an encoded-word, so a comma, quote or
+  `@` in the name cannot reach the address list). A plain name is an atom or a quoted string. The subject and other free text use encoded-words
+  only where a word needs them. File names use RFC 2231 extended parameters (`filename*=utf-8''...`, with continuations that never cut a character).
+- **`Utf8Headers` true (RFC 6532, for an SMTPUTF8 transport, RFC 6531):** names, subject and file names stay raw UTF-8: a name is an atom or a
+  quoted string, a file name a quoted string. Addresses are never converted either way; a non-ASCII local part or domain is written as given.
+
+Python `email` reads raw UTF-8 in headers from bytes as U+FFFD, one per byte (ambiguity L6); MimeKit and Go read it. The check below treats exactly
+that as explained.
+
 ## Quoting
 
 Top posting: the author's `Text`/`Html` (if given), then the quote.
@@ -111,3 +125,7 @@ translated attribution or banner text (pass your own).
 `tools/composition/run.sh`: replies, reply-alls and both forwards of every sampled item, parsed back by OneMail, MimeKit, Python `email` and Go
 `net/mail`, with subject, From, To, Cc, In-Reply-To and References compared to what the composer says it wrote. See `docs/compatibility.md` for the
 latest numbers. `fuzz/` has the `composition` target.
+
+`tools/composition/names.sh`: 200 seeded messages with non-ASCII names, subjects and file names (half ASCII headers, half raw UTF-8) are read back
+by OneMail (exact strings) and by MimeKit, Python `email` and Go `net/mail` (decoded display names, addresses, subject and file names,
+white space normalised).

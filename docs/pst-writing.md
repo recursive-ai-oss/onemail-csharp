@@ -155,7 +155,8 @@ Bytes after the header's `ibFileEof` (a stopped commit that was growing the file
 transaction cuts the bytes it wrote past the end in the same way. If a tree does reach them, the file is refused for good and left as it was.
 
 The exclusive open is `FileShare.None`: on Windows the operating system enforces it, on Linux and macOS the BCL takes an advisory `flock`, which stops other .NET programs and other editors but not a program that
-does not look (such as the libpff tools or a backup that reads the file mid-commit).
+does not look (such as the libpff tools or a backup that reads the file mid-commit). The BCL offers nothing stronger on these systems (mandatory locks are not available through it, and `FileStream.Lock` is a
+byte-range advisory lock there too), so callers who share a file with other programs must coordinate with them: close the store before copying or reading the file, and do not edit a file another process has open.
 
 ### Allocation (MS-PST 2.2.2.7.2 to 2.2.2.7.4, 2.6.1.1)
 

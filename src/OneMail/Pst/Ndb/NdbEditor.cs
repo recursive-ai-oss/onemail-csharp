@@ -656,7 +656,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
     }
 
     /// <summary>Takes the next unused NID of a type from the header's counters (MS-PST 2.2.2.6, rgnid).</summary>
-    /// <exception cref="InvalidOperationException">Every NID index of the type is taken.</exception>
+    /// <exception cref="PstEditException">Every NID index of the type is taken (<see cref="PstEditFailure.NidSpaceExhausted"/>). The counter is unchanged and nothing was written.</exception>
     public Nid AllocateNid(NidType type)
     {
         ThrowIfUnusable();
@@ -671,7 +671,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         {
             if (++index >= 1u << 27)
             {
-                throw new InvalidOperationException($"every NID index of type {type} is in use");
+                throw new PstEditException(PstEditFailure.NidSpaceExhausted, $"every NID index of type {type} is in use");
             }
 
             nid = new Nid((index << 5) | (uint)type);
