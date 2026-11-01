@@ -29,4 +29,17 @@ public sealed class MsgReaderOptions
 
     /// <summary>Most defects kept in <see cref="MsgFile.Defects"/> and on the objects; later ones are only counted in <see cref="MsgFile.DroppedDefects"/>. Default 10,000.</summary>
     public int MaxDefects { get; init; } = 10_000;
+
+    /// <summary>
+    /// True to open a damaged compound file by recovery instead of refusing it. Default false: a file that breaks the compound file format is not opened
+    /// (<see cref="Mapi.MapiDefectKind.CompoundFileInvalid"/>). With recovery, a file that passes the strict checks is read exactly as without it; otherwise the
+    /// message is read from what survives and every loss is a defect: <see cref="Mapi.MapiDefectKind.CompoundFileRecovered"/>, one
+    /// <see cref="Mapi.MapiDefectKind.CompoundFileDamage"/> per repair and <see cref="Mapi.MapiDefectKind.StreamDamaged"/> per shortened stream.
+    /// A property stream cut short yields the properties it holds. Damage inside a stream's bytes is not detected. A file with no usable header, allocation table
+    /// or directory still cannot be opened.
+    /// </summary>
+    public bool Recovery { get; init; }
+
+    /// <summary>Most bytes recovery examines while searching for lost directory sectors. Default 1 GiB. Only used with <see cref="Recovery"/>.</summary>
+    public long MaxRecoveryBytes { get; init; } = 1L << 30;
 }

@@ -60,6 +60,9 @@ public sealed class MsgFile : IDisposable
     /// </summary>
     public bool? HasUnicodeStrings => _container.UnicodeStrings;
 
+    /// <summary>True when the compound file was damaged and opened by recovery (<see cref="MsgReaderOptions.Recovery"/>); <see cref="Defects"/> lists what was lost. Always false in strict mode.</summary>
+    public bool IsRecovered => _container.Recovered;
+
     /// <summary>Whether the first bytes are the compound file signature. A cheap test that does not parse anything.</summary>
     /// <param name="header">At least the first 8 bytes of the file.</param>
     /// <returns>True when they match.</returns>
@@ -116,7 +119,7 @@ public sealed class MsgFile : IDisposable
     /// <param name="options">Limits, or null for the defaults.</param>
     /// <returns>True when a message was found.</returns>
     public static bool TryOpen(ReadOnlyMemory<byte> data, [NotNullWhen(true)] out MsgFile? file, out IReadOnlyList<MapiDefect> defects, MsgReaderOptions? options = null) =>
-        Open(() => new CompoundFileReader(data), data.Length, null, out file, out defects, options);
+        Open(() => new CompoundFileReader(data, ReaderOptions(options)), data.Length, null, out file, out defects, options);
 
     /// <summary>Opens an MSG or OFT from a random-access source.</summary>
     /// <param name="source">The file's bytes.</param>
@@ -147,7 +150,7 @@ public sealed class MsgFile : IDisposable
             return false;
         }
 
-        return Open(() => new CompoundFileReader(source.OpenRead(0, source.Length), null, leaveOpen: false), source.Length, dispose, out file, out defects, options);
+        return Open(() => new CompoundFileReader(source.OpenRead(0, source.Length), ReaderOptions(options), leaveOpen: false), source.Length, dispose, out file, out defects, options);
     }
 
     /// <summary>Opens an MSG or OFT from a seekable stream.</summary>
@@ -160,6 +163,9 @@ public sealed class MsgFile : IDisposable
     public static bool TryOpen(Stream stream, bool leaveOpen, [NotNullWhen(true)] out MsgFile? file, out IReadOnlyList<MapiDefect> defects, MsgReaderOptions? options = null) =>
         TryOpen(new StreamSource(stream, leaveOpen), leaveOpen: false, out file, out defects, options);
 
+    private static CompoundFileReaderOptions? ReaderOptions(MsgReaderOptions? o) =>
+        o is { Recovery: true } ? new CompoundFileReaderOptions { Recovery = true, MaxRecoveryBytes = o.MaxRecoveryBytes } : null;
+
     private static bool Open(Func<CompoundFileReader> create, long length, Action? onDispose, [NotNullWhen(true)] out MsgFile? file, out IReadOnlyList<MapiDefect> defects, MsgReaderOptions? options)
     {
         options ??= new MsgReaderOptions();
@@ -169,6 +175,7 @@ public sealed class MsgFile : IDisposable
             reader = create();
             CfbEntry root = reader.Root;
             var container = new MsgContainer(reader, options, onDispose);
+            container.ReportRecovery();
             IReadOnlyList<CfbEntry> top = container.Children(root);
             bool isItem = false;
             CfbEntry? nameId = null;

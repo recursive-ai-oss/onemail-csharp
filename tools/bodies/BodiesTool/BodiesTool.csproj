@@ -9,8 +9,6 @@
     <AssemblyName>BodiesTool</AssemblyName>
     <RootNamespace>BodiesTool</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
-    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -212,6 +212,26 @@ internal static class Program
             }
         }
 
+        // Recovery: a broken FAT slot (MS-CFB 2.3) is refused by default and opens, with defects, when recovery is asked for.
+        {
+            byte[] cut = (byte[])msgBytes.Clone();
+            uint fat0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(cut.AsSpan(0x4C));
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(cut.AsSpan(512 + (int)(fat0 * 512L) + 12), 0xFFFFFFFE);
+            RecursiveAI.OneMail.Msg.MsgFile? rec = null;
+            bool recOk = !RecursiveAI.OneMail.Msg.MsgFile.TryOpen(cut, out _, out _)
+                && RecursiveAI.OneMail.Msg.MsgFile.TryOpen(cut, out rec, out _, new RecursiveAI.OneMail.Msg.MsgReaderOptions { Recovery = true });
+            if (recOk)
+            {
+                using (rec)
+                {
+                    rec!.ReadEverything();
+                    recOk = rec.IsRecovered && rec.Defects.Any(d => d.Kind == RecursiveAI.OneMail.Mapi.MapiDefectKind.CompoundFileDamage);
+                }
+            }
+
+            msgOk &= recOk;
+        }
+
         Console.WriteLine("msg: " + (msgOk ? "ok" : "FAILED"));
 
         // PST: build a small store, open it through the messaging layer and through Mail.Open, read an attachment and an embedded message.

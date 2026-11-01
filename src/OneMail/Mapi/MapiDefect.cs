@@ -108,6 +108,16 @@ public enum MapiDefectKind
 
     /// <summary>A table's row identifier is not the NID the object it describes is stored under, or an object is listed twice.</summary>
     RowIdMismatch,
+
+    // ---- recovered compound files
+    /// <summary>The compound file was damaged and was opened with recovery (<c>MsgReaderOptions.Recovery</c>). What it lost is listed as <see cref="CompoundFileDamage"/> and <see cref="StreamDamaged"/> defects.</summary>
+    CompoundFileRecovered,
+
+    /// <summary>One thing the compound file reader repaired or skipped while recovering; the offset is a file offset and the detail names the kind, the directory entry and the length.</summary>
+    CompoundFileDamage,
+
+    /// <summary>Recovery shortened a stream because its sector chain breaks before the size the directory declares; the offset is the length kept. Properties read from it hold only the bytes before the break.</summary>
+    StreamDamaged,
 }
 
 /// <summary>One thing a MAPI reader found wrong, and where.</summary>
