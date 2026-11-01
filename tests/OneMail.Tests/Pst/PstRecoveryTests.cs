@@ -453,6 +453,82 @@ public sealed class PstRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void ItemsDeletedByTheInPlaceWriterAreRecoveredWithTheirTagAndNeverCalledLive()
+    {
+        string path = P("w.pst");
+        Dictionary<string, string> original = BuildBase(path, 10);
+        var doomed = new HashSet<string>();
+        var nids = new List<Nid>();
+        Nid projects = default;
+        Assert.True(PstStore.TryOpen(path, out PstStore? rs, out _));
+        using (rs)
+        {
+            foreach (PstFolder f in rs!.EnumerateFolders(Ct))
+            {
+                if (f.Name == "Projects")
+                {
+                    projects = f.Nid;
+                }
+
+                foreach (PstMessage m in f.EnumerateMessages(PstMessageSet.Normal, Ct))
+                {
+                    string sub = m.Subject ?? "";
+                    if (f.Name == "Projects" || sub is "Inbox-0" or "Inbox-1" or "Inbox-2" or "Sent-0" or "Sent-1")
+                    {
+                        doomed.Add(sub);
+                        if (f.Name != "Projects")
+                        {
+                            nids.Add(m.Nid);
+                        }
+                    }
+                }
+            }
+        }
+
+        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { ZeroFreedSpace = false }))
+        {
+            foreach (Nid n in nids)
+            {
+                w.DeleteMessage(n);
+            }
+
+            w.DeleteFolder(projects);
+            w.Commit();
+        }
+
+        Assert.Equal(15, doomed.Count);
+        Assert.True(PstRecovery.TryOpen(path, out PstRecovery? r, new PstRecoveryOptions { Forensic = true }, Ct));
+        using (r)
+        {
+            Assert.False(r!.IndexRebuilt);
+            var byName = new Dictionary<string, PstRecoveredItem>();
+            foreach (PstRecoveredItem it in Items(r))
+            {
+                byName[it.Message.Subject ?? ""] = it;
+            }
+
+            foreach ((string sub, _) in original)
+            {
+                Assert.True(byName.TryGetValue(sub, out PstRecoveredItem? it), "not recovered: " + sub);
+                if (doomed.Contains(sub))
+                {
+                    Assert.NotEqual(RecoveryStatus.Live, it!.Provenance.Status);
+                    Assert.NotEmpty(it.Provenance.Ranges);
+                }
+                else
+                {
+                    Assert.Equal(RecoveryStatus.Live, it!.Provenance.Status);
+                }
+            }
+
+            // The deleted messages are whole where their subnodes could be found.
+            int whole = byName.Where(kv => doomed.Contains(kv.Key)).Count(kv => PstStoreCompare.Signature(kv.Value.Message) == original[kv.Key]);
+            Assert.True(whole >= 1, "no deleted message came back whole");
+            Assert.Equal(original.Count - doomed.Count, byName.Values.Count(i => i.Provenance.Status == RecoveryStatus.Live));
+        }
+    }
+
+    [Fact]
     public void WithoutForensicOnlyLiveItemsComeBack()
     {
         Forensic fx = BuildForensic();
