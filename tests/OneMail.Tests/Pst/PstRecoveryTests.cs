@@ -289,41 +289,47 @@ public sealed class PstRecoveryTests : IDisposable
 
     private sealed record Forensic(string Path, Dictionary<string, string> Original, HashSet<string> Listed, Dictionary<string, RecoveryStatus> Expected);
 
-    private Forensic BuildForensic()
+    // k scales the states: 10k live, 2k stale, k free-space, k orphaned without a node, 2k soft-deleted, k with a folder that is gone.
+    private Forensic BuildForensic(int k = 1)
     {
         string path = P("f.pst");
         var listed = new HashSet<string>();
         var expected = new Dictionary<string, RecoveryStatus>();
-        var removeFromTrees = new List<uint>();
         var stale = new List<uint>();
-        uint freeNid;
-        uint orphanNid;
+        var free = new List<uint>();
+        var orphan = new List<uint>();
         using (PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = Stamp, StoreId = Guid.Parse("11111111-2222-3333-4444-555555555555") }))
         {
             PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 10 * k; i++)
             {
                 inbox.AddMessage(Msg("live-" + i, i));
                 listed.Add("live-" + i);
             }
 
             // Listed by the folder but the node is gone from the tree, an older copy of the leaf page remains: stale.
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 2 * k; i++)
             {
                 stale.Add(inbox.AddMessage(Msg("stale-" + i, 20 + i)).Value);
                 expected["stale-" + i] = RecoveryStatus.Orphaned;
             }
 
             // The node and its blocks are gone from both trees, the bytes are still in the file: free space.
-            freeNid = inbox.AddMessage(Msg("free-0", 31)).Value;
-            expected["free-0"] = RecoveryStatus.FreeSpace;
+            for (int i = 0; i < k; i++)
+            {
+                free.Add(inbox.AddMessage(Msg("free-" + i, 31 + i)).Value);
+                expected["free-" + i] = RecoveryStatus.FreeSpace;
+            }
 
             // The node is gone from the node tree but the block tree still lists its blocks: orphaned without a node ID.
-            orphanNid = inbox.AddMessage(Msg("orphan-0", 33)).Value;
-            expected["orphan-0"] = RecoveryStatus.Orphaned;
+            for (int i = 0; i < k; i++)
+            {
+                orphan.Add(inbox.AddMessage(Msg("orphan-" + i, 33 + i)).Value);
+                expected["orphan-" + i] = RecoveryStatus.Orphaned;
+            }
 
             // Node in the tree, row removed from the folder's contents table: soft-deleted.
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 2 * k; i++)
             {
                 Nid nid = b.NewMessageNid(false);
                 b.Items.WriteMessage(Msg("soft-" + i, 40 + i), nid, inbox.Nid, false, "test");
@@ -331,10 +337,11 @@ public sealed class PstRecoveryTests : IDisposable
             }
 
             // Node in the tree whose folder is not in the hierarchy.
+            for (int i = 0; i < k; i++)
             {
                 Nid nid = b.NewMessageNid(false);
-                b.Items.WriteMessage(Msg("nofolder-0", 50), nid, new Nid(0x2A2), false, "test");
-                expected["nofolder-0"] = RecoveryStatus.SoftDeleted;
+                b.Items.WriteMessage(Msg("nofolder-" + i, 50 + i), nid, new Nid(0x2A2), false, "test");
+                expected["nofolder-" + i] = RecoveryStatus.SoftDeleted;
             }
 
             b.Complete();
@@ -342,21 +349,24 @@ public sealed class PstRecoveryTests : IDisposable
 
         Dictionary<string, string> original = Snapshot(path);
 
-        // Blocks of the free and orphaned messages, from the intact file.
+        // Blocks of the free messages, from the intact file.
         var freeBids = new List<ulong>();
         Assert.True(NdbFile.TryOpen(path, out NdbFile? nf, out _));
         using (nf)
         {
-            Assert.True(nf!.Nodes.TryGet(new Nid(freeNid), out NodeEntry fe));
-            var w = new PstNodeWalker(nf, 100000);
-            w.Walk(fe);
-            freeBids.AddRange(w.Visited);
+            foreach (uint nid in free)
+            {
+                Assert.True(nf!.Nodes.TryGet(new Nid(nid), out NodeEntry fe));
+                var w = new PstNodeWalker(nf, 100000);
+                w.Walk(fe);
+                freeBids.AddRange(w.Visited);
+            }
         }
 
         using (var f = new FileStream(path, FileMode.Open, FileAccess.ReadWrite))
         {
-            Assert.Equal(1 + freeBids.Count, PstDamage.RemoveFromTrees(f, [freeNid], freeBids, keepStalePages: false));
-            Assert.Equal(1, PstDamage.RemoveFromTrees(f, [orphanNid], [], keepStalePages: false));
+            Assert.Equal(free.Count + freeBids.Count, PstDamage.RemoveFromTrees(f, free, freeBids, keepStalePages: false));
+            Assert.Equal(orphan.Count, PstDamage.RemoveFromTrees(f, orphan, [], keepStalePages: false));
             Assert.Equal(stale.Count, PstDamage.RemoveFromTrees(f, stale, [], keepStalePages: true));
         }
 
@@ -410,6 +420,35 @@ public sealed class PstRecoveryTests : IDisposable
             Assert.NotEmpty(byName["soft-0"].Message.Recipients);
             Assert.Contains(byName["free-0"].Provenance.Defects, d => d.Code == nameof(PstRecoveryDefectKind.SubnodesNotFound));
             Assert.False(byName["stale-0"].PlaceInFolder);
+        }
+    }
+
+    [Fact]
+    public void ForensicRecallAtScaleHasNoLiveFalsePositives()
+    {
+        Forensic fx = BuildForensic(15);
+        Assert.True(PstRecovery.TryOpen(fx.Path, out PstRecovery? r, new PstRecoveryOptions { Forensic = true }, Ct));
+        using (r)
+        {
+            var tags = new Dictionary<RecoveryStatus, int>();
+            int wrong = 0;
+            foreach (PstRecoveredItem it in Items(r!))
+            {
+                tags[it.Provenance.Status] = tags.GetValueOrDefault(it.Provenance.Status) + 1;
+                string s = it.Message.Subject ?? "";
+                RecoveryStatus want = fx.Expected.TryGetValue(s, out RecoveryStatus e) ? e : RecoveryStatus.Live;
+                wrong += it.Provenance.Status == want ? 0 : 1;
+                if (it.Provenance.Status == RecoveryStatus.Live)
+                {
+                    Assert.Contains(s, fx.Listed);
+                }
+            }
+
+            Assert.Equal(0, wrong);
+            Assert.Equal(150, tags[RecoveryStatus.Live]);
+            Assert.Equal(45, tags[RecoveryStatus.SoftDeleted]);
+            Assert.Equal(30 + 15, tags[RecoveryStatus.Orphaned]);
+            Assert.Equal(15, tags[RecoveryStatus.FreeSpace]);
         }
     }
 
