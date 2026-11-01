@@ -201,7 +201,8 @@ public class TransportTests
         await using ProtocolConnection conn = ProtocolConnection.FromStream(source);
         var reader = new ImapResponseReader(conn.Reader);
         long seen = 0;
-        long before = GC.GetTotalAllocatedBytes(true);
+        // This thread only: other tests run in parallel in the same process. The generated stream completes synchronously, so no hops.
+        long before = GC.GetAllocatedBytesForCurrentThread();
         ImapResponse r = await reader.ReadResponseAsync(async (_, s, ct) =>
         {
             using var mime = new MimeReader(s);
@@ -215,7 +216,7 @@ public class TransportTests
 
             return true;
         }, TestContext.Current.CancellationToken);
-        long allocated = GC.GetTotalAllocatedBytes(true) - before;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(r.TryGetFetch(out ImapFetchData f));
         Assert.Equal(1, f.Uid);
         Assert.Equal(Body, seen);

@@ -492,13 +492,15 @@ internal static class Program
             var fetch = imap.Execute(RecursiveAI.OneMail.Client.Imap.Protocol.ImapCommand.Create("FETCH").SequenceSet("1").Raw("(UID BODY[])"), (ctx, stream) =>
             {
                 var buf = new byte[16];
-                literal = System.Text.Encoding.ASCII.GetString(buf, 0, stream.Read(buf, 0, buf.Length));
+                int got = 0, n;
+                while (got < buf.Length && (n = stream.Read(buf, got, buf.Length - got)) > 0) { got += n; }
+                literal = System.Text.Encoding.ASCII.GetString(buf, 0, got);
                 return true;
             });
             bool typed = fetch.Untagged.Count == 1 && fetch.Untagged[0].TryGetFetch(out var f) && f.Uid == 7 && f.Envelope?.Subject == "hi";
             var smtp = RecursiveAI.OneMail.Client.Smtp.Protocol.SmtpRawConnection.MailFromArguments("a@example.com", new RecursiveAI.OneMail.Client.Smtp.Protocol.SmtpMailOptions { Size = 5 });
             clientOk = greeting.Status == RecursiveAI.OneMail.Client.Imap.Protocol.ImapStatus.Ok && auth.IsOk && fetch.IsOk && literal == "hello" && typed
-                && script.SentText.StartsWith("A0001 AUTHENTICATE PLAIN AHAAcA==\r\n", StringComparison.Ordinal)
+                && script.SentText.StartsWith("A0001 AUTHENTICATE PLAIN AHUAcA==\r\n", StringComparison.Ordinal)
                 && smtp == "FROM:<a@example.com> SIZE=5";
         }
 
