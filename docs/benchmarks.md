@@ -343,7 +343,7 @@ and no row above 1.25.
 
 ## Inputs
 
-- IMAP: the first 5,000 messages of the CMU Enron maildir appended to a Dovecot mailbox (`imap-prepare`; mean about 4 KB).
+- IMAP: the first 5,000 messages of the CMU Enron maildir appended to a Dovecot mailbox (`imap-prepare`).
   `imap-summary` fetches UID, FLAGS, INTERNALDATE, RFC822.SIZE and ENVELOPE of all 5,000 in one command. `imap-full` fetches
   `BODY[]` of the first 1,000, one FETCH each, into memory.
 - SMTP: `smtp-small` is 1,000 generated messages of about 4 KB and `smtp-big` 100 of about 1 MB, each over one connection to one
@@ -353,14 +353,15 @@ and no row above 1.25.
 
 - Ours: `ImapClient.FetchAsync` enumerating the results; `SmtpClient.SendAsync` with CHUNKING (BDAT) as the guest offers it.
   `ours-data` is the same with DATA, to show the transfer command does not matter.
-- MailKit: `ImapClient.Fetch` (summary) and `GetStream`-free full-body fetch into memory; `SmtpClient.SendAsync`.
+- MailKit: `IMailFolder.FetchAsync` with the same items (summary); `GetStreamAsync(uid, "")` copied into a `MemoryStream`, ours
+  `DownloadAsync(uid, "", stream)` (full body, one FETCH per message); `SmtpClient.SendAsync`.
 - **SMTP times the send of messages that are already built, on both sides.** Building (our `OutgoingMessage.ToEntity`, MailKit's
   `MimeMessage`) is outside the timed region, and each repetition sends the same prepared messages again. Allocation per message
   is therefore the send's alone.
 - **Two MailKit variants.** `mailkit` is MailKit as it ships: it connects its own socket without `TCP_NODELAY` and writes the
   command and the message in several small segments, so each message waits out Nagle's algorithm against the server's delayed ACK:
-  about 42 ms per message on this path (the 42 s for 1,000 messages in the table; a trace of the wire shows the waits, our
-  `smtp-trace` row prints it). That is real MailKit behaviour on this path, not a harness fault, but it measures TCP timers, so the
+  about 42 ms per message on this path (the 42 s for 1,000 messages below). Setting `TCP_NODELAY` removes it, which is why we
+  attribute it to Nagle against delayed ACK. It is real MailKit behaviour on this path, not a harness fault, but it measures TCP timers, so the
   gate comparator is `mailkit-nodelay`: the same MailKit calls on a socket we connect with `TCP_NODELAY` set, which is how our
   connections are opened. Both are reported.
 - The Postfix guest relays every accepted message to a sink on the host; the harness waits (outside the timed region) until the
@@ -377,8 +378,7 @@ and no row above 1.25.
 
 Geometric mean 0.71, worst row 0.99: the bar is met. MailKit as it ships (Nagle on): smtp-small 42,427 ms (ours 0.025x), smtp-big
 2,931 ms (0.23x). `ours-data`: 911 ms and 697 ms. Ours holds more at the 1 MB peak because the prepared messages are held as an
-entity tree plus the converted SMTP message. The `imap-full` row is the allocation-dominated one: the 1,000 bodies (about 4 MB) are
-copied into result buffers on both sides.
+entity tree plus the converted SMTP message. `imap-full` is dominated by the server and the copy of each body, so the two sides land together.
 
 ### Allocation per message in enumeration and download
 
@@ -391,8 +391,8 @@ code did) and after (plain lines decoded in place):
 | Dovecot 2.4.5 | 6,909 B | 960 B |
 
 The item itself (`ImapMessage`, its data, flags, envelope, strings and addresses) is about 900 B of that for these envelopes. The
-download of a 1 MB and a 100 MB message from Dovecot allocates 38 KiB and 153 KiB (before: about 127 B per read, 12 MB for 100 MB);
-the 153 KiB is the 100 MB message's own reads of the response buffer growing, not a per-read allocation of the old size.
+download of a 1 MB and a 100 MB message from Dovecot allocates 38 KiB and 153 KiB (before: about 127 B per read, about 12 MB for 100 MB at 16 KB reads);
+the remaining growth is about 24 B per read, against about 127 B before.
 
 ## Tuning
 
@@ -405,7 +405,7 @@ plain FETCH lines decoded in place, SMTP scan buffers pooled, `CopyToAsync` on t
 | | x64 |
 |---|---|
 | CPU | AMD Ryzen 9 7950X3D, 32 logical cores |
-| SDK | .NET 10.0.402, Checked off (Release) |
+| SDK | .NET 10.0.402, Release build |
 | Servers | Dovecot `docker.io/dovecot/dovecot@sha256:1b3041c0...db4c6`; Postfix 3.7 in the Debian 12 guest (`tools/servers/guest-*.sh`) |
 | Jobs | `wq` bench 001941 (IMAP rows, 17:29 to 17:30 UTC) and 001960 (SMTP rows, 18:45 to 18:51 UTC), 2026-11-01 |
 | Load before (1/5/15 min) | IMAP 8.93 / 8.00 / 8.99 (the previous job's tail); SMTP 2.05 / 3.67 / 6.89 |
