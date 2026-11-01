@@ -4,7 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- Protocol clients allocate far less: IMAP `FetchAsync` decodes plain FETCH lines in place (about 1 KB per message for UID, FLAGS, INTERNALDATE and ENVELOPE against about 7 KB), downloads allocate a constant amount whatever the number of reads, SMTP sending and POP3 listings drop their per-message temporaries (about 10 KB per 4 KB message sent, from about 30 KB). Read and write time limits are checked by one coarse timer per direction, so a stall fails after 1 to 1.25 times the limit.
+
 ### Added
+
+- `bench/ProtocolRows` and `bench/run-protocol-rows.sh`: the IMAP fetch and SMTP send rows against MailKit 4.18.2 on local Dovecot and Postfix (`docs/benchmarks.md`, Protocol rows); fuzz target `imap-fetch`.
 
 - `OutgoingMessage.Utf8Headers` and `CompositionOptions.Utf8Headers`: write display names, the subject and file names as raw UTF-8 (RFC 6532) for an SMTPUTF8 transport; the default stays ASCII. `PstEditException` with `PstEditFailure` (`FolderNotFound`, `ItemNotFound`, `InvalidFolderOperation`, `NidSpaceExhausted`): the typed refusal of an edit to an open PST, thrown before anything is written.
 - PST and OST recovery (`RecursiveAI.OneMail.Pst.Recovery.PstRecovery`, `docs/recovery.md`): recovers what a damaged store still holds without its header, B-trees, allocation maps or density list, from a scan of its pages and blocks (generation and encoding inferred when the header is destroyed; the newest leaf page of the node tree wins; entries of damaged pages kept only when the blocks they name are whole), returns each message with a `RecoveryProvenance` (`Live` only when the store's own node tree reaches it; `Orphaned` for entries rebuilt from the scan), and with `PstRecoveryOptions.Forensic` also `SoftDeleted` messages, stale and superseded nodes and `FreeSpace` blocks. `RepairTo` writes a new Unicode PST through `PstBuilder` (items in their folders, deleted ones under `Recovered/<tag>`, provenance as named properties, a JSON report; values that cannot be read in full are dropped and listed). `onemail recover` takes `.pst` and `.ost` (`--forensic`, `--pst` for a destroyed header). `MapiMailItem.Recovery` carries the provenance. `NdbFile.Scan` now also finds a live block written over a stale page (a page trailer with a failing checksum no longer hides the blocks in its unit). Ambiguities PR1 to PR8, fuzz target `pst-recovery`, `tools/recovery/check-pst.sh` and `memory-pst.sh`, `PstOracle pstdamage|pstrecover|pstcampaign`.
