@@ -43,7 +43,7 @@ public sealed partial class PstRecovery : IDisposable
     private PstRecoveryStats _stats;
 
     // Node classification. Every node the store can open is in _entries; the sets say how it got there.
-    private readonly Dictionary<uint, NodeEntry> _entries = [];
+    private Dictionary<uint, NodeEntry> _entries = [];
     private readonly HashSet<uint> _reached = [];
     private readonly HashSet<uint> _rebuilt = [];
     private readonly HashSet<uint> _stale = [];
@@ -275,6 +275,7 @@ public sealed partial class PstRecovery : IDisposable
     private void ScanAndIndex(Dictionary<uint, NodeEntry> reached, ref long pages, ref long damagedPages, ref long blocks, ref long damagedBlocks, CancellationToken ct)
     {
         var index = new NdbRecoveredIndex();
+        _entries = index.Nodes;   // one table serves the reader and the classification
         var leaves = new List<LeafPage>();
         foreach (NdbScanItem it in _file.Scan(new NdbScanOptions { IncludeDamaged = true }, ct))
         {
@@ -426,11 +427,6 @@ public sealed partial class PstRecovery : IDisposable
         }
 
         _stats = _stats with { SupersededVersions = superseded };
-
-        foreach (KeyValuePair<uint, NodeEntry> kv in _entries)
-        {
-            index.Nodes[kv.Key] = kv.Value;
-        }
 
         _file.Recovered = index;
         _scanned = true;

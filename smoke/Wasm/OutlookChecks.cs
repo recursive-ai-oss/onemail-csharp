@@ -56,7 +56,7 @@ internal static class OutlookChecks
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
         & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite)
         & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite)
-        & Guard("recovery", Recovery);
+        & Guard("recovery", Recovery) & Guard("pst-recovery", PstRecovery);
 
     // Builds a small store with the PST builder (folders, a message with a recipient, an attachment and a named property), reads it back with no defect.
     public static bool PstWrite()
@@ -89,6 +89,53 @@ internal static class OutlookChecks
             RecursiveAI.OneMail.Pst.Messaging.PstMessage? got = store.EnumerateMessages().FirstOrDefault();
             return got is not null && got.Subject == "café" && got.Recipients.Count == 1 && got.Attachments.Count == 1 && got.Attachments[0].OpenData()!.Length == 20_000
                 && got.Properties.Any(p => p.Name == name) && store.Defects.Count == 0 && store.Database.Defects.Count == 0;
+        }
+    }
+
+    // A store with its header destroyed is recovered from a scan of its pages and blocks and repaired into a fresh store that opens clean.
+    public static bool PstRecovery()
+    {
+        var ms = new MemoryStream();
+        using (var b = RecursiveAI.OneMail.Pst.Messaging.PstBuilder.Create(ms, leaveOpen: true))
+        {
+            var inbox = b.IpmSubtree.CreateFolder("Inbox");
+            for (int i = 0; i < 3; i++)
+            {
+                var m = new MapiMessage();
+                m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.MessageClass, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+                m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.Subject, MapiType.UnicodeString), Encoding.Unicode.GetBytes("m" + i)));
+                var r = new MapiRecipient(m);
+                r.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.DisplayName, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Ann")));
+                m.AddRecipient(r);
+                inbox.AddMessage(m);
+            }
+
+            b.Complete();
+        }
+
+        byte[] bytes = ms.ToArray();
+        Array.Clear(bytes, 0, 564);
+        if (!RecursiveAI.OneMail.Pst.Recovery.PstRecovery.TryOpen(new MemorySource(bytes), true, out var rec) || rec is null)
+        {
+            return false;
+        }
+
+        using (rec)
+        {
+            var items = rec.EnumerateItems().ToArray();
+            var output = new MemoryStream();
+            var summary = rec.RepairTo(output, null);
+            output.Position = 0;
+            if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(output, true, out var fresh, out _) || fresh is null)
+            {
+                return false;
+            }
+
+            using (fresh)
+            {
+                return !rec.HeaderUsable && rec.IndexRebuilt && items.Length == 3 && items.All(i => i.Provenance.Status == RecursiveAI.OneMail.Recovery.RecoveryStatus.Orphaned && i.Message.Recipients.Count == 1)
+                    && summary.Written == 3 && fresh.Database.Defects.Count == 0 && fresh.EnumerateMessages().Count() == 3;
+            }
         }
     }
 
