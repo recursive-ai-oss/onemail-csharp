@@ -187,23 +187,41 @@ public sealed class NdbBlockBuilder
     /// <exception cref="ArgumentException"><paramref name="data"/> is empty or longer than <see cref="MaxBlockData"/>.</exception>
     public Bid WriteDataBlock(ReadOnlySpan<byte> data)
     {
-        if (data.IsEmpty || data.Length > MaxBlockData)
-        {
-            throw new ArgumentException($"a data block holds 1 to {MaxBlockData} bytes, not {data.Length}", nameof(data));
-        }
-
+        CheckDataBlock(data);
         if (Encryption == NdbEncryption.None)
         {
             return Emit(data, isInternal: false);
         }
 
-        // The cyclic key is the block's BID, so the BID is taken first. Encode into a scratch copy, then emit with that BID.
+        // The cyclic key is the block's BID, so the BID is taken first.
+        Bid bid = _bids.NextBlockBid(isInternal: false);
+        EmitData(bid, data);
+        return bid;
+    }
+
+    private static void CheckDataBlock(ReadOnlySpan<byte> data)
+    {
+        if (data.IsEmpty || data.Length > MaxBlockData)
+        {
+            throw new ArgumentException($"a data block holds 1 to {MaxBlockData} bytes, not {data.Length}", nameof(data));
+        }
+    }
+
+    /// <summary>Encodes a data block as the file says and places it under a BID taken earlier.</summary>
+    private void EmitData(Bid bid, ReadOnlySpan<byte> data)
+    {
+        CheckDataBlock(data);
+        if (Encryption == NdbEncryption.None)
+        {
+            EmitWithBid(data, bid);
+            return;
+        }
+
         byte[] rented = ArrayPool<byte>.Shared.Rent(data.Length);
         try
         {
             Span<byte> encoded = rented.AsSpan(0, data.Length);
             data.CopyTo(encoded);
-            Bid bid = _bids.NextBlockBid(isInternal: false);
             if (Encryption == NdbEncryption.Permute)
             {
                 NdbChecksums.Permute(encoded, encode: true);
@@ -214,7 +232,7 @@ public sealed class NdbBlockBuilder
                 NdbChecksums.Cyclic(encoded, (uint)bid.Value);
             }
 
-            return EmitWithBid(encoded, bid);
+            EmitWithBid(encoded, bid);
         }
         finally
         {
@@ -371,22 +389,39 @@ public sealed class NdbBlockBuilder
     /// Builds a data tree leaf by leaf: the leaves are blocks the caller sized (heap blocks, row-matrix blocks), listed by an XBLOCK, or by an
     /// XXBLOCK over XBLOCKs once there are more than one XBLOCK holds. Memory is eight bytes per leaf.
     /// </summary>
+    /// <remarks>
+    /// A leaf can also be reserved first and filled later (<see cref="ReserveBlock"/>, <see cref="FillBlock"/>): its BID is fixed when it is
+    /// reserved, so the tree's internal blocks do not wait for it except for their total size. A heap uses this to write block 0, whose header
+    /// is only known at the end, last.
+    /// </remarks>
     public sealed class DataTreeWriter
     {
+        // The leaves of one XBLOCK. It is written once it is full, every leaf is filled and every earlier XBLOCK has been written.
+        private sealed class XState
+        {
+            public readonly ulong[] Bids = new ulong[XBlockCapacity];
+            public readonly bool[] Done = new bool[XBlockCapacity];
+            public int Count;
+            public int Unfilled;
+            public long Bytes;
+        }
+
         private readonly NdbBlockBuilder _owner;
-        private readonly List<ulong> _leaves = [];          // BIDs of the leaves of the XBLOCK being filled
-        private long _leavesBytes;                          // their total size
-        private readonly List<(ulong Bid, long Bytes)> _xblocks = [];   // finished XBLOCKs, once there is more than one
+        private readonly Dictionary<long, XState> _states = [];   // XBLOCKs not written yet, by ordinal
+        private readonly List<(ulong Bid, long Bytes)> _xblocks = [];   // written XBLOCKs, in order
+        private XState? _current;
+        private long _currentOrdinal = -1;
+        private long _nextToWrite;
         private long _total;
         private long _count;
         private bool _done;
 
         internal DataTreeWriter(NdbBlockBuilder owner) => _owner = owner;
 
-        /// <summary>The number of data blocks added.</summary>
+        /// <summary>The number of data blocks added or reserved.</summary>
         public long BlockCount => _count;
 
-        /// <summary>The bytes added.</summary>
+        /// <summary>The bytes in the blocks filled so far.</summary>
         public long Length => _total;
 
         /// <summary>Adds the next leaf.</summary>
@@ -395,52 +430,116 @@ public sealed class NdbBlockBuilder
         /// <exception cref="ArgumentException">The block is empty or too long.</exception>
         public void AddBlock(ReadOnlySpan<byte> data)
         {
+            CheckData(data);
+            long slot = ReserveBlock();
+            FillBlock(slot, data);
+        }
+
+        private static void CheckData(ReadOnlySpan<byte> data)
+        {
+            if (data.IsEmpty || data.Length > MaxBlockData)
+            {
+                throw new ArgumentException($"a data block holds 1 to {MaxBlockData} bytes, not {data.Length}", nameof(data));
+            }
+        }
+
+        /// <summary>Takes the next leaf position and its BID now; the bytes come later through <see cref="FillBlock"/>.</summary>
+        /// <returns>The slot, which is the leaf's position in the tree (the first leaf is 0).</returns>
+        /// <exception cref="InvalidOperationException">The tree is complete or already has the most blocks it can hold.</exception>
+        public long ReserveBlock()
+        {
             if (_done)
             {
                 throw new InvalidOperationException("the data tree is already complete");
             }
 
-            if (_count >= MaxDataTreeBlocks || _total + data.Length > MaxDataTreeBytes)
+            if (_count >= MaxDataTreeBlocks)
             {
                 throw new InvalidOperationException("the data tree would exceed what an XXBLOCK over XBLOCKs can describe");
             }
 
-            if (_leaves.Count == XBlockCapacity)
+            if (_current is null || _current.Count == XBlockCapacity)
             {
-                FlushXBlock();
+                _current = new XState();
+                _states[++_currentOrdinal] = _current;
+                WriteReadyXBlocks();
             }
 
-            _leaves.Add(_owner.WriteDataBlock(data).Value);
-            _leavesBytes += data.Length;
-            _total += data.Length;
-            _count++;
+            _current.Bids[_current.Count++] = _owner._bids.NextBlockBid(isInternal: false).Value;
+            _current.Unfilled++;
+            return _count++;
         }
 
-        private void FlushXBlock()
+        /// <summary>Writes the bytes of a reserved leaf.</summary>
+        /// <param name="slot">The value <see cref="ReserveBlock"/> returned.</param>
+        /// <param name="data">1 to <see cref="MaxBlockData"/> bytes, unencoded.</param>
+        /// <exception cref="InvalidOperationException">The slot is unknown or already filled, or the tree would hold more than <see cref="MaxDataTreeBytes"/> bytes.</exception>
+        /// <exception cref="ArgumentException">The block is empty or too long.</exception>
+        public void FillBlock(long slot, ReadOnlySpan<byte> data)
         {
-            // MS-PST 2.2.2.8.3.2.1: btype 1, cLevel 1, cEnt, lcbTotal (the bytes under this block), then the leaf BIDs.
-            byte[] x = new byte[8 + (_leaves.Count * 8)];
-            x[0] = 0x01;
-            x[1] = 1;
-            BinaryPrimitives.WriteUInt16LittleEndian(x.AsSpan(2), (ushort)_leaves.Count);
-            BinaryPrimitives.WriteUInt32LittleEndian(x.AsSpan(4), (uint)_leavesBytes);
-            for (int i = 0; i < _leaves.Count; i++)
+            CheckData(data);
+            long ordinal = slot / XBlockCapacity;
+            int index = (int)(slot % XBlockCapacity);
+            if (slot < 0 || slot >= _count || !_states.TryGetValue(ordinal, out XState? state) || index >= state.Count || state.Done[index])
             {
-                BinaryPrimitives.WriteUInt64LittleEndian(x.AsSpan(8 + (i * 8)), _leaves[i]);
+                throw new InvalidOperationException("the slot is not a reserved, unfilled leaf of this tree");
             }
 
-            _xblocks.Add((_owner.EmitInternal(x).Value, _leavesBytes));
-            _leaves.Clear();
-            _leavesBytes = 0;
+            if (_total + data.Length > MaxDataTreeBytes)
+            {
+                throw new InvalidOperationException("the data tree would exceed what an XXBLOCK over XBLOCKs can describe");
+            }
+
+            ulong bid = state.Bids[index];
+            _owner.EmitData(new Bid(bid), data);
+            state.Unfilled--;
+            state.Bytes += data.Length;
+            _total += data.Length;
+            state.Done[index] = true;
+            WriteReadyXBlocks();
+        }
+
+        private void WriteReadyXBlocks()
+        {
+            while (_states.TryGetValue(_nextToWrite, out XState? s) && s.Count == XBlockCapacity && s.Unfilled == 0)
+            {
+                WriteXBlock(s);
+                _states.Remove(_nextToWrite++);
+            }
+        }
+
+        private void WriteXBlock(XState s)
+        {
+            // MS-PST 2.2.2.8.3.2.1: btype 1, cLevel 1, cEnt, lcbTotal (the bytes under this block), then the leaf BIDs.
+            byte[] x = new byte[8 + (s.Count * 8)];
+            x[0] = 0x01;
+            x[1] = 1;
+            BinaryPrimitives.WriteUInt16LittleEndian(x.AsSpan(2), (ushort)s.Count);
+            BinaryPrimitives.WriteUInt32LittleEndian(x.AsSpan(4), (uint)s.Bytes);
+            for (int i = 0; i < s.Count; i++)
+            {
+                BinaryPrimitives.WriteUInt64LittleEndian(x.AsSpan(8 + (i * 8)), s.Bids[i]);
+            }
+
+            _xblocks.Add((_owner.EmitInternal(x).Value, s.Bytes));
         }
 
         /// <summary>Writes the tree's internal blocks.</summary>
         /// <returns>The BID for the node's bidData (the data block itself when there is only one) and the total length.</returns>
+        /// <exception cref="InvalidOperationException">Called twice, or a reserved leaf was never filled.</exception>
         public DataTreeResult Complete()
         {
             if (_done)
             {
                 throw new InvalidOperationException("the data tree is already complete");
+            }
+
+            foreach (XState s in _states.Values)
+            {
+                if (s.Unfilled != 0)
+                {
+                    throw new InvalidOperationException("a reserved leaf of the data tree was never filled");
+                }
             }
 
             _done = true;
@@ -452,17 +551,25 @@ public sealed class NdbBlockBuilder
             if (_count == 1)
             {
                 // A single block is its own tree: the reader treats a non-internal root as the only leaf.
-                return new DataTreeResult(new Bid(_leaves[0]), _total, 1);
+                return new DataTreeResult(new Bid(_current!.Bids[0]), _total, 1);
             }
 
-            if (_xblocks.Count == 0)
+            WriteReadyXBlocks();
+            if (_states.Count > 0)
+            {
+                // The last XBLOCK, not full.
+                foreach (XState s in _states.Values)
+                {
+                    WriteXBlock(s);
+                }
+            }
+
+            if (_xblocks.Count == 1)
             {
                 // The XBLOCK is the root; its lcbTotal is the whole stream.
-                FlushXBlock();
                 return new DataTreeResult(new Bid(_xblocks[0].Bid), _total, _count);
             }
 
-            FlushXBlock();
             // MS-PST 2.2.2.8.3.2.2: btype 1, cLevel 2, cEnt, lcbTotal for the whole tree, then the XBLOCK BIDs.
             byte[] xx = new byte[8 + (_xblocks.Count * 8)];
             xx[0] = 0x01;

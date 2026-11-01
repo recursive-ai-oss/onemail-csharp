@@ -162,6 +162,7 @@ public sealed class StoreConverter
             Kind = payload.Kind,
             Folder = u.Folder,
             Content = payload.Content,
+            Message = payload.Message,
             Extension = payload.Extension,
             Marks = marks,
             Keywords = keywords,

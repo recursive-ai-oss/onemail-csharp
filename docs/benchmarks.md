@@ -285,3 +285,21 @@ jCal), run after the tuning above. The first column is before tuning (one 43-min
 
 vCard parse, 10k cards: 79.4 ms against 67.2 ms, 5,500 B per card against 7,770. The M2 runs the comparator's parser relatively
 faster than the x64 machine does (x64 ratio 1.046 on the same rows); a further cut needs fewer objects per property in the tree.
+
+# Benchmarks: PST building (memory)
+
+`tools/pst/memory.sh` runs `PstOracle pstgen`, which writes a generated store through `PstBuilder` (messages of about 2.5 KB with two recipients, spread over the
+given number of folders), and prints the peak resident set of each run (GNU time). Only memory is reported: there is no comparator that builds PSTs in .NET, so there is no
+speed gate for this area. Release build, one process per run, x64 (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402); run as a light job beside other work (load 37-40 throughout), so
+the times are indicative only.
+
+| Messages | Folders | File | Peak RSS | Elapsed |
+|---|---|---|---|---|
+| 10,000 | 10 | 37 MiB | 105 MiB | 1.2 s |
+| 100,000 | 10 | 370 MiB | 110 MiB | 3.7 s |
+| 1,000,000 | 10 | 3,704 MiB | 113 MiB | 25.3 s |
+| 600,000 | 1 | 2,222 MiB | 123 MiB | 15.2 s |
+
+The resident set stops growing at about 110 MiB from 40,000 messages on (the runtime and its allocation budget are most of it; the managed heap swings between 7 and 54 MiB).
+A single folder of 600,000 messages adds about 10 MiB: the row index of the folder being closed, about 12 bytes a row. Files of this size were not read back or checked with
+libpff; the 20,000-message run was (`propexact` 0 differences, 0 defects).

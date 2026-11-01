@@ -25,7 +25,11 @@ public enum PayloadKind
     Contact,
 }
 
-internal sealed record Payload(PayloadKind Kind, byte[] Content, string Extension);
+internal sealed record Payload(PayloadKind Kind, byte[] Content, string Extension)
+{
+    /// <summary>The item as a MAPI message when the target writes properties rather than bytes.</summary>
+    public MapiMessage? Message { get; init; }
+}
 
 /// <summary>
 /// Converts one item of any source into the bytes a target stores. The report is the converters' own: nothing is added except the
@@ -60,6 +64,9 @@ internal static class ItemTranscoder
                 return Tnef(item, options, report, out reason);
             case ConvertFormat.Msg:
                 return Msg(item, options, report, out reason);
+            case ConvertFormat.Pst:
+                MapiMessage? message = ToMapi(item, options, report, out reason);
+                return message is null ? null : new Payload(PayloadKind.Message, [], ".pst") { Message = message };
             default:
                 return Skip(out reason, "Unconvertible");
         }
@@ -187,30 +194,36 @@ internal static class ItemTranscoder
         return new Payload(PayloadKind.Message, ms.ToArray(), ".tnef");
     }
 
-    private static Payload? Msg(IMailItem item, StoreConversionOptions o, LossReport report, out string reason)
+    // The item as a property bag: an Outlook item as it is, a MIME message or an OLM mail record converted (MS-OXCMAIL). Null with a reason for the rest.
+    private static MapiMessage? ToMapi(IMailItem item, StoreConversionOptions o, LossReport report, out string reason)
     {
         reason = string.Empty;
-        MapiMessage message;
         switch (item)
         {
             case MapiMailItem mi:
-                message = mi.Message;
-                break;
+                return mi.Message;
             case MimeMailItem m:
                 ConversionResult<MapiMessage> r = new MimeToMapiConverter().Convert(m.Entity);
                 Merge(report, r.Report);
-                message = r.Value;
-                break;
+                return r.Value;
             case OlmItem { OlmKind: OlmItemKind.Email }:
                 // The record becomes a MIME message first (its own source when it kept one), and that becomes the item.
                 Payload mime = Mime(item, o, report);
                 ConversionResult<MapiMessage> converted = new MimeToMapiConverter().Convert(MimeEntity.Parse(mime.Content, o.Mime));
                 Merge(report, converted.Report);
-                message = converted.Value;
-                break;
+                return converted.Value;
             default:
                 reason = "NotMapiConvertible";
                 return null;
+        }
+    }
+
+    private static Payload? Msg(IMailItem item, StoreConversionOptions o, LossReport report, out string reason)
+    {
+        MapiMessage? message = ToMapi(item, o, report, out reason);
+        if (message is null)
+        {
+            return null;
         }
 
         using MemoryStream ms = new();

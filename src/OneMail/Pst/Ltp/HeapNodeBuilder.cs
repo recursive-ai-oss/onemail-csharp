@@ -13,7 +13,9 @@ namespace RecursiveAI.OneMail.Pst.Ltp;
 /// <remarks>
 /// <para>Allocations are packed in the order they are made, a new block starting when the next one would not fit with its page map.
 /// Blocks are filled to 8,176 bytes (the most a block holds), so a heap of N bytes takes about N / 8,176 blocks.
-/// The whole heap is held in memory until <see cref="Finish"/>; its size is the size of the structure being built.</para>
+/// The whole heap is held in memory until <see cref="Finish"/>; its size is the size of the structure being built. A heap made with a
+/// <see cref="NdbBlockBuilder.DataTreeWriter"/> instead hands each block over as soon as no later allocation can change it, so a large table
+/// keeps only its last block, block 0 (whose header is written last) and the block-bitmap block of the 128 blocks in progress.</para>
 /// <para>Not thread-safe.</para>
 /// </remarks>
 public sealed class HeapNodeBuilder
@@ -39,15 +41,44 @@ public sealed class HeapNodeBuilder
         public int Used;                          // end of the last allocation
     }
 
-    private readonly List<Block> _blocks = [];
+    private readonly List<Block?> _blocks = [];
+    private readonly List<byte> _levels = [];   // the fill level of every finished block, kept after the block itself is written
+    private readonly NdbBlockBuilder.DataTreeWriter? _tree;
+    private int _blockCount;
     private bool _finished;
 
     /// <summary>Starts a heap with one empty block.</summary>
     /// <param name="clientSignature">bClientSig: 0xBC for a property context, 0x7C for a table context, 0xB5 for a bare BTH.</param>
     public HeapNodeBuilder(byte clientSignature)
+        : this(clientSignature, null)
+    {
+    }
+
+    /// <summary>Starts a heap that writes its blocks into a data tree as they are finished.</summary>
+    /// <param name="clientSignature">bClientSig: 0xBC for a property context, 0x7C for a table context, 0xB5 for a bare BTH.</param>
+    /// <param name="tree">The data tree of the node. The heap reserves one leaf per block, in order, so a block's index in its HID is its position in the tree; call <see cref="Seal"/> and then complete the tree.</param>
+    public HeapNodeBuilder(byte clientSignature, NdbBlockBuilder.DataTreeWriter? tree)
     {
         ClientSignature = clientSignature;
-        _blocks.Add(new Block { Used = HeaderSize(0) });
+        _tree = tree;
+        AddBlock();
+    }
+
+    private Block AddBlock()
+    {
+        var b = new Block { Used = HeaderSize(_blockCount) };
+        _blocks.Add(b);
+        _blockCount++;
+        if (_tree is not null)
+        {
+            long slot = _tree.ReserveBlock();
+            if (slot != _blockCount - 1)
+            {
+                throw new InvalidOperationException("the data tree already has blocks, so heap block indexes would not match leaf positions");
+            }
+        }
+
+        return b;
     }
 
     /// <summary>bClientSig as given.</summary>
@@ -57,17 +88,20 @@ public sealed class HeapNodeBuilder
     public Hid UserRoot { get; set; }
 
     /// <summary>The number of heap blocks so far.</summary>
-    public int BlockCount => _blocks.Count;
+    public int BlockCount => _blockCount;
 
-    /// <summary>The number of bytes the heap takes so far, counting the last block as full only to its page map.</summary>
+    /// <summary>The number of bytes the heap takes so far, counting the last block as full only to its page map. Blocks already written to a data tree are not counted.</summary>
     public long Length
     {
         get
         {
             long n = 0;
-            foreach (Block b in _blocks)
+            foreach (Block? b in _blocks)
             {
-                n += PageMapAt(b) + PageMapSize(b.Starts.Count);
+                if (b is not null)
+                {
+                    n += PageMapAt(b) + PageMapSize(b.Starts.Count);
+                }
             }
 
             return n;
@@ -98,21 +132,25 @@ public sealed class HeapNodeBuilder
         ArgumentOutOfRangeException.ThrowIfLessThan(size, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(size, MaxAllocation);
 
-        Block b = _blocks[^1];
+        Block b = _blocks[^1]!;
         if (!Fits(b, size))
         {
-            if (_blocks.Count >= MaxBlocks)
+            if (_blockCount >= MaxBlocks)
             {
                 throw new InvalidOperationException($"a heap has at most {MaxBlocks} blocks");
             }
 
-            b = new Block { Used = HeaderSize(_blocks.Count) };
-            _blocks.Add(b);
+            _levels.Add((byte)FillLevel(b));
+            b = AddBlock();
+            if (_tree is not null)
+            {
+                WriteFinishedBlocks();
+            }
         }
 
         b.Starts.Add(b.Used);
         b.Used += size;
-        return new Hid((uint)(((_blocks.Count - 1) << 16) | (b.Starts.Count << 5)));
+        return new Hid((uint)(((_blockCount - 1) << 16) | (b.Starts.Count << 5)));
     }
 
     private static bool Fits(Block b, int size) =>
@@ -136,12 +174,11 @@ public sealed class HeapNodeBuilder
     public Span<byte> GetSpan(Hid hid)
     {
         int block = hid.BlockIndex;
-        if (hid.Type != 0 || hid.Index == 0 || (uint)block >= (uint)_blocks.Count || hid.Index > _blocks[block].Starts.Count)
+        if (hid.Type != 0 || hid.Index == 0 || (uint)block >= (uint)_blocks.Count || _blocks[block] is not { } b || hid.Index > b.Starts.Count)
         {
-            throw new ArgumentException($"HID {hid} was not allocated by this heap", nameof(hid));
+            throw new ArgumentException($"HID {hid} was not allocated by this heap, or its block is already written", nameof(hid));
         }
 
-        Block b = _blocks[block];
         int start = b.Starts[hid.Index - 1];
         int end = hid.Index < b.Starts.Count ? b.Starts[hid.Index] : b.Used;
         return b.Data.AsSpan(start, end - start);
@@ -149,60 +186,109 @@ public sealed class HeapNodeBuilder
 
     /// <summary>
     /// Completes every block: writes the headers, the page maps and the fill levels, and returns the block bytes in order. The heap
-    /// cannot be changed afterwards.
+    /// cannot be changed afterwards. Not for a heap made with a data tree: use <see cref="Seal"/>.
     /// </summary>
     /// <returns>One entry per heap block, each the data of one data block (never more than 8,176 bytes). Valid for the life of the builder.</returns>
-    /// <exception cref="InvalidOperationException">Called twice.</exception>
+    /// <exception cref="InvalidOperationException">Called twice, or the heap writes to a data tree.</exception>
     public IReadOnlyList<ReadOnlyMemory<byte>> Finish()
     {
-        if (_finished)
+        if (_finished || _tree is not null)
         {
-            throw new InvalidOperationException("the heap is already finished");
+            throw new InvalidOperationException(_finished ? "the heap is already finished" : "the heap writes to a data tree; call Seal");
         }
 
         _finished = true;
-        var result = new List<ReadOnlyMemory<byte>>(_blocks.Count);
-        for (int i = 0; i < _blocks.Count; i++)
+        _levels.Add((byte)FillLevel(_blocks[^1]!));
+        var result = new List<ReadOnlyMemory<byte>>(_blockCount);
+        for (int i = 0; i < _blockCount; i++)
         {
-            Block b = _blocks[i];
-            int mapAt = PageMapAt(b);
-            int n = b.Starts.Count;
-            Span<byte> d = b.Data;
-            BinaryPrimitives.WriteUInt16LittleEndian(d, (ushort)mapAt);   // ibHnpm, in all three header kinds
-            if (i == 0)
-            {
-                d[2] = 0xEC;   // bSig
-                d[3] = ClientSignature;
-                BinaryPrimitives.WriteUInt32LittleEndian(d[4..], UserRoot.Value);
-                // rgbFillLevel: eight 4-bit levels for blocks 0 to 7.
-                for (int k = 0; k < Math.Min(8, _blocks.Count); k++)
-                {
-                    SetLevel(d.Slice(8, 4), k, FillLevel(_blocks[k]));
-                }
-            }
-            else if (HeaderSize(i) == BitmapHeaderSize)
-            {
-                // The map in this block covers the next 128 blocks, this one included.
-                for (int k = 0; k < 128 && i + k < _blocks.Count; k++)
-                {
-                    SetLevel(d.Slice(2, 64), k, FillLevel(_blocks[i + k]));
-                }
-            }
-
-            // HNPAGEMAP: cAlloc, cFree (always zero: nothing is freed), then cAlloc + 1 offsets, the last being the end of the data.
-            Span<byte> map = d[mapAt..];
-            BinaryPrimitives.WriteUInt16LittleEndian(map, (ushort)n);
-            BinaryPrimitives.WriteUInt16LittleEndian(map[2..], 0);
-            for (int k = 0; k < n; k++)
-            {
-                BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * k))..], (ushort)b.Starts[k]);
-            }
-
-            BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * n))..], (ushort)b.Used);
-            result.Add(b.Data.AsMemory(0, mapAt + PageMapSize(n)));
+            result.Add(Render(i));
         }
 
         return result;
+    }
+
+    /// <summary>Writes the blocks still held to the data tree and ends the heap. The caller then completes the tree.</summary>
+    /// <exception cref="InvalidOperationException">Called twice, or the heap has no data tree.</exception>
+    public void Seal()
+    {
+        if (_finished || _tree is null)
+        {
+            throw new InvalidOperationException(_finished ? "the heap is already finished" : "the heap has no data tree");
+        }
+
+        _finished = true;
+        _levels.Add((byte)FillLevel(_blocks[^1]!));
+        for (int i = 0; i < _blockCount; i++)
+        {
+            if (_blocks[i] is not null)
+            {
+                _tree.FillBlock(i, Render(i).Span);
+                _blocks[i] = null;
+            }
+        }
+    }
+
+    // A block can be written once the blocks after it cannot change what it says: an ordinary block when it is finished (the next one has
+    // started), and a bitmap block when the 128 blocks it describes are. Block 0 holds the user root and the levels of blocks 0 to 7 and
+    // the TCINFO, which are set at the end, so it waits for Seal.
+    private void WriteFinishedBlocks()
+    {
+        int finished = _blockCount - 2;   // the block before the one just started has its level
+        if (finished >= 1 && HeaderSize(finished) != BitmapHeaderSize && _blocks[finished] is not null)
+        {
+            _tree!.FillBlock(finished, Render(finished).Span);
+            _blocks[finished] = null;
+        }
+
+        // The bitmap block B describes blocks B to B + 127; the last of them has just been finished when finished == B + 127.
+        int bitmap = finished - 127;
+        if (bitmap >= 8 && (bitmap - 8) % 128 == 0 && _blocks[bitmap] is not null)
+        {
+            _tree!.FillBlock(bitmap, Render(bitmap).Span);
+            _blocks[bitmap] = null;
+        }
+    }
+
+    // Finishes block i: its header fields, the fill levels it carries, and its page map. Needs the levels of the blocks it describes.
+    private ReadOnlyMemory<byte> Render(int i)
+    {
+        Block b = _blocks[i]!;
+        int mapAt = PageMapAt(b);
+        int n = b.Starts.Count;
+        Span<byte> d = b.Data;
+        BinaryPrimitives.WriteUInt16LittleEndian(d, (ushort)mapAt);   // ibHnpm, in all three header kinds
+        if (i == 0)
+        {
+            d[2] = 0xEC;   // bSig
+            d[3] = ClientSignature;
+            BinaryPrimitives.WriteUInt32LittleEndian(d[4..], UserRoot.Value);
+            // rgbFillLevel: eight 4-bit levels for blocks 0 to 7.
+            for (int k = 0; k < 8 && k < _levels.Count; k++)
+            {
+                SetLevel(d.Slice(8, 4), k, _levels[k]);
+            }
+        }
+        else if (HeaderSize(i) == BitmapHeaderSize)
+        {
+            // The map in this block covers the next 128 blocks, this one included.
+            for (int k = 0; k < 128 && i + k < _levels.Count; k++)
+            {
+                SetLevel(d.Slice(2, 64), k, _levels[i + k]);
+            }
+        }
+
+        // HNPAGEMAP: cAlloc, cFree (always zero: nothing is freed), then cAlloc + 1 offsets, the last being the end of the data.
+        Span<byte> map = d[mapAt..];
+        BinaryPrimitives.WriteUInt16LittleEndian(map, (ushort)n);
+        BinaryPrimitives.WriteUInt16LittleEndian(map[2..], 0);
+        for (int k = 0; k < n; k++)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * k))..], (ushort)b.Starts[k]);
+        }
+
+        BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * n))..], (ushort)b.Used);
+        return b.Data.AsMemory(0, mapAt + PageMapSize(n));
     }
 
     private static void SetLevel(Span<byte> levels, int index, int level)

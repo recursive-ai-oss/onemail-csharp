@@ -35,7 +35,10 @@ public sealed class TableContextBuilder
 
     private readonly NdbBlockBuilder _blocks;
     private readonly LtpValuePlacer _values;
-    private readonly HeapNodeBuilder _heap = new(TcSignature);
+    private readonly HeapNodeBuilder _heap;
+    private readonly NdbBlockBuilder.DataTreeWriter? _heapTree;
+    private readonly bool _ascendingRowIds;
+    private uint _lastRowId;
     private readonly Hid _info;
     private readonly BthTreeBuilder _rowIndex;
     private readonly TcColumn[] _columns;
@@ -56,13 +59,22 @@ public sealed class TableContextBuilder
     /// <param name="blocks">Where the heap, the row matrix and any value subnodes are written.</param>
     /// <param name="columns">The columns by property ID and type. PidTagLtpRowId and PidTagLtpRowVer are added if missing.</param>
     /// <param name="nextSubnodeNid">Supplies the NIDs of subnodes (large values, the row matrix); null for NID_TYPE_LTP NIDs counting up from index 1.</param>
+    /// <param name="streamHeap">True to write the heap's blocks to the file as they fill instead of holding the whole heap until <see cref="Build"/>. For tables with many rows; the heap then keeps only its last block and the few blocks that wait for their summaries.</param>
+    /// <param name="rowIdsAscending">True when the caller adds rows in strictly increasing row ID order. The builder then checks that, instead of remembering every row ID to refuse a repeat, so a long table costs no memory for it.</param>
     /// <exception cref="ArgumentException">A property ID repeats, there are more than 255 columns, a column the format reserves has another type, or a row would be larger than a block.</exception>
-    public TableContextBuilder(NdbBlockBuilder blocks, IEnumerable<(ushort Id, ushort Type)> columns, Func<Nid>? nextSubnodeNid = null)
+    public TableContextBuilder(NdbBlockBuilder blocks, IEnumerable<(ushort Id, ushort Type)> columns, Func<Nid>? nextSubnodeNid = null, bool streamHeap = false, bool rowIdsAscending = false)
     {
         ArgumentNullException.ThrowIfNull(blocks);
         ArgumentNullException.ThrowIfNull(columns);
         _blocks = blocks;
         _values = new LtpValuePlacer(blocks, nextSubnodeNid);
+        _ascendingRowIds = rowIdsAscending;
+        if (streamHeap)
+        {
+            _heapTree = blocks.BeginDataTree();
+        }
+
+        _heap = new HeapNodeBuilder(TcSignature, _heapTree);
 
         var list = new List<(ushort Id, ushort Type)>(columns);
         // A column is a property tag, so one ID may appear with two types (a String8 and a String column, say) but never twice with the same one.
@@ -252,7 +264,16 @@ public sealed class TableContextBuilder
             throw new InvalidOperationException(_built ? "the table is built" : "the previous row is not ended");
         }
 
-        if (!_rowIds.Add(rowId))
+        if (_ascendingRowIds)
+        {
+            if (_rowCount > 0 && rowId <= _lastRowId)
+            {
+                throw new ArgumentException($"row ID 0x{rowId:x} does not come after 0x{_lastRowId:x}, but the rows were promised in increasing order", nameof(rowId));
+            }
+
+            _lastRowId = rowId;
+        }
+        else if (!_rowIds.Add(rowId))
         {
             throw new ArgumentException($"row ID 0x{rowId:x} is already in the table", nameof(rowId));
         }
@@ -492,6 +513,13 @@ public sealed class TableContextBuilder
             BinaryPrimitives.WriteUInt16LittleEndian(d[4..], (ushort)_columns[i].Offset);
             d[6] = (byte)_columns[i].Size;
             d[7] = (byte)_columns[i].BitIndex;
+        }
+
+        if (_heapTree is not null)
+        {
+            _heap.Seal();
+            DataTreeResult r = _heapTree.Complete();
+            return new LtpNodeResult(r.Root, r.Length, (int)r.BlockCount, _values.Subnodes);
         }
 
         return LtpNodeResult.WriteHeap(_blocks, _heap, _values.Subnodes);

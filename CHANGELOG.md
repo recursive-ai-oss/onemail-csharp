@@ -9,6 +9,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `OutlookNames.RecurrenceType` (`PidLidRecurrenceType`) and `OutlookNames.CounterProposal` (`PidLidAppointmentCounterProposal`).
 - iCalendar to Outlook item: `METHOD:COUNTER` becomes a tentative response with the counter-proposal flag (and back); an RDATE paired with an EXDATE becomes a moved instance; a daily rule on weekdays, a yearly `BYMONTHDAY` with no month and one day, and a task's weekly, monthly and yearly rules are now carried; new loss entries say what an Outlook item cannot hold of attendees (`AttendeeRoleNotCarried`, `AttendeeTypeApproximated`, `PartstatNotCarried`, `RsvpIsPerMessage`), of STATUS (`StatusNotExported`), of a series (`SubMinuteTimeDropped`, `RangeThisAndFutureNotCarried`, `RdatePeriodNotCarried`) and of duplicate UIDs (`DuplicateUidNotConverted`); a rule Outlook cannot express reports which part (`RecurrenceNotMapped`), listed in `docs/conversion.md`.
 - `tools/oxocal`: `OxocalTool icsdiff` and `itemdiff` compare an iCalendar or an Outlook item with its round trip field by field and classify every difference as reported or unreported; `ics-roundtrip-checks.sh` adds the expansion oracles on the exported iCalendar.
+- `PstBuilder` (`RecursiveAI.OneMail.Pst.Messaging`) and `PstFileWriter` (`.Pst.Ndb`): write a new Unicode PST from folders and MAPI items handed over one at a time, in constant memory. The file writer places blocks as they are made, builds the block and node B-trees bottom-up (the node tree from sorted runs), and writes the allocation, page, free and free-page maps, the density list and the header last, so a stopped build leaves a file every reader refuses. The builder writes the mandatory nodes, folders with their hierarchy, contents and associated tables, messages with recipient and attachment tables, embedded messages, large values in subnodes, and the name-to-ID map with its hash buckets; every property is written as it is, and what it adds, renumbers or leaves out is listed in `PstBuilder.Defects`. `ConvertFormat.Pst`, `onemail convert --to pst` and `StoreEntry.Message` carry the same through `Mail.ConvertAsync`. `HeapNodeBuilder` and `TableContextBuilder` can write a heap's blocks as they fill, and `NdbBlockBuilder.DataTreeWriter` reserves a leaf's BID before its bytes. Outlook opening the files is not yet verified. See `docs/pst-writing.md`.
 
 ### Fixed
 
@@ -76,7 +77,6 @@ On the local feed. Calendar and contacts close with this preview (speed rows in 
 - Display HTML (`RecursiveAI.OneMail.Display`): an allowlist sanitiser on the HTML DOM, a remote-content policy (block, allow or a rewrite callback), `cid:` and attachment resolution, and optional header and attachment blocks. It has not had its independent review yet.
 - Calendar and contact benchmark rows against Ical.Net and FolkerKinzel.VCards, with a libical reference, in `docs/benchmarks.md`.
 - `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
-
 
 ### Changed
 
