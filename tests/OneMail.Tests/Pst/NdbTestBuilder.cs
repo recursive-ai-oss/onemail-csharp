@@ -302,7 +302,7 @@ public static class NdbTestBuilder
         {
             int usedBits = (int)Math.Min(g.AllocBytes * 8L, (eof - at + g.Align - 1) / g.Align);
             var amap = new byte[g.Page];
-            for (int b = 0; b < usedBits; b++) { amap[g.AllocOffset + (b >> 3)] |= (byte)(1 << (b & 7)); }
+            for (int b = 0; b < usedBits; b++) { amap[g.AllocOffset + (b >> 3)] |= (byte)(0x80 >> (b & 7)); }
             freeBytes = ((long)g.AllocBytes * 8 - usedBits) * g.Align;
             lastAMap = at;
             FinishPage(g, amap, 0x84, (ulong)at, (ulong)at, allocation: true);

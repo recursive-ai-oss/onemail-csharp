@@ -55,7 +55,7 @@ internal static class OutlookChecks
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
         & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite)
-        & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite)
+        & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite) & Guard("pst-edit", PstEdit)
         & Guard("recovery", Recovery);
 
     // Builds a small store with the PST builder (folders, a message with a recipient, an attachment and a named property), reads it back with no defect.
@@ -128,6 +128,51 @@ internal static class OutlookChecks
         cfb[0x20] = 6;
         bool cfbOk = CfbSpan.TryParseHeader(cfb, out CfbHeaderInfo ch) && ch.SectorSize == 512;
         return olmOk && pageOk && blockOk && mimeOk && cfbOk;
+    }
+
+    // Opens a store held in memory for writing, adds an item and a folder, deletes an item, commits, and reads the result back with no defect and exact counts.
+    public static bool PstEdit()
+    {
+        static MapiMessage Make(string subject)
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.MessageClass, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+            m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.Subject, MapiType.UnicodeString), Encoding.Unicode.GetBytes(subject)));
+            var a = new MapiAttachment(m);
+            a.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.AttachDataBinary, MapiType.Binary), new byte[30_000]));
+            m.AddAttachment(a);
+            return m;
+        }
+
+        using var ms = new MemoryStream();
+        using (RecursiveAI.OneMail.Pst.Messaging.PstBuilder b = RecursiveAI.OneMail.Pst.Messaging.PstBuilder.Create(ms, leaveOpen: true))
+        {
+            RecursiveAI.OneMail.Pst.Messaging.PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
+            inbox.AddMessage(Make("one"));
+            inbox.AddMessage(Make("two"));
+            b.Complete();
+        }
+
+        using (RecursiveAI.OneMail.Pst.Messaging.PstWritableStore w = RecursiveAI.OneMail.Pst.Messaging.PstStore.OpenForWriting(ms, leaveOpen: true))
+        {
+            RecursiveAI.OneMail.Pst.Messaging.PstFolder inbox = w.View.EnumerateFolders().First(f => f.Name == "Inbox");
+            RecursiveAI.OneMail.Pst.Ndb.Nid first = inbox.EnumerateMessageIds().First();
+            RecursiveAI.OneMail.Pst.Ndb.Nid added = w.CreateFolder(inbox.Nid, "Sub");
+            w.AddMessage(added, Make("three"));
+            w.DeleteMessage(first);
+            w.Commit();
+        }
+
+        if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(ms.ToArray(), out RecursiveAI.OneMail.Pst.Messaging.PstStore? store, out _) || store is null)
+        {
+            return false;
+        }
+
+        using (store)
+        {
+            return store.EnumerateMessages().Count() == 2 && store.EnumerateFolders().Any(f => f.Name == "Sub" && f.ContentCount == 1)
+                && store.EnumerateFolders().First(f => f.Name == "Inbox").ContentCount == 1 && store.Defects.Count == 0 && store.Database.Defects.Count == 0;
+        }
     }
 
     // Writes an Outlook message with a named property, a recipient, an attachment and an embedded message, and reads it back property-exact.

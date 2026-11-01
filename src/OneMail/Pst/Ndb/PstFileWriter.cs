@@ -55,7 +55,7 @@ public readonly record struct PstFileSummary(long FileLength, long Blocks, long 
 /// file Outlook wrote), follow the specification's statements that they must exist at the right intervals; the pages are valid and our readers and libpff accept them.</para>
 /// <para>Not thread-safe. The output stream must be seekable and writable.</para>
 /// </remarks>
-public sealed class PstFileWriter : IBidAllocator, INdbBlockSink, IDisposable
+public sealed class PstFileWriter : IBidAllocator, INdbBlockSink, INdbNodeSink, IDisposable
 {
     private const int PageSize = 512;
     private const int AMapBits = 496 * 8;
@@ -384,7 +384,7 @@ public sealed class PstFileWriter : IBidAllocator, INdbBlockSink, IDisposable
     {
         for (int slot = at / Slot, end = (at + length) / Slot; slot < end; slot++)
         {
-            _bits[slot >> 3] |= (byte)(1 << (slot & 7));
+            _bits[slot >> 3] |= (byte)(0x80 >> (slot & 7));   // the first slot is the high bit of the first byte (seen in files Outlook wrote)
         }
     }
 
