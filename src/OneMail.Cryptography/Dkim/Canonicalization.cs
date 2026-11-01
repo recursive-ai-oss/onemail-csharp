@@ -14,7 +14,7 @@ internal readonly record struct HeaderField(int Start, int End, int Colon, strin
 /// </summary>
 internal sealed class MessageParts
 {
-    public MessageParts(ReadOnlyMemory<byte> bytes)
+    public MessageParts(ReadOnlyMemory<byte> bytes, int maxHeaders = int.MaxValue)
     {
         Bytes = bytes;
         ReadOnlySpan<byte> m = bytes.Span;
@@ -25,6 +25,14 @@ internal sealed class MessageParts
         string openName = string.Empty;
         while (pos < m.Length)
         {
+            if (Headers.Count >= maxHeaders)
+            {
+                // A message with this many header fields is hostile; stop before the lists grow with the input.
+                HeaderLimitExceeded = true;
+                BodyStart = m.Length;
+                return;
+            }
+
             int nl = m[pos..].IndexOf((byte)'\n');
             int lineEnd = nl < 0 ? m.Length : pos + nl + 1;
             int contentEnd = nl < 0 ? m.Length : pos + nl;
@@ -92,6 +100,36 @@ internal sealed class MessageParts
     public ReadOnlyMemory<byte> Bytes { get; }
 
     public List<HeaderField> Headers { get; } = [];
+
+    /// <summary>True when the header section held more fields than the limit given to the constructor; the fields past it were not read.</summary>
+    public bool HeaderLimitExceeded { get; private set; }
+
+    private Dictionary<string, List<int>>? _byName;
+
+    /// <summary>Header positions (indexes into <see cref="Headers"/>, top to bottom) by field name, ignoring case. Built once, so selecting headers costs the number of names asked for, not the number of fields in the message.</summary>
+    public Dictionary<string, List<int>> ByName
+    {
+        get
+        {
+            if (_byName is null)
+            {
+                var d = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < Headers.Count; i++)
+                {
+                    if (!d.TryGetValue(Headers[i].Name, out List<int>? l))
+                    {
+                        d[Headers[i].Name] = l = [];
+                    }
+
+                    l.Add(i);
+                }
+
+                _byName = d;
+            }
+
+            return _byName;
+        }
+    }
 
     /// <summary>Offset of the first body byte (after the blank line), or the message length if there is no body.</summary>
     public int BodyStart { get; private set; }

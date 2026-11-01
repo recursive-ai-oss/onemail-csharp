@@ -125,6 +125,15 @@ public enum DkimReason
 
     /// <summary>The key record's <c>s=</c> excludes email.</summary>
     ServiceTypeMismatch = 26,
+
+    /// <summary>The signature uses <c>l=</c> and content follows the signed part of the body, which the signature does not protect (RFC 6376 §8.2). Refused unless <see cref="DkimVerifierOptions.AllowBodyLengthLimit"/> is set.</summary>
+    BodyLengthLimited = 27,
+
+    /// <summary>The message holds more <c>From</c> header fields than the signature covers, so the one a reader shows may be unsigned (RFC 6376 §8.15). Refused unless <see cref="DkimVerifierOptions.AllowUnsignedFromInstances"/> is set.</summary>
+    UnsignedFromHeader = 28,
+
+    /// <summary>The header section holds more fields than <see cref="DkimVerifierOptions.MaxHeaderFields"/>; nothing was verified.</summary>
+    TooManyHeaders = 29,
 }
 
 /// <summary>Things worth knowing about a signature even when it passes.</summary>
@@ -151,6 +160,9 @@ public enum DkimWarnings
 
     /// <summary>The signature has no <c>x=</c> expiry.</summary>
     NoExpiry = 32,
+
+    /// <summary>The message holds more instances of a header named in <c>h=</c> than the signature covers; see <see cref="DkimSignatureResult.UnsignedHeaderInstances"/>.</summary>
+    UnsignedHeaderInstances = 64,
 }
 
 /// <summary>How a signature stands against the clock.</summary>

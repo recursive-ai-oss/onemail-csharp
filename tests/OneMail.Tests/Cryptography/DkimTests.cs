@@ -68,7 +68,9 @@ internal sealed class DkimVerifierOptionsBuilder
 
     public bool AllowRsaSha1 { get; set; } = true;
 
-    public DkimVerifierOptions Build() => new() { Resolver = Resolver, TimeProvider = new DkimVectorTests.FixedTime(Now), MinimumRsaBits = MinimumRsaBits, AllowRsaSha1 = AllowRsaSha1 };
+    public bool AllowBodyLengthLimit { get; set; }
+
+    public DkimVerifierOptions Build() => new() { Resolver = Resolver, TimeProvider = new DkimVectorTests.FixedTime(Now), MinimumRsaBits = MinimumRsaBits, AllowRsaSha1 = AllowRsaSha1, AllowBodyLengthLimit = AllowBodyLengthLimit };
 }
 
 public class DkimRoundTripTests
@@ -137,7 +139,7 @@ public class DkimRoundTripTests
         using DkimSigningKey key = DkimFixtures.RsaSigning();
         byte[] signed = DkimFixtures.Signer(key, length: true).Sign(DkimFixtures.Message());
         byte[] appended = [.. signed, .. "Appended by someone else.\r\n"u8.ToArray()];
-        DkimSignatureResult r = (await DkimFixtures.Verifier().VerifyAsync(appended, TestContext.Current.CancellationToken)).Single();
+        DkimSignatureResult r = (await DkimFixtures.Verifier(tweak: b => b.AllowBodyLengthLimit = true).VerifyAsync(appended, TestContext.Current.CancellationToken)).Single();
         Assert.True(r.IsPass, r.ToString());
         Assert.True(r.BodyHasUnsignedContent);
         Assert.True(r.Warnings.HasFlag(DkimWarnings.BodyLengthLimit));

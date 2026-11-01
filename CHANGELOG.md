@@ -32,6 +32,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - An Outlook item whose PidLidTimeZoneStruct holds a rule no VTIMEZONE can state (found by the fuzzer) made the export throw `InvalidOperationException`; the item now reads as having no zone, with a `ValueOutOfRange` defect.
 - Outlook item to iCalendar: PidLidRecurrenceType, the end-display time zone, PidLidResponseStatus and PidLidIsException are reported as derived, not as properties iCalendar cannot hold.
 
+### Security
+
+- DKIM: a signature no longer passes while the message holds a `From` field it does not cover (`DkimReason.UnsignedFromHeader`; `DkimVerifierOptions.AllowUnsignedFromInstances` restores the old result), or while `l=` leaves content after the signed part of the body (`DkimReason.BodyLengthLimited`; `AllowBodyLengthLimit` restores it). `DkimSignatureResult.UnsignedHeaderInstances` and the `UnsignedHeaderInstances` warning name any header in `h=` that the message holds more often than the signature covers.
+- DKIM and ARC: a message with more than `DkimVerifierOptions.MaxHeaderFields` (10,000) header fields is not verified (`DkimReason.TooManyHeaders`, a failed ARC chain); header selection no longer scans every field once per name in `h=`.
+- `DkimSigner` refuses header names that could add tags to the signature.
+- S/MIME: `SmimeSignerResult.IsTrusted`, `SmimeSignedLayer.IsTrusted` and `SmimeResult.IsTrusted` say whether a chain to a caller-supplied anchor was built; `Succeeded` alone holds for a message signed with a certificate nobody vouched for. `SmimeResult.Succeeded` is false for a signed part inside an unsigned wrapper. The sender check compares the signed entity's own `From` when it has one, and a `From` naming a mailbox the certificate does not cover is a mismatch. Platform decryption errors after a recipient matched report as `DecryptionFailed` like every other failure. The default CMS content and decompression limits are 256 MiB.
+
 ## [0.4.0-preview.1]
 
 On the local feed. Bodies, display and conversion close with this preview: RTF to HTML, HTML and text, best body, display HTML with its independent review passed, the calendar card, the Render package, conversions with loss reports, replies and forwards. It also carries the first Outlook writing (MSG and OFT, PST write primitives), opt-in recovery of damaged MSG files, and DKIM and ARC in the Cryptography package. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).

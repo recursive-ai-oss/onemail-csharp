@@ -137,7 +137,8 @@ internal static class Program
             resolver.Add(kv.Key, kv.Value!.AsArray().Select(x => x!.GetValue<string>()).ToArray());
         }
 
-        var verifier = new DkimVerifier(new DkimVerifierOptions { Resolver = resolver });
+        // ONEMAIL_DKIM_ALLOW_L=1 accepts signatures with l= that leave content after the signed part (off by default).
+        var verifier = new DkimVerifier(new DkimVerifierOptions { Resolver = resolver, AllowBodyLengthLimit = Environment.GetEnvironmentVariable("ONEMAIL_DKIM_ALLOW_L") == "1" });
         var result = new JsonObject();
         foreach (string file in Directory.EnumerateFiles(Path.Combine(dir, sub), "*.eml").Order(StringComparer.Ordinal))
         {

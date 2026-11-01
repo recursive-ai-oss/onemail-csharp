@@ -54,6 +54,12 @@ public sealed class DkimSignatureResult
     /// <summary>Header names that <c>h=</c> lists more often than the message holds them (over-signing, RFC 6376 §5.4): adding such a header later breaks the signature.</summary>
     public IReadOnlyList<string> OversignedHeaders { get; internal set; } = [];
 
+    /// <summary>
+    /// Names from <c>h=</c> of which the message holds more instances than the signature covers (an added second <c>From</c>, say). Those extra
+    /// instances are not signed even when the status is a pass; a reader that shows the topmost instance shows unsigned text (RFC 6376 §8.15).
+    /// </summary>
+    public IReadOnlyList<string> UnsignedHeaderInstances { get; internal set; } = [];
+
     /// <summary>The ranges of the header fields the signature covered, in hashing order.</summary>
     public IReadOnlyList<DkimByteRange> CoveredHeaders { get; internal set; } = [];
 

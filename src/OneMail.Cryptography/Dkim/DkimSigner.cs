@@ -200,7 +200,7 @@ public sealed class DkimSigner
     /// <summary>Creates a signer.</summary>
     /// <param name="key">The private key.</param>
     /// <param name="options">The signing settings.</param>
-    /// <exception cref="ArgumentException">The domain or selector is not a plain ASCII DNS name, the identity is outside the domain, or rsa-sha1 or an algorithm that does not fit the key was asked for.</exception>
+    /// <exception cref="ArgumentException">The domain or selector is not a plain ASCII DNS name, a header name to sign cannot be written in h=, the identity is outside the domain, or rsa-sha1 or an algorithm that does not fit the key was asked for.</exception>
     public DkimSigner(DkimSigningKey key, DkimSignerOptions options)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -220,6 +220,12 @@ public sealed class DkimSigner
         if (options.Algorithm is { } a && a != key.Algorithm)
         {
             throw new ArgumentException("The key makes " + key.Algorithm + ", not " + a + ".", nameof(options));
+        }
+
+        if (options.HeadersToSign is { } names && names.Any(static n => n.Length == 0 || n.Any(static c => c is ':' or ';' or '=' || c <= 32 || c > 126)))
+        {
+            // A name is written into the h= tag; one with a colon, semicolon or space would add tags or headers to the signature.
+            throw new ArgumentException("A header name to sign has characters that cannot be written in h=.", nameof(options));
         }
 
         if (options.Identity is { } id)

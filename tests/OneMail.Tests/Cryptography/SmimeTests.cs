@@ -454,7 +454,8 @@ public sealed class SmimeTests : IDisposable
         extra.SetDecodedContent("added later\r\n"u8, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.SevenBit);
         wrapper.Add(extra);
         SmimeResult r = SmimeProcessor.Open(Transport(wrapper));
-        Assert.True(r.Succeeded);
+        Assert.False(r.Succeeded);
+        Assert.True(r.Layers.Single().Succeeded);
         Assert.Contains(SmimeIssue.SignedPartInUnsignedWrapper, r.Issues);
         Assert.Equal(["2"], r.Outside!.UnsignedParts);
     }
