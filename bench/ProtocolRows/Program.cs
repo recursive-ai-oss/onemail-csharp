@@ -48,13 +48,34 @@ switch (row)
 }
 
 // Runs the timed body `reps` times after one untimed warm-up and prints the rows and their median.
+// The Postfix guest relays every accepted message to a sink on the host. With the sink directory known, wait (outside the timed
+// region) until everything accepted so far has arrived there and drop it, so the guest's queue and disk never fill up over a long row.
+void DrainSink()
+{
+    string? dir = Environment.GetEnvironmentVariable("ONEMAIL_SINK_DIR");
+    if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) { return; }
+    int last = -1, stable = 0;
+    for (int waited = 0; waited < 300 && stable < 3; waited++)
+    {
+        int now = Directory.GetFiles(dir, "*.eml").Length;
+        stable = now == last ? stable + 1 : 0;
+        last = now;
+        Thread.Sleep(1000);
+    }
+
+    foreach (string f in Directory.GetFiles(dir)) { File.Delete(f); }
+}
+
 async Task Measure(string name, int messages, Func<Task<int>> body)
 {
+    DrainSink();
     await body();
+    DrainSink();
     var times = new List<double>();
     var allocs = new List<long>();
     for (int r = 1; r <= reps; r++)
     {
+        DrainSink();
         GC.Collect();
         long before = GC.GetTotalAllocatedBytes(true);
         var sw = Stopwatch.StartNew();
