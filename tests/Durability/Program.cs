@@ -18,6 +18,7 @@ using RecursiveAI.OneMail.Tests.Pst;
 //   Durability soak <dir> <base> <ops> <seed> [--commit-every 100] [--corpus <dir>]
 //       Random operations on a real file with a check after every commit.
 //   Durability child <scenario> <file> <killAtOp> <killAfterMs>        (used by kill)
+//   Durability make <dir> [--bases ...] [--scenarios ...]             writes each base after each scenario, finished, for the libpff comparison
 //   Durability pff <dir>                                              runs pffinfo over every .pst in a directory (needs PFFINFO)
 
 string Opt(string name, string fallback)
@@ -45,6 +46,8 @@ switch (args[0])
         return Soak.Run(args[1], args[2], I(args[3]), I(args[4]), I(Opt("--commit-every", "100")), corpus);
     case "child":
         return Campaign.Child(args[1], args[2], I(args[3]), I(args[4]));
+    case "make":
+        return Campaign.Make(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), corpus);
     case "pff":
         return Campaign.Pff(args[1]);
     default:
@@ -157,6 +160,23 @@ internal static class Campaign
         {
             return StoreChecks.Consistency(s!).Count;
         }
+    }
+
+    public static int Make(string dir, string[] bases, string[] scenarios, string corpus)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string b in bases)
+        {
+            byte[] image = Bases.Load(b, corpus);
+            foreach (string sc in scenarios)
+            {
+                string file = Path.Combine(dir, $"edited-{b}-{sc}.pst");
+                File.WriteAllBytes(file, image);
+                Child(sc, file, 0, 0);
+            }
+        }
+
+        return 0;
     }
 
     public static int Child(string scenario, string file, int killAtOp, int killAfterMs)
