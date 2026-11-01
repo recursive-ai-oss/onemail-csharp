@@ -44,9 +44,10 @@ public sealed class MimeHeader
     {
     }
 
-    internal MimeHeader(string name, string value, ReadOnlySpan<byte> newline)
+    internal MimeHeader(string name, string value, ReadOnlySpan<byte> newline, bool utf8Text = false)
     {
-        _raw = Writing.MimeWriterSupport.FormatHeader(name, value, newline, 78);
+        // utf8Text keeps non-ASCII free text as raw UTF-8 (RFC 6532) instead of encoded-words.
+        _raw = Writing.MimeWriterSupport.FormatHeader(name, value, newline, 78, encodeFreeText: !utf8Text);
         Reparse(name.Length);
     }
 

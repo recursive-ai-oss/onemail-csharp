@@ -217,18 +217,18 @@ OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Nod
 
 ## S/MIME (`RecursiveAI.OneMail.Cryptography.Smime`)
 
-RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: OpenSSL `cms` 3.0.13 (worker) and 3.6.2 (a second build), MimeKit 4.18.2 (public S/MIME API, in `tools/smime`). Rules and method: [`smime.md`](smime.md), ambiguities SM1-SM8; the checks are `tools/smime/`. Not yet reviewed as a crypto path.
+RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: OpenSSL `cms` 3.0.13 (worker) and 3.6.2 (a second build), MimeKit 4.18.2 (public S/MIME API, in `tools/smime`). Rules and method: [`smime.md`](smime.md), ambiguities SM1-SM8; the checks are `tools/smime/`. Reviewed as a crypto path (see the *Review* section of `smime.md`); the counts below are from the runs after the review fixes.
 
 | Check | Input | Result | Known gaps |
 |---|---|---|---|
-| Ours to OpenSSL, OpenSSL to ours | sign (detached, opaque) x RSA PKCS#1 v1.5, RSA-PSS, ECDSA P-256, Ed25519; encrypt (EnvelopedData CBC, AuthEnvelopedData GCM) x RSA-OAEP, RSA PKCS#1 v1.5, ECDH; sign-then-encrypt | 3.6.2: 16/16 each way. 3.0.13: 14/16 each way; the 2 failing cells each way are Ed25519 signatures, which 3.0 cannot sign or verify in CMS (`eddsa_digest_signverify_init: invalid digest`), so they are oracle limits, not counted as failures | the Ed25519 cells have no 3.0 oracle; they pass on 3.6.2 |
+| Ours to OpenSSL, OpenSSL to ours | sign (detached, opaque) x RSA PKCS#1 v1.5, RSA-PSS, ECDSA P-256, Ed25519; encrypt (EnvelopedData CBC, AuthEnvelopedData GCM) x RSA-OAEP, RSA PKCS#1 v1.5, ECDH; sign-then-encrypt | 3.0.13 (the worker's pinned build): ours to OpenSSL 14/16 and OpenSSL to ours 14/16; the misses are the Ed25519 cells, which 3.0 cannot sign or verify in CMS (`eddsa_digest_signverify_init: invalid digest`), so they are oracle limits. 3.6.2 (a local second build): 16/16 each way | Ed25519 S/MIME has no oracle on the worker until OpenSSL 3.6 is pinned there |
 | Ours to MimeKit, MimeKit to ours | the same cells MimeKit supports (no Ed25519, no GCM sign) | 8/8 and 11/11. MimeKit's default content cipher is 3DES: we refuse it unless `AllowLegacyCiphers` is set, and read it with the flag | |
 | RFC 9216 example keys and certificates (sha256 06fbf1ed...2b71) | Alice, Bob (RSA), Carlos, Dana (Ed25519 with X25519 keys): sign detached and opaque, encrypt Enveloped and AuthEnveloped | 16/16; chains validate to the published roots | the RFC's own messages are not used (its signed examples are not published as MIME) |
 | Tamper classes | body byte, signed header, boundary games, signature swapped, wrong recipient, truncated CMS (unit tests) | each gives its typed status (`ContentModified`, `SignatureInvalid`, `NoMatchingRecipient`, `StructureInvalid`, `Malformed` ...), never an exception | |
 | Outlook S/MIME items (MS-OXOSMIME) | generated `IPM.Note.SMIME` and `IPM.Note.SMIME.MultipartSigned` items in MSG and PST; the corpora | generated items verify and decrypt through the same path; the corpora hold 3,014 items, 78 from Outlook, with 1 S/MIME-class item (`IPM.Note.SMIME.MultipartSigned`, Valid) and 412 MIME messages with S/MIME parts; no Outlook-produced encrypted item | no Outlook-written sample beyond that one until the Outlook VM exists |
-| Structure fuzz `smime-structure` | multipart/signed, pkcs7-mime and triple-wrapped messages, raw and edited from valid ones; 600 s, `Checked` build | 9,622,572 executions, 0 findings. An earlier run found a certificate with a damaged extended-key-usage extension throwing out of the verifier (now reported as `eku:malformed`; repro `testdata/fuzz/smime-structure-malformed-eku-in-signer-cert.bin`) | CMS parsing is fuzzed in OneCrypto |
+| Structure fuzz `smime-structure` | multipart/signed, pkcs7-mime and triple-wrapped messages, raw and edited from valid ones; 600 s, `Checked` build | 7.7 M executions, 0 findings (peak RSS 33 MB). An earlier run found a certificate with a damaged extended-key-usage extension throwing out of the verifier (now reported as `eku:malformed`; repro `testdata/fuzz/smime-structure-malformed-eku-in-signer-cert.bin`) | CMS parsing is fuzzed in OneCrypto |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; `smime: ok` | native only |
-| Suite | `Checked` configuration | 3,159 / 3,159 pass (38 of them S/MIME) | |
+| Suite | `Checked` configuration | 3,348 / 3,348 pass | |
 
 ## Rendering to PDF and PNG
 

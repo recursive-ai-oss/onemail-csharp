@@ -247,11 +247,12 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
 
         _items.Finish(this);
         _completed = true;
-        // MS-PST 2.2.2.6 rgnid: the next nidIndex for each type.
+        // MS-PST 2.2.2.6 rgnid: the last nidIndex allocated for each type (the next allocation adds one), as files written by Outlook hold it. The _next fields
+        // hold the next index to hand out, so the last one allocated is one less.
         uint[] n = _file.NodeCounters;
-        n[(int)NidType.NormalFolder] = _nextFolderIndex;
-        n[(int)NidType.NormalMessage] = _nextMessageIndex;
-        n[(int)NidType.AssocMessage] = _nextAssocIndex;
+        n[(int)NidType.NormalFolder] = _nextFolderIndex - 1;
+        n[(int)NidType.NormalMessage] = _nextMessageIndex - 1;
+        n[(int)NidType.AssocMessage] = _nextAssocIndex - 1;
         n[(int)NidType.SearchFolder] = Math.Max(n[(int)NidType.SearchFolder], 0x112);
         return _file.Complete();
     }

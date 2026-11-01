@@ -298,7 +298,7 @@ internal static class MimeWriterSupport
         IsStructured(name) || System.Text.Ascii.IsValid(value) ? value : Text.Rfc2047.Encode(value);
 
     // RFC 5322 §2.2.3: fold only at whitespace, so the unfolded value is the value given.
-    public static byte[] FormatHeader(string name, string value, ReadOnlySpan<byte> newline, int foldWidth)
+    public static byte[] FormatHeader(string name, string value, ReadOnlySpan<byte> newline, int foldWidth, bool encodeFreeText = true)
     {
         if (name.Length == 0)
         {
@@ -318,7 +318,7 @@ internal static class MimeWriterSupport
             throw new ArgumentException("A header value cannot contain a line break; it would start a new header.", nameof(value));
         }
 
-        byte[] v = Encoding.UTF8.GetBytes(EncodeText(name, value.Trim(' ', '\t')));
+        byte[] v = Encoding.UTF8.GetBytes(encodeFreeText ? EncodeText(name, value.Trim(' ', '\t')) : value.Trim(' ', '\t'));
         var w = new ArrayBufferWriter<byte>(name.Length + v.Length + 16);
         w.Write(Encoding.ASCII.GetBytes(name));
         w.Write(": "u8);
