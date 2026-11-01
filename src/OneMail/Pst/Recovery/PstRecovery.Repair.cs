@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using RecursiveAI.OneMail.Mapi;
@@ -84,10 +85,16 @@ public sealed partial class PstRecovery
                 RecoveryProvenance p = item.Provenance;
                 string target = string.Empty;
                 string? error = null;
+                var dropped = new List<string>();
                 uint newNid = 0;
                 try
                 {
                     PstFolderWriter folder = TargetFolder(ipm, prefix, item, out target);
+                    if (item.Provenance.Status != RecoveryStatus.Live)
+                    {
+                        Salvage(item.Message, "message", dropped);
+                    }
+
                     AddProvenance(item);
                     newNid = folder.AddMessage(item.Message, item.Associated).Value;
                     written++;
@@ -96,12 +103,12 @@ public sealed partial class PstRecovery
                 catch (Exception e) when (e is InvalidOperationException or InvalidDataException or IOException or ArgumentException or NotSupportedException or OverflowException)
                 {
                     failed++;
-                    error = e.GetType().Name + ": " + e.Message;
+                    error = e.GetType().Name + ": " + e.Message + " @ " + string.Join(" <- ", (e.StackTrace ?? "").Split((char)10).Take(6).Select(x => x.Trim()));
                 }
 
                 if (w is not null)
                 {
-                    WriteItem(w, item, target, newNid, error);
+                    WriteItem(w, item, target, newNid, error, dropped);
                 }
             }
 
@@ -217,6 +224,62 @@ public sealed partial class PstRecovery
         return sb.ToString();
     }
 
+    // A value whose blocks are gone cannot be copied. Reading each value of a damaged item first drops the ones that fail, so the rest of the item is
+    // written instead of the whole item being lost; what was dropped goes in the report.
+    private static void Salvage(MapiObject o, string where, List<string> dropped)
+    {
+        byte[] buffer = new byte[64 * 1024];
+        foreach (MapiProperty p in o.Properties.ToList())
+        {
+            try
+            {
+                for (int i = 0; i < p.ValueCount; i++)
+                {
+                    // The builder streams large values, so a value is read the same way here.
+                    // A value that comes up shorter than its declared length is cut by a missing block; the builder would refuse it.
+                    using Stream stream = p.OpenRead(i);
+                    long read = 0;
+                    int got;
+                    while ((got = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        read += got;
+                    }
+
+                    if (read != p.GetByteLength(i))
+                    {
+                        throw new EndOfStreamException("the value is " + read + " bytes of " + p.GetByteLength(i));
+                    }
+                }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or InvalidOperationException or OverflowException or NotSupportedException)
+            {
+                o.Properties.Remove(p.Tag);
+                dropped.Add(where + " " + p.Tag + " (" + e.GetType().Name + ")");
+            }
+        }
+
+        if (o is MapiMessage m)
+        {
+            int n = 0;
+            foreach (MapiRecipient r in m.Recipients)
+            {
+                Salvage(r, where + " recipient " + n++, dropped);
+            }
+
+            n = 0;
+            foreach (MapiAttachment a in m.Attachments)
+            {
+                Salvage(a, where + " attachment " + n, dropped);
+                if (a.EmbeddedMessage is { } em)
+                {
+                    Salvage(em, where + " attachment " + n + " message", dropped);
+                }
+
+                n++;
+            }
+        }
+    }
+
     private static void AddProvenance(PstRecoveredItem item)
     {
         RecoveryProvenance p = item.Provenance;
@@ -273,7 +336,7 @@ public sealed partial class PstRecovery
         w.WriteEndArray();
     }
 
-    private static void WriteItem(Utf8JsonWriter w, PstRecoveredItem item, string target, uint newNid, string? error)
+    private static void WriteItem(Utf8JsonWriter w, PstRecoveredItem item, string target, uint newNid, string? error, List<string> dropped)
     {
         RecoveryProvenance p = item.Provenance;
         w.WriteStartObject();
@@ -306,6 +369,17 @@ public sealed partial class PstRecovery
         }
 
         w.WriteEndArray();
+        if (dropped.Count > 0)
+        {
+            w.WriteStartArray("droppedProperties");
+            foreach (string d in dropped)
+            {
+                w.WriteStringValue(d);
+            }
+
+            w.WriteEndArray();
+        }
+
         if (error is not null)
         {
             w.WriteString("error", error);

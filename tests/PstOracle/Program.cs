@@ -8,6 +8,26 @@ using RecursiveAI.OneMail.Pst.Ndb;
 // Dumps what the NDB layer sees in a PST/OST as "key value" lines, so the numbers can be set beside what the libpff tools report.
 //   PstOracle dump <file>      header, node and block counts, data-tree sizes, allocation, defects, scan agreement
 //   PstOracle nodes <file>     one line per node: nid, type, data bid, data length, subnode bid
+if (args is ["pstdamage", var dIn, var dOut, var dKind, ..])
+{
+    return RecursiveAI.OneMail.PstOracle.RecoveryCommands.Damage(dIn, dOut, dKind, args.Length > 4 ? double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) : 0, args.Length > 5 ? int.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 1);
+}
+
+if (args is ["pstrecover", var rIn, var rOut, ..])
+{
+    return RecursiveAI.OneMail.PstOracle.RecoveryCommands.Recover(rIn, rOut, args.Length > 3 && !args[3].StartsWith("--", StringComparison.Ordinal) ? args[3] : null, args.Contains("--forensic"));
+}
+
+if (args is ["pstscan", var sIn])
+{
+    return RecursiveAI.OneMail.PstOracle.RecoveryCommands.ScanDamaged(sIn);
+}
+
+if (args is ["pstcampaign", var cIn, var cWork])
+{
+    return RecursiveAI.OneMail.PstOracle.RecoveryCommands.Campaign(cIn, cWork);
+}
+
 if (args is ["gen", var outPath, var count, ..] && args.Length <= 4)
 {
     // A file (ansi, unicode or 4k; default 4k) with <count> small nodes, for the working-set runs.

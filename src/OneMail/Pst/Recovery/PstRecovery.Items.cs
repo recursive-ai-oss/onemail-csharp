@@ -364,6 +364,18 @@ public sealed partial class PstRecovery
             }
         }
 
+        // Block ranges past the end of a truncated file are not in the file; what is left of them is the part that was.
+        long length = _file.Length;
+        var clipped = new List<ByteRange>(lost.Count);
+        foreach (ByteRange l in lost)
+        {
+            if (l.Offset < length)
+            {
+                clipped.Add(new ByteRange(l.Offset, Math.Min(l.Length, length - l.Offset)));
+            }
+        }
+
+        lost = clipped;
         IReadOnlyList<ByteRange> ranges = RecoveryProvenance.Merge(walker.Ranges);
         long at = ranges.Count > 0 ? ranges[0].Offset : 0;
         var mail = new List<MailDefect>(kinds.Count);
