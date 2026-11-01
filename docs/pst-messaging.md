@@ -86,3 +86,7 @@ Worker, libpff `pffexport` 20180714 (black box), `tests/PstOracle`:
   differential until another oracle (Outlook) exists.
 - Fuzzing: the `pst-messaging` target (bounded run recorded in the unit report).
 - Memory: `PstOracle pstalloc <file> <passes>` prints bytes allocated per message and the working set after each pass.
+
+## Writing
+
+`PstBuilder` writes a new store from folders and MAPI items; see [`pst-writing.md`](pst-writing.md).

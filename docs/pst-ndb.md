@@ -94,3 +94,7 @@ On the real OST: all 381 BBT blocks and both root pages are found, plus 101 furt
 Working set: one block image (at most 8,192 bytes) at a time, plus eight bytes per data block of the stream being written (the BIDs the XBLOCK lists; 12 MB for a 4 GB stream). A stream is never held whole.
 
 What is checked: `tests/OneMail.Tests/Pst/NdbBlockBuilderTests.cs` writes data trees of 1, 100, 8,175, 8,176 and 8,177 bytes, a full XBLOCK, one byte more (the first XXBLOCK) and two full XBLOCKs and a bit, in a file made around the builder's blocks, and reads each back byte for byte through `NdbFile` with no defect (CRC, signature and BID of every trailer); all three encodings; subnode trees of 1, 340, 341, 1,000 and the maximum 173,400 entries; the trailer fields by value.
+
+## Writing a whole file
+
+`PstFileWriter` places these blocks in a new file, builds the two B-trees and the allocation maps and writes the header; see [`pst-writing.md`](pst-writing.md).
