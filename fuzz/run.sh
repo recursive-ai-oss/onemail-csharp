@@ -70,6 +70,7 @@ case "$target" in
   dkim-tags) maxlen=4096 ;;
   dkim-key) maxlen=9000 ;;
   dns-reply) maxlen=2048 ;;
+  smime-structure) maxlen=8192 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 

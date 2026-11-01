@@ -478,15 +478,44 @@ internal static class Program
 
         Console.WriteLine("cryptography: " + (cryptoOk ? "ok" : "FAILED"));
 
+        // S/MIME under NativeAOT: sign (detached and opaque, RSA and Ed25519), encrypt (CBC and GCM), open both, tamper once. CMS is OneCrypto's.
+        bool smimeOk;
+        {
+            var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            using var caRsa = System.Security.Cryptography.RSA.Create(2048);
+            var ca = RecursiveAI.OneCrypto.Issuance.CertificateAuthority.CreateRoot(RecursiveAI.OneCrypto.DistinguishedName.FromString("CN=Smoke Root"), RecursiveAI.OneCrypto.X509Signer.FromRsa(caRsa, System.Security.Cryptography.HashAlgorithmName.SHA256), start, TimeSpan.FromDays(3650));
+            using var rsa = System.Security.Cryptography.RSA.Create(2048);
+            var cert = ca.Issue(RecursiveAI.OneCrypto.PublicKeyInfo.FromAsymmetricAlgorithm(rsa), RecursiveAI.OneCrypto.DistinguishedName.FromString("CN=smoke"), new RecursiveAI.OneCrypto.Issuance.CertificateIssueOptions { Profile = RecursiveAI.OneCrypto.Issuance.CertificateProfile.SMime, NotBefore = start, SubjectAlternativeNames = [RecursiveAI.OneCrypto.GeneralName.Email("smoke@example.test")] });
+            var content = new RecursiveAI.OneMail.Mime.MimePart("text/plain");
+            content.SetDecodedContent("smoke body\r\n"u8, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.SevenBit);
+            var sign = new RecursiveAI.OneMail.Cryptography.Smime.SmimeSignOptions { Signers = [new RecursiveAI.OneCrypto.CmsSignerSpec { Certificate = cert, Key = RecursiveAI.OneCrypto.Keys.PrivateKey.FromRsa(rsa) }] };
+            var detached = RecursiveAI.OneMail.Cryptography.Smime.SmimeSigner.SignDetached(content, sign);
+            detached.Headers.Add("From", "smoke@example.test");
+            var detachedResult = RecursiveAI.OneMail.Cryptography.Smime.SmimeProcessor.Open(detached.ToArray());
+            var opaqueResult = RecursiveAI.OneMail.Cryptography.Smime.SmimeProcessor.Open(RecursiveAI.OneMail.Cryptography.Smime.SmimeSigner.SignOpaque(content, sign));
+            var edKey = RecursiveAI.OneCrypto.Keys.PrivateKey.FromEd25519(RecursiveAI.OneCrypto.Primitives.Ed25519PrivateKey.FromSeed(new byte[32] { 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 8, 7, 6, 5 }));
+            var edCert = ca.Issue(edKey.PublicKey, RecursiveAI.OneCrypto.DistinguishedName.FromString("CN=smoke-ed"), new RecursiveAI.OneCrypto.Issuance.CertificateIssueOptions { Profile = new RecursiveAI.OneCrypto.Issuance.CertificateProfile { Name = "ed", KeyUsages = RecursiveAI.OneCrypto.X509.KeyUsages.DigitalSignature, MaxValidity = TimeSpan.FromDays(825) }, NotBefore = start });
+            var edResult = RecursiveAI.OneMail.Cryptography.Smime.SmimeProcessor.Open(RecursiveAI.OneMail.Cryptography.Smime.SmimeSigner.SignOpaque(content, new RecursiveAI.OneMail.Cryptography.Smime.SmimeSignOptions { Signers = [new RecursiveAI.OneCrypto.CmsSignerSpec { Certificate = edCert, Key = edKey, DigestAlgorithm = "2.16.840.1.101.3.4.2.3" }] }));
+            bool encOk = true;
+            foreach (var kind in new[] { RecursiveAI.OneMail.Cryptography.Smime.SmimeEncryptionKind.Enveloped, RecursiveAI.OneMail.Cryptography.Smime.SmimeEncryptionKind.AuthEnveloped })
+            {
+                var enc = RecursiveAI.OneMail.Cryptography.Smime.SmimeEncryptor.Encrypt(content, new RecursiveAI.OneMail.Cryptography.Smime.SmimeEncryptOptions { Recipients = [cert], Kind = kind });
+                var smimeOpened = RecursiveAI.OneMail.Cryptography.Smime.SmimeProcessor.Open(enc.ToArray(), new RecursiveAI.OneMail.Cryptography.Smime.SmimeOpenOptions { DecryptionKeys = [RecursiveAI.OneCrypto.CmsDecryptionKey.FromRsa(rsa, cert)] });
+                encOk &= smimeOpened.Succeeded && smimeOpened.InnerItem?.TextBody?.ReadText().Contains("smoke body", StringComparison.Ordinal) == true;
+            }
 
+            byte[] tampered = detached.ToArray();
+            int at = System.Text.Encoding.Latin1.GetString(tampered).IndexOf("smoke body", StringComparison.Ordinal);
+            tampered[at] ^= 1;
+            var tamperedResult = RecursiveAI.OneMail.Cryptography.Smime.SmimeProcessor.Open(tampered);
+            smimeOk = detachedResult.Succeeded && detachedResult.Signers.Single().SenderMatch == RecursiveAI.OneMail.Cryptography.Smime.SmimeSenderMatch.Match
+                && opaqueResult.Succeeded && edResult.Succeeded && encOk
+                && tamperedResult.Signers.Single().Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.ContentModified;
+        }
 
+        Console.WriteLine("smime: " + (smimeOk ? "ok" : "FAILED"));
 
-
-
-
-
-
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

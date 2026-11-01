@@ -578,3 +578,18 @@ mail client has been observed, so each resolution is provisional. Details: [`bod
 | BD13 | A paragraph that ends in a space, on `FormatFlowed.Encode` | n/a | Trailing spaces are dropped (a fixed line cannot end in one), except the `-- ` separator | none | RFC 3676 §4.2 |
 | BD14 | An HTML document past OneHtml's parse limits | OneHtml refuses it | The text before a cut is kept: the input is halved until it parses | `HtmlLimitExceeded` | hostile-input test |
 | BD15 | A lone CR in text being turned into HTML | n/a | A line break | none | prov. |
+
+## S/MIME
+
+Resolutions for `RecursiveAI.OneMail.Cryptography.Smime` ([`smime.md`](smime.md)). No mail client has been observed for these yet, so every entry is an agent default; they are tested in `SmimeTests`.
+
+| ID | Situation | Resolution | Defect or issue | Basis |
+|---|---|---|---|---|
+| SM1 | `multipart/signed` with other than two parts | `StructureInvalid`: nothing is verified | status | prov. |
+| SM2 | `smime-type` missing, or disagreeing with the CMS content type | the CMS content type decides | `SmimeTypeMissing`, `SmimeTypeMismatch` | prov. |
+| SM3 | `application/octet-stream` with a `.p7m` name | read as `application/pkcs7-mime` (MS-OXOSMIME §2.1.3.2.1.1) | `RecognisedByFileName` | prov. |
+| SM4 | The signed part was stored with LF line ends (mbox, Maildir and tools that rewrite them) | check the stored bytes, then the canonical CRLF form; the first that verifies wins | `SignedPartLineEndingsNormalised` | prov. |
+| SM5 | `micalg` missing, wrong, or `protocol` missing | advisory: ignored for the verdict | `MicalgMissing`, `MicalgMismatch`, `ProtocolParameterUnexpected` | prov. |
+| SM6 | A signed entity inside a wrapper that is not signed (for example `multipart/mixed` with an added attachment) | the signed part is verified, the siblings are listed as unsigned | `SignedPartInUnsignedWrapper` | prov. |
+| SM7 | Decrypted or signed content that is not a MIME entity (no header at all) | wrapped as one `application/octet-stream` part | `InnerContentNotMime` | prov. |
+| SM8 | The sender's address differs only by case | equal (addresses are compared ignoring case) | `SenderMatch` | prov. |
