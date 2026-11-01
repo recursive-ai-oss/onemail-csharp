@@ -51,7 +51,7 @@ public class SmtpClientServerTests
         Host = "127.0.0.1",
         Port = port ?? s.Port(security == SmtpSecurity.ImplicitTls ? "submissions" : "submission"),
         Security = security,
-        Credentials = auth ? new SaslCredentials { UserName = s.User, Password = s.Password, AccessToken = "test-token" } : null,
+        Credentials = auth ? new SaslCredentials { UserName = s.User, Password = s.Password } : null,
         MechanismSelector = selector,
         UsePipelining = pipelining,
         UseChunking = chunking,
