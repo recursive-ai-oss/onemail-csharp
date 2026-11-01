@@ -298,12 +298,12 @@ public sealed class PstWriterTests
         {
             using (PstBuilder b = Create(path))
             {
-                PstFolderWriter f = b.IpmSubtree.GetOrCreatePath("Projects/2024/Q1");
+                PstFolderWriter f = b.IpmSubtree.GetOrCreatePath("Projects/2024/Spring");
                 f.AddMessage(PstBuilderTests.Message("normal"));
                 f.AddMessage(PstBuilderTests.Message("hidden"), associated: true);
                 b.IpmSubtree.CreateFolder("Zed");
                 b.IpmSubtree.CreateFolder("Alpha");
-                Assert.Same(f, b.IpmSubtree.GetOrCreatePath("Projects/2024/Q1"));
+                Assert.Same(f, b.IpmSubtree.GetOrCreatePath("Projects/2024/Spring"));
                 b.Complete();
             }
 
@@ -311,10 +311,10 @@ public sealed class PstWriterTests
             AssertClean(store);
             PstFolder top = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(x => x.Name == "Top of Personal Folders");
             Assert.Equal(["Deleted Items", "Projects", "Zed", "Alpha"], top.EnumerateSubfolders(TestContext.Current.CancellationToken).Select(x => x.Name!).ToArray());
-            PstFolder q1 = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(x => x.Name == "Q1");
-            Assert.Equal("Top of Personal Folders/Projects/2024/Q1", q1.Path);
-            Assert.Equal(["normal"], q1.EnumerateMessages(PstMessageSet.Normal, TestContext.Current.CancellationToken).Select(x => x.Subject!).ToArray());
-            Assert.Equal(["hidden"], q1.EnumerateMessages(PstMessageSet.Associated, TestContext.Current.CancellationToken).Select(x => x.Subject!).ToArray());
+            PstFolder spring = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(x => x.Name == "Spring");
+            Assert.Equal("Top of Personal Folders/Projects/2024/Spring", spring.Path);
+            Assert.Equal(["normal"], spring.EnumerateMessages(PstMessageSet.Normal, TestContext.Current.CancellationToken).Select(x => x.Subject!).ToArray());
+            Assert.Equal(["hidden"], spring.EnumerateMessages(PstMessageSet.Associated, TestContext.Current.CancellationToken).Select(x => x.Subject!).ToArray());
         }
         finally
         {
