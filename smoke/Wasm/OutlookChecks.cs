@@ -54,7 +54,8 @@ internal static class OutlookChecks
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite);
+        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite)
+        & Guard("ltp-write", LtpWrite);
 
     // Writes an Outlook message with a named property, a recipient, an attachment and an embedded message, and reads it back property-exact.
     public static bool MsgWrite()
@@ -89,7 +90,6 @@ internal static class OutlookChecks
                 && f.Message.Attachments[1].EmbeddedMessage?.Subject == "inner";
         }
     }
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("ltp-write", LtpWrite);
 
     public static bool Msg()
     {
