@@ -218,6 +218,7 @@ public class SmtpClientServerTests
     public async Task EachSaslMechanismTheServerOffers(ServerInfo s, string mechanism)
     {
         ServerHarness.RequireServer(s);
+        Assert.SkipWhen(s.Name == "stalwart" && mechanism is "XOAUTH2" or "OAUTHBEARER", "Stalwart is not configured with an OAuth directory in these tests");
         await using (SmtpClient probe = await SmtpClient.ConnectAsync(Options(s, auth: false), Ct))
         {
             Assert.SkipUnless(probe.Capabilities.AuthMechanisms.Contains(mechanism), s.Name + " does not offer " + mechanism);
@@ -457,11 +458,13 @@ public class SmtpClientServerTests
         // The same session also handles a message every recipient of which is rejected, and then carries on.
         if (s.Name == "stalwart")
         {
-            SmtpSendResult none = await c.SendAsync(Compose(s, "nn" + Guid.NewGuid().ToString("N")[..9], tweak: x => x.Recipients = ["nobody-1@example.test", "nobody-2@example.test"]).Message, Ct);
+            // Stalwart answers a session that keeps naming unknown recipients with a long delay and then a close, so this runs on its own connection.
+            await using SmtpClient c2 = await SmtpClient.ConnectAsync(Options(s), Ct);
+            SmtpSendResult none = await c2.SendAsync(Compose(s, "nn" + Guid.NewGuid().ToString("N")[..9], tweak: x => x.Recipients = ["nobody-1@example.test", "nobody-2@example.test"]).Message, Ct);
             Assert.False(none.Delivered);
             Assert.Null(none.DataReply);
             Assert.All(none.Recipients, r => Assert.False(r.Accepted));
-            Assert.True((await c.SendAsync(Compose(s, "ok" + Guid.NewGuid().ToString("N")[..9]).Message, Ct)).Complete);
+            Assert.True((await c2.SendAsync(Compose(s, "ok" + Guid.NewGuid().ToString("N")[..9]).Message, Ct)).Complete);
             Report(s, "all recipients rejected: no data sent, session reused afterwards");
         }
 

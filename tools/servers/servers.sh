@@ -79,6 +79,8 @@ start_stalwart() {
   cat > "$S/plan.ndjson" <<'PLAN'
 {"@type":"upsert","object":"Domain","matchOn":["name"],"value":{"dom":{"name":"example.test","certificateManagement":{"@type":"Manual"},"dkimManagement":{"@type":"Automatic"},"dnsManagement":{"@type":"Manual"}}}}
 {"@type":"upsert","object":"Account","matchOn":["name","domainId"],"value":{"u":{"@type":"User","name":"test","domainId":"#dom","credentials":{"0":{"@type":"Password","secret":"onemail-test"}}}}}
+{"@type":"create","object":"Tracer","value":{"t":{"@type":"Stdout","enable":true,"level":"debug","buffered":false,"ansi":false}}}
+{"@type":"create","object":"MtaInboundThrottle","value":{"th":{"description":"test runs open many connections","enable":false,"rate":{"count":1000000,"period":1000}}}}
 {"@type":"update","object":"SystemSettings","value":{"defaultHostname":"mail.example.test","defaultDomainId":"#dom"}}
 {"@type":"upsert","object":"NetworkListener","matchOn":["name"],"value":{"l1":{"name":"smtp","bind":{"[::]:25":true},"protocol":"smtp"},"l2":{"name":"submission","bind":{"[::]:587":true},"protocol":"smtp"},"l3":{"name":"submissions","bind":{"[::]:465":true},"protocol":"smtp","implicitTls":true},"l4":{"name":"imap","bind":{"[::]:143":true},"protocol":"imap"},"l5":{"name":"imaps","bind":{"[::]:993":true},"protocol":"imap","implicitTls":true},"l6":{"name":"pop3","bind":{"[::]:110":true},"protocol":"pop3"},"l7":{"name":"pop3s","bind":{"[::]:995":true},"protocol":"pop3","implicitTls":true},"l8":{"name":"https","bind":{"[::]:443":true},"protocol":"http","implicitTls":true}}}
 PLAN
@@ -89,10 +91,25 @@ PLAN
     sleep 2
   done
   [ -n "$ok" ] || { cat "$LOGS/stalwart-apply.log" >&2; kill $pid; return 1; }
+  if [ -n "${DBG_CLI:-}" ]; then XDG_CACHE_HOME="$S/cache" HOME="$S" "$CLI" --url http://127.0.0.1:8080 --user admin --password secret $DBG_CLI >"$LOGS/dbg.txt" 2>&1; fi
   "$PODMAN" stop -t 5 "onemail-stalwart-$RUN" >/dev/null 2>&1; wait $pid 2>/dev/null
   "$PODMAN" run --name "onemail-stalwart-$RUN" "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
   PIDS+=($!)
   wait_port 143 40 || return 1
+  # The listeners open before the certificate is loaded: a TLS handshake on the implicit-TLS ports is closed until it is ready.
+  local tls=
+  for _ in $(seq 1 60); do
+    if python3 - <<'PY' 2>/dev/null
+import socket, ssl
+c = ssl.create_default_context(); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE
+for port in (465, 993):
+    with socket.create_connection(("127.0.0.1", port), 3) as s, c.wrap_socket(s) as t:
+        t.recv(1)
+PY
+    then tls=1; break; fi
+    sleep 1
+  done
+  [ -n "$tls" ] || { echo "stalwart TLS listeners did not become ready; see $LOGS" >&2; return 1; }
   export ONEMAIL_STALWART_IMAP_PORT=143 ONEMAIL_STALWART_IMAPS_PORT=993 ONEMAIL_STALWART_POP3_PORT=110 ONEMAIL_STALWART_POP3S_PORT=995 \
          ONEMAIL_STALWART_SMTP_PORT=25 ONEMAIL_STALWART_SUBMISSION_PORT=587 ONEMAIL_STALWART_SUBMISSIONS_PORT=465 \
          ONEMAIL_STALWART_USER=test@example.test ONEMAIL_STALWART_PASSWORD=onemail-test
