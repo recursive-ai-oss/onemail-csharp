@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="../../src/OneMail.Render/OneMail.Render.csproj" />
   </ItemGroup>
 
 </Project>

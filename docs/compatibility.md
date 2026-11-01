@@ -190,6 +190,24 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 | Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
 | Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
 
+## Rendering to PDF and PNG
+
+`RecursiveAI.OneMail.Render` on OneRender 1.3.2 (OneHtml 1.5.1, the same as ours); poppler `pdftotext` and Google Chrome (headless) from the distribution packages, run only. Method and options: [`render.md`](render.md); the checks are `tools/render/run.sh`.
+
+| Check | Input | Result | Known gaps |
+|---|---|---|---|
+| Every item rendered to PDF and to PNG pages | 8,757 items: MSG/OFT, PST/OST, TNEF, OLM, DBX, Mime4j, dovecot and Enron-sample files (every HTML, text and RTF-derived body), plus 16 generated cases (long and wide tables, 6,000 px image, RTL, CJK, emoji, 10,000 images, 3,000-deep nesting, 100,000-row table, 5,000 columns, 200,000-character word, 30,000-line text) | 8,757 and 16 rendered, **0 exceptions**; 8 files in the corpus folders are not mail (7z parts, three header-less messages, two fuzz-minimised MSGs OneArchive refuses) and are skipped | PNG pages are strips of one layout and can cut a line |
+| PDF text against the display HTML's text (`pdftotext -raw`, white space and bidi controls removed, compatibility forms folded) | the same 8,757 | 8,751 equal, 6 the same characters in a different order, **0 missing or extra**: 1 Hebrew/Arabic (visual against logical order), 5 messages built from nested tables with percentage heights, where content-stream order differs from document order | the text check cannot see a glyph the fonts lack: OneRender 1.3.2 draws nothing for it and keeps the text extractable |
+| Same with the CJK, emoji, Arabic and Hebrew font packages referenced | the same | identical counts (8,751 / 6); the generated CJK, emoji and RTL cases show their glyphs | without the packages those scripts render blank, silently |
+| Generated cases | 16 | 13 equal, 1 reordered (RTL), 2 missing: a 60-column and a 5,000-column table are clipped at the right margin, as print layout does | no scale-to-fit |
+| Nothing fetched | remote content allowed by policy, no `Resources` callback; 8,420 items | 10 items ask for 33 remote addresses (images, a background, a style sheet); all are listed in `UnservedRequests`, none is fetched (the loader decodes `data:` and otherwise asks only the caller). With the default policy no item asks for any | |
+| Page count against headless Chrome printing the same HTML (A4, 48 px margins) | 75 documents (the first 60 corpus items, 15 generated) | 70 equal, 5 differ: three copies of one Outlook newsletter template with `height:100%` tables (ours 3 pages, Chrome 1), one other mail (3 against 2), the 200,000-character word (39 against 42) | the 100,000-row table could not be printed by Chrome within its limit |
+| Page 1 pixels against Chrome (mean absolute grey difference at 48 dpi, 0 identical, 255 opposite) | the same 75 | median 1.6, p90 22.1, max 25.5 | different fonts and line breaking |
+| Time and memory (indicative, one process on the worker, not a benchmark row) | the 8,757 items | PDF median 2 ms, p90 7 ms, max 276 ms; PNG median 14 ms, p90 39 ms, max 191 ms; process peak 697 MB resident over the whole sweep | the 3,000-row to 100,000-row hostile cases take 0.3 to 6.3 s and 1,662 pages (PDF) |
+| Hostile bodies | 3,000-deep blockquotes, 150 nested tables, 100,000-row table, 10,000 images | the sanitiser's limits cut the deep-nesting, nested-table and 100,000-row cases (`DisplayTruncated`); the 10,000 images render in 0.26 s; `MaxPdfPages`, `MaxPngPages`, `MaxDuration` and a 40-million-pixel page cap bound the rest | |
+| PDF structure | the 76 kept PDFs | poppler `pdfinfo` reads all 76 without a message, every one tagged, title = subject | `qpdf --check` and veraPDF were not run (no prebuilt copy on the worker) |
+| AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; renders one message to PDF and to PNG (`render: ok`); `.Render` is not referenced by the browser smoke | |
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio

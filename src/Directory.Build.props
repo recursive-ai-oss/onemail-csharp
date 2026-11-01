@@ -61,12 +61,13 @@
   </ItemGroup>
 
 
-  <!-- The package page links to files in the repository. PACKAGE.md says blob/main/; the packed copy points at the release tag
+  <!-- The package page links to files in the repository. PACKAGE.md (or the project's PackageReadmeSource) says blob/main/; the packed copy points at the release tag
        for $(Version) so the page shown for a version describes that version. -->
   <Target Name="StampPackageReadme" BeforeTargets="_GetPackageFiles;GenerateNuspec">
     <PropertyGroup>
       <StampedReadme>$(IntermediateOutputPath)PACKAGE.md</StampedReadme>
-      <ReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../PACKAGE.md'))</ReadmeText>
+      <PackageReadmeSource Condition="'$(PackageReadmeSource)' == ''">$(MSBuildThisFileDirectory)../PACKAGE.md</PackageReadmeSource>
+      <ReadmeText>$([System.IO.File]::ReadAllText('$(PackageReadmeSource)'))</ReadmeText>
       <ReadmeText>$(ReadmeText.Replace('/blob/main/', '/blob/v$(Version)/'))</ReadmeText>
     </PropertyGroup>
     <WriteLinesToFile File="$(StampedReadme)" Lines="$([MSBuild]::Escape($(ReadmeText)))" Overwrite="true" WriteOnlyWhenDifferent="true" />

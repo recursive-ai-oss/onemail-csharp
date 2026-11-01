@@ -412,10 +412,40 @@ internal static class Program
             && sanMsg.ToDisplayHtml().Html.Contains("see <a href=\"http://x.test/a\"", StringComparison.Ordinal);
         Console.WriteLine("sanitizer: " + (sanitizerOk ? "ok" : "FAILED"));
 
+        // A message to a PDF and to PNG pages through OneRender under NativeAOT; nothing is fetched (the remote image stays unserved).
+        IMailItem renderMsg = Mail.Parse(System.Text.Encoding.ASCII.GetBytes("Subject: Render\r\nContent-Type: text/html\r\n\r\n<h1>Hello</h1><p>body <img src=\"http://x.test/i.png\"></p>\r\n"));
+        using var renderPdf = new MemoryStream();
+        RecursiveAI.OneMail.Render.RenderResult renderPdfResult = renderMsg.ToPdfAsync(renderPdf).GetAwaiter().GetResult();
+        int renderPngPages = 0;
+        long renderPngBytes = 0;
+        RecursiveAI.OneMail.Render.RenderResult renderPngResult = renderMsg.ToPngAsync(n =>
+        {
+            renderPngPages++;
+            return new CountingSink(l => renderPngBytes += l);
+        }).GetAwaiter().GetResult();
+        bool renderOk = renderPdf.Length > 500 && renderPdf.ToArray().AsSpan(0, 4).SequenceEqual("%PDF"u8) && renderPdfResult.PageCount == 1
+            && renderPngPages == 1 && renderPngBytes > 500 && renderPngResult.PagesWritten == 1 && renderPdfResult.UnservedRequests.Count == 0;
+        Console.WriteLine("render: " + (renderOk ? "ok" : "FAILED"));
 
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
+}
+
+/// <summary>A write-only stream that counts what is written.</summary>
+internal sealed class CountingSink(Action<long> onWrite) : Stream
+{
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => onWrite(count);
 }

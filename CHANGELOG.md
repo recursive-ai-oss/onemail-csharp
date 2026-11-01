@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `RecursiveAI.OneMail.Render`: `ToPdfAsync` and `ToPngAsync` on any item render the display HTML to a tagged PDF or PNG pages through OneRender, with page size and margins, header and attachment-list switches, fonts, PNG scale and page range, limits on pages and time, and a loader that decodes `data:` URIs and fetches nothing else. See `docs/render.md`.
 - Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.
 
 ## [0.3.0-preview.2]
@@ -40,6 +41,7 @@ On the local feed. Calendar and contacts close with this preview (speed rows in 
 - Display HTML (`RecursiveAI.OneMail.Display`): an allowlist sanitiser on the HTML DOM, a remote-content policy (block, allow or a rewrite callback), `cid:` and attachment resolution, and optional header and attachment blocks. It has not had its independent review yet.
 - Calendar and contact benchmark rows against Ical.Net and FolkerKinzel.VCards, with a libical reference, in `docs/benchmarks.md`.
 - `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
+
 
 ### Changed
 
