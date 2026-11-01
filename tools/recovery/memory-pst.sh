@@ -19,10 +19,10 @@ for n in "${runs[@]}"; do
   dotnet "$ora" pstdamage "$work/gen.pst" "$work/bad.pst" header
   rm -f "$work/gen.pst"
   echo "== $n messages, $(( $(stat -c %s "$work/bad.pst") / 1048576 )) MiB, header destroyed"
-  # Twice: with the runtime's default allocation budget (large on a big-cache CPU, so the peak includes garbage not yet collected) and with a 16 MiB budget.
-  for budget in default 0x1000000; do
-    if [ "$budget" = default ]; then e=X=1; else e=DOTNET_GCgen0MaxBudget=$budget; fi
-    echo "  -- allocation budget: $budget"
+  # Twice: with the runtime's defaults (on a large machine the collector lets garbage pile up, so the peak overstates what is live) and with the managed heap capped at 512 MiB, which a run only survives if its live data fits.
+  for budget in default 0x20000000; do
+    if [ "$budget" = default ]; then e=X=1; else e=DOTNET_GCHeapHardLimit=$budget; fi
+    echo "  -- managed heap limit: $budget"
     env "$e" /usr/bin/time -f '  peak RSS %M KiB, elapsed %e s, cpu %U s user %S s sys' dotnet "$ora" pstrecover "$work/bad.pst" "$work/out.pst" "$work/out.json" 2>&1 | sed 's/^/  /'
   done
   echo "  repaired file $(( $(stat -c %s "$work/out.pst") / 1048576 )) MiB"
