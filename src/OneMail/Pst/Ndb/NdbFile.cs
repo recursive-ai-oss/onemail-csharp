@@ -71,6 +71,25 @@ public sealed partial class NdbFile : IDisposable
 
     internal NdbLayout Layout { get; private set; }
 
+    /// <summary>The node and block index rebuilt by recovery. When set, node and block lookups use it and the file's own B-trees are not consulted.</summary>
+    internal NdbRecoveredIndex? Recovered { get; set; }
+
+    /// <summary>
+    /// Opens a file whose header is unusable, assuming the given generation and encoding. Lookups find nothing until a recovered index is set.
+    /// </summary>
+    internal static NdbFile OpenSynthesized(IRandomAccessSource source, bool leaveOpen, NdbFormat format, NdbEncryption encryption, NdbOptions? options = null)
+    {
+        if (!source.SupportsSyncRead)
+        {
+            throw new ArgumentException("The node database is read with synchronous positioned reads; this source is asynchronous only.", nameof(source));
+        }
+
+        var f = new NdbFile(source, leaveOpen, NdbHeader.Synthesized(format, encryption, offline: false), NdbLayout.For(format), options ?? new NdbOptions());
+        f.Report(NdbDefectKind.BadMagic, 0, "the header is unusable; the generation and encoding were inferred from the file body");
+        return f;
+    }
+
+
     /// <summary>The parsed header.</summary>
     public NdbHeader Header { get; }
 

@@ -47,6 +47,50 @@ public sealed class RecoverCommandTests
     }
 
     [Fact]
+    public void RecoversADamagedPstIntoANewOneAndLeavesTheInputAlone()
+    {
+        string dir = Temp();
+        try
+        {
+            string input = Path.Combine(dir, "damaged.pst");
+            using (RecursiveAI.OneMail.Pst.Messaging.PstBuilder b = RecursiveAI.OneMail.Pst.Messaging.PstBuilder.Create(input))
+            {
+                RecursiveAI.OneMail.Pst.Messaging.PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
+                for (int i = 0; i < 6; i++)
+                {
+                    inbox.AddMessage(Pst.PstBuilderTests.Message("m" + i));
+                }
+
+                b.Complete();
+            }
+
+            using (var f = new FileStream(input, FileMode.Open, FileAccess.ReadWrite))
+            {
+                Pst.PstDamage.ZeroHeader(f);
+            }
+
+            string before = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(input)));
+            string output = Path.Combine(dir, "out");
+            StringWriter o = new(), e = new();
+            Assert.Equal(0, RecoverCommand.Run(["--pst", input, output], o, e));
+            Assert.True(RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(Path.Combine(output, "recovered.pst"), out RecursiveAI.OneMail.Pst.Messaging.PstStore? s, out _));
+            using (s)
+            {
+                Assert.Equal(6, s!.EnumerateMessages(RecursiveAI.OneMail.Pst.Messaging.PstMessageSet.All, TestContext.Current.CancellationToken).Count());
+            }
+
+            using JsonDocument report = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(output, "recovery-report.json")));
+            Assert.Equal(6, report.RootElement.GetProperty("written").GetInt32());
+            Assert.False(report.RootElement.GetProperty("headerUsable").GetBoolean());
+            Assert.Equal(before, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(input))));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public void ReportsUsageAndMissingInput()
     {
         Assert.Equal(2, RecoverCommand.Run([], new StringWriter(), new StringWriter()));

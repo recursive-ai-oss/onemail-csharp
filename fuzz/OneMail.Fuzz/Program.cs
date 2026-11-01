@@ -40,6 +40,7 @@ internal static class Program
             ["span-cfb"] = RecoveryTargets.Cfb,
             ["dbx-recovery"] = RecoveryTargets.Dbx,
             ["olm-recovery"] = RecoveryTargets.OlmRecovery,
+            ["pst-recovery"] = PstRecoveryTarget.Run,
             ["oxocal"] = OxocalTarget.Run,
             ["calcard"] = CalcardTarget.Run,
             ["htmltext"] = HtmlTextTarget.Run,

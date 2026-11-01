@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using RecursiveAI.OneMail.Conversion.Stores;
+using RecursiveAI.OneMail.Pst.Recovery;
 using RecursiveAI.OneMail.Recovery;
 using RecursiveAI.OneMail.Sources;
 using RecursiveAI.OneMail.Stores.Dbx;
@@ -16,11 +17,11 @@ namespace RecursiveAI.OneMail.Cli;
 /// </summary>
 internal static class RecoverCommand
 {
-    public const string Usage = "usage: onemail recover [--format eml|msg] [--include-duplicates] <input.dbx | store directory | input.olm> <output directory>";
+    public const string Usage = "usage: onemail recover [--format eml|msg] [--include-duplicates] [--forensic] [--pst] <input.dbx | store directory | input.olm | input.pst | input.ost> <output directory>";
 
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {
-        bool msg = false, dupes = false;
+        bool msg = false, dupes = false, forensic = false, pst = false;
         List<string> paths = [];
         for (int i = 0; i < args.Length; i++)
         {
@@ -38,6 +39,12 @@ internal static class RecoverCommand
                     break;
                 case "--include-duplicates":
                     dupes = true;
+                    break;
+                case "--forensic":
+                    forensic = true;
+                    break;
+                case "--pst":
+                    pst = true;
                     break;
                 default:
                     if (args[i].StartsWith("--", StringComparison.Ordinal))
@@ -75,6 +82,11 @@ internal static class RecoverCommand
         }
 
         Directory.CreateDirectory(dest);
+        if (File.Exists(input) && (pst || IsPst(input)))
+        {
+            return RecoverPst(input, dest, forensic, output, error);
+        }
+
         using MemoryStream ms = new();
         int written = 0;
         string format;
@@ -109,6 +121,41 @@ internal static class RecoverCommand
         File.WriteAllBytes(Path.Combine(dest, "recovery-report.json"), ms.ToArray());
         output.WriteLine("recovered " + written.ToString(CultureInfo.InvariantCulture) + " item(s) from " + input + "; report: " + Path.Combine(dest, "recovery-report.json"));
         return 0;
+    }
+
+    // A PST or OST starts with "!BDN". A file whose header is destroyed does not, so --pst names it by hand.
+    private static bool IsPst(string path)
+    {
+        using FileSource s = FileSource.Open(path);
+        Span<byte> head = stackalloc byte[4];
+        return s.ReadFully(0, head) == 4 && head.SequenceEqual("!BDN"u8);
+    }
+
+    // Recovery writes a new PST of what it found and the report beside it; the source is only read.
+    private static int RecoverPst(string input, string dest, bool forensic, TextWriter output, TextWriter error)
+    {
+        try
+        {
+            if (!PstRecovery.TryOpen(input, out PstRecovery? r, new PstRecoveryOptions { Forensic = forensic }) || r is null)
+            {
+                error.WriteLine("recover: no page or block of a PST or OST was found in " + input);
+                return 1;
+            }
+
+            using (r)
+            {
+                string pst = Path.Combine(dest, "recovered.pst");
+                string report = Path.Combine(dest, "recovery-report.json");
+                PstRepairSummary s = r.RepairTo(pst, report);
+                output.WriteLine("recovered " + s.Written.ToString(CultureInfo.InvariantCulture) + " item(s) from " + input + " into " + pst + (s.Failed > 0 ? " (" + s.Failed.ToString(CultureInfo.InvariantCulture) + " could not be copied)" : string.Empty) + "; report: " + report);
+                return 0;
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            error.WriteLine("recover: " + e.Message);
+            return 1;
+        }
     }
 
     private static bool IsOlm(string path)

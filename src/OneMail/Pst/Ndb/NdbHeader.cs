@@ -131,7 +131,7 @@ public sealed class NdbHeader
     public byte Sentinel { get; private set; }
 
     /// <summary>bCryptMethod as stored.</summary>
-    public byte CryptMethod { get; private set; }
+    public byte CryptMethod { get; internal set; }
 
     /// <summary>bCryptMethod as an enumeration. Values the format does not define are cast through unchanged.</summary>
     public NdbEncryption Encryption => (NdbEncryption)CryptMethod;
@@ -141,6 +141,17 @@ public sealed class NdbHeader
 
     /// <summary>True when dwCRCFull matches the 516 bytes it covers; always false for ANSI files, which have none.</summary>
     public bool FullCrcValid { get; private set; }
+
+    /// <summary>A header for a file whose own header is destroyed: the generation and encoding come from what recovery found in the body, everything else is empty.</summary>
+    internal static NdbHeader Synthesized(NdbFormat format, NdbEncryption encryption, bool offline) => new()
+    {
+        Format = format,
+        Version = format switch { NdbFormat.Ansi => (ushort)14, NdbFormat.Unicode4K => (ushort)36, _ => (ushort)23 },
+        ClientMagic = offline ? (ushort)0x4F53 : (ushort)0x4D53,
+        CryptMethod = (byte)encryption,
+        Sentinel = 0x80,
+        NodeCounters = new uint[32],
+    };
 
     internal int Size => Format == NdbFormat.Ansi ? AnsiHeaderSize : UnicodeHeaderSize;
 

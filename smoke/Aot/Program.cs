@@ -417,6 +417,8 @@ internal static class Program
 
         bool pstWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstWrite();
         Console.WriteLine("pst-write: " + (pstWriteOk ? "ok" : "FAILED"));
+        bool pstRecoveryOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstRecovery();
+        Console.WriteLine("pst-recovery: " + (pstRecoveryOk ? "ok" : "FAILED"));
 
         bool pstEditOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstEdit();
         Console.WriteLine("pst-edit: " + (pstEditOk ? "ok" : "FAILED"));
@@ -614,7 +616,7 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstEditOk && typedClientOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstRecoveryOk && pstEditOk && typedClientOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

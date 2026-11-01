@@ -126,7 +126,13 @@ public sealed partial class NdbFile
         if (TryPage(unit, all.Slice(unitAt, Layout.PageSize), includeDamaged, out NdbScanItem pageHit))
         {
             results.Add(pageHit);
-            return;
+            if (pageHit.Check.SignatureValid && pageHit.Check.CrcValid)
+            {
+                return;
+            }
+
+            // A page whose checksum fails may be a stale page that a later, smaller block was written over (a live block then starts inside
+            // the unit and the old trailer is all that is left of the page), so blocks are looked for in the unit too.
         }
 
         for (int e = unitAt + Layout.BlockAlignment; e <= unitAt + Layout.PageSize; e += Layout.BlockAlignment)

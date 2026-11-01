@@ -399,7 +399,8 @@ public sealed class NodeBTree : NdbBTree<NodeEntry>
     /// <param name="nid">The NID.</param>
     /// <param name="entry">The entry, when found.</param>
     /// <returns>True when the NBT has the NID.</returns>
-    public bool TryGet(Nid nid, out NodeEntry entry) => TryGetByKey(nid.Value, out entry);
+    public bool TryGet(Nid nid, out NodeEntry entry) =>
+        File.Recovered is { } r ? r.Nodes.TryGetValue(nid.Value, out entry) : TryGetByKey(nid.Value, out entry);
 }
 
 /// <summary>The block B-tree (BBT): maps BIDs to file offset, size and reference count (MS-PST 2.2.2.7.7.3).</summary>
@@ -434,5 +435,6 @@ public sealed class BlockBTree : NdbBTree<BlockEntry>
     /// <param name="bid">The BID.</param>
     /// <param name="entry">The entry, when found.</param>
     /// <returns>True when the BBT has the BID.</returns>
-    public bool TryGet(Bid bid, out BlockEntry entry) => TryGetByKey(bid.Normalized.Value, out entry);
+    public bool TryGet(Bid bid, out BlockEntry entry) =>
+        File.Recovered is { } r ? r.Blocks.TryGetValue(bid.Normalized.Value, out entry) : TryGetByKey(bid.Normalized.Value, out entry);
 }

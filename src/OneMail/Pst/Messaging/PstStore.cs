@@ -178,6 +178,13 @@ public sealed partial class PstStore : IDisposable
         return Finish(ok, file, why, options, out store, out defects);
     }
 
+    /// <summary>Opens the messaging layer over a node database that recovery has prepared (its index may be rebuilt).</summary>
+    internal static PstStore OpenPrepared(NdbFile file, PstReaderOptions? options = null)
+    {
+        Finish(true, file, [], options ?? new PstReaderOptions(), out PstStore? store, out _);
+        return store!;
+    }
+
     private static bool Finish(bool opened, NdbFile? file, IReadOnlyList<NdbDefect> why, PstReaderOptions options, out PstStore? store, out IReadOnlyList<MapiDefect> defects)
     {
         store = null;

@@ -1,4 +1,5 @@
 using System.Text;
+using RecursiveAI.OneMail.Recovery;
 using RecursiveAI.OneMail.Calendaring;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
@@ -27,6 +28,11 @@ public sealed class MapiMailItem : IMailItem
         _message = message;
         _provenance = provenance;
     }
+
+    /// <summary>How a recovery reader found the item (tag, byte ranges, defects); null for items read in the ordinary way.</summary>
+    public RecoveryProvenance? Recovery => RecoveryInfo;
+
+    internal RecoveryProvenance? RecoveryInfo { get; init; }
 
     /// <summary>The MAPI message behind the view.</summary>
     public MapiMessage Message => _message;

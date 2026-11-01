@@ -57,6 +57,7 @@ case "$target" in
   span-mime) maxlen=8192 ;;
   span-cfb) maxlen=1024 ;;
   dbx-recovery|olm-recovery) maxlen=2048 ;;
+  pst-recovery) maxlen=4096 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;
   mail-open) maxlen=65536 ;;
   rtf-decompress) maxlen=65536 ;;
