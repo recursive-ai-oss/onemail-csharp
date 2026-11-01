@@ -90,6 +90,11 @@ reads, from `OlmTool stats` over the two samples:
 | task | 5 | 2 | 6 | priority, primary category |
 | note, category | 1, 18 | 0 | 0 | |
 
+## Damaged archives
+
+`OlmReaderOptions.Recovery` (off by default) opens damaged archives through OneArchive's zip recovery mode and tags what it reads; see
+[`recovery.md`](recovery.md). Strict reading is unchanged.
+
 ## Limits
 
 All are on by default (`OlmReaderOptions`); a limit that is hit is a typed defect and the rest of the archive is still read.

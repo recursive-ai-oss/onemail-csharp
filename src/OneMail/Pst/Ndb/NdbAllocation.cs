@@ -174,7 +174,7 @@ public sealed partial class NdbFile
             }
 
             long bit = (p - AMapOffset(index)) / Layout.BlockAlignment;
-            if ((_amapCache[bit >> 3] & (1 << (int)(bit & 7))) == 0)
+            if ((_amapCache[bit >> 3] & (0x80 >> (int)(bit & 7))) == 0)
             {
                 return false;
             }

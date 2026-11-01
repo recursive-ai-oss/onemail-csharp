@@ -20,6 +20,8 @@ from the libyal PFF format notes (GFDL 1.3: cited, nothing copied).
 | AMap bits | 496 bytes, one bit per 64 | 496 bytes, one bit per 64 | 4072 bytes, **one bit per 512** |
 | first block | 0x4800 | 0x4800 | 0x23000 |
 
+**Bit order.** MS-PST says only that "the nth bit" of an AMap stands for the nth 64-byte block. In files Outlook wrote the first block is the **high** bit of the first byte (checked against every block of both Tika files: all marked allocated that way, 23 of 71 free the other way). The reader's `IsAllocated`, the builder and the editor use that order. (Builder files written before this was found had the opposite order, wrong for any program that trusts the maps.)
+
 Observed on a real 4 KiB OST (a 16 MB Outlook 2013 offline store, wVer 36, `SO`, no encoding):
 
 - Blocks are padded to 512 bytes and the 24-byte trailer sits at the end of the padded extent. A 56-byte block occupies 512.

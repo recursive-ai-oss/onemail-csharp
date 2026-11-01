@@ -45,6 +45,14 @@ public sealed class DbxBuild
     public int ShuffleSeed { get; init; }
     /// <summary>Bytes of text per segment (the format uses 0x200).</summary>
     public int SegmentText { get; init; } = 0x200;
+    /// <summary>
+    /// Positions (in the message list) of messages to delete the way Outlook Express does: the tree entry is removed, the record and every
+    /// segment of the chain get a deleted-object header (docs/recovery.md), and the segments go on the deleted-message list in chain order, each
+    /// pushed to the front.
+    /// </summary>
+    public IReadOnlySet<int>? Deleted { get; init; }
+    /// <summary>Positions of messages whose tree entry is removed and nothing else is changed: the orphaned-chain case.</summary>
+    public IReadOnlySet<int>? Unlinked { get; init; }
 }
 
 /// <summary>
@@ -124,6 +132,7 @@ public static class DbxTestBuilder
 
         // Records, in index order (the order of the tree).
         List<(int Index, int At)> records = [];
+        List<int> recordSize = [];
         for (int i = 0; i < messages.Count; i++)
         {
             DbxTestMessage m = messages[i];
@@ -166,13 +175,16 @@ public static class DbxTestBuilder
             r.Build(at, obj);
             l.Put(at, obj);
             records.Add((index, at));
+            recordSize.Add((obj.Length + 3) & ~3);
         }
 
-        int root = TreeBuilder.Build(l, records.Select(x => x.At).ToArray(), build.TreeFanout);
+        bool Gone(int i) => (build.Deleted?.Contains(i) ?? false) || (build.Unlinked?.Contains(i) ?? false);
+        int[] linked = records.Where((_, i) => !Gone(i)).Select(x => x.At).ToArray();
+        int root = TreeBuilder.Build(l, linked, build.TreeFanout);
         byte[] file = l.ToFile();
         Header(file, 0xC5, 0x618, l.Length);
         W(file, 0x88, conditionsAt);
-        W(file, 0xC4, records.Count);
+        W(file, 0xC4, linked.Length);
         W(file, 0xE4, root);
         W(file, 0x5C, records.Count);
         W(file, 0x24, conditionsAt);
@@ -182,6 +194,36 @@ public static class DbxTestBuilder
         W(file, 0x44, SegmentSize);
         W(file, 0x80, 2);
         file[HeaderLength + 4] = 3; // the notes: source type 3 is a local folder
+        if (build.Deleted is { Count: > 0 })
+        {
+            // OE_Dbx_Deleted: marker kept, word 2 becomes the length of the free body, word 3 that plus 0x14, word 4 stays as it was (a message
+            // segment's next pointer), word 5 links to the next deleted object. A message segment's first four text bytes are word 5's place.
+            int freeHead = 0;
+            foreach (int i in build.Deleted.OrderBy(x => x))
+            {
+                for (int p = 0; p < pieceCount[i]; p++)
+                {
+                    int at = pieceAt[firstPiece[i] + p];
+                    W(file, at + 4, SegmentSize - 0x14);
+                    W(file, at + 8, SegmentSize);
+                    W(file, at + 16, freeHead);
+                    freeHead = at;
+                }
+
+                int rec = records[i].At;
+                int size = recordSize[i];
+                if (size < 0x2000)
+                {
+                    W(file, rec + 4, size - 0x14);
+                    W(file, rec + 8, size);
+                    W(file, rec + 16, BinaryPrimitives.ReadInt32LittleEndian(file.AsSpan(0x29C + size)));
+                    W(file, 0x29C + size, rec);
+                }
+            }
+
+            W(file, 0x48, freeHead);
+        }
+
         return file;
     }
 

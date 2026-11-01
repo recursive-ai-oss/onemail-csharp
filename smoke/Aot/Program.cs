@@ -384,6 +384,25 @@ internal static class Program
 
         Console.WriteLine("dbx: " + (dbxOk ? "ok" : "FAILED"));
 
+        // Forensic recovery: one message freed the way Outlook Express frees it, one unlinked; both come back tagged and neither as Live.
+        bool recoveryOk;
+        {
+            List<RecursiveAI.OneMail.Tests.Stores.DbxTestMessage> rm = [];
+            for (int i = 0; i < 5; i++)
+            {
+                rm.Add(new RecursiveAI.OneMail.Tests.Stores.DbxTestMessage { Text = System.Text.Encoding.ASCII.GetBytes("Subject: r" + i + "\r\n\r\n" + new string('y', 900)), Subject = "r" + i });
+            }
+
+            byte[] rf = RecursiveAI.OneMail.Tests.Stores.DbxTestBuilder.MessageDatabase(rm, new RecursiveAI.OneMail.Tests.Stores.DbxBuild { Deleted = new HashSet<int> { 1 }, Unlinked = new HashSet<int> { 3 } });
+            using RecursiveAI.OneMail.Sources.MemorySource rs = new(rf);
+            var found = new RecursiveAI.OneMail.Stores.Dbx.DbxReader(rs).RecoverDeleted().ToArray();
+            recoveryOk = found.Length == 2 && found.All(f => f.Provenance.Status != RecursiveAI.OneMail.Recovery.RecoveryStatus.Live)
+                && found.Any(f => f.Provenance.Status == RecursiveAI.OneMail.Recovery.RecoveryStatus.Orphaned && f.Content.Span.SequenceEqual(rm[3].Text))
+                && RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Recovery();
+        }
+
+        Console.WriteLine("recovery: " + (recoveryOk ? "ok" : "FAILED"));
+
         bool calcardOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Calcard();
         Console.WriteLine("calcard: " + (calcardOk ? "ok" : "FAILED"));
 
@@ -398,6 +417,9 @@ internal static class Program
 
         bool pstWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstWrite();
         Console.WriteLine("pst-write: " + (pstWriteOk ? "ok" : "FAILED"));
+
+        bool pstEditOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstEdit();
+        Console.WriteLine("pst-edit: " + (pstEditOk ? "ok" : "FAILED"));
 
         // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
         bool convertOk;
@@ -554,6 +576,48 @@ internal static class Program
 
         Console.WriteLine("smtp: " + (smtpOk ? "ok" : "FAILED"));
 
+        // The typed IMAP and POP3 clients over scripted streams: the state machine, the selected-mailbox model, FETCH/SEARCH and the POP3 maildrop.
+        bool typedClientOk;
+        {
+            var imapScript = new ScriptStream(System.Text.Encoding.ASCII.GetBytes(
+                "* OK [CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN] ready\r\n" +
+                "A0001 OK [CAPABILITY IMAP4rev1 IDLE UIDPLUS] authenticated\r\n" +
+                "* 3 EXISTS\r\n* OK [UIDVALIDITY 5] x\r\n* OK [UIDNEXT 9] x\r\nA0002 OK [READ-WRITE] selected\r\n" +
+                "* 1 FETCH (UID 7 FLAGS (\\Seen) BODY[] {5}\r\nhello)\r\nA0003 OK done\r\n" +
+                "* SEARCH 1 3\r\nA0004 OK done\r\n" +
+                "* BYE bye\r\nA0005 OK logged out\r\n"));
+            var imapConn = RecursiveAI.OneMail.Client.Protocol.ProtocolConnection.FromStream(imapScript, "localhost",
+                new RecursiveAI.OneMail.Client.Protocol.ProtocolConnectionOptions { AllowInsecureAuthentication = true });
+            var imapClient = RecursiveAI.OneMail.Client.Imap.ImapClient.FromConnectionAsync(imapConn).AsTask().GetAwaiter().GetResult();
+            imapClient.Login("u", "p");
+            var box = imapClient.Select("INBOX");
+            var fetched = imapClient.Fetch(RecursiveAI.OneMail.Client.Imap.ImapSet.All, new RecursiveAI.OneMail.Client.Imap.ImapFetchQuery { Uid = true, Flags = true, Source = true });
+            var found = imapClient.Search(RecursiveAI.OneMail.Client.Imap.ImapSearch.From("x").Or(RecursiveAI.OneMail.Client.Imap.ImapSearch.Unseen));
+            imapClient.Logout();
+            bool imapOk = box.Exists == 3 && box.UidValidity == 5 && box.UidNext == 9 && fetched.Count == 1 && fetched[0].Uid == 7
+                && System.Text.Encoding.ASCII.GetString(fetched[0].Source.Span) == "hello" && found.Numbers.SequenceEqual(new long[] { 1, 3 })
+                && imapScript.SentText.Contains("A0004 SEARCH OR FROM x UNSEEN\r\n", StringComparison.Ordinal);
+
+            var popScript = new ScriptStream(System.Text.Encoding.ASCII.GetBytes(
+                "+OK hi\r\n+OK\r\nUSER\r\nPIPELINING\r\n.\r\n" +
+                "+OK\r\n+OK\r\n+OK\r\nUSER\r\n.\r\n" +
+                "+OK 1 40\r\n" +
+                "+OK\r\nSubject: x\r\n\r\n..dot\r\n.\r\n" +
+                "+OK bye\r\n"));
+            var popConn = RecursiveAI.OneMail.Client.Protocol.ProtocolConnection.FromStream(popScript, "localhost",
+                new RecursiveAI.OneMail.Client.Protocol.ProtocolConnectionOptions { AllowInsecureAuthentication = true });
+            var pop = RecursiveAI.OneMail.Client.Pop3.Pop3Client.ConnectAsync(popConn, new RecursiveAI.OneMail.Client.Pop3.Pop3ClientOptions()).AsTask().GetAwaiter().GetResult();
+            pop.Login("u", "p");
+            var (popCount, popSize) = pop.Stat();
+            var popMessage = pop.GetMessage(1);
+            pop.Quit();
+            bool popOk = popCount == 1 && popSize == 40 && popMessage.Headers.GetFirst("Subject")?.Value == "x"
+                && popMessage.ToArray().AsSpan().IndexOf("\r\n.dot\r\n"u8) > 0;
+            typedClientOk = imapOk && popOk;
+        }
+
+        Console.WriteLine("typed clients: " + (typedClientOk ? "ok" : "FAILED"));
+
         // S/MIME under NativeAOT: sign (detached and opaque, RSA and Ed25519), encrypt (CBC and GCM), open both, tamper once. CMS is OneCrypto's.
         bool smimeOk;
         {
@@ -591,7 +655,7 @@ internal static class Program
 
         Console.WriteLine("smime: " + (smimeOk ? "ok" : "FAILED"));
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && smtpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstEditOk && typedClientOk && smtpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

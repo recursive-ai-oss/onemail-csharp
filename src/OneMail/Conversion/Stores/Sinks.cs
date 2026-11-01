@@ -91,7 +91,7 @@ public static class StoreSinks
             ConvertFormat.Eml => new EmlSink(destination),
             // An MSG file keeps an Outlook item's flags in its properties, so only items that came from somewhere else lose them.
             ConvertFormat.Msg => new DirectorySink(destination, requireEmpty: true, e => e.Item is not MapiMailItem),
-            ConvertFormat.Pst => new PstSink(destination),
+            ConvertFormat.Pst => options.AddToExistingPst ? new PstAppendSink(destination) : new PstSink(destination),
             _ => new DirectorySink(destination, requireEmpty: true),
         };
     }

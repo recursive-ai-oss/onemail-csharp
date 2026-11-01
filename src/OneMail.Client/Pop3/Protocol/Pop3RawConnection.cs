@@ -105,6 +105,38 @@ public sealed class Pop3RawConnection : IAsyncDisposable, IDisposable
         return arguments is null ? command : command + " " + arguments;
     }
 
+    /// <summary>Writes a command without reading its response, so several can be in flight (PIPELINING, RFC 2449). Pair every call with one <see cref="ReadResponseAsync"/> or <see cref="ReadMultilineAsync"/>, in order.</summary>
+    /// <param name="command">The command word.</param>
+    /// <param name="arguments">Arguments, or null.</param>
+    /// <param name="flush">Whether to flush now. Pass false to batch several commands into one write, then call <see cref="FlushAsync"/>.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes when the command is written.</returns>
+    public async ValueTask SendAsync(string command, string? arguments = null, bool flush = true, CancellationToken cancellationToken = default)
+    {
+        EnsureIdle();
+        Connection.Writer.WriteAscii(Line(command, arguments));
+        Connection.Writer.WriteCrLf();
+        if (flush)
+        {
+            await Connection.Writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Flushes commands written with <see cref="SendAsync"/> <c>flush: false</c>.</summary>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes when flushed.</returns>
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default) => Connection.Writer.FlushAsync(cancellationToken);
+
+    /// <summary>Reads the response to an earlier <see cref="SendAsync"/> of a command with a multi-line reply (RETR, TOP, LIST, UIDL).</summary>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The status line, and the body stream when it was +OK (read it to its end before the next read).</returns>
+    public async ValueTask<(Pop3Response Response, Pop3DotStream? Body)> ReadMultilineAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureIdle();
+        Pop3Response r = await ReadResponseAsync(cancellationToken).ConfigureAwait(false);
+        return (r, Begin(r));
+    }
+
     /// <summary>Sends a command and reads its single-line status.</summary>
     /// <param name="command">The command word (<c>STAT</c>).</param>
     /// <param name="arguments">The rest of the line, or null.</param>

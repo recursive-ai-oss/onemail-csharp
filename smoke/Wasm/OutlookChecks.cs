@@ -55,7 +55,8 @@ internal static class OutlookChecks
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
         & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite)
-        & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite);
+        & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite) & Guard("pst-edit", PstEdit)
+        & Guard("recovery", Recovery);
 
     // Builds a small store with the PST builder (folders, a message with a recipient, an attachment and a named property), reads it back with no defect.
     public static bool PstWrite()
@@ -88,6 +89,89 @@ internal static class OutlookChecks
             RecursiveAI.OneMail.Pst.Messaging.PstMessage? got = store.EnumerateMessages().FirstOrDefault();
             return got is not null && got.Subject == "café" && got.Recipients.Count == 1 && got.Attachments.Count == 1 && got.Attachments[0].OpenData()!.Length == 20_000
                 && got.Properties.Any(p => p.Name == name) && store.Defects.Count == 0 && store.Database.Defects.Count == 0;
+        }
+    }
+
+    // Opt-in recovery and the span-level TryParse entry points: a truncated OLM archive keeps its complete entries and tags them, and a page, a block,
+    // a header block and a compound file header are recognised from spans.
+    public static bool Recovery()
+    {
+        const string x = " xml:space=\"preserve\"";
+        var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                using Stream e = zip.CreateEntry("Local/com.microsoft.__Messages/F" + i + "/message_00000.xml", System.IO.Compression.CompressionLevel.NoCompression).Open();
+                e.Write(Encoding.UTF8.GetBytes($"<emails{x} elementCount=\"1\"><email{x}><OPFMessageCopySubject{x}>m{i}</OPFMessageCopySubject><OPFMessageCopyBody{x}>{new string('b', 200)}</OPFMessageCopyBody></email></emails>"));
+            }
+        }
+
+        byte[] whole = ms.ToArray();
+        byte[] cut = whole.AsSpan(0, whole.Length * 2 / 3).ToArray();
+        using var olm = RecursiveAI.OneMail.Stores.Olm.OlmArchive.Open(new MemorySource(cut), false, null, new RecursiveAI.OneMail.Stores.Olm.OlmReaderOptions { Recovery = true });
+        var items = olm.Enumerate().ToArray();
+        bool olmOk = items.Length >= 1 && items.Length < 3 && olm.Damage.Count > 0 && items.All(i => i.Recovery is not null);
+
+        var built = NdbTestBuilder.Build(NdbFormat.Unicode, [new TestNode { Nid = 0x21, Data = new byte[100] }]);
+        bool pageOk = NdbSpan.TryParsePage(built.Bytes.AsSpan((int)built.NbtPages[0]), NdbFormat.Unicode, built.NbtPages[0], out NdbPageInfo page) && page.Check.CrcValid && page.Check.SignatureValid;
+        long ib = built.BlockOffsets.Values.First();
+        bool blockOk = NdbSpan.TryParseBlock(built.Bytes.AsSpan((int)ib), NdbFormat.Unicode, ib, out NdbBlockInfo block) && block.Check.IsClean && block.DataLength == 100;
+        bool mimeOk = RecursiveAI.OneMail.Mime.Reading.MimeHeaderBlock.TryParse("A: b\r\n\r\nbody"u8, out var hb) && hb.HeaderCount == 1 && hb.Terminated
+            && MimeEntity.TryParse("A: b\r\n\r\nbody"u8, out MimeEntity? entity) && entity is not null;
+        byte[] cfb = new byte[512];
+        CfbSpan.Signature.CopyTo(cfb);
+        cfb[0x1A] = 3;
+        cfb[0x1C] = 0xFE;
+        cfb[0x1D] = 0xFF;
+        cfb[0x1E] = 9;
+        cfb[0x20] = 6;
+        bool cfbOk = CfbSpan.TryParseHeader(cfb, out CfbHeaderInfo ch) && ch.SectorSize == 512;
+        return olmOk && pageOk && blockOk && mimeOk && cfbOk;
+    }
+
+    // Opens a store held in memory for writing, adds an item and a folder, deletes an item, commits, and reads the result back with no defect and exact counts.
+    public static bool PstEdit()
+    {
+        static MapiMessage Make(string subject)
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.MessageClass, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+            m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.Subject, MapiType.UnicodeString), Encoding.Unicode.GetBytes(subject)));
+            var a = new MapiAttachment(m);
+            a.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.AttachDataBinary, MapiType.Binary), new byte[30_000]));
+            m.AddAttachment(a);
+            return m;
+        }
+
+        using var ms = new MemoryStream();
+        using (RecursiveAI.OneMail.Pst.Messaging.PstBuilder b = RecursiveAI.OneMail.Pst.Messaging.PstBuilder.Create(ms, leaveOpen: true))
+        {
+            RecursiveAI.OneMail.Pst.Messaging.PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
+            inbox.AddMessage(Make("one"));
+            inbox.AddMessage(Make("two"));
+            b.Complete();
+        }
+
+        using (RecursiveAI.OneMail.Pst.Messaging.PstWritableStore w = RecursiveAI.OneMail.Pst.Messaging.PstStore.OpenForWriting(ms, leaveOpen: true))
+        {
+            RecursiveAI.OneMail.Pst.Messaging.PstFolder inbox = w.View.EnumerateFolders().First(f => f.Name == "Inbox");
+            RecursiveAI.OneMail.Pst.Ndb.Nid first = inbox.EnumerateMessageIds().First();
+            RecursiveAI.OneMail.Pst.Ndb.Nid added = w.CreateFolder(inbox.Nid, "Sub");
+            w.AddMessage(added, Make("three"));
+            w.DeleteMessage(first);
+            w.Commit();
+        }
+
+        if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(ms.ToArray(), out RecursiveAI.OneMail.Pst.Messaging.PstStore? store, out _) || store is null)
+        {
+            return false;
+        }
+
+        using (store)
+        {
+            return store.EnumerateMessages().Count() == 2 && store.EnumerateFolders().Any(f => f.Name == "Sub" && f.ContentCount == 1)
+                && store.EnumerateFolders().First(f => f.Name == "Inbox").ContentCount == 1 && store.Defects.Count == 0 && store.Database.Defects.Count == 0;
         }
     }
 

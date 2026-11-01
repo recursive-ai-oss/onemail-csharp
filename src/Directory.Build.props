@@ -58,6 +58,7 @@
   <ItemGroup Label="Test access">
     <InternalsVisibleTo Include="$(PackagePrefix).OneMail.Tests" />
     <InternalsVisibleTo Include="$(PackagePrefix).OneMail.Fuzz" />
+    <InternalsVisibleTo Include="$(PackagePrefix).OneMail.Durability" />
   </ItemGroup>
 
 

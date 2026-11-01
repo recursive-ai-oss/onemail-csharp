@@ -91,7 +91,7 @@ Typed views over the tree, each returning false when the response is not of that
 - Servers and accounts: Dovecot (user `test`, a shared password; IMAP 31143/31993, POP3 31110/31995, submission 31587/31465, `smtp-sink.py` as its relay), Stalwart (`test@example.test`; IMAP 143/993, POP3 110/995, submission 587/465), Cyrus (`user1`, any password; IMAP 143/993, POP3 110/995). TLS certificates are the images' own or self-signed; the tests accept any certificate.
 - Postfix needs the superuser and several system users, which one mapped id cannot give it, so it runs in a small Linux guest instead: `guest-build.sh` builds a Debian 12 cloud image (pinned by URL and SHA-512) with Postfix and Dovecot's authentication service through cloud-init, once, with network access; `guest-run.sh` boots it on a throw-away overlay under user-mode qemu with KVM and forwards SMTP, submission and smtps to 127.0.0.1:32025, 32587 and 32465 (user `test`, the shared password, recipient `test@example.test`). No root is needed on the host.
 
-The container tests (`ServerTests`) skip when `ONEMAIL_SERVERS` is unset. `ONEMAIL_CAPTURE_DIR` keeps the server's side of each session, which is where `testdata/client/captures` comes from.
+The typed clients are tested against the same servers (`ImapClientServerTests`, `Pop3ClientServerTests`; `ImapCorpusTests` and `ImapMemoryTests` are opt-in through environment variables named in their files). Dovecot is configured to poll for other sessions' changes every second and Cyrus to keep 8-bit header bytes, which they otherwise do not. The container tests (`ServerTests`) skip when `ONEMAIL_SERVERS` is unset. `ONEMAIL_CAPTURE_DIR` keeps the server's side of each session, which is where `testdata/client/captures` comes from.
 
 ## Fuzzing
 

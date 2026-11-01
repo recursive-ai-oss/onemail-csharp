@@ -135,7 +135,7 @@ count line is reproduced exactly.
 
 An Outlook Express 5/6 store is a directory of `.dbx` files: `Folders.dbx` (the folder hierarchy), one message database per folder
 (`Inbox.dbx`, `Sent Items.dbx`, user folders) and helpers (`Pop3uidl.dbx`, `Offline.dbx`) that hold no mail. Reading is read-only and
-never writes. Facts are from the oedbx DBX format notes (Arne Schloh, updated by Zvonko Tesic); the constants and structures here are
+never writes. Deleted and orphaned messages are listed only by the opt-in forensic reader ([`recovery.md`](recovery.md)). Facts are from the oedbx DBX format notes (Arne Schloh, updated by Zvonko Tesic); the constants and structures here are
 our own statement of them.
 
 **File.** Every database starts with `cf ad 12 fe` and a class id: `c5 fd 74 6f` message database, `c6 fd 74 6f` `Folders.dbx`,
