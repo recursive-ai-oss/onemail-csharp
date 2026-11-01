@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using RecursiveAI.OneMail.Client.Protocol;
 
@@ -79,6 +80,7 @@ public sealed class SmtpReplyReader
     /// <returns>The reply.</returns>
     public SmtpReply ReadReply() => SyncBridge.Run(ReadCore(true, default));
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<SmtpReply> ReadCore(bool sync, CancellationToken ct)
     {
         var lines = new List<string>(1);

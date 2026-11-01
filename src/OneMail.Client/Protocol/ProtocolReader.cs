@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Buffers;
 
 namespace RecursiveAI.OneMail.Client.Protocol;
@@ -38,7 +39,11 @@ public sealed class ProtocolReader : IDisposable
     /// <returns>The line, valid until the next call. Whether the terminator was a bare LF is available from <see cref="LastLineWasBareLf"/>.</returns>
     /// <exception cref="MailConnectionClosedException">The connection ended before a line end.</exception>
     /// <exception cref="MailProtocolLimitException">The line is longer than <see cref="ProtocolLimits.MaxLineLength"/>.</exception>
-    public async ValueTask<ReadOnlyMemory<byte>> ReadLineAsync(CancellationToken cancellationToken = default)
+    public ValueTask<ReadOnlyMemory<byte>> ReadLineAsync(CancellationToken cancellationToken = default) => ReadLinePooled(cancellationToken);
+
+    // The pooled builder keeps a read that has to wait for the network from allocating a state machine box each time (a download is thousands of them).
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    private async ValueTask<ReadOnlyMemory<byte>> ReadLinePooled(CancellationToken cancellationToken)
     {
         ReadOnlyMemory<byte> raw = await ReadRawLineCore(false, cancellationToken).ConfigureAwait(false);
         return StripEnd(raw);
@@ -73,6 +78,7 @@ public sealed class ProtocolReader : IDisposable
         return raw[..len];
     }
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<ReadOnlyMemory<byte>> ReadRawLineCore(bool sync, CancellationToken ct)
     {
         int scanned = 0;
@@ -139,6 +145,7 @@ public sealed class ProtocolReader : IDisposable
         return Read(destination);
     }
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<int> ReadCore(Memory<byte> destination, bool sync, CancellationToken ct)
     {
         int avail = _end - _start;
@@ -161,6 +168,7 @@ public sealed class ProtocolReader : IDisposable
 
     // Hands out the buffered bytes themselves (filling first when there are none) so a literal can be written to its destination
     // without a second copy. Empty means the connection ended. The caller consumes with Advance before the next reader call.
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<ReadOnlyMemory<byte>> PeekAsync(CancellationToken ct)
     {
         if (_end == _start && await FillAsync(false, ct).ConfigureAwait(false) == 0)
@@ -186,7 +194,10 @@ public sealed class ProtocolReader : IDisposable
     /// <param name="count">How many.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <exception cref="MailConnectionClosedException">The connection ended first.</exception>
-    public async ValueTask SkipAsync(long count, CancellationToken cancellationToken = default)
+    public ValueTask SkipAsync(long count, CancellationToken cancellationToken = default) => SkipPooled(count, cancellationToken);
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    private async ValueTask SkipPooled(long count, CancellationToken cancellationToken)
     {
         while (count > 0)
         {
@@ -220,6 +231,7 @@ public sealed class ProtocolReader : IDisposable
         }
     }
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<int> FillAsync(bool sync, CancellationToken ct)
     {
         if (_start == _end)
@@ -350,7 +362,10 @@ public sealed class ProtocolReader : IDisposable
         }
 
         /// <inheritdoc />
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ReadPooled(buffer, cancellationToken);
+
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        private async ValueTask<int> ReadPooled(Memory<byte> buffer, CancellationToken cancellationToken)
         {
             if (_remaining == 0 || buffer.Length == 0)
             {

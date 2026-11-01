@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Buffers;
 using System.Text;
 
@@ -97,7 +98,10 @@ public sealed class ProtocolWriter : IDisposable
     /// <summary>Sends everything buffered.</summary>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes when the bytes are handed to the transport.</returns>
-    public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default) => FlushPooled(cancellationToken);
+
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    private async ValueTask FlushPooled(CancellationToken cancellationToken)
     {
         if (_len == 0)
         {

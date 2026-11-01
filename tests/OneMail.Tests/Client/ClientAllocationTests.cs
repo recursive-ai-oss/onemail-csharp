@@ -1,4 +1,8 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
+using RecursiveAI.OneMail.Client.Smtp;
+using RecursiveAI.OneMail.Composition;
 using RecursiveAI.OneMail.Client.Imap;
 using RecursiveAI.OneMail.Client.Protocol;
 
@@ -202,5 +206,138 @@ public class ClientAllocationTests
             Assert.Equal(e.Cc, a.Cc);
             Assert.Equal(e.Bcc, a.Bcc);
         }
+    }
+
+    /// <summary>
+    /// An SMTP server that allocates nothing per message (blocking sockets, one reused buffer): it answers the commands of the SMTP
+    /// transaction and swallows the data, so the process-wide allocation counter sees the client.
+    /// </summary>
+    private sealed class QuietSmtpServer : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly Thread _thread;
+
+        public QuietSmtpServer()
+        {
+            _listener.Start();
+            _thread = new Thread(Serve) { IsBackground = true };
+            _thread.Start();
+        }
+
+        public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+        public void Dispose() => _listener.Stop();
+
+        private static readonly byte[] Greeting = Encoding.ASCII.GetBytes("220 quiet ESMTP\r\n");
+        private static readonly byte[] Ehlo = Encoding.ASCII.GetBytes("250-quiet\r\n250-PIPELINING\r\n250-SIZE 52428800\r\n250-8BITMIME\r\n250-CHUNKING\r\n250 SMTPUTF8\r\n");
+        private static readonly byte[] Ok = Encoding.ASCII.GetBytes("250 2.0.0 Ok\r\n");
+        private static readonly byte[] Go = Encoding.ASCII.GetBytes("354 go ahead\r\n");
+        private static readonly byte[] Bye = Encoding.ASCII.GetBytes("221 bye\r\n");
+
+        private void Serve()
+        {
+            try
+            {
+                using Socket s = _listener.AcceptSocket();
+                s.NoDelay = true;
+                s.Send(Greeting);
+                byte[] buf = new byte[256 * 1024];
+                int len = 0;
+                bool inData = false;
+                long skip = 0;
+                while (true)
+                {
+                    int n = s.Receive(buf, len, buf.Length - len, SocketFlags.None);
+                    if (n == 0) { return; }
+                    len += n;
+                    int pos = 0;
+                    while (true)
+                    {
+                        if (skip > 0)
+                        {
+                            int take = (int)Math.Min(skip, len - pos);
+                            pos += take;
+                            skip -= take;
+                            if (skip > 0) { break; }
+                            s.Send(Ok); // every chunk is acknowledged (RFC 3030 §2)
+                            continue;
+                        }
+
+                        ReadOnlySpan<byte> rest = buf.AsSpan(pos, len - pos);
+                        if (inData)
+                        {
+                            int end = rest.IndexOf("\r\n.\r\n"u8);
+                            if (end < 0)
+                            {
+                                // Keep the tail so a terminator split across reads is still found.
+                                int keep = Math.Min(4, rest.Length);
+                                pos = len - keep;
+                                break;
+                            }
+
+                            pos += end + 5;
+                            inData = false;
+                            s.Send(Ok);
+                            continue;
+                        }
+
+                        int eol = rest.IndexOf((byte)'\n');
+                        if (eol < 0) { break; }
+                        ReadOnlySpan<byte> line = rest[..eol];
+                        pos += eol + 1;
+                        if (line.StartsWith("EHLO"u8)) { s.Send(Ehlo); }
+                        else if (line.StartsWith("DATA"u8)) { s.Send(Go); inData = true; }
+                        else if (line.StartsWith("BDAT"u8))
+                        {
+                            string[] parts = Encoding.ASCII.GetString(line).TrimEnd().Split(' ');
+                            skip = long.Parse(parts[1]);
+                            if (skip == 0) { s.Send(Ok); }
+                        }
+                        else if (line.StartsWith("QUIT"u8)) { s.Send(Bye); return; }
+                        else { s.Send(Ok); }
+                    }
+
+                    // Move what is left to the front of the buffer.
+                    Buffer.BlockCopy(buf, pos, buf, 0, len - pos);
+                    len -= pos;
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or InvalidOperationException) { }
+        }
+    }
+
+    [Theory]
+    [InlineData(4 * 1024, true)]
+    [InlineData(4 * 1024, false)]
+    [InlineData(1024 * 1024, true)]
+    public async Task SendingAMessageAllocatesWhatTheMessageNeeds(int size, bool chunking)
+    {
+        Assert.SkipUnless(Measure, MeasureHint);
+        using var server = new QuietSmtpServer();
+        await using SmtpClient c = await SmtpClient.ConnectAsync(new SmtpClientOptions { Host = "127.0.0.1", Port = server.Port, Security = SmtpSecurity.None, UseChunking = chunking }, Ct);
+        string body = string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. 0123456789 abcdefghijklmn\n", size / 71));
+        int count = size > 65536 ? 20 : 500;
+        long build = 0, send = 0;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            build = 0;
+            send = 0;
+            for (int i = 0; i < count; i++)
+            {
+                long b0 = GC.GetTotalAllocatedBytes(true);
+                var m = new OutgoingMessage { From = "sender@example.com", To = ["test@example.test"], Subject = "row " + i, Text = body, MessageId = "m-" + i + "@rows.test" };
+                var message = SmtpMessage.FromEntity(m.ToEntity());
+                long b1 = GC.GetTotalAllocatedBytes(true);
+                Assert.True((await c.SendAsync(message, Ct)).Delivered);
+                long b2 = GC.GetTotalAllocatedBytes(true);
+                build += b1 - b0;
+                send += b2 - b1;
+            }
+        }
+
+        TestContext.Current.SendDiagnosticMessage($"{size} bytes, chunking {chunking}: build {build / count} B/msg, send {send / count} B/msg");
+        // The send is the envelope, the size check and the framing; the 4 KB message needs none of it copied. The build (the sender's text to a MIME tree) is counted apart.
+        Assert.True(send / count < 20_000, $"{send / count} B per send");
+        await c.QuitAsync(Ct);
     }
 }

@@ -303,8 +303,68 @@ public sealed class SmtpClient : IAsyncDisposable, IDisposable
     /// <returns>The result.</returns>
     public SmtpSendResult Send(SmtpMessage message) => SyncBridge.Run(SendCore(true, message, default));
 
-    private static IEnumerable<string> Mailboxes(MimeEntity e, string header) =>
-        e.Headers.GetAll(header).SelectMany(h => AddressParser.Flatten(AddressParser.Parse(h.RawValue.Span)).Select(m => m.Address));
+    // The envelope is read from the headers with plain loops: this runs once per message and a mailbox of thousands should not pay for LINQ here.
+    private static void AddMailboxes(MimeEntity e, string header, List<string> into, bool firstOnly = false)
+    {
+        foreach (MimeHeader h in e.Headers)
+        {
+            if (!h.IsNamed(header))
+            {
+                continue;
+            }
+
+            foreach (MimeAddress a in AddressParser.Parse(h.RawValue.Span))
+            {
+                if (a is MimeMailbox m)
+                {
+                    into.Add(m.Address);
+                }
+                else if (a is MimeGroup g)
+                {
+                    foreach (MimeMailbox member in g.Members) { into.Add(member.Address); }
+                }
+
+                if (firstOnly && into.Count > 0)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private static string? FirstMailbox(MimeEntity e, string header)
+    {
+        var found = new List<string>(1);
+        AddMailboxes(e, header, found, firstOnly: true);
+        return found.Count > 0 ? found[0] : null;
+    }
+
+    private static bool HasHeader(MimeEntity e, string name)
+    {
+        foreach (MimeHeader h in e.Headers)
+        {
+            if (h.IsNamed(name)) { return true; }
+        }
+
+        return false;
+    }
+
+    private static List<string> Distinct(IEnumerable<string> addresses)
+    {
+        var result = new List<string>();
+        foreach (string a in addresses)
+        {
+            bool seen = false;
+            foreach (string r in result)
+            {
+                if (string.Equals(r, a, StringComparison.OrdinalIgnoreCase)) { seen = true; break; }
+            }
+
+            if (!seen) { result.Add(a); }
+        }
+
+        return result;
+    }
 
     private async ValueTask<SmtpSendResult> SendCore(bool sync, SmtpMessage message, CancellationToken ct)
     {
@@ -327,13 +387,30 @@ public sealed class SmtpClient : IAsyncDisposable, IDisposable
 
         // The tree that carries the headers: the message itself, or a parse of the bytes. A stream has none, so its envelope must be given.
         MimeEntity? tree = message.Entity ?? (message.Stream is null ? MimeEntity.Parse(message.Bytes) : null);
-        string? sender = message.Sender ?? (tree is null ? null : (Mailboxes(tree, "Sender").FirstOrDefault() ?? Mailboxes(tree, "From").FirstOrDefault()));
+        string? sender = message.Sender ?? (tree is null ? null : (FirstMailbox(tree, "Sender") ?? FirstMailbox(tree, "From")));
         if (sender is null)
         {
             throw new ArgumentException("No sender: set SmtpMessage.Sender or give the message a From header.");
         }
 
-        List<string> recipients = [.. (message.Recipients ?? (tree is null ? [] : Mailboxes(tree, "To").Concat(Mailboxes(tree, "Cc")).Concat(Mailboxes(tree, "Bcc")))).Distinct(StringComparer.OrdinalIgnoreCase)];
+        List<string> recipients;
+        if (message.Recipients is not null)
+        {
+            recipients = Distinct(message.Recipients);
+        }
+        else
+        {
+            var all = new List<string>();
+            if (tree is not null)
+            {
+                AddMailboxes(tree, "To", all);
+                AddMailboxes(tree, "Cc", all);
+                AddMailboxes(tree, "Bcc", all);
+            }
+
+            recipients = Distinct(all);
+        }
+
         if (recipients.Count == 0)
         {
             throw new ArgumentException("No recipients: set SmtpMessage.Recipients or give the message To, Cc or Bcc headers.");
@@ -400,7 +477,7 @@ public sealed class SmtpClient : IAsyncDisposable, IDisposable
 
         // RFC 5322 §3.6.3: Bcc recipients are used for the envelope and the header is not transmitted. Taken out of the tree while sending.
         (MimeHeader Header, int Index)[] removedBcc = [];
-        if (toWrite is not null && toWrite.Headers.GetAll("Bcc").Any())
+        if (toWrite is not null && HasHeader(toWrite, "Bcc"))
         {
             removedBcc = [.. toWrite.Headers.Select((h, i) => (h, i)).Where(t => t.h.IsNamed("Bcc"))];
             foreach ((MimeHeader h, _) in removedBcc)

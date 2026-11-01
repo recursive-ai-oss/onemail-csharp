@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using RecursiveAI.OneMail.Client.Protocol;
 
@@ -48,6 +49,7 @@ public sealed class ImapResponseReader
     /// knows is decoded straight from the line into the second result with no generic tree; anything else (a literal, a
     /// BODYSTRUCTURE, an unknown item, a malformed line) is parsed as <see cref="ReadResponseAsync"/> would, so the result is the same.
     /// </summary>
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     internal async ValueTask<(ImapResponse? Response, ImapFetchData? Fetch)> ReadFetchAsync(CancellationToken ct)
     {
         ReadOnlyMemory<byte> line = await _reader.ReadLineAsync(ct).ConfigureAwait(false);
@@ -61,6 +63,7 @@ public sealed class ImapResponseReader
         return (await ReadCore(false, null, null, ct, line).ConfigureAwait(false), null);
     }
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<ImapResponse> ReadCore(bool sync, ImapLiteralHandler? asyncHandler, ImapLiteralHandlerSync? syncHandler, CancellationToken ct, ReadOnlyMemory<byte>? preRead = null)
     {
         ProtocolLimits limits = _reader.Limits;

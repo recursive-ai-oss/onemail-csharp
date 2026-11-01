@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using RecursiveAI.OneMail.Client.Protocol;
 using RecursiveAI.OneMail.Client.Sasl;
@@ -126,6 +127,7 @@ public sealed class ImapRawConnection : IAsyncDisposable, IDisposable
     public ImapResponse ReadResponse(ImapLiteralHandlerSync? literalHandler = null) =>
         SyncBridge.Run(ReadCore(true, null, literalHandler, default));
 
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     private async ValueTask<ImapResponse> ReadCore(bool sync, ImapLiteralHandler? ah, ImapLiteralHandlerSync? sh, CancellationToken ct)
     {
         if (_pending.TryDequeue(out ImapResponse? queued))
@@ -139,6 +141,7 @@ public sealed class ImapRawConnection : IAsyncDisposable, IDisposable
     }
 
     // FETCH enumeration: a plain FETCH line comes back decoded (Fetch set), anything else as the response ReadCore would return.
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     internal async ValueTask<(ImapResponse? Response, ImapFetchData? Fetch)> ReadFetchAsync(CancellationToken ct)
     {
         if (_pending.Count > 0)
