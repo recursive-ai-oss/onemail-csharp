@@ -533,6 +533,51 @@ internal static class Program
 
         Console.WriteLine("client: " + (clientOk ? "ok" : "FAILED"));
 
+        // SMTP submission and the SASL mechanisms under NativeAOT: the RFC vectors, then a real send to a loopback server written inline.
+        bool smtpOk;
+        {
+            var scram = new RecursiveAI.OneMail.Client.Sasl.SaslScram(RecursiveAI.OneMail.Client.Sasl.ScramHash.Sha256, "user", "pencil", nonce: "rOprNGfwEbeRWgbNEkqO");
+            scram.GetInitialResponse();
+            string proof = System.Text.Encoding.ASCII.GetString(scram.Respond("r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096"u8));
+            bool vectors = proof.EndsWith("p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=", StringComparison.Ordinal)
+                && Convert.ToHexStringLower(RecursiveAI.OneMail.Client.Sasl.Md4.Hash("abc"u8)) == "a448017aaf21d8525fc10ae87aa6729d"
+                && System.Text.Encoding.ASCII.GetString(new RecursiveAI.OneMail.Client.Sasl.SaslCramMd5("tim", "tanstaaftanstaaf").Respond("<1896.697170952@postoffice.reston.mci.net>"u8)) == "tim b913a602c7eda7a495b4e6e7334d3890";
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            byte[]? received = null;
+            var serverThread = new System.Threading.Thread(() =>
+            {
+                using var tcp = listener.AcceptTcpClient();
+                using var net = tcp.GetStream();
+                void Say(string t) { var b = System.Text.Encoding.ASCII.GetBytes(t + "\r\n"); net.Write(b, 0, b.Length); }
+                string? Line() { var l = new List<byte>(); int c; while ((c = net.ReadByte()) >= 0 && c != '\n') { l.Add((byte)c); } return c < 0 ? null : System.Text.Encoding.ASCII.GetString(l.ToArray()).TrimEnd('\r'); }
+                Say("220 smoke");
+                while (Line() is { } cmd)
+                {
+                    if (cmd.StartsWith("EHLO", StringComparison.Ordinal)) { Say("250-smoke\r\n250-PIPELINING\r\n250 8BITMIME"); }
+                    else if (cmd.StartsWith("DATA", StringComparison.Ordinal))
+                    {
+                        Say("354 go");
+                        var ms = new MemoryStream();
+                        int c;
+                        while ((c = net.ReadByte()) >= 0) { ms.WriteByte((byte)c); if (ms.Length >= 5 && ms.GetBuffer().AsSpan((int)ms.Length - 5, 5).SequenceEqual("\r\n.\r\n"u8)) { break; } }
+                        received = ms.ToArray();
+                        Say("250 2.0.0 queued");
+                    }
+                    else if (cmd.StartsWith("QUIT", StringComparison.Ordinal)) { Say("221 bye"); break; }
+                    else { Say("250 ok"); }
+                }
+            });
+            serverThread.Start();
+            var outgoing = new RecursiveAI.OneMail.Composition.OutgoingMessage { From = "A \u00fc <a@example.com>", To = ["b@example.com"], Subject = "caf\u00e9", Text = "hello" };
+            var result = RecursiveAI.OneMail.Mail.SendAsync(outgoing, new RecursiveAI.OneMail.Client.Smtp.SmtpClientOptions { Host = "127.0.0.1", Port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port, Security = RecursiveAI.OneMail.Client.Smtp.SmtpSecurity.None }).GetAwaiter().GetResult();
+            serverThread.Join();
+            listener.Stop();
+            smtpOk = vectors && result.Complete && received is not null && System.Text.Encoding.ASCII.GetString(received).Contains("Subject: =?", StringComparison.Ordinal);
+        }
+
+        Console.WriteLine("smtp: " + (smtpOk ? "ok" : "FAILED"));
+
         // The typed IMAP and POP3 clients over scripted streams: the state machine, the selected-mailbox model, FETCH/SEARCH and the POP3 maildrop.
         bool typedClientOk;
         {
@@ -616,7 +661,7 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstRecoveryOk && pstEditOk && typedClientOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstRecoveryOk && pstEditOk && typedClientOk && smtpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

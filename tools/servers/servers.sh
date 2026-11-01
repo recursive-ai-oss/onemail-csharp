@@ -8,9 +8,12 @@
 set -uo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$D/images.env"
-STATE=${ONEMAIL_SERVER_STATE:-$HOME/onemail/containers/state}
+# Runs on one machine must not touch each other: the state directory and the container names carry this run's process id.
+RUN=$$
+STATE=${ONEMAIL_SERVER_STATE:-$HOME/onemail/containers/state/run-$RUN}
 LOGS=${ONEMAIL_SERVER_LOGS:-$STATE/logs}
 mkdir -p "$STATE" "$LOGS"
+export ONEMAIL_GUEST_PIDFILE="$STATE/qemu.pid"
 PODMAN="$D/pm"
 PIDS=()
 UP=()
@@ -20,11 +23,12 @@ if [ "${1:-}" = "--servers" ]; then want=$2; shift 2; fi
 [ "${1:-}" = "--" ] && shift
 
 cleanup() {
-  for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c" >/dev/null 2>&1; done
+  for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c-$RUN" >/dev/null 2>&1; done
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
   wait 2>/dev/null
   "$D/guest-run.sh" stop
   "$D/cleanup.sh" >/dev/null
+  [ -n "${ONEMAIL_SERVER_STATE:-}" ] || rm -rf "$STATE"
 }
 trap cleanup EXIT
 
@@ -38,22 +42,29 @@ wait_port() { # port seconds
 }
 
 start_sink() {
-  python3 "$D/smtp-sink.py" 2525 >"$LOGS/sink.log" 2>&1 &
+  [ -n "${ONEMAIL_SINK_DIR:-}" ] && return 0
+  rm -rf "$STATE/sink"; mkdir -p "$STATE/sink"
+  python3 "$D/smtp-sink.py" 2525 "$STATE/sink" >"$LOGS/sink.log" 2>&1 &
   PIDS+=($!)
-  wait_port 2525 10
+  wait_port 2525 10 || return 1
+  # What the sink received (the Dovecot submission relay, the Postfix guest's relay) is kept here for the tests to read back.
+  export ONEMAIL_SINK_DIR="$STATE/sink"
 }
 
 start_dovecot() {
   rm -rf "$STATE/dovecot"; mkdir -p "$STATE/dovecot/vmail"
   start_sink || return 1
-  "$PODMAN" run --rm --name onemail-dovecot --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
+  python3 "$D/oauth-introspect.py" 2526 >"$LOGS/oauth.log" 2>&1 &
+  PIDS+=($!)
+  wait_port 2526 10 || return 1
+  "$PODMAN" run --rm --name "onemail-dovecot-$RUN" --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
     -e USER_PASSWORD='{PLAIN}onemail-test' \
     -v "$STATE/dovecot/vmail:/srv/vmail" -v "$D/conf/dovecot-onemail.conf:/etc/dovecot/conf.d/90-onemail.conf:ro" \
     --tmpfs /run/dovecot:rw,mode=1777 "$DOVECOT_IMAGE" >"$LOGS/dovecot.log" 2>&1 &
   PIDS+=($!)
   wait_port 31143 30 || return 1
   export ONEMAIL_DOVECOT_IMAP_PORT=31143 ONEMAIL_DOVECOT_IMAPS_PORT=31993 ONEMAIL_DOVECOT_POP3_PORT=31110 ONEMAIL_DOVECOT_POP3S_PORT=31995 \
-         ONEMAIL_DOVECOT_SUBMISSION_PORT=31587 ONEMAIL_DOVECOT_SUBMISSIONS_PORT=31465 ONEMAIL_DOVECOT_USER=test ONEMAIL_DOVECOT_PASSWORD=onemail-test
+         ONEMAIL_DOVECOT_SUBMISSION_PORT=31587 ONEMAIL_DOVECOT_SUBMISSIONS_PORT=31465 ONEMAIL_DOVECOT_USER=test ONEMAIL_DOVECOT_PASSWORD=onemail-test ONEMAIL_DOVECOT_TOKEN=test-token
 }
 
 start_stalwart() {
@@ -62,12 +73,14 @@ start_stalwart() {
   echo '{"@type":"RocksDb","path":"/var/lib/stalwart/"}' > "$S/etc/config.json"
   local common=(--rm --network=host --uidmap 2000:0:1 --gidmap 2000:0:1 --user 2000:2000 -v "$S/etc:/etc/stalwart" -v "$S/data:/var/lib/stalwart")
   # First run in recovery mode: only the management listener, so the domain and account can be provisioned before any mail service starts.
-  "$PODMAN" run --name onemail-stalwart "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
+  "$PODMAN" run --name "onemail-stalwart-$RUN" "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
   local pid=$!
   wait_port 8080 30 || { kill $pid; return 1; }
   cat > "$S/plan.ndjson" <<'PLAN'
 {"@type":"upsert","object":"Domain","matchOn":["name"],"value":{"dom":{"name":"example.test","certificateManagement":{"@type":"Manual"},"dkimManagement":{"@type":"Automatic"},"dnsManagement":{"@type":"Manual"}}}}
 {"@type":"upsert","object":"Account","matchOn":["name","domainId"],"value":{"u":{"@type":"User","name":"test","domainId":"#dom","credentials":{"0":{"@type":"Password","secret":"onemail-test"}}}}}
+{"@type":"create","object":"Tracer","value":{"t":{"@type":"Stdout","enable":true,"level":"debug","buffered":false,"ansi":false}}}
+{"@type":"create","object":"MtaInboundThrottle","value":{"th":{"description":"test runs open many connections","enable":false,"rate":{"count":1000000,"period":1000}}}}
 {"@type":"update","object":"SystemSettings","value":{"defaultHostname":"mail.example.test","defaultDomainId":"#dom"}}
 {"@type":"upsert","object":"NetworkListener","matchOn":["name"],"value":{"l1":{"name":"smtp","bind":{"[::]:25":true},"protocol":"smtp"},"l2":{"name":"submission","bind":{"[::]:587":true},"protocol":"smtp"},"l3":{"name":"submissions","bind":{"[::]:465":true},"protocol":"smtp","implicitTls":true},"l4":{"name":"imap","bind":{"[::]:143":true},"protocol":"imap"},"l5":{"name":"imaps","bind":{"[::]:993":true},"protocol":"imap","implicitTls":true},"l6":{"name":"pop3","bind":{"[::]:110":true},"protocol":"pop3"},"l7":{"name":"pop3s","bind":{"[::]:995":true},"protocol":"pop3","implicitTls":true},"l8":{"name":"https","bind":{"[::]:443":true},"protocol":"http","implicitTls":true}}}
 PLAN
@@ -78,10 +91,25 @@ PLAN
     sleep 2
   done
   [ -n "$ok" ] || { cat "$LOGS/stalwart-apply.log" >&2; kill $pid; return 1; }
-  "$PODMAN" stop -t 5 onemail-stalwart >/dev/null 2>&1; wait $pid 2>/dev/null
-  "$PODMAN" run --name onemail-stalwart "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
+  if [ -n "${DBG_CLI:-}" ]; then XDG_CACHE_HOME="$S/cache" HOME="$S" "$CLI" --url http://127.0.0.1:8080 --user admin --password secret $DBG_CLI >"$LOGS/dbg.txt" 2>&1; fi
+  "$PODMAN" stop -t 5 "onemail-stalwart-$RUN" >/dev/null 2>&1; wait $pid 2>/dev/null
+  "$PODMAN" run --name "onemail-stalwart-$RUN" "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
   PIDS+=($!)
   wait_port 143 40 || return 1
+  # The listeners open before the certificate is loaded: a TLS handshake on the implicit-TLS ports is closed until it is ready.
+  local tls=
+  for _ in $(seq 1 60); do
+    if python3 - <<'PY' 2>/dev/null
+import socket, ssl
+c = ssl.create_default_context(); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE
+for port in (465, 993):
+    with socket.create_connection(("127.0.0.1", port), 3) as s, c.wrap_socket(s) as t:
+        t.recv(1)
+PY
+    then tls=1; break; fi
+    sleep 1
+  done
+  [ -n "$tls" ] || { echo "stalwart TLS listeners did not become ready; see $LOGS" >&2; return 1; }
   export ONEMAIL_STALWART_IMAP_PORT=143 ONEMAIL_STALWART_IMAPS_PORT=993 ONEMAIL_STALWART_POP3_PORT=110 ONEMAIL_STALWART_POP3S_PORT=995 \
          ONEMAIL_STALWART_SMTP_PORT=25 ONEMAIL_STALWART_SUBMISSION_PORT=587 ONEMAIL_STALWART_SUBMISSIONS_PORT=465 \
          ONEMAIL_STALWART_USER=test@example.test ONEMAIL_STALWART_PASSWORD=onemail-test
@@ -96,7 +124,7 @@ start_cyrus() {
   PIDS+=($!)
   sleep 0.5
   # The image's /var/imap is copied out so the container's one user owns a writable copy (an anonymous volume would need a chown).
-  "$PODMAN" run --rm --name onemail-cyrus --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
+  "$PODMAN" run --rm --name "onemail-cyrus-$RUN" --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
     -v "$S/log.sock:/dev/log" -v "$S/tls:/onemail:ro" -v "$D/conf/cyrus-start.sh:/onemail/start.sh:ro" --tmpfs /run:rw,mode=1777 --tmpfs /tmp:rw,mode=1777 \
     --entrypoint /bin/bash "$CYRUS_IMAGE" /onemail/start.sh >"$LOGS/cyrus.log" 2>&1 &
   PIDS+=($!)
@@ -120,6 +148,7 @@ PY
 }
 
 start_postfix() {
+  start_sink || return 1
   "$D/guest-run.sh" start || return 1
   GUEST_STARTED=1
   local ok=
@@ -128,7 +157,7 @@ start_postfix() {
     sleep 2
   done
   [ -n "$ok" ] || { echo "postfix guest did not answer; see its console log" >&2; return 1; }
-  export ONEMAIL_POSTFIX_SMTP_PORT=32025 ONEMAIL_POSTFIX_SUBMISSION_PORT=32587 ONEMAIL_POSTFIX_SUBMISSIONS_PORT=32465 \
+  export ONEMAIL_POSTFIX_SMTP_PORT=32025 ONEMAIL_POSTFIX_SUBMISSION_PORT=32587 ONEMAIL_POSTFIX_SUBMISSIONS_PORT=32465 ONEMAIL_POSTFIX_LEGACY_PORT=32588 \
          ONEMAIL_POSTFIX_USER=test ONEMAIL_POSTFIX_PASSWORD=onemail-test
 }
 

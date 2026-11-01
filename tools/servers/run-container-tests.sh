@@ -17,12 +17,9 @@ dotnet build tests/OneMail.Tests -c Checked -v quiet -clp:NoSummary
 rc=0
 for s in ${servers//,/ }; do
   echo "##### $s"
-  if [ "$s" = postfix ]; then
-    # The guest uses the host network (forwards on high ports) and needs no user namespace.
-    "$D/servers.sh" --servers "$s" -- dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
-  else
-    "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
-      dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
-  fi
+  # Every server runs in its own private network namespace, so runs of different checkouts on one machine never share ports; the
+  # Postfix guest's forwarded ports and the SMTP sink live inside it too.
+  "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
+    dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
 done
 exit $rc

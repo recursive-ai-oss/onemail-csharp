@@ -2,7 +2,7 @@
 
 The raw protocol layer under the IMAP, SMTP and POP3 clients of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp): connections with implicit TLS, STARTTLS and `COMPRESS=DEFLATE`, command writers, response readers that turn every line into a typed tree, SASL, and a protocol trace with credentials redacted. It is for tools that need to drive a server by hand, including extensions no typed client knows.
 
-**Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet. The typed `ImapClient` and `Pop3Client` are on top of it; the SMTP client is not in this version.
+**Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet. The typed `ImapClient`, `Pop3Client` and `SmtpClient`, `Mail.SendAsync` and the SASL mechanisms (SCRAM, OAuth, NTLM, GSSAPI and more) are on top of it.
 
 ```csharp
 using RecursiveAI.OneMail.Client.Imap.Protocol;
@@ -23,6 +23,14 @@ await imap.ExecuteAsync(ImapCommand.Create("FETCH").SequenceSet("1").Raw("(BODY.
     while (await mime.ReadAsync(ct)) { /* headers, bodies, parts */ }
     return true;
 });
+```
+
+```csharp
+// Connect (STARTTLS required), authenticate with the strongest mechanism offered, send, QUIT.
+SmtpSendResult r = await Mail.SendAsync(
+    new OutgoingMessage { From = "me@example.com", To = ["you@example.org"], Subject = "Hi", Text = "Hello" },
+    new SmtpClientOptions { Host = "smtp.example.com", Credentials = new SaslCredentials { UserName = "me", Password = "…" } });
+foreach (var rejected in r.Rejected) Console.WriteLine($"{rejected.Address}: {rejected.Reply}");
 ```
 
 - Credentials are never sent over an unencrypted connection unless you say so (`AllowInsecureAuthentication`); the trace shows asterisks in their place.

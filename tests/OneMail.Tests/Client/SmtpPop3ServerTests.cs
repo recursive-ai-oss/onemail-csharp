@@ -150,7 +150,19 @@ public class SmtpPop3ServerTests
         Assert.Equal(count, uidl.Count);
 
         // RETR streamed into the MIME reader; TOP gives only the headers.
-        int number = list[^1].Number;
+        // Other tests deliver to the same mailbox, so the message seeded above is found by its marker rather than by position.
+        string marker = Encoding.ASCII.GetString(message).Split("Message-ID: <")[1].Split('@')[0];
+        int number = 0;
+        for (int i = list.Count - 1; i >= 0 && number == 0; i--)
+        {
+            (Pop3Response t, Pop3DotStream? h) = await pop.MultilineAsync("TOP", list[i].Number.ToString(System.Globalization.CultureInfo.InvariantCulture) + " 0", Ct);
+            Assert.True(t.IsOk);
+            using var tm = new MemoryStream();
+            await h!.CopyToAsync(tm, Ct);
+            if (Encoding.ASCII.GetString(tm.ToArray()).Contains(marker, StringComparison.Ordinal)) { number = list[i].Number; }
+        }
+
+        Assert.NotEqual(0, number);
         (Pop3Response retr, Pop3DotStream? body) = await pop.MultilineAsync("RETR", number.ToString(System.Globalization.CultureInfo.InvariantCulture), Ct);
         Assert.True(retr.IsOk);
         long bodyBytes = 0;
