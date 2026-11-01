@@ -417,6 +417,22 @@ has been observed yet, so each resolution is provisional. L-entries are the list
 | L3 | Property or cell of an unknown type | n/a | Read as an HNID in a PC; kept inline when one, two or eight bytes | none | prov. |
 | L4 | Positions in a heap's fill-level bitmap blocks (HNBITMAPHDR) | n/a | Allocations may not start before the block's header (12, 66 or 136... bytes, 2 elsewhere) | none | exercised on our files only |
 
+## PST/OST recovery
+
+Resolutions of `docs/recovery.md`. Observed on the Tika `testPST` files, the CFReDS OST and generated stores, with `pffexport` 20180714 as a black-box
+comparison. No Outlook has been observed, so each is provisional (an agent default).
+
+| ID | Case | Other reader | Resolution | Defect | Basis |
+|---|---|---|---|---|---|
+| PR1 | Two leaf pages of the node tree hold the same NID with different data | n/a | The page with the higher page BID is current; the other entry is an earlier version | `SupersededVersion` (only when asked for) | pages are allocated in increasing BID order (MS-PST 2.2.2.7); the CFReDS OST yields 2 deleted messages this way |
+| PR2 | The node tree cannot be walked from its root, and a leaf page names a node the tree never reached | `pffexport` reads nothing from a store whose header or root pages are zeroed (0 items on 8 of 8 such files) | The entry is rebuilt and the item is `Orphaned` with `IndexEntryRebuilt`, filed in its folder by a repaired copy. A deleted node whose page survives is indistinguishable from a live one in this state | `IndexEntryRebuilt` | generated stores: 3,000 of 3,000 recovered with the root pages or the header destroyed |
+| PR3 | A message block no node names, with the node tree damaged | n/a | Returned as `Orphaned` with its properties only; recipients and attachments are not attached to it by guess | `SubnodesNotFound` | the link is the node entry's subnode BID only |
+| PR4 | The header is destroyed | n/a | Layout: the one with the most checksummed pages and blocks in the first 32 MiB, ties to Unicode; encoding: the one that makes most sampled blocks start with a heap header, none found means not encoded | `HeaderUnusable` | all three layouts and both encodings on generated files; the Tika and CFReDS files |
+| PR5 | A leaf page whose checksum fails | n/a | Entries are kept only when the blocks they name are whole in the file | `DamagedPageEntriesKept` | prov. |
+| PR6 | A unit holds a page trailer and a live block written over the page | n/a | The block is found too; the page trailer alone does not claim the unit | none | 8 live blocks in `testPST.pst` (a stale BBT page with a failing checksum over a later block) |
+| PR7 | A value of a damaged item is shorter than its declared length | n/a | The property is dropped from the repaired copy and listed in the report; the rest of the item is written | none (report) | prov. |
+| PR8 | The node tree holds a message its folder's contents table does not list | n/a | `SoftDeleted` when the table reads cleanly, else `Live` with `ListingUnknown` | `NotListedByFolder`, `ListingUnknown` | prov. |
+
 ## RTF bodies (compressed RTF, de-encapsulation)
 
 Probes are the 45 RTF bodies of the public Tika and POI `.msg` files, the specification examples (`testdata/rtf`), and 3,000
