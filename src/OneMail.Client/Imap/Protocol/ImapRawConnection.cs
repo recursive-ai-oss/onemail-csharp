@@ -138,6 +138,23 @@ public sealed class ImapRawConnection : IAsyncDisposable, IDisposable
         return r;
     }
 
+    // FETCH enumeration: a plain FETCH line comes back decoded (Fetch set), anything else as the response ReadCore would return.
+    internal async ValueTask<(ImapResponse? Response, ImapFetchData? Fetch)> ReadFetchAsync(CancellationToken ct)
+    {
+        if (_pending.Count > 0)
+        {
+            return (await ReadCore(false, null, null, ct).ConfigureAwait(false), null);
+        }
+
+        (ImapResponse? r, ImapFetchData? f) = await _responses.ReadFetchAsync(ct).ConfigureAwait(false);
+        if (r is not null)
+        {
+            Observe(r);
+        }
+
+        return (r, f);
+    }
+
     private void Observe(ImapResponse r)
     {
         if (r.TryGetCapabilities(out IReadOnlyList<string> caps))

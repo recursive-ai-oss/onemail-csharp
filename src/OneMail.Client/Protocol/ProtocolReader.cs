@@ -17,6 +17,7 @@ public sealed class ProtocolReader : IDisposable
     private byte[] _buf = ArrayPool<byte>.Shared.Rent(InitialSize);
     private int _start;
     private int _end;
+    private readonly ReusableDeadline _deadline = new();
 
     internal ProtocolReader(ProtocolConnection connection)
     {
@@ -158,6 +159,24 @@ public sealed class ProtocolReader : IDisposable
         return n;
     }
 
+    // Hands out the buffered bytes themselves (filling first when there are none) so a literal can be written to its destination
+    // without a second copy. Empty means the connection ended. The caller consumes with Advance before the next reader call.
+    private async ValueTask<ReadOnlyMemory<byte>> PeekAsync(CancellationToken ct)
+    {
+        if (_end == _start && await FillAsync(false, ct).ConfigureAwait(false) == 0)
+        {
+            return default;
+        }
+
+        return new ReadOnlyMemory<byte>(_buf, _start, _end - _start);
+    }
+
+    private void Advance(int n)
+    {
+        _start += n;
+        Consumed += n;
+    }
+
     /// <summary>Opens a stream over the next <paramref name="length"/> bytes. It must be read or <see cref="LiteralStream.SkipAsync"/>ped to the end before the reader is used again.</summary>
     /// <param name="length">The exact number of bytes.</param>
     /// <returns>The stream.</returns>
@@ -234,14 +253,18 @@ public sealed class ProtocolReader : IDisposable
         }
         else
         {
-            using CancellationTokenSource cts = ProtocolConnection.TimeoutSource(_connection.ReadTimeout, ct);
+            CancellationToken token = _deadline.Begin(_connection.ReadTimeout, ct);
             try
             {
-                n = await s.ReadAsync(_buf.AsMemory(_end), cts.Token).ConfigureAwait(false);
+                n = await s.ReadAsync(_buf.AsMemory(_end), token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 throw new TimeoutException("The server did not send anything within " + _connection.ReadTimeout + ".");
+            }
+            finally
+            {
+                _deadline.End();
             }
         }
 
@@ -257,6 +280,7 @@ public sealed class ProtocolReader : IDisposable
     /// <summary>Returns the buffer to the pool.</summary>
     public void Dispose()
     {
+        _deadline.Dispose();
         byte[] b = _buf;
         _buf = [];
         _start = _end = 0;
@@ -341,6 +365,29 @@ public sealed class ProtocolReader : IDisposable
 
             _remaining -= n;
             return n;
+        }
+
+        /// <summary>Copies what is left to <paramref name="destination"/> straight from the reader's buffer: no intermediate buffer, and allocation does not grow with the number of reads.</summary>
+        /// <param name="destination">Receives the bytes.</param>
+        /// <param name="bufferSize">Ignored; the reader's own buffer is used.</param>
+        /// <param name="cancellationToken">Cancels the copy.</param>
+        /// <returns>A task that completes when the literal has been copied.</returns>
+        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(destination);
+            while (_remaining > 0)
+            {
+                ReadOnlyMemory<byte> buffered = await _reader.PeekAsync(cancellationToken).ConfigureAwait(false);
+                if (buffered.IsEmpty)
+                {
+                    throw new MailConnectionClosedException("The connection was closed in the middle of a literal.");
+                }
+
+                int n = (int)Math.Min(buffered.Length, _remaining);
+                await destination.WriteAsync(buffered[..n], cancellationToken).ConfigureAwait(false);
+                _reader.Advance(n);
+                _remaining -= n;
+            }
         }
 
         /// <summary>Discards what is left, leaving the reader just after the literal.</summary>

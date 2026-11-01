@@ -11,6 +11,7 @@ public sealed class ProtocolWriter : IDisposable
 {
     private readonly ProtocolConnection _connection;
     private byte[] _buf = ArrayPool<byte>.Shared.Rent(8192);
+    private readonly ReusableDeadline _deadline = new();
     private int _len;
     private List<(int Start, int Length)>? _secrets;
 
@@ -106,15 +107,19 @@ public sealed class ProtocolWriter : IDisposable
         Trace();
         int n = _len;
         _len = 0;
-        using CancellationTokenSource cts = ProtocolConnection.TimeoutSource(_connection.WriteTimeout, cancellationToken);
+        CancellationToken token = _deadline.Begin(_connection.WriteTimeout, cancellationToken);
         try
         {
-            await _connection.Stream.WriteAsync(_buf.AsMemory(0, n), cts.Token).ConfigureAwait(false);
-            await _connection.Stream.FlushAsync(cts.Token).ConfigureAwait(false);
+            await _connection.Stream.WriteAsync(_buf.AsMemory(0, n), token).ConfigureAwait(false);
+            await _connection.Stream.FlushAsync(token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException("The server did not accept data within " + _connection.WriteTimeout + ".");
+        }
+        finally
+        {
+            _deadline.End();
         }
     }
 
@@ -212,6 +217,7 @@ public sealed class ProtocolWriter : IDisposable
     /// <summary>Returns the buffer to the pool.</summary>
     public void Dispose()
     {
+        _deadline.Dispose();
         byte[] b = _buf;
         _buf = [];
         _len = 0;

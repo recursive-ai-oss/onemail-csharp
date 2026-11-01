@@ -305,7 +305,7 @@ internal static class ImapDecoders
     private static void Bad(List<ProtocolDefect> defects, string item) =>
         defects.Add(new ProtocolDefect(ProtocolDefectKind.UnexpectedShape, 0, "FETCH item " + item + " has an unexpected value."));
 
-    private static DateTimeOffset? ParseInternalDate(string? text)
+    internal static DateTimeOffset? ParseInternalDate(string? text)
     {
         // date-time = DQUOTE date-day-fixed "-" date-month "-" date-year SP time SP zone DQUOTE (RFC 9051 §9); the day may be space-padded.
         if (text is null)
