@@ -27,6 +27,16 @@ URL, conference, attachment and its name, organizer and attendee names and addre
 0 scripts run, 0 requests (the raw vectors as control: 42 scripts, 58 requests). The Outlook meeting items in the corpora are few (two appointments in
 MSG); the Outlook-item path is checked on generated items only, and Outlook-produced meeting items wait for Outlook.
 
+## 0.4.0-preview.1
+
+Bodies, display and conversion are complete for this stage; the sections below hold each format's numbers. The display sanitiser
+passed its independent review (see [`display-html.md`](display-html.md), *Review*). Fuzzing, 600 s per target with 0 findings:
+`sanitizer` 3.9M executions, `sanitizer-reparse` 2.5M, `sanitizer-display` 3.4M, `htmltext` 10.0M, `composition` 2.7M, `calcard` 5.4M,
+`render` 0.05M, `render-datauri` 32.5M, `msg-write` 1.5M, `msg` (recovery on) 8.0M, `dkim-key` 30.9M, `dns-reply` 34.0M, `dkim-tags` clean.
+Also in this preview: MSG and OFT writing and the PST write primitives (Outlook opening the written files is not yet verified),
+opt-in MSG recovery, and DKIM and ARC (the cryptography code has not had its independent review). Known gaps: no Outlook-produced
+calendar, contact or distribution-list fixtures yet, and no Outlook check of written files (both need Outlook).
+
 ## 0.3.0-preview.1
 
 Calendar and contacts, the other stores and the Outlook item semantics on read are complete for this stage; the sections below

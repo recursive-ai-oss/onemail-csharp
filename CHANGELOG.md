@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.4.0-preview.1]
+
+On the local feed. Bodies, display and conversion close with this preview: RTF to HTML, HTML and text, best body, display HTML with its independent review passed, the calendar card, the Render package, conversions with loss reports, replies and forwards. It also carries the first Outlook writing (MSG and OFT, PST write primitives), opt-in recovery of damaged MSG files, and DKIM and ARC in the Cryptography package. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
+
 ### Added
 
 - `MsgWriter` (`RecursiveAI.OneMail.Msg`): writes MSG and OFT files from the MAPI model (named properties, recipients, attachments, embedded messages, OLE storages), Unicode or code page strings, limits checked before the first byte, large attachment data copied from the caller's stream (`MapiStreamValue`). Outlook opening the files is not yet verified.
