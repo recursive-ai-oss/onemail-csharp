@@ -17,6 +17,18 @@ if (args is ["gen", var outPath, var count, ..] && args.Length <= 4)
     return 0;
 }
 
+if (args is ["ltpwrite", var wpath, ..])
+{
+    // ltpwrite <file> [-v]: rebuild every property and table context of the file with the LTP builders, read them back from a scratch
+    // file and compare value by value; then report how the original lays out its heaps.
+    return LtpWriteCommands.Run(wpath, args.Length > 2 && args[2] == "-v");
+}
+
+if (args is ["ltpmem", var memRows])
+{
+    return LtpWriteCommands.Memory(int.Parse(memRows, System.Globalization.CultureInfo.InvariantCulture));
+}
+
 if (args is ["pad", var padPath, var megabytes])
 {
     // Extends a file with zeros (sparse) so a scan has a long way to go.

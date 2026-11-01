@@ -77,3 +77,20 @@ On the real OST: all 381 BBT blocks and both root pages are found, plus 101 furt
 ## Comparison with the libpff tools (20180714, black box)
 
 `tools/oracles/libpff-ndb.sh <file>` prints what `pffinfo` and `pffexport` say next to `PstOracle dump` for the same file. On the 4 KiB OST: both report `64-bit with 4k page`, `Offline Storage Tables (OST)`, no encryption, file size 16,818,176. pffexport builds the folder tree and exports messages, but logs "unable to read table" for 12 items in this file (its 2018 build and 4 KiB stores); our reader finds no defect anywhere in the file. Item-level agreement belongs to the LTP/Messaging layers.
+
+## Writing blocks
+
+`NdbBlockBuilder` makes the blocks of a Unicode file (512-byte pages; ANSI and 4 KiB files are read-only) and nothing else. It does not write the header, B-tree pages, allocation maps or density list, and it does not decide where a block goes: every block is handed to an `INdbBlockSink` as an `NdbBlock`, with a BID from an `IBidAllocator`, and the caller puts it in the file and in the block B-tree.
+
+| Piece | What it writes |
+|---|---|
+| Data block | The data, zero padding, and the 16-byte trailer so the block ends on a 64-byte boundary (MS-PST 2.2.2.8.1): `cb`, `wSig`, `dwCRC` (over the `cb` data bytes only), `bid`. 1 to 8,176 data bytes. |
+| Encoding | `NDB_CRYPT_NONE`, `NDB_CRYPT_PERMUTE` and `NDB_CRYPT_CYCLIC` (key: the low 32 bits of the block's BID), set once on the builder and to be matched by the header's `bCryptMethod`. Internal blocks are never encoded. The CRC covers the stored (encoded) bytes. Windows Information Protection is refused. |
+| Data tree | One data block when the stream fits; else an XBLOCK (btype 1, cLevel 1, `cEnt`, `lcbTotal`, BIDs: up to 1,021 leaves, 8,347,696 bytes); else an XXBLOCK over XBLOCKs (cLevel 2; its `lcbTotal` is the whole stream). Up to 1,021 × 1,021 leaves and 4,294,967,295 bytes (`lcbTotal` is 32 bits); beyond that is refused. A stream is read and written one block at a time; empty data is no block (null BID). `BeginDataTree` takes leaves of any size the caller chooses (heap blocks, row-matrix blocks). |
+| Subnode tree | One SLBLOCK (btype 2, cLevel 0, up to 340 24-byte SLENTRYs), or an SIBLOCK (cLevel 1, up to 510 16-byte SIENTRYs holding each child's smallest NID) over SLBLOCKs: 173,400 subnodes at most. Entries are written in NID order; a repeated NID is refused. |
+
+`wSig` is the one field that depends on placement (MS-PST 5.5: offset XOR BID), so an `NdbBlock` carries everything else and `WriteTo(destination, offset)` fills the signature in for the offset the caller chose. `NdbBlock.DataLength` is the `cb` for the block's BBT entry and `RefCount` suggests the `cRef`: 2, the BBT entry plus the one reference from the node, subnode entry or XBLOCK that names the block (MS-PST 2.2.2.7.7.3.1; the 3, 4 and 5 seen in Outlook-written files are blocks shared by several nodes, which the placing code counts). `SequentialBidAllocator` numbers blocks by index, shifted left two bits with bit 1 set for internal blocks, and exposes the next index for the header's `bidNextB`.
+
+Working set: one block image (at most 8,192 bytes) at a time, plus eight bytes per data block of the stream being written (the BIDs the XBLOCK lists; 12 MB for a 4 GB stream). A stream is never held whole.
+
+What is checked: `tests/OneMail.Tests/Pst/NdbBlockBuilderTests.cs` writes data trees of 1, 100, 8,175, 8,176 and 8,177 bytes, a full XBLOCK, one byte more (the first XXBLOCK) and two full XBLOCKs and a bit, in a file made around the builder's blocks, and reads each back byte for byte through `NdbFile` with no defect (CRC, signature and BID of every trailer); all three encodings; subnode trees of 1, 340, 341, 1,000 and the maximum 173,400 entries; the trailer fields by value.
