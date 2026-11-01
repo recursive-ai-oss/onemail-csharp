@@ -48,6 +48,18 @@ switch (args[0])
         return Campaign.Child(args[1], args[2], I(args[3]), I(args[4]));
     case "make":
         return Campaign.Make(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), corpus);
+    case "leftovers":
+        return Campaign.Leftovers(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), I(Opt("--per-phase", "2")), I(Opt("--seed", "3")), corpus);
+    case "nids":
+        return Hostile.Nids(args[1]);
+    case "hostile":
+        return Hostile.Run(args[1], I(args[2]), I(args[3]), args[4] == "permissive", corpus);
+    case "diffbase":
+        return Hostile.Diff(args[1], args[2], corpus);
+    case "case":
+        return Hostile.Case(args[1], I(args[2]), args[3] == "permissive", corpus);
+    case "one":
+        return Hostile.One(args[1], args[2] == "permissive");
     case "memory":
         return Memory.Run(args[1], I(args[2]), I(args[3]));
     case "pff":
@@ -99,17 +111,36 @@ internal static class Campaign
                     jobs.Add((c, 1, rnd.Next()));
                     jobs.Add((c, 1, rnd.Next()));
                     jobs.Add((c, 2, rnd.Next()));
+                    jobs.Add((c, 3, rnd.Next()));
+                    if (Environment.GetEnvironmentVariable("DURABILITY_TEAR_HEADER") == "1")
+                    {
+                        jobs.Add((c, 4, rnd.Next()));
+                    }
                 }
 
                 int[] byState = new int[rec.States.Count];
+                int[] byPhase = new int[6];       // leftovers by the step of the commit the stop fell in: 1 data and pages, 2 header invalid, 3 maps, 4 header, 5 zeroing, 0 between commits
+                int[] badPhase = new int[6];
                 int bad = 0, invalid = 0, repaired = 0, repairBad = 0;
                 var messages = new ConcurrentBag<string>();
                 Parallel.ForEach(jobs, new ParallelOptions { MaxDegreeOfParallelism = parallel }, job =>
                 {
                     byte[] file = Harness.Materialize(rec, job.Cut, job.Variant, new Random(job.Seed));
                     (string? problem, int state, bool invalidMaps) = Harness.Classify(file, rec, deep);
+                    int barriers = 0;
+                    for (int i = 0; i < job.Cut; i++)
+                    {
+                        if (rec.Ops[i].Kind == OpKind.Barrier)
+                        {
+                            barriers++;
+                        }
+                    }
+
+                    int phase = job.Cut >= ops ? 0 : (barriers % 5) + 1;
+                    Interlocked.Increment(ref byPhase[phase]);
                     if (problem is not null)
                     {
+                        Interlocked.Increment(ref badPhase[phase]);
                         Interlocked.Increment(ref bad);
                         string name = $"fail-{baseName}-{scenario}-cut{job.Cut}-v{job.Variant}.pst";
                         File.WriteAllBytes(Path.Combine(dir, name), file);
@@ -139,7 +170,7 @@ internal static class Campaign
 
                 failures += bad + repairBad;
                 total += jobs.Count;
-                Console.WriteLine($"{baseName,-6} {scenario,-8} ops {ops,6} barriers {rec.Ops.Count(o => o.Kind == OpKind.Barrier),3} leftovers {jobs.Count,5}  old {byState[0],5} new {byState[^1],5} between {byState.Skip(1).Take(byState.Length - 2).Sum(),4}  invalid-maps {invalid,4} (repaired {repaired}, repair failed {repairBad})  FAIL {bad}  {sw.Elapsed.TotalSeconds:F1}s");
+                Console.WriteLine($"{baseName,-6} {scenario,-8} ops {ops,6} barriers {rec.Ops.Count(o => o.Kind == OpKind.Barrier),3} leftovers {jobs.Count,5}  old {byState[0],5} new {byState[^1],5} between {byState.Skip(1).Take(byState.Length - 2).Sum(),4}  by step [end {byPhase[0]}, data {byPhase[1]}, hdr-invalid {byPhase[2]}, maps {byPhase[3]}, hdr {byPhase[4]}, zeroing {byPhase[5]}] fail [{string.Join(",", badPhase)}]  invalid-maps {invalid,4} (repaired {repaired}, repair failed {repairBad})  FAIL {bad}  {sw.Elapsed.TotalSeconds:F1}s");
                 foreach (string m in messages.Take(5))
                 {
                     Console.WriteLine("    " + m);
@@ -162,6 +193,56 @@ internal static class Campaign
         {
             return StoreChecks.Consistency(s!).Count;
         }
+    }
+
+    /// <summary>Writes power-cut leftovers (a few per commit step, per scenario) to disk, named by the step and the state they opened at, for the libpff tools.</summary>
+    public static int Leftovers(string dir, string[] bases, string[] scenarios, int perPhase, int seed, string corpus)
+    {
+        Directory.CreateDirectory(dir);
+        var rnd = new Random(seed);
+        int written = 0;
+        foreach (string baseName in bases)
+        {
+            byte[] image = Bases.Load(baseName, corpus);
+            foreach (string scenario in scenarios)
+            {
+                Recording rec = Harness.Record(image, scenario);
+                int ops = rec.Ops.Count;
+                var byPhase = new Dictionary<int, List<int>>();
+                int barriers = 0;
+                for (int cut = 0; cut <= ops; cut++)
+                {
+                    int phase = cut >= ops ? 0 : (barriers % 5) + 1;
+                    if (!byPhase.TryGetValue(phase, out List<int>? list))
+                    {
+                        byPhase[phase] = list = [];
+                    }
+
+                    list.Add(cut);
+                    if (cut < ops && rec.Ops[cut].Kind == OpKind.Barrier)
+                    {
+                        barriers++;
+                    }
+                }
+
+                foreach ((int phase, List<int> cuts) in byPhase)
+                {
+                    for (int n = 0; n < perPhase; n++)
+                    {
+                        int cut = cuts[rnd.Next(cuts.Count)];
+                        int variant = new[] { 0, 1, 3 }[n % 3];
+                        byte[] file = Harness.Materialize(rec, cut, variant, new Random(rnd.Next()));
+                        (string? problem, int state, bool invalid) = Harness.Classify(file, rec, deep: false);
+                        string tag = problem is not null ? "FAIL" : state == 0 ? "old" : state == rec.States.Count - 1 ? "new" : "mid";
+                        File.WriteAllBytes(Path.Combine(dir, $"left-{baseName}-{scenario}-step{phase}-cut{cut}-v{variant}-{tag}{(invalid ? "-invalidmaps" : "")}.pst"), file);
+                        written++;
+                    }
+                }
+            }
+        }
+
+        Console.WriteLine($"{written} leftovers written to {dir}");
+        return 0;
     }
 
     public static int Make(string dir, string[] bases, string[] scenarios, string corpus)

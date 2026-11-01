@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.IO;
 
 namespace RecursiveAI.OneMail.Pst.Ndb;
 
@@ -52,6 +53,19 @@ internal sealed class EditorBTree
         BinaryPrimitives.WriteUInt64LittleEndian(e[16..], child.Ib);
     }
 
+    // MS-PST 2.2.2.7.7.1: a page's cLevel is one below its parent's, and a leaf is level 0. Enforcing it on every step down is what makes each walk end: a crafted
+    // tree whose index page names itself or an ancestor would otherwise be followed forever.
+    private byte[] ReadChild(Bref at, byte[] parent)
+    {
+        byte[] pg = _pages.Read(at, _ptype);
+        if (pg[491] != parent[491] - 1)
+        {
+            throw new InvalidDataException($"the B-tree page at 0x{at.Ib:x} is level {pg[491]} under a level {parent[491]} page");
+        }
+
+        return pg;
+    }
+
     private int Max(byte[] pg) => pg[491] == 0 ? _leafMax : IndexMax;
 
     /// <summary>The first entry whose key is not below <paramref name="key"/>.</summary>
@@ -92,40 +106,42 @@ internal sealed class EditorBTree
     /// <summary>Copies the leaf entry for <paramref name="key"/> into <paramref name="entry"/> (at least one stride long).</summary>
     public bool TryGet(ulong key, Span<byte> entry)
     {
-        Bref at = Root;
-        while (true)
+        byte[] pg = _pages.Read(Root, _ptype);
+        while (pg[491] != 0)
         {
-            byte[] pg = _pages.Read(at, _ptype);
-            if (pg[491] == 0)
-            {
-                int i = LowerBound(pg, key);
-                if (i < pg[488] && Key(pg, i) == key)
-                {
-                    pg.AsSpan(i * pg[490], Math.Min(_leafStride, entry.Length)).CopyTo(entry);
-                    return true;
-                }
-
-                return false;
-            }
-
             if (pg[488] == 0)
             {
                 return false;
             }
 
-            at = ChildRef(pg, ChildIndex(pg, key));
+            pg = ReadChild(ChildRef(pg, ChildIndex(pg, key)), pg);
         }
+
+        int i = LowerBound(pg, key);
+        if (i < pg[488] && Key(pg, i) == key)
+        {
+            pg.AsSpan(i * pg[490], Math.Min(_leafStride, entry.Length)).CopyTo(entry);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Calls <paramref name="visit"/> for every leaf entry in key order.</summary>
-    public void ForEach(Action<ulong, ReadOnlySpan<byte>> visit) => Walk(Root, visit, null);
+    public void ForEach(Action<ulong, ReadOnlySpan<byte>> visit) => Walk(Root, null, visit, null, []);
 
     /// <summary>Calls <paramref name="page"/> for every page of the tree, leaves and index pages.</summary>
-    public void ForEachPage(Action<Bref> page) => Walk(Root, null, page);
+    public void ForEachPage(Action<Bref> page) => Walk(Root, null, null, page, []);
 
-    private void Walk(Bref at, Action<ulong, ReadOnlySpan<byte>>? leaf, Action<Bref>? page)
+    // A page reached twice, or one at the wrong level, means the tree is not a tree (a crafted or damaged file); the walk stops with InvalidDataException.
+    private void Walk(Bref at, byte[]? parent, Action<ulong, ReadOnlySpan<byte>>? leaf, Action<Bref>? page, HashSet<long> seen)
     {
-        byte[] pg = _pages.Read(at, _ptype);
+        byte[] pg = parent is null ? _pages.Read(at, _ptype) : ReadChild(at, parent);
+        if (!seen.Add((long)at.Ib))
+        {
+            throw new InvalidDataException($"the B-tree page at 0x{at.Ib:x} is reached twice");
+        }
+
         page?.Invoke(at);
         int n = pg[488];
         if (pg[491] == 0)
@@ -143,7 +159,7 @@ internal sealed class EditorBTree
 
         for (int i = 0; i < n; i++)
         {
-            Walk(ChildRef(pg, i), leaf, page);
+            Walk(ChildRef(pg, i), pg, leaf, page, seen);
         }
     }
 
@@ -161,7 +177,7 @@ internal sealed class EditorBTree
     /// <summary>Adds the entry, or replaces the one with the same key.</summary>
     public void Upsert(ulong key, ReadOnlySpan<byte> entry)
     {
-        Outcome o = Insert(Root, key, entry);
+        Outcome o = Insert(Root, null, key, entry);
         if (!o.Split)
         {
             Root = o.Self;
@@ -177,9 +193,9 @@ internal sealed class EditorBTree
         Root = rootRef;
     }
 
-    private Outcome Insert(Bref at, ulong key, ReadOnlySpan<byte> entry)
+    private Outcome Insert(Bref at, byte[]? parent, ulong key, ReadOnlySpan<byte> entry)
     {
-        byte[] pg = _pages.Read(at, _ptype);
+        byte[] pg = parent is null ? _pages.Read(at, _ptype) : ReadChild(at, parent);
         if (pg[491] == 0)
         {
             (Bref self, byte[] w) = _pages.Own(at, pg, _ptype);
@@ -198,7 +214,7 @@ internal sealed class EditorBTree
         }
 
         int ci = ChildIndex(pg, key);
-        Outcome c = Insert(ChildRef(pg, ci), key, entry);
+        Outcome c = Insert(ChildRef(pg, ci), pg, key, entry);
         (Bref me, byte[] mw) = _pages.Own(at, pg, _ptype);
         SetIndex(mw, ci, c.FirstKey, c.Self);
         if (!c.Split)
@@ -261,7 +277,7 @@ internal sealed class EditorBTree
     /// <summary>Removes the entry with <paramref name="key"/>; false when there is none.</summary>
     public bool Remove(ulong key)
     {
-        Removal r = Delete(Root, key);
+        Removal r = Delete(Root, null, key);
         if (!r.Found)
         {
             return false;
@@ -292,9 +308,9 @@ internal sealed class EditorBTree
         return true;
     }
 
-    private Removal Delete(Bref at, ulong key)
+    private Removal Delete(Bref at, byte[]? parent, ulong key)
     {
-        byte[] pg = _pages.Read(at, _ptype);
+        byte[] pg = parent is null ? _pages.Read(at, _ptype) : ReadChild(at, parent);
         int n = pg[488];
         if (pg[491] == 0)
         {
@@ -324,7 +340,7 @@ internal sealed class EditorBTree
         }
 
         int ci = ChildIndex(pg, key);
-        Removal c = Delete(ChildRef(pg, ci), key);
+        Removal c = Delete(ChildRef(pg, ci), pg, key);
         if (!c.Found)
         {
             return default;
@@ -373,8 +389,8 @@ internal sealed class EditorBTree
         int right = left + 1;
         Bref leftRef = ChildRef(parent, left);
         Bref rightRef = ChildRef(parent, right);
-        byte[] lp = _pages.Read(leftRef, _ptype);
-        byte[] rp = _pages.Read(rightRef, _ptype);
+        byte[] lp = ReadChild(leftRef, parent);
+        byte[] rp = ReadChild(rightRef, parent);
         int max = Max(lp);
         if (lp[488] + rp[488] > max)
         {

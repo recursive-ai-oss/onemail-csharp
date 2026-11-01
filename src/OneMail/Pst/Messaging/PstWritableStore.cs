@@ -39,7 +39,8 @@ public sealed class PstWriteOptions
 /// <see cref="Commit"/>; disposing without committing drops them. <see cref="View"/> shows the file as of the last commit.
 /// </summary>
 /// <remarks>
-/// In-place writing is new and has not been through an independent review of its commit path. Keep a copy of files you cannot lose.
+/// The commit path has had an independent review (see <c>docs/pst-writing.md</c>), but edited files have not been opened in Outlook or checked by
+/// <c>scanpst.exe</c>. Keep a copy of files you cannot lose.
 /// Search folders' criteria and update queues are not maintained: a client rebuilds a search folder when it opens it (MS-PST 2.4.8).
 /// </remarks>
 public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
@@ -314,7 +315,7 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
 
         FolderState parent = FolderOrThrow(f.Parent);
         var orphans = new List<Nid>();
-        UnlinkFolder(folder, orphans);
+        UnlinkFolder(folder, orphans, []);
         parent.RemovedChildren.Add(folder.Value);
         parent.ChildrenChanged = true;
         Commit();
@@ -332,8 +333,14 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
     }
 
     // Removes a folder's own nodes and, recursively, its subfolders'; collects the items (and leaves them for the caller to free after the commit).
-    private void UnlinkFolder(Nid folder, List<Nid> orphans)
+    // A folder that names itself or an ancestor as a child (a damaged hierarchy table) is unlinked once and not followed again.
+    private void UnlinkFolder(Nid folder, List<Nid> orphans, HashSet<uint> seen)
     {
+        if (!seen.Add(folder.Value))
+        {
+            return;
+        }
+
         using var contents = OldTable.Open(_ed.Committed, TableNid(folder, NidType.ContentsTable), PstItemWriter.ContentsColumns);
         using var assoc = OldTable.Open(_ed.Committed, TableNid(folder, NidType.AssocContentsTable), PstItemWriter.AssocColumns);
         using var hierarchy = OldTable.Open(_ed.Committed, TableNid(folder, NidType.HierarchyTable), PstItemWriter.HierarchyColumns);
@@ -341,7 +348,11 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         orphans.AddRange(assoc.RowIds().Select(static id => new Nid(id)));
         foreach (uint child in hierarchy.RowIds().ToList())
         {
-            UnlinkFolder(new Nid(child), orphans);
+            // Only a folder whose own node says it is a child of this one: a row naming some other folder (a damaged table) must not take that folder with it.
+            if (_ed.TryGetNode(new Nid(child), out NodeEntry childNode) && childNode.Parent == folder)
+            {
+                UnlinkFolder(new Nid(child), orphans, seen);
+            }
         }
 
         foreach (NidType t in new[] { NidType.HierarchyTable, NidType.ContentsTable, NidType.AssocContentsTable, NidType.SearchContentsTable })

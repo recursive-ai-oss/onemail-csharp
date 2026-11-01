@@ -12,7 +12,11 @@ internal static class Soak
     {
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, $"soak-{baseName}-{seed}.pst");
-        File.WriteAllBytes(path, Bases.Load(baseName, corpus));
+        byte[] baseBytes = Bases.Load(baseName, corpus);
+        File.WriteAllBytes(path, baseBytes);
+        HashSet<string> baseline = [.. NdbChecker.Check(baseBytes).Errors];
+        HashSet<string> baseSoft = [.. NdbChecker.Check(baseBytes).Soft];
+        int softSeen = 0, checks = 0;
         var rnd = new Random(seed);
         int baseProblems;
         if (!PstStore.TryOpen(path, out PstStore? s0, out _))
@@ -132,7 +136,7 @@ internal static class Soak
                 {
                     w.Commit();
                     commits++;
-                    Check(w.View, baseProblems, originals, problems, op, initialFree);
+                    Check(w.View, baseProblems, originals, problems, op, initialFree, baseline, baseSoft, ref softSeen, ref checks);
                 }
             }
         }
@@ -146,7 +150,7 @@ internal static class Soak
         {
             using (fin)
             {
-                Check(fin!, baseProblems, originals, problems, ops, initialFree);
+                Check(fin!, baseProblems, originals, problems, ops, initialFree, baseline, baseSoft, ref softSeen, ref checks);
                 int unreadable = 0;
                 foreach (Nid m in messages.Keys)
                 {
@@ -163,7 +167,12 @@ internal static class Soak
             }
         }
 
-        Console.WriteLine($"soak {baseName} seed {seed}: {ops} operations ({adds} adds, {deletes} deletes, {moves} moves, {replaces} replaces, {folderOps} folder operations), {commits} commits, {messages.Count} items kept in sight, {problems.Count} problems");
+        Console.WriteLine($"soak {baseName} seed {seed}: {ops} operations ({adds} adds, {deletes} deletes, {moves} moves, {replaces} replaces, {folderOps} folder operations), {commits} commits, {messages.Count} items kept in sight, {checks} checker runs ({softSeen} soft findings: leaks and lagging counters), {problems.Count} problems");
+        foreach (string k in SoftKinds)
+        {
+            Console.WriteLine("    soft: " + k);
+        }
+
         foreach (string p in problems.Take(10))
         {
             Console.WriteLine("    " + p);
@@ -171,6 +180,8 @@ internal static class Soak
 
         return problems.Count == 0 ? 0 : 1;
     }
+
+    private static readonly HashSet<string> SoftKinds = [];
 
     private static bool IsWithin(Dictionary<Nid, Nid> parents, Nid folder, Nid ancestor)
     {
@@ -190,9 +201,30 @@ internal static class Soak
         }
     }
 
-    private static void Check(PstStore view, int baseProblems, Dictionary<Nid, MapiMessage> originals, List<string> problems, int op, HashSet<long> initialFree)
+    private static void Check(PstStore view, int baseProblems, Dictionary<Nid, MapiMessage> originals, List<string> problems, int op, HashSet<long> initialFree,
+        HashSet<string> baseline, HashSet<string> baseSoft, ref int softSeen, ref int checks)
     {
         NdbFile db = view.Database;
+
+        // The independent checker: recomputes references, space in use, free counts, the density list and the BID and NID counters from the two trees.
+        byte[] image = new byte[db.Length];
+        db.ReadRaw(0, image);
+        NdbChecker.Report rep = NdbChecker.Check(image);
+        checks++;
+        foreach (string e in rep.Errors.Where(e => !baseline.Contains(e)).Take(3))
+        {
+            problems.Add($"op {op}: node database checker: {e}");
+        }
+
+        foreach (string e in rep.Soft.Where(e => !baseSoft.Contains(e)))
+        {
+            softSeen++;
+            if (SoftKinds.Count < 12)
+            {
+                SoftKinds.Add(System.Text.RegularExpressions.Regex.Replace(e, "[0-9a-f]{3,}|[0-9]+", "#"));
+            }
+        }
+
         NdbAllocationSummary sum = db.ValidateAllocation();
         _ = db.ReadDensityList();
         if (sum.InvalidCount != 0 || sum.FreeBytes != sum.HeaderFreeBytes)

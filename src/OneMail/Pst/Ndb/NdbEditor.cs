@@ -14,7 +14,8 @@ namespace RecursiveAI.OneMail.Pst.Ndb;
 /// </summary>
 /// <remarks>
 /// This is the node database layer: blocks and nodes. <c>RecursiveAI.OneMail.Pst.Messaging.PstWritableStore</c> builds folders and items on it. The
-/// commit path has not been through an independent review yet; treat it as preview quality.
+/// commit path has had an independent review (see <c>docs/pst-writing.md</c>); it has not been opened in Outlook or checked by <c>scanpst.exe</c>, so keep
+/// a copy of files you cannot lose.
 /// </remarks>
 public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDisposable
 {
@@ -29,6 +30,8 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
     private EditorBTree _nbt = null!;
     private EditorBTree _bbt = null!;
     private ulong _nextBlock;
+    private ulong _minNextBlock;     // the next block and page BIDs are never below what the trees already use, whatever the header says
+    private ulong _minNextPage;
     private uint[] _counters = new uint[32];
     private uint _unique;
     private long _committedRanges;
@@ -146,6 +149,15 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         }
 
         NdbRoot root = h.Root;
+
+        // ibFileEof is a 64-bit field of an untrusted header: a value above the signed range, or one that cannot even hold the first allocation map, is
+        // not a size, and the file is not touched.
+        long recorded = root.FileEof > long.MaxValue ? long.MaxValue : (long)root.FileEof;
+        if (recorded < EditorMaps.FirstAMap)
+        {
+            throw new NdbEditRefusedException([new NdbRefusal(NdbRefusalReason.Damage, $"ibFileEof 0x{root.FileEof:x} is smaller than the first allocation map", false)]);
+        }
+
         if (!h.PartialCrcValid || !h.FullCrcValid || h.Sentinel != 0x80)
         {
             refusals.Add(new NdbRefusal(NdbRefusalReason.HeaderChecksum, "the header's checksums or sentinel do not match", true));
@@ -192,7 +204,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
 
                     badDensity = true;
                     break;
-                case NdbDefectKind.FileSizeMismatch when _io.Length > (long)root.FileEof:
+                case NdbDefectKind.FileSizeMismatch when _io.Length > recorded:
                     break;   // bytes after the recorded end are what a writer stopped while growing the file leaves; they are cut off below
                 default:
                     other++;
@@ -225,7 +237,45 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
 
         _densityFlags = density?.Flags ?? 1;
         _rebuildPending = mapsInvalid || badMaps;
-        LoadState(rebuildMaps: _rebuildPending, rebuildDensity: badDensity || density is null, density);
+        try
+        {
+            LoadState(rebuildMaps: _rebuildPending, rebuildDensity: badDensity || density is null, density);
+
+            // Walk both trees once. Every page must pass its checks, and every page and block must lie in the allocated part of the file the header describes.
+            // Otherwise ibFileEof is wrong, and cutting the file at it (below), or adding a range at it later, would destroy live data; and a damaged page found
+            // half-way through an edit is worse than one found now. Such a file is repaired into a fresh PST (recovery), not edited.
+            string? bad = FindBadExtent(_eof, out string? unmarked, out ulong maxBlockBid, out ulong maxPageBid);
+            if (bad is not null)
+            {
+                throw new NdbEditRefusedException([new NdbRefusal(NdbRefusalReason.Damage, bad, false)]);
+            }
+
+            // A header whose bidNextB or bidNextP lags the trees (a write that was torn, or another program's) would have new blocks reuse BIDs that are in use.
+            if (((maxBlockBid >> 2) + 1) << 2 > _nextBlock || maxPageBid + 1 > _pages.NextPageBid)
+            {
+                _minNextBlock = Math.Max(_minNextBlock, ((maxBlockBid >> 2) + 1) << 2);
+                _minNextPage = Math.Max(_minNextPage, maxPageBid + 1);
+                _nextBlock = Math.Max(_nextBlock, _minNextBlock);
+                _pages.RaiseNextBid(_minNextPage);
+            }
+
+            if (unmarked is not null && !_rebuildPending)
+            {
+                // The maps' totals add up, but they call space free that a tree reaches: allocating from them would overwrite live data.
+                if ((NdbOpenRisks.AllocationMaps & ~_options.Allow) != 0)
+                {
+                    throw new NdbEditRefusedException([new NdbRefusal(NdbRefusalReason.AllocationMaps, unmarked, true)]);
+                }
+
+                _rebuildPending = true;
+                RebuildMaps();
+            }
+        }
+        catch (InvalidDataException e)
+        {
+            // A tree page that fails its checks: nothing can be edited safely, and no flag lets it through.
+            throw new NdbEditRefusedException([new NdbRefusal(NdbRefusalReason.Damage, e.Message, false)]);
+        }
 
         if (_io.Length > _eof)
         {
@@ -235,20 +285,66 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         }
     }
 
+    // The first page or block of either tree that is not inside [first allocation map, limit), described; null when all are. Also fails (InvalidDataException,
+    // turned into a refusal by the caller) on a page that fails its checks, repeats, or sits at the wrong level.
+    private string? FindBadExtent(long limit, out string? unmarked, out ulong maxBlockBid, out ulong maxPageBid)
+    {
+        ulong maxBlock = 0, maxPage = 0;
+        string? found = null;
+        string? notMarked = null;
+        NdbFile file = _reader;
+        void Check(ulong ib, long length, string what)
+        {
+            if (found is null && (ib < (ulong)EditorMaps.FirstAMap || ib > (ulong)limit || (ulong)length > (ulong)limit - ib))
+            {
+                found = $"{what} at 0x{ib:x} is not inside the allocated part of the file (0x{EditorMaps.FirstAMap:x} to 0x{limit:x})";
+            }
+            else if (found is null && notMarked is null && !file.IsAllocated((long)ib, length))
+            {
+                notMarked = $"{what} at 0x{ib:x} is in use, and the allocation maps call it free";
+            }
+        }
+
+        _nbt.ForEachPage(r =>
+        {
+            maxPage = Math.Max(maxPage, r.Bid.Value);
+            Check(r.Ib, EditorMaps.PageSize, "a node tree page");
+        });
+        _bbt.ForEachPage(r =>
+        {
+            maxPage = Math.Max(maxPage, r.Bid.Value);
+            Check(r.Ib, EditorMaps.PageSize, "a block tree page");
+        });
+        _bbt.ForEach((key, entry) =>
+        {
+            maxBlock = Math.Max(maxBlock, key | (BinaryPrimitives.ReadUInt64LittleEndian(entry) & 3));
+            Check(BinaryPrimitives.ReadUInt64LittleEndian(entry[8..]), EditorMaps.BlockTotal(BinaryPrimitives.ReadUInt16LittleEndian(entry[16..])), "a block");
+        });
+        if (found is null && (maxBlock > 1UL << 60 || maxPage > 1UL << 60))
+        {
+            found = "a BID is implausibly large";
+        }
+
+        maxBlockBid = maxBlock;
+        maxPageBid = maxPage;
+        unmarked = notMarked;
+        return found;
+    }
+
     // Reads the committed header into the editing state: counters, roots, trees, maps.
     private void LoadState(bool rebuildMaps, bool rebuildDensity, NdbDensityList? density)
     {
         NdbHeader h = _reader.Header;
         NdbRoot root = h.Root;
-        _nextBlock = (h.NextBlockBid + 3) & ~3UL;
+        _nextBlock = Math.Max((h.NextBlockBid + 3) & ~3UL, _minNextBlock);
         _counters = h.NodeCounters.ToArray();
         _unique = h.Unique;
-        _eof = (long)root.FileEof;
-        long fromLast = root.AMapLast >= (ulong)EditorMaps.FirstAMap ? (((long)root.AMapLast - EditorMaps.FirstAMap) / EditorMaps.RangeLength) + 1 : 0;
-        long fromEof = _eof > EditorMaps.FirstAMap ? ((_eof - EditorMaps.FirstAMap + EditorMaps.RangeLength - 1) / EditorMaps.RangeLength) : 0;
-        _committedRanges = Math.Max(fromLast, fromEof);
+        // The header is not trusted to be right about the size: the file is never taken to be longer than it is, so a wrong ibFileEof or ibAMapLast cannot
+        // make the editor loop over, or later grow the file to, a made-up number of ranges.
+        _eof = Math.Min(root.FileEof > long.MaxValue ? long.MaxValue : (long)root.FileEof, _io.Length);
+        _committedRanges = _eof > EditorMaps.FirstAMap ? ((_eof - EditorMaps.FirstAMap + EditorMaps.RangeLength - 1) / EditorMaps.RangeLength) : 0;
         _maps = new EditorMaps(_io, _committedRanges, _options.ZeroFreedSpace);
-        _pages = new EditorPageStore(_io, _maps, h.NextPageBid);
+        _pages = new EditorPageStore(_io, _maps, Math.Max(h.NextPageBid, _minNextPage));
         _nbt = new EditorBTree(_pages, isNbt: true, root.NodeBTree);
         _bbt = new EditorBTree(_pages, isNbt: false, root.BlockBTree);
         Blocks ??= new NdbBlockBuilder(this, this, h.Encryption);
@@ -380,7 +476,16 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
     public void Release(Bid bid)
     {
         ThrowIfUnusable();
-        if (bid.IsNull)
+        Release(bid, 0);
+    }
+
+    // Real block trees are at most three deep (a subnode tree's SIBLOCK, SLBLOCK, then data trees of an XXBLOCK, XBLOCK, data). A chain longer than that
+    // is a crafted or damaged file; the rest of it is left allocated rather than followed.
+    private const int MaxReleaseDepth = 12;
+
+    private void Release(Bid bid, int depth)
+    {
+        if (bid.IsNull || depth > MaxReleaseDepth)
         {
             return;
         }
@@ -404,16 +509,27 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         long ib = (long)BinaryPrimitives.ReadUInt64LittleEndian(e[8..]);
         int cb = BinaryPrimitives.ReadUInt16LittleEndian(e[16..]);
         _bbt.Remove(key);
-        if (bid.IsInternal)
+
+        // The block's own trailer (MS-PST 2.2.2.8.1: cb, signature, CRC, BID) must agree with the tree entry before its space is freed, and so wiped. An entry
+        // whose size is wrong would otherwise make the zeroing run over the neighbouring blocks; the space is left allocated instead (a leak, not a loss).
+        Span<byte> trailer = stackalloc byte[16];
+        int total = EditorMaps.BlockTotal(cb);
+        if (_io.Read(ib + total - 16, trailer) != 16 || BinaryPrimitives.ReadUInt16LittleEndian(trailer) != cb
+            || (BinaryPrimitives.ReadUInt64LittleEndian(trailer[8..]) & ~1UL) != key)
         {
-            ReleaseChildren(ib, cb);
+            return;
         }
 
-        _maps.Free(ib, EditorMaps.BlockTotal(cb));
+        if (bid.IsInternal)
+        {
+            ReleaseChildren(ib, cb, depth + 1);
+        }
+
+        _maps.Free(ib, total);
     }
 
     // MS-PST 2.2.2.8.3: XBLOCK/XXBLOCK (btype 1) list data or XBLOCK BIDs; 2.2.2.8.3.3: SLBLOCK (btype 2, level 0) lists SLENTRYs and SIBLOCK (level 1) SIENTRYs.
-    private void ReleaseChildren(long ib, int cb)
+    private void ReleaseChildren(long ib, int cb, int depth)
     {
         if (cb < 8)
         {
@@ -431,22 +547,22 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         {
             for (int i = 0; i < count && 8 + (i * 8) + 8 <= cb; i++)
             {
-                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 8)))));
+                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 8)))), depth);
             }
         }
         else if (data[0] == 2 && data[1] == 0)
         {
             for (int i = 0; i < count && 8 + (i * 24) + 24 <= cb; i++)
             {
-                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 24) + 8))));
-                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 24) + 16))));
+                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 24) + 8))), depth);
+                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 24) + 16))), depth);
             }
         }
         else if (data[0] == 2)
         {
             for (int i = 0; i < count && 8 + (i * 16) + 16 <= cb; i++)
             {
-                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 16) + 8))));
+                Release(new Bid(BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(8 + (i * 16) + 8))), depth);
             }
         }
     }
@@ -540,15 +656,25 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
     }
 
     /// <summary>Takes the next unused NID of a type from the header's counters (MS-PST 2.2.2.6, rgnid).</summary>
+    /// <exception cref="InvalidOperationException">Every NID index of the type is taken.</exception>
     public Nid AllocateNid(NidType type)
     {
         ThrowIfUnusable();
         int t = (int)type;
-        uint index = Math.Max(_counters[t], 0x400u);
+
+        // MS-PST 2.2.2.6: rgnid[type] is the last nidIndex that was allocated, and allocating adds one. The next NID is therefore the one after it: a file Outlook
+        // wrote uses the counter's own value for the embedded message of an attachment (a subnode, drawn from the same counter), so starting at the
+        // counter would give a new top-level item the NID of that embedded message, and a reader that looks the NID up in both places finds the wrong one.
+        uint index = Math.Max(_counters[t], 0x3FFu);
         Nid nid;
         do
         {
-            nid = new Nid((index++ << 5) | (uint)type);
+            if (++index >= 1u << 27)
+            {
+                throw new InvalidOperationException($"every NID index of type {type} is in use");
+            }
+
+            nid = new Nid((index << 5) | (uint)type);
         }
         while (TryGetNode(nid, out _));
         _counters[t] = index;
@@ -606,7 +732,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
 
         // 3. The maps record the new allocations and the frees; freed space is not wiped yet because the old tree still reaches it.
         List<(long Ib, int Length)> freed = _maps.ApplyFrees();
-        long eof = Math.Max((long)root.FileEof, _maps.RequiredEof);
+        long eof = Math.Max(_eof, _maps.RequiredEof);
         if (_io.Length < eof)
         {
             _io.SetLength(eof);
@@ -631,7 +757,7 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         }
         else
         {
-            free = Math.Max(0, (long)root.AMapFree + _maps.FreeDelta);
+            free = Math.Max(0, (long)Math.Min(root.AMapFree, long.MaxValue) + _maps.FreeDelta);
         }
 
         WriteHeader(_nbt.Root, _bbt.Root, eof, (ulong)amapLast, free, valid: 2, nextPage: _pages.NextPageBid, bidNextB: _nextBlock);
@@ -716,6 +842,12 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         _reader = file;
         NdbDensityList? density = file.ReadDensityList();
         LoadState(rebuildMaps: _rebuildPending, rebuildDensity: false, density);
+        if (_io.Length > _eof)
+        {
+            // A transaction that grew the file left its writes past the recorded end; nothing refers to them.
+            _io.SetLength(_eof);
+            _io.Barrier();
+        }
     }
 
     private void ThrowIfUnusable()
