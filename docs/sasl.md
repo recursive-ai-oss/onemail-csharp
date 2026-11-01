@@ -13,6 +13,10 @@ One mechanism object per authentication attempt; the same objects serve SMTP (RF
 | NTLM (MS-NLMP) | `SaslNtlm` | NTLMv2 only (never LM or NTLMv1); our own `Md4` for the password hash; no signing or sealing negotiated; legacy; needs an encrypted connection |
 | GSSAPI (RFC 4752), GSS-SPNEGO | `SaslNegotiate` | through `System.Net.Security.NegotiateAuthentication`; no security layer (TLS protects the session); needs the platform's Kerberos stack |
 
+## Weak primitives
+
+CRAM-MD5 and NTLMv2 are defined on HMAC-MD5, and SCRAM-SHA-1 on HMAC-SHA-1. The analyzer rules against MD5 and SHA-1 (CA5350, CA5351) are suppressed in one place, the internal `ProtocolHashes` class, and nowhere else; no other code in the library uses MD5 or SHA-1. Mechanism selection never prefers these over a stronger mechanism the server offers.
+
 ## Channel binding
 
 `-PLUS` mechanisms bind the login to the TLS session. The binding is `tls-server-end-point` (RFC 5929 §4): the hash of the server certificate, using the hash of the certificate's signature algorithm with MD5 and SHA-1 replaced by SHA-256 (`SaslChannelBinding.From(connection)`). `tls-exporter` (RFC 9266), which servers should prefer for TLS 1.3, needs the exporter secret, which `SslStream` does not expose, so it is not offered; `tls-unique` is not used (TLS 1.2 only). When the connection has a binding but the server did not offer the `-PLUS` form, the plain SCRAM mechanism announces `y` (RFC 5802 §6) so a server that supports binding can detect that the offer was stripped.
