@@ -1,0 +1,57 @@
++OK Stalwart POP3 at your service.
++OK Capability list follows
+USER
+SASL PLAIN OAUTHBEARER XOAUTH2
+TOP
+RESP-CODES
+PIPELINING
+EXPIRE NEVER
+UIDL
+UTF8
+IMPLEMENTATION Stalwart Server
+.
++OK test@example.test is a valid mailbox
++OK Authentication successful
++OK 2 2099
++OK 2 messages
+1 1505
+2 594
+.
++OK 2 messages
+1 12690069761
+2 12690069762
+.
++OK 594 octets
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= pope42a02fa8
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <pope42a02fa8@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+--bnd
+Content-Type: text/plain; charset=utf-8
+
+Hello from the container tests.
+..A line that starts with a period.
+
+--bnd
+Content-Type: application/octet-stream; name="data.bin"
+Content-Disposition: attachment; filename="data.bin"
+Content-Transfer-Encoding: base64
+
+vwNWJwtm74QeYUQngeFSnySSN9rPpCyBdV+3lfnz82I=
+--bnd--
+.
++OK 263 octets
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= pope42a02fa8
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <pope42a02fa8@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+.
++OK Stalwart POP3 bids you farewell (no messages deleted).

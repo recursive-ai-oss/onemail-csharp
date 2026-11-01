@@ -1,0 +1,58 @@
+* OK [CAPABILITY IMAP4rev1 IMAP4rev2 LOGIN-REFERRALS ID ENABLE IDLE SASL-IR LITERAL+ AUTH=PLAIN] Dovecot ready.
+A0001 OK [CAPABILITY IMAP4rev1 IMAP4rev2 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE SORT SORT=DISPLAY THREAD=REFERENCES THREAD=REFS THREAD=ORDEREDSUBJECT MULTIAPPEND URL-PARTIAL CATENATE UNSELECT CHILDREN NAMESPACE UIDPLUS LIST-EXTENDED I18NLEVEL=1 CONDSTORE QRESYNC ESEARCH ESORT SEARCHRES WITHIN CONTEXT=SEARCH LIST-STATUS BINARY MOVE REPLACE SNIPPET=FUZZY PREVIEW=FUZZY PREVIEW SPECIAL-USE STATUS=SIZE SAVEDATE COMPRESS=DEFLATE INPROGRESS NOTIFY LITERAL+ UTF8=ACCEPT FILTER=SIEVE] Logged in
+A0002 OK Create completed (0.022 + 0.000 + 0.021 secs).
+* LIST (\HasNoChildren) "/" "OneMail raw c5b37c0a Entw&APw-rfe"
+A0003 OK List completed (0.001 + 0.000 + 0.001 secs).
+A0004 OK [APPENDUID 1793508608 1] Append completed (0.028 + 0.000 + 0.027 secs).
+* FLAGS (\Answered \Flagged \Deleted \Seen \Draft)
+* OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.
+* 1 EXISTS
+* 1 RECENT
+* OK [UIDVALIDITY 1793508608] UIDs valid
+* OK [UIDNEXT 2] Predicted next UID
+A0005 OK [READ-WRITE] Select completed (0.001 + 0.000 secs).
+* 1 FETCH (UID 1 RFC822.SIZE 594 FLAGS (\Seen \Recent) ENVELOPE ("Tue, 03 Nov 2026 10:00:00 +0000" "=?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= b8004950f4dd" (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Bob" NIL "bob" "example.com")) NIL NIL NIL "<b8004950f4dd@example.com>") BODYSTRUCTURE (("text" "plain" ("charset" "utf-8") NIL NIL "7bit" 69 2 NIL NIL NIL NIL)("application" "octet-stream" ("name" "data.bin") NIL NIL "base64" 44 NIL ("attachment" ("filename" "data.bin")) NIL NIL) "mixed" ("boundary" "bnd") NIL NIL NIL))
+A0006 OK Fetch completed (0.001 + 0.000 secs).
+* 1 FETCH (UID 1 BODY[] {594}
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= b8004950f4dd
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <b8004950f4dd@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+--bnd
+Content-Type: text/plain; charset=utf-8
+
+Hello from the container tests.
+.A line that starts with a period.
+
+--bnd
+Content-Type: application/octet-stream; name="data.bin"
+Content-Disposition: attachment; filename="data.bin"
+Content-Transfer-Encoding: base64
+
+H6k55Xz7CfXFtfEETBLzRh532c1PXfSOPRcjtDErJ7k=
+--bnd--
+)
+A0007 OK Fetch completed (0.001 + 0.000 secs).
+* SEARCH 1
+A0008 OK Search completed (0.254 + 0.000 + 0.001 secs).
+* ESEARCH (TAG "A0009") UID ALL 1 COUNT 1
+A0009 OK Search completed (0.001 + 0.000 secs).
+* STATUS "OneMail raw c5b37c0a Entw&APw-rfe" (MESSAGES 1 UIDNEXT 2)
+A0010 OK [CLIENTBUG] Status on selected mailbox completed (0.001 + 0.000 secs).
+A0011 OK Begin compression (0.001 + 0.000 secs).
+A0012 OK NOOP completed (0.001 + 0.000 secs).
+* 1 FETCH (UID 1 BODY[1] {69}
+Hello from the container tests.
+.A line that starts with a period.
+)
+A0013 OK Fetch completed (0.001 + 0.000 secs).
++ idling
+A0014 OK Idle completed (0.003 + 0.003 + 0.002 secs).
+A0015 OK Close completed (0.001 + 0.000 secs).
+A0016 OK Delete completed (0.066 + 0.000 + 0.065 secs).
+* BYE Logging out
+A0017 OK Logout completed (0.001 + 0.000 secs).

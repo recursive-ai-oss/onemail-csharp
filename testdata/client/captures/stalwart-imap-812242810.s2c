@@ -1,0 +1,53 @@
+* OK [CAPABILITY IMAP4rev2 IMAP4rev1 ENABLE SASL-IR LITERAL+ ID UTF8=ACCEPT AUTH=PLAIN AUTH=OAUTHBEARER AUTH=XOAUTH2] Stalwart IMAP4rev2 at your service.
+A0001 OK [CAPABILITY IMAP4rev2 IMAP4rev1 ENABLE SASL-IR LITERAL+ ID UTF8=ACCEPT JMAPACCESS IDLE NAMESPACE CHILDREN MULTIAPPEND BINARY UNSELECT ACL UIDPLUS ESEARCH WITHIN SEARCHRES SORT THREAD=REFERENCES LIST-EXTENDED LIST-STATUS ESORT SORT=DISPLAY SPECIAL-USE CREATE-SPECIAL-USE MOVE CONDSTORE QRESYNC UNAUTHENTICATE STATUS=SIZE OBJECTID+ PREVIEW RIGHTS=texkn QUOTA QUOTA=RES-STORAGE UIDONLY UIDBATCHES MESSAGELIMIT=1000000 SAVELIMIT=1000000 METADATA LIST-METADATA] Authentication successful
+A0002 OK Mailbox created.
+* LIST () "/" "OneMail raw 89d2d1ab Entw&APw-rfe"
+A0003 OK LIST completed
+A0004 OK [APPENDUID 103019286 1] APPEND completed
+* 1 EXISTS
+* FLAGS (\Answered \Flagged \Deleted \Seen \Draft)
+* 0 RECENT
+* OK [PERMANENTFLAGS (\Deleted \Seen \Answered \Flagged \Draft \*)] All allowed
+* OK [UIDVALIDITY 103019286] UIDs valid
+* OK [UIDNEXT 2] Next predicted UID
+A0005 OK [READ-WRITE] SELECT completed
+* 1 FETCH (UID 1 ENVELOPE ("Tue, 3 Nov 2026 10:00:00 +0000" "=?utf-8?B?w4RwZmVsIHVuZCBCaXJuZW4gYzc4YTcxNjhkODdm?=" (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Bob" NIL "bob" "example.com")) NIL NIL NIL "<c78a7168d87f@example.com>") BODYSTRUCTURE (("text" "plain" ("charset" "utf-8") NIL NIL "7bit" 69 2 NIL NIL NIL NIL)("application" "octet-stream" ("name" "data.bin") NIL NIL "base64" 44 NIL ("attachment" ("filename" "data.bin")) NIL NIL) "mixed" ("boundary" "bnd") NIL NIL NIL) RFC822.SIZE 594 FLAGS ($hasattachment \Seen))
+A0006 OK FETCH completed
+* 1 FETCH (UID 1 BODY[] {594}
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= c78a7168d87f
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <c78a7168d87f@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+--bnd
+Content-Type: text/plain; charset=utf-8
+
+Hello from the container tests.
+.A line that starts with a period.
+
+--bnd
+Content-Type: application/octet-stream; name="data.bin"
+Content-Disposition: attachment; filename="data.bin"
+Content-Transfer-Encoding: base64
+
+dPUUMgYhi/Fy+ZVGZyoPgbYdJry64UnyqSXM2pi0i2w=
+--bnd--
+)
+A0007 OK UID FETCH completed
+* SEARCH
+A0008 OK UID SEARCH completed
+* SEARCH 1
+A0009 OK UID SEARCH completed
+* ESEARCH (TAG "A0010") UID COUNT 1 ALL 1
+A0010 OK UID SEARCH completed
+* STATUS "OneMail raw 89d2d1ab Entw&APw-rfe" (MESSAGES 1 UIDNEXT 2)
+A0011 OK STATUS completed
++ Idling, send 'DONE' to stop.
+A0012 OK IDLE completed
+A0013 OK CLOSE completed
+A0014 OK Mailbox deleted.
+* BYE Stalwart IMAP4rev2 bids you farewell.
+A0015 OK LOGOUT completed

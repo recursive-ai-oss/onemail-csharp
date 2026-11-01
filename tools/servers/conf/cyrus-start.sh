@@ -10,6 +10,7 @@ perl /srv/testserver/env-replace.pl /srv/testserver/imapd.conf /etc/imapd.conf
   echo "tls_server_cert: /onemail/tls.crt"
   echo "tls_server_key: /onemail/tls.key"
   echo "tls_versions: tls1_2 tls1_3"
+  echo "allowstarttls: 1"
 } >> /etc/imapd.conf
 perl /srv/testserver/env-replace.pl /srv/testserver/cyrus.conf /etc/cyrus.conf
 # Implicit-TLS twins of the IMAP and POP3 services.
@@ -20,9 +21,4 @@ sed -i '/annotator/d' /etc/cyrus.conf /etc/imapd.conf
 master=$!
 for _ in $(seq 1 60); do [ -f /run/cyrus/ready ] && break; sleep 1; done
 chmod 666 /run/cyrus/saslauthd.sock 2>/dev/null || true
-sed 's/8143/143/' /srv/testserver/make5.pl > /tmp/cy/make5.pl
-( exec 3<>/dev/tcp/127.0.0.1/143; head -c 300 <&3 ) || echo "NO GREETING"
-ps -eo pid,user,args | head -20
-perl /tmp/cy/make5.pl || echo MAKE5_FAILED
-echo "cyrus ready"
 wait $master

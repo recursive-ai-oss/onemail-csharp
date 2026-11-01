@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the published server images inside the private network namespace of `userns.sh -n` and runs a command against them.
+# Starts a published server image inside the private network namespace of `userns.sh -n` and runs a command against them.
 #
 #   userns.sh -n tools/servers/servers.sh [--servers dovecot,stalwart,...] -- <command...>
 #
@@ -11,7 +11,7 @@ D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE=${ONEMAIL_SERVER_STATE:-$HOME/onemail/containers/state}
 LOGS=${ONEMAIL_SERVER_LOGS:-$STATE/logs}
 mkdir -p "$STATE" "$LOGS"
-PM="$D/pm"
+PODMAN="$D/pm"
 PIDS=()
 UP=()
 
@@ -20,7 +20,7 @@ if [ "${1:-}" = "--servers" ]; then want=$2; shift 2; fi
 [ "${1:-}" = "--" ] && shift
 
 cleanup() {
-  for c in dovecot stalwart cyrus postfix; do "$PM" rm -f -t 2 "onemail-$c" >/dev/null 2>&1; done
+  for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c" >/dev/null 2>&1; done
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
   wait 2>/dev/null
   "$D/cleanup.sh" >/dev/null
@@ -45,7 +45,7 @@ start_sink() {
 start_dovecot() {
   rm -rf "$STATE/dovecot"; mkdir -p "$STATE/dovecot/vmail"
   start_sink || return 1
-  "$PM" run --rm --name onemail-dovecot --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
+  "$PODMAN" run --rm --name onemail-dovecot --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
     -e USER_PASSWORD='{PLAIN}onemail-test' \
     -v "$STATE/dovecot/vmail:/srv/vmail" -v "$D/conf/dovecot-onemail.conf:/etc/dovecot/conf.d/90-onemail.conf:ro" \
     --tmpfs /run/dovecot:rw,mode=1777 "$DOVECOT_IMAGE" >"$LOGS/dovecot.log" 2>&1 &
@@ -61,7 +61,7 @@ start_stalwart() {
   echo '{"@type":"RocksDb","path":"/var/lib/stalwart/"}' > "$S/etc/config.json"
   local common=(--rm --network=host --uidmap 2000:0:1 --gidmap 2000:0:1 --user 2000:2000 -v "$S/etc:/etc/stalwart" -v "$S/data:/var/lib/stalwart")
   # First run in recovery mode: only the management listener, so the domain and account can be provisioned before any mail service starts.
-  "$PM" run --name onemail-stalwart "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
+  "$PODMAN" run --name onemail-stalwart "${common[@]}" -e STALWART_RECOVERY_MODE=1 -e STALWART_RECOVERY_ADMIN=admin:secret "$STALWART_IMAGE" >"$LOGS/stalwart-setup.log" 2>&1 &
   local pid=$!
   wait_port 8080 30 || { kill $pid; return 1; }
   cat > "$S/plan.ndjson" <<'PLAN'
@@ -70,9 +70,15 @@ start_stalwart() {
 {"@type":"update","object":"SystemSettings","value":{"defaultHostname":"mail.example.test","defaultDomainId":"#dom"}}
 {"@type":"upsert","object":"NetworkListener","matchOn":["name"],"value":{"l1":{"name":"smtp","bind":{"[::]:25":true},"protocol":"smtp"},"l2":{"name":"submission","bind":{"[::]:587":true},"protocol":"smtp"},"l3":{"name":"submissions","bind":{"[::]:465":true},"protocol":"smtp","implicitTls":true},"l4":{"name":"imap","bind":{"[::]:143":true},"protocol":"imap"},"l5":{"name":"imaps","bind":{"[::]:993":true},"protocol":"imap","implicitTls":true},"l6":{"name":"pop3","bind":{"[::]:110":true},"protocol":"pop3"},"l7":{"name":"pop3s","bind":{"[::]:995":true},"protocol":"pop3","implicitTls":true},"l8":{"name":"https","bind":{"[::]:443":true},"protocol":"http","implicitTls":true}}}
 PLAN
-  XDG_CACHE_HOME="$S/cache" HOME="$S" "$CLI" --url http://127.0.0.1:8080 --user admin --password secret apply --file "$S/plan.ndjson" >"$LOGS/stalwart-apply.log" 2>&1 || { cat "$LOGS/stalwart-apply.log" >&2; kill $pid; return 1; }
-  "$PM" stop -t 5 onemail-stalwart >/dev/null 2>&1; wait $pid 2>/dev/null
-  "$PM" run --name onemail-stalwart "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
+  # The management port opens before the API answers, so the first requests may fail.
+  local ok=
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    XDG_CACHE_HOME="$S/cache" HOME="$S" "$CLI" --url http://127.0.0.1:8080 --user admin --password secret apply --file "$S/plan.ndjson" >"$LOGS/stalwart-apply.log" 2>&1 && { ok=1; break; }
+    sleep 2
+  done
+  [ -n "$ok" ] || { cat "$LOGS/stalwart-apply.log" >&2; kill $pid; return 1; }
+  "$PODMAN" stop -t 5 onemail-stalwart >/dev/null 2>&1; wait $pid 2>/dev/null
+  "$PODMAN" run --name onemail-stalwart "${common[@]}" "$STALWART_IMAGE" >"$LOGS/stalwart.log" 2>&1 &
   PIDS+=($!)
   wait_port 143 40 || return 1
   export ONEMAIL_STALWART_IMAP_PORT=143 ONEMAIL_STALWART_IMAPS_PORT=993 ONEMAIL_STALWART_POP3_PORT=110 ONEMAIL_STALWART_POP3S_PORT=995 \
@@ -89,17 +95,32 @@ start_cyrus() {
   PIDS+=($!)
   sleep 0.5
   # The image's /var/imap is copied out so the container's one user owns a writable copy (an anonymous volume would need a chown).
-  "$PM" run --rm --name onemail-cyrus --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
+  "$PODMAN" run --rm --name onemail-cyrus --network=host --uidmap 999:0:1 --gidmap 8:0:1 --user 999:8 \
     -v "$S/log.sock:/dev/log" -v "$S/tls:/onemail:ro" -v "$D/conf/cyrus-start.sh:/onemail/start.sh:ro" --tmpfs /run:rw,mode=1777 --tmpfs /tmp:rw,mode=1777 \
     --entrypoint /bin/bash "$CYRUS_IMAGE" /onemail/start.sh >"$LOGS/cyrus.log" 2>&1 &
   PIDS+=($!)
   wait_port 143 60 || return 1
-  for _ in $(seq 1 60); do grep -q "cyrus ready" "$LOGS/cyrus.log" && break; sleep 1; done
+  # The user's mailbox is created through the admin account (the image's own account script does not leave one behind).
+  local made=
+  for _ in $(seq 1 60); do
+    python3 - >>"$LOGS/cyrus-setup.log" 2>&1 <<'PY' && { made=1; break; }
+import imaplib, ssl
+c = ssl._create_unverified_context()
+a = imaplib.IMAP4_SSL("127.0.0.1", 993, ssl_context=c)
+a.login("admin", "admin")
+r = a.create("user/user1")
+assert r[0] == "OK", r
+PY
+    sleep 1
+  done
+  [ -n "$made" ] || return 1
   export ONEMAIL_CYRUS_IMAP_PORT=143 ONEMAIL_CYRUS_IMAPS_PORT=993 ONEMAIL_CYRUS_POP3_PORT=110 ONEMAIL_CYRUS_POP3S_PORT=995 \
          ONEMAIL_CYRUS_USER=user1 ONEMAIL_CYRUS_PASSWORD=x
 }
 
-for s in ${want//,/ }; do
+# Stalwart first: its provisioning step needs port 8080, which Dovecot and Cyrus also open for their HTTP services.
+for s in stalwart dovecot cyrus; do
+  case ",$want," in *",$s,"*) ;; *) continue ;; esac
   if "start_$s"; then UP+=("$s"); else echo "failed to start $s" >&2; fi
 done
 export ONEMAIL_SERVERS="${UP[*]}"

@@ -13,5 +13,11 @@ servers=${1:-dovecot,stalwart,cyrus}
 filter=${ONEMAIL_TEST_FILTER:-FullyQualifiedName~ServerTests}
 cd "$ROOT"
 dotnet build tests/OneMail.Tests -c Checked -v quiet -clp:NoSummary
-"$D/userns.sh" -n "$D/servers.sh" --servers "$servers" -- \
-  dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter"
+# Stalwart and Cyrus both want the standard mail ports, so each server gets its own private network namespace and test run.
+rc=0
+for s in ${servers//,/ }; do
+  echo "##### $s"
+  "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
+    dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
+done
+exit $rc

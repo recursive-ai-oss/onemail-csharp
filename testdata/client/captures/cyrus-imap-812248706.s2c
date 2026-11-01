@@ -1,0 +1,64 @@
+* OK [CAPABILITY IMAP4rev1 IMAP4rev2 AUTH=PLAIN AUTH=LOGIN ENABLE ID LITERAL+ SASL-IR] cyrus.test Cyrus IMAP 3.13.8-115-gb2ee17d30 server ready
+A0001 OK [CAPABILITY IMAP4rev1 IMAP4rev2 ACL ANNOTATE-EXPERIMENT-1 APPENDLIMIT=209715200 BINARY CATENATE CHILDREN COMPRESS=DEFLATE CONDSTORE CREATE-SPECIAL-USE ENABLE ESEARCH ESORT ID IDLE INPROGRESS JMAPACCESS LIST-EXTENDED LIST-METADATA LIST-MYRIGHTS LIST-STATUS LITERAL+ LOGINDISABLED MAILBOX-REFERRALS METADATA MOVE MULTIAPPEND MULTISEARCH NAMESPACE OBJECTID PARTIAL PREVIEW QRESYNC QUOTA QUOTA=RES-STORAGE QUOTA=RES-MESSAGE QUOTA=RES-ANNOTATION-STORAGE QUOTA=RES-MAILBOX QUOTASET REPLACE RIGHTS=kxten SAVEDATE SEARCH=FUZZY SEARCHRES SORT SORT=DISPLAY SPECIAL-USE STATUS=SIZE THREAD=ORDEREDSUBJECT THREAD=REFERENCES UIDBATCHES UIDONLY UIDPLUS UNSELECT URL-PARTIAL WITHIN DIGEST=SHA1 NO_ATOMIC_RENAME SORT=MODSEQ SORT=UID THREAD=REFS X-CREATEDMODSEQ X-REPLICATION X-REPLICATION-ARCHIVE X-SIEVE-MAILBOX X-UNMAILBOX-ID XLIST] Success (tls protection) SESSIONID=<cyrus.test-1793508652-23-1-17866447676034321400>
+A0002 OK [MAILBOXID (04426725-f490-4a5f-9ff4-e486a5302fbf)] Completed
+* LIST (\HasNoChildren) "/" "OneMail raw 6d7bf7ec Entw&APw-rfe"
+A0003 OK Completed (0.000 secs 1 calls)
+A0004 OK [APPENDUID 1793508653 1] Completed
+* 1 EXISTS
+* 1 RECENT
+* FLAGS (\Answered \Flagged \Draft \Deleted \Seen)
+* OK [PERMANENTFLAGS (\Answered \Flagged \Draft \Deleted \Seen \*)] Ok
+* OK [UIDVALIDITY 1793508653] Ok
+* OK [UIDNEXT 2] Ok
+* OK [HIGHESTMODSEQ 4] Ok
+* OK [MAILBOXID (04426725-f490-4a5f-9ff4-e486a5302fbf)] Ok
+* OK [URLMECH INTERNAL] Ok
+* OK [ANNOTATIONS 65536] Ok
+A0005 OK [READ-WRITE] Completed
+* 1 FETCH (FLAGS (\Recent \Seen) UID 1 RFC822.SIZE 594 ENVELOPE ("Tue, 03 Nov 2026 10:00:00 +0000" "=?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= a4fc13acba4d" (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Ann" NIL "ann" "example.com")) (("Bob" NIL "bob" "example.com")) NIL NIL NIL "<a4fc13acba4d@example.com>") BODYSTRUCTURE (("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" 69 2 NIL NIL NIL NIL)("APPLICATION" "OCTET-STREAM" ("NAME" "data.bin") NIL NIL "BASE64" 44 NIL ("ATTACHMENT" ("FILENAME" "data.bin")) NIL NIL) "MIXED" ("BOUNDARY" "bnd") NIL NIL NIL))
+A0006 OK Completed (0.000 sec)
+* 1 FETCH (UID 1 BODY[] {594}
+From: Ann <ann@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?w4RwZmVsIHVuZCBCaXJuZW4=?= a4fc13acba4d
+Date: Tue, 03 Nov 2026 10:00:00 +0000
+Message-ID: <a4fc13acba4d@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd"
+
+--bnd
+Content-Type: text/plain; charset=utf-8
+
+Hello from the container tests.
+.A line that starts with a period.
+
+--bnd
+Content-Type: application/octet-stream; name="data.bin"
+Content-Disposition: attachment; filename="data.bin"
+Content-Transfer-Encoding: base64
+
+XRoba+k6fruPDJ5Asb2dW21W0Tm79d+8sfm1j3iWLIY=
+--bnd--
+)
+A0007 OK Completed (0.000 sec)
+* SEARCH
+A0008 OK Completed (0 msgs in 0.002 secs)
+* SEARCH 1
+A0009 OK Completed (1 msgs in 0.000 secs)
+* ESEARCH (TAG "A0010") UID COUNT 1 ALL 1
+A0010 OK Completed (1 msgs in 0.000 secs)
+* STATUS "OneMail raw 6d7bf7ec Entw&APw-rfe" (MESSAGES 1 UIDNEXT 2)
+A0011 OK Completed
+A0012 OK DEFLATE active
+A0013 OK Completed
+* 1 FETCH (UID 1 BODY[1] {69}
+Hello from the container tests.
+.A line that starts with a period.
+)
+A0014 OK Completed (0.000 sec)
++ idling
+A0015 OK Completed
+A0016 OK Completed
+A0017 OK Completed
+* BYE LOGOUT received
+A0018 OK Completed
