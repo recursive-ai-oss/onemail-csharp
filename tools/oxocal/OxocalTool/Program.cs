@@ -14,6 +14,8 @@ using RecursiveAI.OneMail.Mapi;
 //                                        typed fields to <out>/items.jsonl, the converted iCalendar to <out>/ics/N.ics, counts on stdout
 // OxocalTool roundtrip <root>            item -> iCalendar -> item -> iCalendar over the same items, and what differs
 // OxocalTool ics <dir> <out dir>         iCalendar files -> items -> iCalendar, with the loss reports
+// OxocalTool itemdiff <root>...          Outlook item -> iCalendar -> item compared property by property (see ItemSweep.cs)
+// OxocalTool icsdiff <root>...           iCalendar -> item -> iCalendar compared field by field (see IcsSweep.cs)
 if (args.Length < 2)
 {
     Console.Error.WriteLine("usage: OxocalTool scan <root> <out> | roundtrip <root> | ics <dir> <out>");
@@ -25,8 +27,34 @@ return args[0] switch
     "scan" => Scan(args[1], args[2]),
     "roundtrip" => RoundTrip(args[1]),
     "ics" => IcsFiles(args[1], args[2]),
+    "icsdiff" => IcsSweep.Run(args[1..]),
+    "itemdiff" => ItemDiff(args[1..]),
     _ => 2,
 };
+
+static int ItemDiff(string[] a)
+{
+    int samples = 3;
+    string? only = null;
+    List<string> roots = [];
+    for (int i = 0; i < a.Length; i++)
+    {
+        if (a[i] == "--samples")
+        {
+            samples = int.Parse(a[++i], CultureInfo.InvariantCulture);
+        }
+        else if (a[i] == "--only")
+        {
+            only = a[++i];
+        }
+        else
+        {
+            roots.Add(a[i]);
+        }
+    }
+
+    return ItemSweep.Run(roots.SelectMany(Items), samples, only);
+}
 
 static IEnumerable<string> Files(string input)
 {

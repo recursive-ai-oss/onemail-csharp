@@ -2,7 +2,7 @@
 
 Normative notes for `RecursiveAI.OneMail.Calendaring` (the typed views over a `MapiMessage`) and
 `RecursiveAI.OneMail.Conversion.OxcIcal` (MS-OXCICAL). Specs: MS-OXOCAL, MS-OXOTASK, MS-OXCICAL, MS-OXPROPS. Losses are reported as in
-[`conversion.md`](conversion.md); choices on ambiguous input are rows OC1-OC6 in [`ambiguities.md`](ambiguities.md).
+[`conversion.md`](conversion.md); choices on ambiguous input are rows OC1-OC17 in [`ambiguities.md`](ambiguities.md).
 
 ## Typed views (read)
 
@@ -28,7 +28,11 @@ Normative notes for `RecursiveAI.OneMail.Calendaring` (the typed views over a `M
 An Outlook recurrence (`RecurrencePattern`: frequency, pattern type, period, first date/day-of-week, end) maps to one RRULE by the templates of
 MS-OXCICAL 2.1.3.2.2; `OutlookRecurrence.ToRRule` writes it and `OutlookRecurrence.Days` walks the valid days exactly as MS-OXOCAL 2.2.1.44.1
 describes (used as the independent check in the tests). Expansion goes through `RecursiveAI.OneMail.Calendar.Recurrence`; there is no
-second engine. Moved/changed instances become `RECURRENCE-ID` overrides, deleted ones `EXDATE`. The pattern's start offset and the series zone
+second engine. Moved/changed instances become `RECURRENCE-ID` overrides, deleted ones `EXDATE`. Going the other way, a rule becomes a pattern
+only if it fits a template or means exactly what one means; the rest is a `RecurrenceNotMapped` loss with its reason
+(`conversion.md`, "Recurrence rules Outlook cannot hold"). BYHOUR and BYMINUTE are the series' time of day (OC8), `UNTIL` bounds the start of
+the last instance (OC9), an RDATE is carried as the new place of an EXDATEd instance (OC10), and a series that runs past a change of its zone's
+rules carries one rule per change in `PidLidAppointmentTimeZoneDefinitionRecur` (OC6). The pattern's start offset and the series zone
 give `DTSTART;TZID=`. `WKST` is always written (OC4) and `INTERVAL` is omitted when 1.
 
 ## Item to iCalendar (`MapiToIcsConverter`)
@@ -43,8 +47,12 @@ VALARM from the reminder, RRULE/EXDATE/RDATE, exceptions, VTIMEZONE from the ite
 ## iCalendar to item (`IcsToMapiConverter`)
 
 `Convert(IcsComponent)` converts the first component; `ConvertAll` gives one result per VEVENT series (overrides with the same UID become exception
-attachments of their series) and VTODO. Zones: a TZID with a `VTIMEZONE` gives a TZDEFINITION by sampling the zone through the item's year (two
-changes = a DST rule, OC6); a known Windows or IANA name is resolved through the `.Calendar` zone layer; otherwise UTC with `UnknownTimeZone`.
+attachments of their series) and VTODO. Zones: a TZID with a `VTIMEZONE` gives a TZDEFINITION by sampling the zone through the item's year
+(two changes = a DST rule) and, for a series, through its last year (OC6); a known Windows or IANA name is resolved through the `.Calendar` zone layer;
+otherwise UTC with `UnknownTimeZone`. METHOD gives the message class (MS-OXCICAL 2.1.3.1.1.1: PUBLISH and none `IPM.Appointment`, REQUEST, CANCEL,
+REPLY by PARTSTAT, COUNTER a tentative response with `PidLidAppointmentCounterProposal`); in a REPLY or COUNTER the sender is the attendee and the
+organizer the recipient (OC11). Attendees are recipients (type from ROLE and CUTYPE, track status from PARTSTAT); what a recipient cannot say is
+reported (OC12). A VTODO's series uses the same templates, without a zone.
 A floating time or a date takes UTC (`FloatingTimeAssumedUtc`, OC3). A task's UID must fit the 16-byte `PidLidTaskGlobalId`: a UID of ours
 (32 hex digits, `@onemail`) comes back unchanged, any other is replaced by a derived GUID and reported (`UidReplacedByGuid`).
 
@@ -57,6 +65,16 @@ A floating time or a date takes UTC (`FloatingTimeAssumedUtc`, OC3). A task's UI
 - The same 54 ICS files (`testdata/calendar/oxocal/generated`, written by `ONEMAIL_OXOCAL_OUT=<dir>` on the tests) through
   `tools/oxocal/oracle-checks.sh`: dateutil 2.9.0.post0, recurring-ical-events 3.8.2 and Ical.Net 5.2.3 expand them; Python icalendar 7.3.0 and
   Ical.Net parse every file we produce.
+- Every event of the calendar corpora through ICS, item and ICS again, field by field (`tools/oxocal/OxocalTool icsdiff`, run by
+  `tools/oxocal/ics-roundtrip-checks.sh`): subject, location, description, status, free/busy, class, priority, organizer, attendees (address,
+  name, role, user type, response, RSVP), alarm, categories, sequence, UID, the first start and length, and the series as every occurrence start and
+  length in 2000-2030 from the same expansion engine on both sides; the item's own recurrence as the days of the MS-OXOCAL day walk. A difference
+  is *reported* when a loss entry of either conversion names the field and *unreported* otherwise; unreported differences are bugs or artefacts of
+  the comparison and are zero. The exported iCalendar of every recurring event is then expanded by dateutil, recurring-ical-events and Ical.Net as
+  well (the same expansion differential as the originals).
+- The other direction, over a grid of every pattern type, end kind, interval, weekday set, three zones and four start days (1,440 series,
+  `OxcIcalGridTests`): the days of the exported RRULE are the days of the pattern's walk, and importing the iCalendar gives the same pattern
+  again; the 108 monthly or yearly cases on day 29 or 30 differ by OC1 and say so.
 - Item to ICS to item and ICS to item to ICS (`tools/oxocal/OxocalTool roundtrip|ics`, and the `OxcIcalRoundTripTests`): mapped properties equal,
   the rest in the report, nothing silent.
 - `tools/oxocal/compare_extract_msg.py`: subject, location, attendees, task status and dates against extract-msg 0.55.0.

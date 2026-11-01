@@ -194,14 +194,46 @@ Codes added by these two converters:
 | `OrganizerWithoutSmtpAddress` | Dropped | item to ICS | an organizer with no SMTP address cannot be a mailto |
 | `AmbiguousShortMonth`, `AmbiguousFirstInstance` | Approximated | item to ICS | see ambiguities OC1, OC2 |
 | `NoEventOrTask` | Dropped | ICS to item | the calendar holds no VEVENT or VTODO |
+| `MissingTime` | Dropped | both | the VEVENT has no DTSTART (the item starts at the epoch) or the item has no start time |
+| `UnsupportedCalendar` | Dropped | item to ICS | a recurrence in another calendar (Hijri, Hebrew and the like) or a pattern with no iCalendar form: written as a single event |
+| `AttachmentNotCarried` | Dropped | item to ICS | an attachment of the item other than an exception object: iCalendar attachments by value are not written |
+| `AttendeeWithoutAddress` | Approximated | ICS to item | an ATTENDEE without a mailto address is kept by name only |
+| `AdditionalAlarms`, `AlarmWithoutTrigger` | Dropped | ICS to item | Outlook keeps one reminder (the first alarm); a VALARM without a usable TRIGGER |
+| `AlarmAfterStart`, `AlarmRelatedToEnd` | Approximated | ICS to item | a reminder is always before the start: an alarm after the start, or relative to the end, is stored relative to the start |
 | `UnknownTimeZone`, `FloatingTimeAssumedUtc` | Approximated | ICS to item | no zone, or a zone not defined: UTC |
-| `MethodNotMapped` | Approximated | ICS to item | the METHOD has no message class: an appointment |
-| `MultipleRRules`, `RecurrenceNotMapped` | Dropped | ICS to item | the rule does not fit an Outlook recurrence pattern |
-| `DatesWithoutRecurrence`, `ExdateNotOnPattern`, `RdateWithoutException` | Dropped | ICS to item | EXDATE/RDATE with no series, a day the series does not occupy, or an added instance that is not a moved one |
-| `OverrideWithoutSeries`, `OverrideWithoutTimes`, `OverrideNotOnPattern` | Dropped | ICS to item | a RECURRENCE-ID override that cannot become an exception |
+| `MethodNotMapped` | Approximated | ICS to item | the METHOD has no message class in MS-OXCICAL 2.1.3.1.1.1 (REFRESH, ADD, DECLINECOUNTER, anything else): an appointment |
+| `MultipleRRules`, `RecurrenceNotMapped` | Dropped | ICS to item | the rule does not fit an Outlook recurrence pattern; one event is kept and the entry's reason says which part is outside MS-OXCICAL 2.1.3.2.2 (see "Recurrence rules Outlook cannot hold" below) |
+| `DatesWithoutRecurrence`, `ExdateNotOnPattern`, `RdateWithoutException`, `RdatePeriodNotCarried` | Dropped | ICS to item | EXDATE/RDATE with no series, a day the series does not occupy, an added instance that is not the new place of an EXDATEd one, or an RDATE with a period |
+| `OverrideWithoutSeries`, `OverrideWithoutTimes`, `OverrideNotOnPattern`, `DuplicateUidNotConverted` | Dropped | ICS to item | a RECURRENCE-ID override that cannot become an exception, or a second VEVENT of one UID that is neither a series nor an override |
+| `RangeThisAndFutureNotCarried` | Approximated | ICS to item | `RECURRENCE-ID;RANGE=THISANDFUTURE` changes every later instance; an Outlook exception changes one |
+| `SubMinuteTimeDropped` | Approximated | ICS to item | a series keeps its times in whole minutes (MS-OXOCAL 2.2.1.44.5) |
 | `ClassNotMapped`, `OrganizerNotMailto`, `ParameterNotMapped` | Dropped | ICS to item | CLASS value, ORGANIZER URI or ATTENDEE parameter with no MAPI field |
+| `AttendeeRoleNotCarried`, `AttendeeTypeApproximated`, `PartstatNotCarried`, `RsvpIsPerMessage` | Approximated or Dropped | ICS to item | ROLE=CHAIR and other roles with no recipient type, CUTYPE other than individual and resource (ROOM becomes a resource), PARTSTAT values with no track status, and one response-requested flag for the whole item (MS-OXCICAL 2.1.3.1.1.20.2) |
+| `AdditionalAttendeesInReply` | Dropped | ICS to item | a REPLY or COUNTER names one ATTENDEE, the one who answers; the others are not converted |
+| `StatusNotExported` | Dropped | ICS to item | STATUS other than CANCELLED only stands in for a missing busy status and is never written back (MS-OXCICAL 2.1.3.1.1.20.23); `CANCELLED` is kept in the appointment state flags |
+| `StatusNotCarried` | Approximated | ICS to item | a VTODO STATUS that is not one of the four RFC 5545 values: the task is complete or not started |
 | `DtstampAsLastModified` | Approximated | ICS to item | DTSTAMP stands in for the last-modified time |
 | `TaskCancelledAsDeferred` | Approximated | ICS to item | a cancelled VTODO is stored as deferred |
+
+### Recurrence rules Outlook cannot hold
+
+An RRULE becomes a recurrence pattern only when it fits a template of MS-OXCICAL 2.1.3.2.2 or means exactly what one of them means: a daily rule
+that only filters weekdays with `INTERVAL=1` is the weekly template, `BYDAY=1MO` is `BYDAY=MO;BYSETPOS=1`, and a yearly `BYMONTHDAY` with no
+`BYMONTH` and `INTERVAL=1` is the monthly template (RFC 5545 3.3.10 puts that rule in every month). A rule outside them is not converted: the
+item is the single event at `DTSTART`, with a `RecurrenceNotMapped` entry whose reason names the cause, one of:
+
+| Cause | Examples |
+|---|---|
+| a frequency below a day | `FREQ=HOURLY`, `MINUTELY`, `SECONDLY` |
+| parts outside the templates | `BYSECOND`, `BYYEARDAY`, `BYWEEKNO`, `RSCALE` and unknown parts |
+| several values where one is allowed | `BYHOUR=9,15`, `BYMINUTE=0,30`, several `BYMONTHDAY`, several `BYMONTH` |
+| a part the frequency has no use for in Outlook | `BYMONTH` on a monthly rule, `BYMONTHDAY` or ordinal weekdays on a weekly rule, `BYSETPOS` on a daily one |
+| a weekday position outside first to fourth and last | `BYDAY=5MO`, `-2FR`, several ordinals |
+| the year's own weekday count | a yearly `BYDAY` with no `BYMONTH` (the 20th Monday of the year) |
+| an interval beyond Outlook's | daily over 999, weekly or monthly over 99, yearly over 8 |
+
+More than one RRULE is `MultipleRRules`. EXDATE and RDATE need a mapped series (`DatesWithoutRecurrence` otherwise). Nothing in this list is
+dropped silently: each case has its entry, and `tools/oxocal` counts them (`docs/calendar-items.md`, "How it is checked").
 
 ## Whole stores
 

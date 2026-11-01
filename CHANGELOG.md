@@ -4,6 +4,19 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `OutlookNames.RecurrenceType` (`PidLidRecurrenceType`) and `OutlookNames.CounterProposal` (`PidLidAppointmentCounterProposal`).
+- iCalendar to Outlook item: `METHOD:COUNTER` becomes a tentative response with the counter-proposal flag (and back); an RDATE paired with an EXDATE becomes a moved instance; a daily rule on weekdays, a yearly `BYMONTHDAY` with no month and one day, and a task's weekly, monthly and yearly rules are now carried; new loss entries say what an Outlook item cannot hold of attendees (`AttendeeRoleNotCarried`, `AttendeeTypeApproximated`, `PartstatNotCarried`, `RsvpIsPerMessage`), of STATUS (`StatusNotExported`), of a series (`SubMinuteTimeDropped`, `RangeThisAndFutureNotCarried`, `RdatePeriodNotCarried`) and of duplicate UIDs (`DuplicateUidNotConverted`); a rule Outlook cannot express reports which part (`RecurrenceNotMapped`), listed in `docs/conversion.md`.
+- `tools/oxocal`: `OxocalTool icsdiff` and `itemdiff` compare an iCalendar or an Outlook item with its round trip field by field and classify every difference as reported or unreported; `ics-roundtrip-checks.sh` adds the expansion oracles on the exported iCalendar.
+
+### Fixed
+
+- iCalendar to Outlook item: a series that ends by `UNTIL` no longer counts a last day whose start is after `UNTIL`; a yearly rule whose `BYMONTH` is not the month of DTSTART keeps its month; a yearly rule with `BYMONTHDAY` and no `BYMONTH` is every month, as RFC 5545 says, instead of the month of DTSTART; `BYHOUR` and `BYMINUTE` set the series' time; a first instance moved to the first allowed day keeps its length; the sender of a REPLY is the attendee and the recipient the organizer.
+- A series across a change of its zone's daylight saving rules (New York in 2007, Sydney in 2008) was an hour out in the affected weeks after conversion: the item now carries one time zone rule per change and the export writes them back.
+- An Outlook item whose PidLidTimeZoneStruct holds a rule no VTIMEZONE can state (found by the fuzzer) made the export throw `InvalidOperationException`; the item now reads as having no zone, with a `ValueOutOfRange` defect.
+- Outlook item to iCalendar: PidLidRecurrenceType, the end-display time zone, PidLidResponseStatus and PidLidIsException are reported as derived, not as properties iCalendar cannot hold.
+
 ## [0.4.0-preview.1]
 
 On the local feed. Bodies, display and conversion close with this preview: RTF to HTML, HTML and text, best body, display HTML with its independent review passed, the calendar card, the Render package, conversions with loss reports, replies and forwards. It also carries the first Outlook writing (MSG and OFT, PST write primitives), opt-in recovery of damaged MSG files, and DKIM and ARC in the Cryptography package. What is checked, and the known gaps, are in [docs/compatibility.md](docs/compatibility.md).
