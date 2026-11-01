@@ -379,6 +379,8 @@ public class LtpBuilderTests
         Assert.Throws<ArgumentException>(() => pcb.Set(3, LtpPropertyTypes.PtypInteger64, [1, 2, 3, 4]));
         Assert.Throws<ArgumentException>(() => pcb.SetNodeReference(4, LtpPropertyTypes.PtypObject, new Nid(0x8000)));   // type 0 would read as an HID
         Assert.Throws<EndOfStreamException>(() => pcb.Set(5, LtpPropertyTypes.PtypBinary, new MemoryStream(new byte[10]), 20));
+        // A huge declared length for a fixed-size type is refused before a byte is read or allocated.
+        Assert.Throws<ArgumentException>(() => pcb.Set(6, LtpPropertyTypes.PtypInteger32, new MemoryStream(), 2_000_000_000));
         pcb.Build();
         Assert.Throws<InvalidOperationException>(() => pcb.Set(9, LtpPropertyTypes.PtypInteger32, U32(1)));
         Assert.Throws<InvalidOperationException>(() => pcb.Build());

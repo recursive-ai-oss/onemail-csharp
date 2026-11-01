@@ -92,7 +92,14 @@ public sealed class PropertyContextBuilder
         ArgumentNullException.ThrowIfNull(source);
         ArgumentOutOfRangeException.ThrowIfNegative(length);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(length, NdbBlockBuilder.MaxDataTreeBytes);
-        if (length <= HeapNodeBuilder.MaxAllocation || LtpPropertyTypes.FixedSize(type) > 0)
+        int fixedSize = LtpPropertyTypes.FixedSize(type);
+        if (fixedSize > 0 && length != fixedSize)
+        {
+            // Checked before anything is allocated or read.
+            throw new ArgumentException($"property type 0x{type:x4} is {fixedSize} bytes, not {length}", nameof(length));
+        }
+
+        if (length <= HeapNodeBuilder.MaxAllocation)
         {
             byte[] small = new byte[length];
             source.ReadExactly(small);
