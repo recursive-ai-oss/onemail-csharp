@@ -15,10 +15,10 @@ public sealed class PstIncrementalTablesTests
         return m;
     }
 
-    private static string BuildBig(int perFolder, int folders)
+    private static string BuildBig(int perFolder, int folders, NdbEncryption encryption = NdbEncryption.Permute)
     {
         string path = NdbEditorTests.TempFile();
-        using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero), StoreId = Guid.Parse("11111111-2222-3333-4444-555555555555") });
+        using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero), StoreId = Guid.Parse("11111111-2222-3333-4444-555555555555"), Encryption = encryption });
         for (int f = 0; f < folders; f++)
         {
             PstFolderWriter folder = b.IpmSubtree.CreateFolder("Folder " + f);
@@ -123,6 +123,16 @@ public sealed class PstIncrementalTablesTests
         if (wiped)
         {
             Assert.Equal(0, NdbEditorTests.NonZeroFreeBytes(actual));
+        }
+
+        // The independent checker recomputes every block's references and the used space: a leaked block or a reference too many shows here.
+        NdbChecker.Report wantReport = NdbChecker.Check(File.ReadAllBytes(expected));
+        NdbChecker.Report gotReport = NdbChecker.Check(File.ReadAllBytes(actual));
+        Assert.Equal(wantReport.Errors.Count, gotReport.Errors.Count);
+        Assert.Equal(wantReport.Soft.Count, gotReport.Soft.Count);
+        if (wiped)
+        {
+            Assert.True(gotReport.Errors.Count == 0, string.Join("; ", gotReport.Errors.Take(5)));
         }
 
         Assert.True(PstStore.TryOpen(expected, out PstStore? e, out _));
@@ -230,6 +240,100 @@ public sealed class PstIncrementalTablesTests
         }
         finally
         {
+            File.Delete(whole);
+            File.Delete(rows);
+        }
+    }
+
+    [Theory]
+    [InlineData(NdbEncryption.None)]
+    [InlineData(NdbEncryption.Cyclic)]
+    public void BlocksWrittenInPlaceAreEncodedAsTheFileSays(NdbEncryption encryption)
+    {
+        string basePath = BuildBig(600, 2, encryption);
+        string whole = NdbEditorTests.TempFile();
+        string rows = NdbEditorTests.TempFile();
+        try
+        {
+            File.Copy(basePath, whole);
+            File.Copy(basePath, rows);
+            Edit(whole, PstTableUpdates.Rewrite, 3, 2, 50, 30, 10, 5);
+            Assert.True(Edit(rows, PstTableUpdates.Incremental, 3, 2, 50, 30, 10, 5) > 0);
+            SameStore(whole, rows);
+        }
+        finally
+        {
+            File.Delete(basePath);
+            File.Delete(whole);
+            File.Delete(rows);
+        }
+    }
+
+    [Fact]
+    public void ABigHierarchyTableChangesRowByRowToo()
+    {
+        string basePath = NdbEditorTests.TempFile();
+        using (PstBuilder b = PstBuilder.Create(basePath, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero) }))
+        {
+            PstFolderWriter parent = b.IpmSubtree.CreateFolder("Parent");
+            PstFolderWriter spare = b.IpmSubtree.CreateFolder("Spare");
+            for (int i = 0; i < 400; i++)
+            {
+                PstFolderWriter child = parent.CreateFolder("Child " + i);
+                for (int m = 0; m < 2; m++)
+                {
+                    child.AddMessage(PstBuilderTests.Message($"c{i}/{m}", 0, 0, "x"));
+                }
+            }
+
+            spare.AddMessage(PstBuilderTests.Message("spare", 0, 0, "x"));
+            b.Complete();
+        }
+
+        string whole = NdbEditorTests.TempFile();
+        string rows = NdbEditorTests.TempFile();
+        try
+        {
+            File.Copy(basePath, whole);
+            File.Copy(basePath, rows);
+            int inPlace = 0;
+            foreach ((string path, PstTableUpdates mode) in new[] { (whole, PstTableUpdates.Rewrite), (rows, PstTableUpdates.Incremental) })
+            {
+                using PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { TableUpdates = mode, AutoCommitRows = 0 });
+                var all = w.View.EnumerateFolders(TestContext.Current.CancellationToken).ToList();
+                Nid parent = all.First(f => f.Name == "Parent").Nid;
+                Nid spare = all.First(f => f.Name == "Spare").Nid;
+                var children = all.Where(f => f.Name?.StartsWith("Child ", StringComparison.Ordinal) == true).OrderBy(f => f.Nid.Value).Select(f => f.Nid).ToList();
+                for (int i = 0; i < 10; i++)
+                {
+                    w.CreateFolder(parent, "New " + i);
+                }
+
+                for (int i = 0; i < 40; i += 4)
+                {
+                    w.AddMessage(children[i], Msg("into child " + i, i % 8 == 0));
+                }
+
+                for (int i = 1; i < 40; i += 8)
+                {
+                    w.RenameFolder(children[i], "Renamed " + i);
+                }
+
+                w.MoveFolder(children[50], spare);
+                w.MoveFolder(children[51], spare);
+                w.Commit();
+                w.DeleteFolder(children[60]);
+                w.CreateFolder(children[3], "Under child");
+                w.Commit();
+                inPlace = w.TablesUpdatedInPlace;
+            }
+
+            Assert.True(inPlace > 0);
+            SameStore(whole, rows);
+        }
+        finally
+        {
+            File.Delete(basePath);
             File.Delete(whole);
             File.Delete(rows);
         }
