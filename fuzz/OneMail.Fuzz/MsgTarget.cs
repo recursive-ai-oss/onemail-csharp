@@ -11,7 +11,7 @@ namespace RecursiveAI.OneMail.Fuzz;
 //   byte 0: which base file (0 all types, 1 recipients and attachments, 2 ANSI Russian; 3 = the rest of the input is the file itself)
 //   then 4-byte records: stream index (low 7 bits, modulo the stream count; the high bit means "cut the stream at the offset"),
 //   a 16-bit offset (modulo the stream length) and a value byte to put there. The record 0xFF, 0xFF, 0xFF, 0xFF deletes the stream.
-// The reader must never throw, hang or grow without bound, whatever the streams hold.
+// Recovery is on, so a raw input (base file 3) also exercises the damaged-file path. The reader must never throw, hang or grow without bound, whatever the streams hold.
 internal static class MsgTarget
 {
     private static readonly (List<(string Path, byte[] Data)> Streams, List<string> Empty, bool Unicode)[] Bases =
@@ -34,7 +34,7 @@ internal static class MsgTarget
             return;
         }
 
-        if (!MsgFile.TryOpen(file, out MsgFile? f, out _, new MsgReaderOptions { MaxValueBytes = 1 << 20 }))
+        if (!MsgFile.TryOpen(file, out MsgFile? f, out _, new MsgReaderOptions { MaxValueBytes = 1 << 20, Recovery = true }))
         {
             return;
         }

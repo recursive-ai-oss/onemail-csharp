@@ -56,8 +56,29 @@ stream's bytes are the value.
 | Strings of the other kind than the store mask says | read by their own type: `AmbiguousStringType` |
 | Unknown streams | ignored: `UnreferencedStream` |
 
-The full list is `MapiDefectKind`. Truncated or damaged compound files that OneArchive's reader rejects cannot be opened at
-all; two minimised fuzzer files in the Apache POI set are in that class.
+The full list is `MapiDefectKind`. By default a compound file that breaks the format is refused (`CompoundFileInvalid`); two
+minimised fuzzer files in the Apache POI set are in that class. `MsgReaderOptions.Recovery` opens them (next section).
+
+## Recovery (`MsgReaderOptions.Recovery`, `MaxRecoveryBytes`)
+
+Off by default. When on, a file that passes the strict checks is read exactly as before (`MsgFile.IsRecovered` is false, no extra
+defects). Otherwise OneArchive's compound file recovery opens what it can (a file cut short, FAT, DIFAT or mini FAT entries that point
+outside the file or at another chain's sectors, chains that loop or end early, a lost directory chain, invalid directory entries or
+links) and the message is read from what survives:
+
+| Defect | Meaning |
+|---|---|
+| `CompoundFileRecovered` | once per file: recovery ran; the offset is 0 |
+| `CompoundFileDamage` | one per repair the compound file reader made. The offset is a **file offset**, the location is empty, the detail names the damage kind (`HeaderInconsistent`, `Truncated`, `AllocationTableUnusable`, `MiniStreamUnusable`, `DirectoryUnusable`, `BadEntry`, `BadLink`, `OrphanedEntry`, `DamagedStream`), the directory entry, the length and the reason |
+| `StreamDamaged` | a stream whose sector chain ends before the size its directory entry declares. The location is the stream's path, the offset the length kept, the detail the declared size. Reported once per stream, on the object that owns it |
+
+A stream cut short gives the bytes before the break, so a property stream yields the entries it holds (`PropertyStreamTruncated` for
+a partial one) and a value stream gives a shorter value (`ValueSizeMismatch`). Nothing throws. Damage inside a stream's bytes is not
+detected. A file with no usable header, FAT or directory is still refused, as is one whose tables sit in a lost tail; the limits
+(`MaxRecoveryBytes` and the compound file entry limits) are never recovered from. `MsgFile.IsMsg` and format sniffing stay strict, so
+`Mail.Open` does not open a damaged file; use `MsgFile.TryOpen(..., new MsgReaderOptions { Recovery = true })`.
+`MsgTool damage` and `tools/msg/regress.sh` damage messages in memory in about 30 ways and report what recovery returns against the
+intact original.
 
 ## Limits (`MsgReaderOptions`)
 

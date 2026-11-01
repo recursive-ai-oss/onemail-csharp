@@ -18,8 +18,17 @@ namespace MsgTool;
 
 internal static class Program
 {
+    // --recover (anywhere in the arguments) opens with MsgReaderOptions.Recovery.
+    internal static MsgReaderOptions? Options;
+
     private static int Main(string[] args)
     {
+        if (args.Contains("--recover"))
+        {
+            Options = new MsgReaderOptions { Recovery = true };
+            args = args.Where(a => a != "--recover").ToArray();
+        }
+
         if (args.Length < 2)
         {
             Console.Error.WriteLine("usage: MsgTool summary|json|streams <file|dir>...");
@@ -36,6 +45,11 @@ internal static class Program
             }
 
             return 0;
+        }
+
+        if (args[0] == "damage")
+        {
+            return Damage.Run(args.Skip(1).SelectMany(Expand).ToArray());
         }
 
         string[] files = args.Skip(1).SelectMany(Expand).ToArray();
@@ -205,14 +219,14 @@ internal static class Program
     {
         long bytes = new FileInfo(path).Length;
         // Warm up so JIT and static initialisation are not counted.
-        if (MsgFile.TryOpen(path, out MsgFile? w, out _))
+        if (MsgFile.TryOpen(path, out MsgFile? w, out _, Options))
         {
             w.Dispose();
         }
 
         long a0 = GC.GetAllocatedBytesForCurrentThread();
         var sw = Stopwatch.StartNew();
-        if (!MsgFile.TryOpen(path, out MsgFile? file, out IReadOnlyList<MapiDefect> openDefects))
+        if (!MsgFile.TryOpen(path, out MsgFile? file, out IReadOnlyList<MapiDefect> openDefects, Options))
         {
             sw.Stop();
             long failAlloc = GC.GetAllocatedBytesForCurrentThread() - a0;
@@ -258,7 +272,7 @@ internal static class Program
 
     private static void Json(string path)
     {
-        if (!MsgFile.TryOpen(path, out MsgFile? file, out IReadOnlyList<MapiDefect> defects))
+        if (!MsgFile.TryOpen(path, out MsgFile? file, out IReadOnlyList<MapiDefect> defects, Options))
         {
             using Stream o = Console.OpenStandardOutput();
             using var w = new Utf8JsonWriter(o, new JsonWriterOptions { Indented = false });
