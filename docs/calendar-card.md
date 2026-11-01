@@ -1,5 +1,7 @@
 # The calendar card
 
+> **Display HTML is not yet independently reviewed.** The sanitiser behind the card's HTML has not had its independent security review. Do not rely on it to make untrusted mail safe to show until a release says the review has passed.
+
 `RecursiveAI.OneMail.Display.CalendarCard` turns a calendar object in a message into the compact card mail clients show above the body, as an
 HTML fragment (`ToHtml()`) and as plain text (`ToText()`). It is format core: it runs in the browser runtime and under NativeAOT.
 

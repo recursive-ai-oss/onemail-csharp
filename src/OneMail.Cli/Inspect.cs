@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using RecursiveAI.OneMail.Calendar;
+using RecursiveAI.OneMail.Calendar.Forms;
 using RecursiveAI.OneMail.Mime.Reading;
 
 namespace RecursiveAI.OneMail.Cli;
@@ -147,6 +149,11 @@ internal sealed class Inspect : IDisposable
                 Describe(item, index++);
             }
         }
+        catch (UnsupportedMailFormatException e) when (e.Format is MailFormat.Ics or MailFormat.VCard or MailFormat.JCal or MailFormat.JCard or MailFormat.XCal or MailFormat.XCard)
+        {
+            // Calendar and contact files are not mail items: they are summarised through the .Calendar readers.
+            CalendarFile(path, e.Format);
+        }
         catch (UnsupportedMailFormatException e)
         {
             Unsupported++;
@@ -161,7 +168,7 @@ internal sealed class Inspect : IDisposable
             }
             else
             {
-                _out.WriteLine(path + ": " + (e.Format == MailFormat.Unknown ? "unrecognised" : e.Format + " (recognised, not readable yet)"));
+                _out.WriteLine(path + ": " + (e.Format == MailFormat.Unknown ? "unrecognised" : e.Format + " (recognised, not readable)"));
             }
         }
         catch (InvalidDataException e)
@@ -180,6 +187,105 @@ internal sealed class Inspect : IDisposable
             else
             {
                 _out.WriteLine(path + ": unreadable (" + e.Message + ")");
+            }
+        }
+    }
+
+    // A calendar or contact file: how many top-level components it holds (cards for contacts), the kinds one level down, and what
+    // the reader repaired. ICS and vCard are read as content lines; the JSON and XML forms are converted to the same tree.
+    private void CalendarFile(string path, MailFormat format)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        bool json = format is MailFormat.JCal or MailFormat.JCard;
+        bool xml = format is MailFormat.XCal or MailFormat.XCard;
+        ContentDocument doc;
+        List<string> notes = [];
+        int defects;
+        int ambiguities = 0;
+        int limits = 0;
+        if (json || xml)
+        {
+            FormReadResult r = json ? JsonForms.FromJson(bytes) : XmlForms.FromXml(bytes);
+            doc = r.Document;
+            defects = r.Defects.Count;
+            limits = r.Defects.Count(d => d.IsLimit);
+            foreach (FormDefect d in r.Defects)
+            {
+                notes.Add(string.Create(CultureInfo.InvariantCulture, $"{d.Kind} @{d.Offset} {d.Path}"));
+            }
+        }
+        else
+        {
+            doc = ContentDocument.Parse(bytes);
+            defects = doc.Defects.Count;
+            foreach (CalendarDefect d in doc.Defects)
+            {
+                ambiguities += d.IsAmbiguity ? 1 : 0;
+                limits += d.IsLimit ? 1 : 0;
+                notes.Add(string.Create(CultureInfo.InvariantCulture, $"{d.Kind} @{d.Offset}{(d.IsAmbiguity ? " (ambiguity)" : string.Empty)}"));
+            }
+        }
+
+        SortedDictionary<string, int> top = new(StringComparer.Ordinal);
+        SortedDictionary<string, int> inner = new(StringComparer.Ordinal);
+        foreach (Component c in doc.Components)
+        {
+            string n = c.Name.ToUpperInvariant();
+            top[n] = top.GetValueOrDefault(n) + 1;
+            foreach (Component k in c.Components)
+            {
+                string kn = k.Name.ToUpperInvariant();
+                inner[kn] = inner.GetValueOrDefault(kn) + 1;
+            }
+        }
+
+        int count = top.Values.Sum();
+        Items += count;
+        Defects += defects;
+        Ambiguities += ambiguities;
+        if (_json)
+        {
+            Json("calendar", w =>
+            {
+                w.WriteString("path", path);
+                w.WriteString("format", format.ToString());
+                w.WriteStartObject("components");
+                foreach (KeyValuePair<string, int> kv in top)
+                {
+                    w.WriteNumber(kv.Key, kv.Value);
+                }
+
+                w.WriteEndObject();
+                w.WriteStartObject("inner");
+                foreach (KeyValuePair<string, int> kv in inner)
+                {
+                    w.WriteNumber(kv.Key, kv.Value);
+                }
+
+                w.WriteEndObject();
+                w.WriteNumber("defects", defects);
+                w.WriteNumber("ambiguities", ambiguities);
+                w.WriteNumber("limits", limits);
+            });
+            return;
+        }
+
+        _out.WriteLine(path + ": " + format);
+        string noun = format is MailFormat.VCard or MailFormat.JCard or MailFormat.XCard ? "cards" : "calendars";
+        StringBuilder sb = new("  ");
+        sb.Append(noun).Append(": ").Append(count.ToString(CultureInfo.InvariantCulture));
+        if (inner.Count > 0)
+        {
+            sb.Append("  components: ").Append(string.Join(", ", inner.Select(kv => kv.Key + " " + kv.Value.ToString(CultureInfo.InvariantCulture))));
+        }
+
+        sb.Append("  defects: ").Append(defects.ToString(CultureInfo.InvariantCulture));
+        _out.WriteLine(sb.ToString());
+        if (_listDefects)
+        {
+            foreach (string note in notes)
+            {
+                _out.WriteLine("      " + note);
             }
         }
     }

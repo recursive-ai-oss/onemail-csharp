@@ -128,9 +128,9 @@ Corpus bodies are not committed; the specification's example blocks are in `test
 
 ## Native RTF to HTML (`RtfHtmlConverter`)
 
-Outlook items whose RTF was authored as RTF (no `\fromhtml`/`\fromtext`) have no other body. `RtfHtmlConverter.Convert(bytes, options)`
-turns them into HTML and plain text; the MAPI view uses it when an item has no HTML or text body (`MailBody.Origin` is
-`RtfConverted`). The same independence rule holds: the namespace uses only the BCL (a test scans the sources).
+Outlook items whose RTF was authored as RTF (no `\fromhtml`/`\fromtext`) often have no HTML body. `RtfHtmlConverter.Convert(bytes, options)`
+turns them into HTML and plain text; the MAPI view uses it whenever the item has no HTML body of its own, even if it has a plain-text body: the converted HTML keeps the formatting (`MailBody.Origin` is
+`RtfConverted`; the text body is derived the same way only when the item has none). The same independence rule holds: the namespace uses only the BCL (a test scans the sources).
 
 - **Model.** A parse pass builds a small document model (paragraphs, runs, lists, tables, pictures, links) from fonts, colours,
   the stylesheet (names only, for headings), list tables and `\pn` lists, fields (HYPERLINK), shapes, `\object` results,
