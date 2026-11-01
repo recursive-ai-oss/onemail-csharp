@@ -1,6 +1,7 @@
 using RecursiveAI.OneMail.Client.Imap.Protocol;
 using RecursiveAI.OneMail.Client.Pop3.Protocol;
 using RecursiveAI.OneMail.Client.Protocol;
+using RecursiveAI.OneMail.Client.Sasl;
 using RecursiveAI.OneMail.Client.Smtp.Protocol;
 
 namespace RecursiveAI.OneMail.Fuzz;
@@ -73,6 +74,47 @@ internal static class ClientTargets
         catch (MailProtocolException)
         {
             // Closed connection or a limit: the expected end of hostile input.
+        }
+    }
+
+    /// <summary>
+    /// The SASL mechanisms on hostile server challenges. The first byte picks the mechanism; the rest is cut into challenges at 0x00 bytes
+    /// and answered in turn (a SCRAM or NTLM challenge parser must reject anything bad with a SaslException and nothing else).
+    /// </summary>
+    public static void Sasl(ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0)
+        {
+            return;
+        }
+
+        SaslMechanism m = (data[0] % 8) switch
+        {
+            0 => new SaslScram(ScramHash.Sha1, "user", "pencil", nonce: "fyko+d2lbbFgONRv9qkxdawL"),
+            1 => new SaslScram(ScramHash.Sha256, "user", "pencil", nonce: "rOprNGfwEbeRWgbNEkqO"),
+            2 => new SaslScram(ScramHash.Sha256, "user", "pencil", binding: new SaslChannelBinding("tls-server-end-point", [1, 2, 3]), plus: true, nonce: "rOprNGfwEbeRWgbNEkqO"),
+            3 => new SaslNtlm("User", "Password", "Domain", "WS", clientChallenge: new byte[8], fileTime: 0),
+            4 => new SaslCramMd5("tim", "pw"),
+            5 => new SaslLogin("u", "p"),
+            6 => new SaslOAuthBearer("u", "t"),
+            _ => new SaslXOAuth2("u", "t"),
+        };
+        try
+        {
+            _ = m.GetInitialResponse();
+            ReadOnlySpan<byte> rest = data[1..];
+            for (int i = 0; i < 8 && !rest.IsEmpty; i++)
+            {
+                int cut = rest.IndexOf((byte)0);
+                // NTLM messages contain NUL bytes themselves: only the Sasl* text mechanisms are split.
+                ReadOnlySpan<byte> challenge = cut < 0 || (data[0] % 8) == 3 ? rest : rest[..cut];
+                _ = m.Respond(challenge);
+                rest = cut < 0 || (data[0] % 8) == 3 ? default : rest[(cut + 1)..];
+            }
+        }
+        catch (MailProtocolException)
+        {
+            // A challenge the mechanism refuses: the expected end of hostile input.
         }
     }
 

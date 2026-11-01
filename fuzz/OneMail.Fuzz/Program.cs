@@ -50,6 +50,7 @@ internal static class Program
             ["smime-structure"] = SmimeTargets.Run,
             ["imap-response"] = ClientTargets.Imap,
             ["smtp-reply"] = ClientTargets.Smtp,
+            ["sasl-challenge"] = ClientTargets.Sasl,
             ["pop3-response"] = ClientTargets.Pop3,
             ["pop3-listings"] = ClientTargets.Pop3Listings,
         };

@@ -9,7 +9,8 @@ Every I/O method has an asynchronous form taking a `CancellationToken` and a syn
 | Namespace | Types |
 |---|---|
 | `Client.Protocol` | `ProtocolConnection` (socket, TLS, compression), `ProtocolReader`, `ProtocolWriter`, `ProtocolLimits`, `ProtocolDefect`, `IProtocolTrace`, the exceptions |
-| `Client.Sasl` | `SaslMechanism`, `SaslPlain` |
+| `Client.Sasl` | `SaslMechanism`, `SaslPlain`, and the mechanisms in `sasl.md` |
+| `Client.Smtp` | `SmtpClient`, `SmtpMessage`, `SmtpSendResult` (see `smtp.md`) |
 | `Client.Imap.Protocol` | `ImapRawConnection`, `ImapCommand`, `ImapResponseReader`, `ImapResponse`, `ImapValue`, the typed views |
 | `Client.Smtp.Protocol` | `SmtpRawConnection`, `SmtpReplyReader`, `SmtpReply`, `SmtpCapabilities`, `SmtpDataStream` |
 | `Client.Pop3.Protocol` | `Pop3RawConnection`, `Pop3Response`, `Pop3Capabilities`, `Pop3DotStream` |
@@ -49,7 +50,7 @@ Malformed content never throws. A response carries `Defects` (`ProtocolDefectKin
 
 ## SASL framework
 
-`SaslMechanism` is the client side of a challenge/response exchange (RFC 4422): `ClientFirst`, `GetInitialResponse`, `Respond`. The raw connections carry it over IMAP `AUTHENTICATE` (with the initial response on the command when the server offers `SASL-IR`, RFC 4959), SMTP `AUTH` (RFC 4954) and POP3 `AUTH` (RFC 5034): base64 on the wire, `=` for an empty initial response, `*` to cancel when a challenge is not valid base64. `SaslPlain` (RFC 4616) is the first mechanism; the others belong to the SASL package of the family.
+`SaslMechanism` is the client side of a challenge/response exchange (RFC 4422): `ClientFirst`, `GetInitialResponse`, `Respond`. The raw connections carry it over IMAP `AUTHENTICATE` (with the initial response on the command when the server offers `SASL-IR`, RFC 4959), SMTP `AUTH` (RFC 4954) and POP3 `AUTH` (RFC 5034): base64 on the wire, `=` for an empty initial response, `*` to cancel when a challenge is not valid base64. `SaslPlain` (RFC 4616) and the other mechanisms are in `sasl.md`.
 
 ## IMAP
 

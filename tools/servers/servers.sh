@@ -38,14 +38,21 @@ wait_port() { # port seconds
 }
 
 start_sink() {
-  python3 "$D/smtp-sink.py" 2525 >"$LOGS/sink.log" 2>&1 &
+  [ -n "${ONEMAIL_SINK_DIR:-}" ] && return 0
+  rm -rf "$STATE/sink"; mkdir -p "$STATE/sink"
+  python3 "$D/smtp-sink.py" 2525 "$STATE/sink" >"$LOGS/sink.log" 2>&1 &
   PIDS+=($!)
-  wait_port 2525 10
+  wait_port 2525 10 || return 1
+  # What the sink received (the Dovecot submission relay, the Postfix guest's relay) is kept here for the tests to read back.
+  export ONEMAIL_SINK_DIR="$STATE/sink"
 }
 
 start_dovecot() {
   rm -rf "$STATE/dovecot"; mkdir -p "$STATE/dovecot/vmail"
   start_sink || return 1
+  python3 "$D/oauth-introspect.py" 2526 >"$LOGS/oauth.log" 2>&1 &
+  PIDS+=($!)
+  wait_port 2526 10 || return 1
   "$PODMAN" run --rm --name onemail-dovecot --network=host --uidmap 1000:0:1 --gidmap 1000:0:1 --user 1000:1000 \
     -e USER_PASSWORD='{PLAIN}onemail-test' \
     -v "$STATE/dovecot/vmail:/srv/vmail" -v "$D/conf/dovecot-onemail.conf:/etc/dovecot/conf.d/90-onemail.conf:ro" \
@@ -53,7 +60,7 @@ start_dovecot() {
   PIDS+=($!)
   wait_port 31143 30 || return 1
   export ONEMAIL_DOVECOT_IMAP_PORT=31143 ONEMAIL_DOVECOT_IMAPS_PORT=31993 ONEMAIL_DOVECOT_POP3_PORT=31110 ONEMAIL_DOVECOT_POP3S_PORT=31995 \
-         ONEMAIL_DOVECOT_SUBMISSION_PORT=31587 ONEMAIL_DOVECOT_SUBMISSIONS_PORT=31465 ONEMAIL_DOVECOT_USER=test ONEMAIL_DOVECOT_PASSWORD=onemail-test
+         ONEMAIL_DOVECOT_SUBMISSION_PORT=31587 ONEMAIL_DOVECOT_SUBMISSIONS_PORT=31465 ONEMAIL_DOVECOT_USER=test ONEMAIL_DOVECOT_PASSWORD=onemail-test ONEMAIL_DOVECOT_TOKEN=test-token
 }
 
 start_stalwart() {
@@ -120,6 +127,7 @@ PY
 }
 
 start_postfix() {
+  start_sink || return 1
   "$D/guest-run.sh" start || return 1
   GUEST_STARTED=1
   local ok=
@@ -128,7 +136,7 @@ start_postfix() {
     sleep 2
   done
   [ -n "$ok" ] || { echo "postfix guest did not answer; see its console log" >&2; return 1; }
-  export ONEMAIL_POSTFIX_SMTP_PORT=32025 ONEMAIL_POSTFIX_SUBMISSION_PORT=32587 ONEMAIL_POSTFIX_SUBMISSIONS_PORT=32465 \
+  export ONEMAIL_POSTFIX_SMTP_PORT=32025 ONEMAIL_POSTFIX_SUBMISSION_PORT=32587 ONEMAIL_POSTFIX_SUBMISSIONS_PORT=32465 ONEMAIL_POSTFIX_LEGACY_PORT=32588 \
          ONEMAIL_POSTFIX_USER=test ONEMAIL_POSTFIX_PASSWORD=onemail-test
 }
 

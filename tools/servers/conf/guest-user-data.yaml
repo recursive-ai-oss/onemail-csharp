@@ -1,6 +1,6 @@
 #cloud-config
-# Postfix with submission (587 STARTTLS) and smtps (465) listeners authenticating through Dovecot's auth service, delivering
-# mail for example.test to the local user "test". Self-signed certificate (ssl-cert package). Powers off when done.
+# Postfix with submission (587 STARTTLS), smtps (465) and legacy (588) listeners authenticating through Dovecot's auth service,
+# relaying all mail to the host's SMTP sink (10.0.2.2:2525 is the host's loopback under user-mode networking). Self-signed certificate (ssl-cert package). Powers off when done.
 package_update: true
 packages: [postfix, dovecot-core, ssl-cert]
 write_files:
@@ -9,7 +9,7 @@ write_files:
       protocols =
       ssl = no
       disable_plaintext_auth = no
-      auth_mechanisms = plain login
+      auth_mechanisms = plain login cram-md5 scram-sha-1 scram-sha-256
       passdb {
         driver = passwd-file
         args = scheme=PLAIN username_format=%u /etc/dovecot/users
@@ -34,12 +34,16 @@ write_files:
       #!/bin/sh
       set -e
       export DEBIAN_FRONTEND=noninteractive
-      postconf -e 'myhostname = mail.example.test' 'mydestination = example.test, localhost' 'inet_interfaces = all' 'inet_protocols = ipv4' \
+      postconf -e 'myhostname = mail.example.test' 'mydestination = localhost' 'relayhost = [10.0.2.2]:2525' 'inet_interfaces = all' 'inet_protocols = ipv4' \
         'smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem' 'smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key' \
         'smtpd_tls_security_level = may' 'smtpd_sasl_type = dovecot' 'smtpd_sasl_path = private/auth' 'smtpd_tls_auth_only = yes'
       cat >> /etc/postfix/master.cf <<'EOF'
       submission inet n - y - - smtpd -o syslog_name=postfix/submission -o smtpd_tls_security_level=encrypt -o smtpd_sasl_auth_enable=yes -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
       smtps inet n - y - - smtpd -o syslog_name=postfix/smtps -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+      EOF
+      # A submission service for old peers: no 8BITMIME, PIPELINING or CHUNKING, so the client's fallbacks run against a real server.
+      cat >> /etc/postfix/master.cf <<'EOF'
+      588 inet n - y - - smtpd -o syslog_name=postfix/legacy -o smtpd_tls_security_level=encrypt -o smtpd_sasl_auth_enable=yes -o smtpd_discard_ehlo_keywords=8bitmime,pipelining,chunking -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
       EOF
       useradd -m test
       systemctl enable postfix dovecot

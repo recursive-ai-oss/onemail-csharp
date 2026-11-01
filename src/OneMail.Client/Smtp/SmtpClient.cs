@@ -79,7 +79,7 @@ public sealed class SmtpClient : IAsyncDisposable, IDisposable
             WriteTimeout = c?.WriteTimeout ?? TimeSpan.FromMinutes(2),
             Limits = c?.Limits ?? ProtocolLimits.Default,
             Trace = c?.Trace,
-            AllowInsecureAuthentication = c?.AllowInsecureAuthentication ?? o.Credentials?.AllowInsecure ?? false,
+            AllowInsecureAuthentication = (c?.AllowInsecureAuthentication ?? false) || (o.Credentials?.AllowInsecure ?? false),
         };
     }
 
