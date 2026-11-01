@@ -20,6 +20,9 @@ public sealed class StoreEntry
     /// <summary>The source folder, <c>/</c> separated; empty for the top.</summary>
     public string Folder { get; init; } = string.Empty;
 
+    /// <summary>The item as a MAPI message, for a sink that writes properties (a PST); null for every other target. <see cref="Content"/> is empty then.</summary>
+    public Mapi.MapiMessage? Message { get; init; }
+
     /// <summary>The converted bytes: a MIME message, TNEF stream, iCalendar, vCard or their JSON or XML forms.</summary>
     public ReadOnlyMemory<byte> Content { get; init; }
 
@@ -88,6 +91,7 @@ public static class StoreSinks
             ConvertFormat.Eml => new EmlSink(destination),
             // An MSG file keeps an Outlook item's flags in its properties, so only items that came from somewhere else lose them.
             ConvertFormat.Msg => new DirectorySink(destination, requireEmpty: true, e => e.Item is not MapiMailItem),
+            ConvertFormat.Pst => new PstSink(destination),
             _ => new DirectorySink(destination, requireEmpty: true),
         };
     }

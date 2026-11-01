@@ -70,6 +70,48 @@ if (args is ["pstalloc", var apath, var passes])
     return 0;
 }
 
+if (args is ["pstcheck", var written, ..])
+{
+    // pstcheck <written.pst> <source>...: every message of the sources (files, or directories of files; converted to Outlook items as the
+    // PST conversion does) against every message of the written store, property by property.
+    if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(written, out var wstore, out var wwhy) || wstore is null) { Console.WriteLine("open failed " + string.Join("; ", wwhy)); return 1; }
+    using (wstore)
+    {
+        var openContainers = new List<RecursiveAI.OneMail.MailContainer>();   // kept open: the messages read their values lazily
+        IEnumerable<RecursiveAI.OneMail.Mapi.MapiMessage> Sources()
+        {
+            foreach (string input in args.Skip(2))
+            {
+                IEnumerable<string> files = Directory.Exists(input) ? Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal) : [input];
+                foreach (string file in files)
+                {
+                    RecursiveAI.OneMail.MailContainer? container = null;
+                    try { container = RecursiveAI.OneMail.MailContainer.Open(file); } catch (Exception e) when (e is NotSupportedException or IOException) { continue; }
+                    openContainers.Add(container);
+                    {
+                        foreach (RecursiveAI.OneMail.IMailItem item in container.Enumerate())
+                        {
+                            RecursiveAI.OneMail.Mapi.MapiMessage? m = item switch
+                            {
+                                RecursiveAI.OneMail.MapiMailItem mi => mi.Message,
+                                RecursiveAI.OneMail.MimeMailItem mm => new RecursiveAI.OneMail.Conversion.OxcMail.MimeToMapiConverter().Convert(mm.Entity).Value,
+                                _ => null,
+                            };
+                            if (m is not null) { yield return m; }
+                        }
+                    }
+                }
+            }
+        }
+
+        var cr = RecursiveAI.OneMail.Tests.Pst.PstStoreCompare.Compare(Sources(), wstore);
+        Console.WriteLine($"pstcheck source {cr.Source} written {cr.Written} exact {cr.Exact} withRequiredAdded {cr.WithAdditions} unmatched {cr.Unmatched} propertiesAdded {cr.PropertiesAdded} notCarried {cr.PropertiesNotCarried}");
+        foreach (string n in cr.Notes) { Console.WriteLine("DIFF " + n); }
+        foreach (var oc in openContainers) { oc.Dispose(); }
+        return cr.Unmatched == 0 && cr.Source == cr.Written ? 0 : 3;
+    }
+}
+
 if (args is ["messaging" or "propexact" or "props", var mpath, ..])
 {
     // The messaging layer over a whole file: "messaging <file> <pffexport .export dir>" compares with pffexport; "propexact <file>" checks every

@@ -42,6 +42,9 @@ public enum ConvertFormat
 
     /// <summary>One Outlook item file (<c>.msg</c>, MS-OXMSG) per message, appointment, contact, task, note or distribution list; a MIME message is converted to an Outlook item first (MS-OXCMAIL).</summary>
     Msg,
+
+    /// <summary>One Unicode PST file (MS-PST): the source's folders as PST folders, every item written with all its properties; a MIME message is converted to an Outlook item first (MS-OXCMAIL). The destination names the file, which must not exist.</summary>
+    Pst,
 }
 
 /// <summary>What a mail-store target does with calendar and contact items.</summary>
