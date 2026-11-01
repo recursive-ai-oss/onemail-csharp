@@ -6,6 +6,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `RecursiveAI.OneMail.Client` (new package, preview): the raw protocol layer under IMAP, SMTP and POP3: connections with implicit TLS, STARTTLS/STLS (refused when the server sent data after the acknowledgement), certificate hooks, ALPN/SNI, timeouts and `COMPRESS=DEFLATE`; IMAP command builder and a response reader that parses every line into a typed tree with FETCH literals streamed (`MimeReader` over a `BODY[]` literal); SMTP reply reader, pipelining, dot-stuffing and BDAT; POP3 responses and dot-unstuffed bodies; SASL framework with PLAIN; a trace with credentials redacted; limits on by default. See `docs/client-protocol.md`.
+
 - `MsgWriter` (`RecursiveAI.OneMail.Msg`): writes MSG and OFT files from the MAPI model (named properties, recipients, attachments, embedded messages, OLE storages), Unicode or code page strings, limits checked before the first byte, large attachment data copied from the caller's stream (`MapiStreamValue`). Outlook opening the files is not yet verified.
 - `ConvertFormat.Msg`, `StoreConverter` and `onemail convert --to msg`: any readable store to MSG files with loss reports.
 - `MapiDistributionList.Create` and `Notes.MapiNote`: builders for distribution list and sticky note items.
