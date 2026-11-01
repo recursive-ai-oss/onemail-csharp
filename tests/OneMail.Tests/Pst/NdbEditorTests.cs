@@ -38,7 +38,7 @@ public sealed class NdbEditorTests
             long start = file.AMapOffset(k);
             for (int s = 0; s < 3968; s++)
             {
-                if ((bits[s >> 3] & (1 << (s & 7))) == 0)
+                if ((bits[s >> 3] & (0x80 >> (s & 7))) == 0)
                 {
                     yield return (start + (s * 64L), 64);
                 }
@@ -91,6 +91,42 @@ public sealed class NdbEditorTests
 
         Assert.True(blocks > 0);
         Assert.Empty(f.Defects);
+    }
+
+    private static void AssertEveryBlockAllocated(string path)
+    {
+        Assert.True(NdbFile.TryOpen(path, out NdbFile? file, out _));
+        using NdbFile f = file!;
+        foreach (BlockEntry b in f.Blocks)
+        {
+            int total = ((b.Size + 16 + 63) / 64) * 64;
+            Assert.True(f.IsAllocated((long)b.Block.Ib, total), $"block {b.Bid} at 0x{b.Block.Ib:x} is free in the allocation maps");
+        }
+    }
+
+    [Fact]
+    public void FilesTheBuilderWritesMarkEveryBlockAllocatedWithTheFirstSlotInTheHighBit()
+    {
+        string path = Build(40, attachments: 1);
+        try
+        {
+            AssertEveryBlockAllocated(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("testPST.pst")]
+    [InlineData("testPST_variousBodyTypes.pst")]
+    public void FilesOutlookWroteMarkEveryBlockAllocatedWithTheFirstSlotInTheHighBit(string name)
+    {
+        if (PstWritableCorpusTests.Find(name) is { } source)
+        {
+            AssertEveryBlockAllocated(source);
+        }
     }
 
     [Fact]

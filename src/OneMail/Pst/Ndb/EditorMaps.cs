@@ -116,19 +116,31 @@ internal sealed class EditorMaps
         return page;
     }
 
-    private static void MarkBits(byte[] page, int firstSlot, int count, bool used)
+    // Sets or clears bits (the first slot is the high bit of the first byte) and returns how many actually changed.
+    private static int MarkBits(byte[] page, int firstSlot, int count, bool used)
     {
+        int changed = 0;
         for (int s = firstSlot; s < firstSlot + count; s++)
         {
+            byte mask = (byte)(0x80 >> (s & 7));
+            bool was = (page[s >> 3] & mask) != 0;
+            if (was == used)
+            {
+                continue;
+            }
+
+            changed++;
             if (used)
             {
-                page[s >> 3] |= (byte)(1 << (s & 7));
+                page[s >> 3] |= mask;
             }
             else
             {
-                page[s >> 3] &= (byte)~(1 << (s & 7));
+                page[s >> 3] &= (byte)~mask;
             }
         }
+
+        return changed;
     }
 
     /// <summary>Marks an extent used (during a rebuild, from what the two trees reference). Extents outside the ranges are ignored.</summary>
@@ -290,7 +302,7 @@ internal sealed class EditorMaps
             return false;
         }
 
-        MarkBits(page, slot, need, true);
+        FreeDelta -= (long)MarkBits(page, slot, need, true) * Slot;
         _dirty.Add(k);
         NoteFree(k);
         ib = RangeStart(k) + ((long)slot * Slot);
@@ -302,7 +314,7 @@ internal sealed class EditorMaps
         int run = 0;
         for (int s = 0; s < BitsPerMap; s++)
         {
-            if ((page[s >> 3] & (1 << (s & 7))) != 0)
+            if ((page[s >> 3] & (0x80 >> (s & 7))) != 0)
             {
                 run = 0;
                 continue;
@@ -325,7 +337,6 @@ internal sealed class EditorMaps
 
     private long Took(long ib, int need, int length)
     {
-        FreeDelta -= (long)need * Slot;
         _txnAllocated[ib] = need * Slot;
         RequiredEof = Math.Max(RequiredEof, ib + (need * Slot));
         return ib;
@@ -361,9 +372,8 @@ internal sealed class EditorMaps
     {
         long k = (ib - FirstAMap) / RangeLength;
         int first = (int)((ib - RangeStart(k)) / Slot);
-        MarkBits(Load(k), first, len / Slot, false);
+        FreeDelta += (long)MarkBits(Load(k), first, len / Slot, false) * Slot;
         _dirty.Add(k);
-        FreeDelta += len;
         NoteFree(k);
     }
 

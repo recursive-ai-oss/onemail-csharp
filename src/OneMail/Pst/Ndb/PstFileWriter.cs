@@ -384,7 +384,7 @@ public sealed class PstFileWriter : IBidAllocator, INdbBlockSink, INdbNodeSink, 
     {
         for (int slot = at / Slot, end = (at + length) / Slot; slot < end; slot++)
         {
-            _bits[slot >> 3] |= (byte)(1 << (slot & 7));
+            _bits[slot >> 3] |= (byte)(0x80 >> (slot & 7));   // the first slot is the high bit of the first byte (seen in files Outlook wrote)
         }
     }
 
