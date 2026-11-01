@@ -218,7 +218,7 @@ Folder properties other than name and container class are not carried (the loss 
 
 * `tests/OneMail.Tests/Pst/NdbEditorTests.cs`, `PstWritableStoreTests.cs`, `PstWritableCorpusTests.cs`: allocation, growth past a range, splits and merges, reference counts, zeroing, exclusive open, rollback, refusals,
   item and folder operations, named properties, the Outlook-written Tika files edited and compared item by item, and the allocation maps of builder- and Outlook-written files agreeing with their block trees.
-* `tests/Durability` (run by `tools/pst/inplace-check.sh`): power-cut replays, process kills and a soak, then the libpff tools over the edited files. Results are in `benchmarks.md`.
+* `tests/Durability` (run by `tools/pst/inplace-check.sh`): power-cut replays, process kills and a soak, then the libpff tools over the edited files. Results are in `benchmarks.md` (*PST in-place writing*).
 
 ### Not verified
 

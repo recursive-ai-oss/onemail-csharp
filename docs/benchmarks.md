@@ -303,3 +303,31 @@ the times are indicative only.
 The resident set stops growing at about 110 MiB from 40,000 messages on (the runtime and its allocation budget are most of it; the managed heap swings between 7 and 54 MiB).
 A single folder of 600,000 messages adds about 10 MiB: the row index of the folder being closed, about 12 bytes a row. Files of this size were not read back or checked with
 libpff; the 20,000-message run was (`propexact` 0 differences, 0 defects).
+
+# PST in-place writing: durability, consistency, memory
+
+Run by `tools/pst/inplace-check.sh` and `Durability memory` (`tests/Durability`, Checked build), x64 worker (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402), as queued jobs of 4-8 cores beside other work.
+Three bases: a file `PstBuilder` wrote (`ours`: three folders of 40 items) and the two Outlook-written Tika files (`tika1` = `testPST.pst`, `tika2` = `testPST_variousBodyTypes.pst`).
+Seven scenarios on each: `add` items, `delete` items, `folders` (create, rename, move, delete), `grow` (past an allocation-map range), `split` (a contacts table of 1,200 rows that splits pages), `named` (new named properties), `mixed`.
+
+**Power-cut replays.** Every write and flush of a scenario is recorded; the file is then rebuilt as a power cut could leave it (all writes up to a point, a random subset of the writes since the last flush, the last write torn at a sector boundary)
+and opened. Each leftover must read as the state before the scenario, the state after it, or (scenarios with several commits) a state between; anything else fails.
+15,200 leftovers over the 21 base/scenario pairs: **0 failures**. They split into 10,305 old, 2,960 new and 1,935 between states; 891 had `fAMapValid` = 0 (the maps are rebuilt from the trees on an opted-in open; repair failed 0 times).
+With the commit's invalid-flag header write skipped on purpose, 35 of 240 replays failed, so the check does see that rule.
+
+**Process kills.** The scenario runs in a child process on a real file and receives SIGKILL at the Nth write or flush (deterministic) or after a random delay: 3,150 runs, **2,539 killed** (2,100 at a chosen write or flush, 439 at random times; the rest of the random runs finished first), **0 failures**.
+Every leftover opened as the old state, the new state or (several-commit scenarios) a state between. (The kill phase ran before the folder-move fix below, which only changes what one commit stages in memory.)
+
+**Soak.** 1,000 random operations (about 455 adds, 210 deletes, 130 moves, 60 replaces, 130 folder operations) in 10 commits on each base, seeds 11 to 13 locally, seed 11 on the worker. After every commit: allocation maps, counts, hierarchy rows, read-back of every kept item property by property,
+and a scan of freed space for non-zero bytes. **0 problems** after the fix below. Before it, the first worker run found 1 to 3 problems on two bases, all from one cause: a folder moved twice in one commit left a stale hierarchy row in the middle parent.
+**libpff** (`pffinfo`, `pffexport` against our reader, `libpff-messaging.sh`) on the three soak files: folders, items, recipients, attachments and every exported field agree, 0 differences, 0 defects. The same on the 21 scenario files:
+18 of 21 agree entirely. Four `tika1` files (add, grow, named, split) show 17 or 18 differences, all about one item that libpff does not export through the live tree even in the unedited file (it reports it as *recovered* from free space, where our reader reads it from the tree) with an embedded message;
+our read of that item is unchanged by the edits (the corpus test compares every untouched item's properties before and after), and the recovered copy libpff finds lies in space our writes reuse. That reading is not separately verified.
+
+**Freed space.** The soak checks every free range after each commit and the unit tests do after every operation: 0 non-zero bytes with the default, and the bytes are left in place with `ZeroFreedSpace = false`.
+
+**Memory** (`Durability memory`): a store of 100,000 items in 100 folders built by `PstBuilder` (96 MiB file; 2.2 s, peak working set 116 MiB), then 1,000 in-place operations (adds, with every third followed by a delete, committed every 50 operations): 20.1 s, **peak working set 123 MiB**.
+Edits hold state only for the changes since the last commit, the touched tables' rows and the page cache; a folder with a very large contents table is rewritten row by row at a commit (cost is proportional to its rows, memory is not).
+
+**Suite.** Checked build, full suite 3,294 passed, 10 skipped by design (server tests), 0 failed; fuzz targets build; NativeAOT publish with warnings as errors runs all smoke checks including `pst-edit`; browser WebAssembly smoke (headless Chromium) passes with the in-memory writable store; all packages pack with package validation.
+
