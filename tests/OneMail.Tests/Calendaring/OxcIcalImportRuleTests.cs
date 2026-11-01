@@ -359,6 +359,49 @@ public sealed class OxcIcalImportRuleTests
         Assert.True(missing.Length == 0, "undocumented codes: " + string.Join(", ", missing));
     }
 
+    // Found by the fuzzer: a damaged PidLidTimeZoneStruct whose rule no VTIMEZONE can state made the export throw; the item's zone is now ignored and reported.
+    [Fact]
+    public void ADamagedTimeZoneStructDoesNotStopTheExport()
+    {
+        const string series =
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//x//EN\r\nMETHOD:REQUEST\r\n" +
+        "BEGIN:VTIMEZONE\r\nTZID:Pacific Standard Time\r\nBEGIN:STANDARD\r\nDTSTART:20071104T020000\r\nTZOFFSETFROM:-0700\r\nTZOFFSETTO:-0800\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\nEND:STANDARD\r\n" +
+        "BEGIN:DAYLIGHT\r\nDTSTART:20070311T020000\r\nTZOFFSETFROM:-0800\r\nTZOFFSETTO:-0700\r\nRRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\n" +
+        "BEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\nDTSTART;TZID=Pacific Standard Time:20260105T100000\r\nDTEND;TZID=Pacific Standard Time:20260105T103000\r\n" +
+        "RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=10;BYDAY=MO,TH;WKST=SU\r\nEXDATE;TZID=Pacific Standard Time:20260108T100000\r\nSUMMARY:Series\r\nLOCATION:Room\r\nSEQUENCE:1\r\n" +
+        "ORGANIZER;CN=Org:mailto:org@example.com\r\nATTENDEE;CN=A;PARTSTAT=ACCEPTED;ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:a@example.com\r\nATTENDEE;PARTSTAT=NEEDS-ACTION;ROLE=OPT-PARTICIPANT:mailto:b@example.com\r\n" +
+        "BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nDESCRIPTION:r\r\nEND:VALARM\r\nEND:VEVENT\r\n" +
+        "BEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\nRECURRENCE-ID;TZID=Pacific Standard Time:20260119T100000\r\nDTSTART;TZID=Pacific Standard Time:20260120T110000\r\nDTEND;TZID=Pacific Standard Time:20260120T113000\r\nSUMMARY:Moved\r\nEND:VEVENT\r\n" +
+        "BEGIN:VTODO\r\nUID:t@example.com\r\nDTSTAMP:20260101T000000Z\r\nSUMMARY:Task\r\nDUE;VALUE=DATE:20260110\r\nSTATUS:IN-PROCESS\r\nPERCENT-COMPLETE:40\r\nEND:VTODO\r\n" +
+        "END:VCALENDAR\r\n";
+        IcsComponent cal = IcsDocument.Calendars(ContentDocument.Parse(Encoding.ASCII.GetBytes(series))).First();
+        foreach (ConversionResult<MapiMessage> converted in IcsToMapiConverter.ConvertAll(cal))
+        {
+            MapiMessage item = converted.Value;
+            // The fuzzer's damage: four-byte records (property index, offset low, offset high, byte) applied to the item's single-valued properties.
+            byte[] records = [0x5d, 0xff, 0xff, 0xff, 0xff, 0xff, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x2c, 0xff, 0xff, 0xff, 0xff, 0x01, 0xff, 0x5e, 0x5e, 0x37, 0x5c, 0x0e, 0x5e, 0x5e, 0xff];
+            for (int i = 0; i + 3 < records.Length; i += 4)
+            {
+                MapiProperty p = item.Properties[records[i] % item.Properties.Count];
+                if (p.IsMultiValued || p.IsLazy)
+                {
+                    continue;
+                }
+
+                byte[] bytes = p.GetBytes().ToArray();
+                if (bytes.Length > 0)
+                {
+                    bytes[(records[i + 1] | (records[i + 2] << 8)) % bytes.Length] = records[i + 3];
+                }
+
+                item.Properties.Set(MapiProperty.CreateOwned(p.Tag, bytes, p.Name));
+            }
+
+            ConversionResult<ContentDocument> exp = new MapiToIcsConverter().Convert(item);
+            Assert.NotEmpty(exp.Value.ToArray());
+        }
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", ".."));
 }

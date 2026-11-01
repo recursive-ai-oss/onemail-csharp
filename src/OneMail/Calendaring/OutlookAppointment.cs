@@ -100,15 +100,22 @@ public sealed record OutlookAttendee(string? Name, string? Address, OutlookAtten
 /// <summary>A time zone of an Outlook item, ready for the <c>.Calendar</c> layer to convert with.</summary>
 public sealed class OutlookTimeZone
 {
-    internal OutlookTimeZone(string id, TimeZoneDefinition? definition, TzRule rule, IReadOnlyList<TzRule> rules)
+    private OutlookTimeZone(string id, TimeZoneDefinition? definition, TzRule rule, Component vtimezone, IcsTimeZone zone)
     {
         Id = id;
         Definition = definition;
         Rule = rule;
-        VTimeZone = TimeZoneBuilder.Build(id, rules);
+        VTimeZone = vtimezone;
+        Zone = zone;
+    }
+
+    /// <summary>Builds the VTIMEZONE for the rules and reads it back; null when the rules (a damaged struct can hold offsets or dates no VTIMEZONE can state) do not make a zone the calendar layer can use.</summary>
+    internal static OutlookTimeZone? TryCreate(string id, TimeZoneDefinition? definition, TzRule rule, IReadOnlyList<TzRule> rules)
+    {
+        Component vtimezone = TimeZoneBuilder.Build(id, rules);
         Component cal = new("VCALENDAR");
-        cal.Add(VTimeZone);
-        Zone = new TimeZoneResolver(new IcsComponent(cal)).Resolve(id) ?? throw new InvalidOperationException("The generated VTIMEZONE could not be read back.");
+        cal.Add(vtimezone);
+        return new TimeZoneResolver(new IcsComponent(cal)).Resolve(id) is { } zone ? new OutlookTimeZone(id, definition, rule, vtimezone, zone) : null;
     }
 
     /// <summary>The TZID used in iCalendar output: the Windows key name when the item has one, else its description, else a name made from the offset.</summary>
@@ -434,16 +441,28 @@ public sealed class OutlookAppointment
 
             string id = recur?.KeyName is { Length: > 0 } k ? k : NameFor(description, structRule);
             // A definition that agrees with the struct carries the rules of every year of the series (MS-OXOCAL 2.2.1.41); with none the struct is the one rule.
-            return new OutlookTimeZone(id, recur, structRule, recur is { Rules.Count: > 0 } ? recur.Rules : [structRule]);
+            return MakeZone(id, recur, structRule, recur is { Rules.Count: > 0 } ? recur.Rules : [structRule]);
         }
 
         TimeZoneDefinition? def = display ?? recur;
         if (def?.Effective is { } eff && def.Rules.Count > 0)
         {
-            return new OutlookTimeZone(def.KeyName.Length > 0 ? def.KeyName : NameFor(description, eff), def, eff, def.Rules);
+            return MakeZone(def.KeyName.Length > 0 ? def.KeyName : NameFor(description, eff), def, eff, def.Rules);
         }
 
-        return structRule is not null ? new OutlookTimeZone(NameFor(description, structRule), null, structRule, [structRule]) : null;
+        return structRule is not null ? MakeZone(NameFor(description, structRule), null, structRule, [structRule]) : null;
+    }
+
+    private OutlookTimeZone? MakeZone(string id, TimeZoneDefinition? definition, TzRule rule, IReadOnlyList<TzRule> rules)
+    {
+        OutlookTimeZone? zone = OutlookTimeZone.TryCreate(id, definition, rule, rules);
+        if (zone is null)
+        {
+            // The times then read as UTC, the same as an item with no zone.
+            _defects.Add(new CalendaringDefect(CalendaringDefectKind.ValueOutOfRange, -1, "the time zone rules cannot be written as a VTIMEZONE; the item's zone is ignored"));
+        }
+
+        return zone;
     }
 
     private static string NameFor(string? description, TzRule rule)

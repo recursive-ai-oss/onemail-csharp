@@ -26,6 +26,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - iCalendar to Outlook item: a series that ends by `UNTIL` no longer counts a last day whose start is after `UNTIL`; a yearly rule whose `BYMONTH` is not the month of DTSTART keeps its month; a yearly rule with `BYMONTHDAY` and no `BYMONTH` is every month, as RFC 5545 says, instead of the month of DTSTART; `BYHOUR` and `BYMINUTE` set the series' time; a first instance moved to the first allowed day keeps its length; the sender of a REPLY is the attendee and the recipient the organizer.
 - A series across a change of its zone's daylight saving rules (New York in 2007, Sydney in 2008) was an hour out in the affected weeks after conversion: the item now carries one time zone rule per change and the export writes them back.
+- An Outlook item whose PidLidTimeZoneStruct holds a rule no VTIMEZONE can state (found by the fuzzer) made the export throw `InvalidOperationException`; the item now reads as having no zone, with a `ValueOutOfRange` defect.
 - Outlook item to iCalendar: PidLidRecurrenceType, the end-display time zone, PidLidResponseStatus and PidLidIsException are reported as derived, not as properties iCalendar cannot hold.
 
 ### Security
