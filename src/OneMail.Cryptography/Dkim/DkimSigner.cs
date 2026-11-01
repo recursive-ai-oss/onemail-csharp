@@ -105,7 +105,7 @@ public sealed class DkimSigningKey : IDisposable
             return "v=DKIM1; k=rsa; p=" + Convert.ToBase64String(_rsa.ExportSubjectPublicKeyInfo());
         }
 
-        Span<byte> pub = stackalloc byte[Ed25519.PublicKeySize];
+        byte[] pub = new byte[Ed25519.PublicKeySize];
         Ed25519.DerivePublicKey(_seed, pub);
         return "v=DKIM1; k=ed25519; p=" + Convert.ToBase64String(pub);
     }
