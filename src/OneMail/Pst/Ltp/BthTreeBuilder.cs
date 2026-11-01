@@ -26,6 +26,8 @@ public sealed class BthTreeBuilder
     private int _count;
     private bool _sorted = true;
     private bool _built;
+    private readonly List<Hid> _leaves = [];
+    private int _perLeaf;
 
     /// <summary>Creates a tree and allocates its BTHHEADER, so a tree created first in a heap is the heap's first allocation.</summary>
     /// <param name="heap">The heap the tree is built in.</param>
@@ -129,6 +131,32 @@ public sealed class BthTreeBuilder
         return 0;
     }
 
+    /// <summary>
+    /// Replaces the data of a record after <see cref="Build"/>. A property context uses it to allocate the tree's nodes before the values the
+    /// records point to, so the values' HIDs are known only after the nodes exist.
+    /// </summary>
+    /// <param name="rank">The record's position in key order, from zero.</param>
+    /// <param name="data">Exactly <see cref="DataSize"/> bytes.</param>
+    /// <exception cref="InvalidOperationException">The tree is not built yet.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rank"/> is not a record.</exception>
+    /// <exception cref="ArgumentException">The length is wrong.</exception>
+    public void SetData(int rank, ReadOnlySpan<byte> data)
+    {
+        if (!_built)
+        {
+            throw new InvalidOperationException("the tree is not built yet");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(rank);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(rank, _count);
+        if (data.Length != DataSize)
+        {
+            throw new ArgumentException($"a record has {DataSize} bytes of data", nameof(data));
+        }
+
+        data.CopyTo(_heap.GetSpan(_leaves[rank / _perLeaf])[(((rank % _perLeaf) * _recordSize) + KeySize)..]);
+    }
+
     /// <summary>Writes the nodes and fills in the header.</summary>
     /// <returns>The HID of the BTHHEADER (<see cref="Header"/>).</returns>
     /// <exception cref="InvalidOperationException">Called twice, or two records have the same key.</exception>
@@ -166,7 +194,7 @@ public sealed class BthTreeBuilder
         if (_count > 0)
         {
             // Leaves: full nodes of records in key order. The index above them records each child's first key (MS-PST 2.3.2.3).
-            int perLeaf = HeapNodeBuilder.MaxAllocation / _recordSize;
+            int perLeaf = _perLeaf = HeapNodeBuilder.MaxAllocation / _recordSize;
             var level = new List<(int FirstRecord, Hid Node)>();
             for (int start = 0; start < _count; start += perLeaf)
             {
@@ -179,6 +207,7 @@ public sealed class BthTreeBuilder
                 }
 
                 level.Add((order[start], hid));
+                _leaves.Add(hid);
             }
 
             int indexRecord = KeySize + IndexPointerSize;

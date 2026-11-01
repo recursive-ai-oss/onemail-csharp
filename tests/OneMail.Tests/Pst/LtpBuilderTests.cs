@@ -516,6 +516,59 @@ public class LtpBuilderTests
     }
 
     [Fact]
+    public void OneIdMayBeAColumnTwiceWithTwoTypesButNotTwiceWithOne()
+    {
+        var store = new BuilderStore();
+        var tcb = new TableContextBuilder(store.Blocks, [(0x3001, LtpPropertyTypes.PtypString), (0x3001, LtpPropertyTypes.PtypString8)]);
+        int unicode = tcb.FindColumn(0x3001, LtpPropertyTypes.PtypString), ansi = tcb.FindColumn(0x3001, LtpPropertyTypes.PtypString8);
+        Assert.NotEqual(unicode, ansi);
+        tcb.BeginRow(1);
+        tcb.SetCell(unicode, [0x41, 0]);
+        tcb.SetCell(ansi, [0x42]);
+        tcb.EndRow();
+        using TableContext tc = OpenTc(tcb.Build(), store, out NdbFile f);
+        using (f)
+        {
+            var buf = new byte[tc.RowSize];
+            Assert.True(tc.TryReadRow(0, buf));
+            TableRow row = tc.GetRow(buf);
+            Assert.True(row.TryGetCell(unicode, out LtpValueRef u));
+            Assert.True(row.TryGetCell(ansi, out LtpValueRef a));
+            Assert.Equal<byte[]>([0x41, 0], tc.ReadValue(u));
+            Assert.Equal<byte[]>([0x42], tc.ReadValue(a));
+        }
+    }
+
+    [Fact]
+    public void HeapOrderAndCellBitsFollowTheStatedConventions()
+    {
+        var store = new BuilderStore();
+        var pcb = new PropertyContextBuilder(store.Blocks);
+        pcb.Set(0x0037, LtpPropertyTypes.PtypString, [0x41, 0]);
+        pcb.Set(0x0038, LtpPropertyTypes.PtypString, [0x42, 0]);
+        LtpNodeResult r = pcb.Build();
+        using PropertyContext pc = OpenPc(r, store, out NdbFile f);
+        using (f)
+        {
+            Assert.Equal(0x20u, pc.Index.Header.Value);   // the BTHHEADER first, then the records, then the values
+            Assert.Equal(0x40u, pc.Index.Root.Value);
+            Assert.Equal(0x60u, Get(pc, 0x0037).Value.Hnid);
+            Assert.Equal(0x80u, Get(pc, 0x0038).Value.Hnid);
+        }
+
+        var store2 = new BuilderStore();
+        var tcb = new TableContextBuilder(store2.Blocks, SampleColumns);
+        // The cell-existence bits number the cells in the order they sit in the row.
+        Assert.Equal(Enumerable.Range(0, tcb.Columns.Count), tcb.Columns.OrderBy(c => c.Offset).Select(c => c.BitIndex));
+        using TableContext tc = OpenTc(tcb.Build(), store2, out NdbFile f2);
+        using (f2)
+        {
+            Assert.Equal(0x40u, tc.Heap.UserRoot.Value);   // TCINFO second, behind the row index header
+            Assert.Equal(0x20u, tc.RowIndex!.Header.Value);
+        }
+    }
+
+    [Fact]
     public void CallerDeclaredRowIdAndVersionColumnsAreKept()
     {
         var store = new BuilderStore();
@@ -609,7 +662,8 @@ public class LtpBuilderTests
             SubnodeEntry sub = r.Subnodes[0];
             using NdbDataTree t = f.OpenDataTree(sub.Data)!;
             Assert.Equal((rows + perBlock - 1) / perBlock, t.LeafCount);
-            for (int i = 0; i < t.LeafCount - 1; i++) { Assert.Equal(perBlock * tcb.RowSize, t.GetLeafSize(i)); }
+            for (int i = 0; i < t.LeafCount - 1; i++) { Assert.Equal(NdbBlockBuilder.MaxBlockData, t.GetLeafSize(i)); }   // full blocks: the rows and then zeros
+            Assert.Equal(rows % perBlock == 0 ? NdbBlockBuilder.MaxBlockData : (rows % perBlock) * tcb.RowSize, t.GetLeafSize(t.LeafCount - 1));   // a last block that filled exactly was written full
             Assert.Empty(tc.Defects);
         }
     }

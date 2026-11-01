@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using RecursiveAI.OneMail.Pst.Ndb;
 
 namespace RecursiveAI.OneMail.Pst.Ltp;
@@ -21,7 +22,7 @@ namespace RecursiveAI.OneMail.Pst.Ltp;
 /// needs one block of rows in memory (at most 8,176 bytes). What the heap holds is proportional to the table: the row index (8 bytes per row
 /// plus its tree) and the variable-size cell values that fit an allocation. Larger values are written to subnodes as they are set.</para>
 /// <para>Where the matrix goes (2.3.4.4): up to 3,580 bytes it is one heap allocation; more, and it is the data of a subnode whose blocks each
-/// hold ⌊8,176 / row size⌋ whole rows, all but the last block full.</para>
+/// hold ⌊8,176 / row size⌋ whole rows; every block but the last is a full 8,176 bytes of data (the rows, then zeros), and the last is as long as its rows.</para>
 /// <para>Not thread-safe; one builder builds one table.</para>
 /// </remarks>
 public sealed class TableContextBuilder
@@ -50,7 +51,7 @@ public sealed class TableContextBuilder
     private bool _inRow;
     private bool _built;
 
-    /// <summary>Creates a builder and allocates the table's TCINFO and row-index header, so they are the heap's first two allocations.</summary>
+    /// <summary>Creates a builder and allocates the table's row-index header and TCINFO, so they are the heap's first two allocations.</summary>
     /// <param name="blocks">Where the heap, the row matrix and any value subnodes are written.</param>
     /// <param name="columns">The columns by property ID and type. PidTagLtpRowId and PidTagLtpRowVer are added if missing.</param>
     /// <param name="nextSubnodeNid">Supplies the NIDs of subnodes (large values, the row matrix); null for NID_TYPE_LTP NIDs counting up from index 1.</param>
@@ -63,13 +64,17 @@ public sealed class TableContextBuilder
         _values = new LtpValuePlacer(blocks, nextSubnodeNid);
 
         var list = new List<(ushort Id, ushort Type)>(columns);
+        // A column is a property tag, so one ID may appear with two types (a String8 and a String column, say) but never twice with the same one.
+        var seenTags = new HashSet<uint>();
         var seen = new HashSet<ushort>();
-        foreach ((ushort id, _) in list)
+        foreach ((ushort id, ushort type) in list)
         {
-            if (!seen.Add(id))
+            if (!seenTags.Add(((uint)id << 16) | type))
             {
-                throw new ArgumentException($"column 0x{id:x4} is listed twice", nameof(columns));
+                throw new ArgumentException($"column 0x{id:x4}/0x{type:x4} is listed twice", nameof(columns));
             }
+
+            seen.Add(id);
         }
 
         foreach ((ushort id, ushort type) in list)
@@ -106,11 +111,12 @@ public sealed class TableContextBuilder
 
         _rowsPerBlock = NdbBlockBuilder.MaxBlockData / RowSize;
         _row = new byte[RowSize];
-        _matrix = new byte[_rowsPerBlock * RowSize];
+        _matrix = new byte[NdbBlockBuilder.MaxBlockData];   // the rows, then dead space that stays zero
 
+        // Real files allocate the row index header first and the TCINFO second (HIDs 0x20 and 0x40); the format does not care.
+        _rowIndex = new BthTreeBuilder(_heap, 4, 4);
         _info = _heap.Allocate(TcInfoHeaderSize + (_columns.Length * ColumnDescriptorSize));
         _heap.UserRoot = _info;
-        _rowIndex = new BthTreeBuilder(_heap, 4, 4);
     }
 
     /// <summary>The columns as laid out, in tag order: the offset, size and bitmap position of each cell.</summary>
@@ -126,13 +132,30 @@ public sealed class TableContextBuilder
     public long RowCount => _rowCount;
 
     /// <summary>The position of a column in <see cref="Columns"/>, which is what <c>SetCell</c> takes.</summary>
-    /// <param name="id">The property ID.</param>
+    /// <param name="id">The property ID. When two columns share it, the one with the lower type code.</param>
     /// <returns>The index, or -1.</returns>
     public int FindColumn(ushort id)
     {
         for (int i = 0; i < _columns.Length; i++)
         {
             if (_columns[i].Id == id)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>The position of the column with this exact tag in <see cref="Columns"/>.</summary>
+    /// <param name="id">The property ID.</param>
+    /// <param name="type">The property type code.</param>
+    /// <returns>The index, or -1.</returns>
+    public int FindColumn(ushort id, ushort type)
+    {
+        for (int i = 0; i < _columns.Length; i++)
+        {
+            if (_columns[i].Id == id && _columns[i].Type == type)
             {
                 return i;
             }
@@ -155,23 +178,15 @@ public sealed class TableContextBuilder
         }
 
         int[] offset = new int[sorted.Count];
-        int[] bit = new int[sorted.Count];
-        int nextBit = 2;
         for (int i = 0; i < sorted.Count; i++)
         {
             if (sorted[i].Id == RowIdColumn)
             {
                 offset[i] = 0;
-                bit[i] = 0;
             }
             else if (sorted[i].Id == RowVerColumn)
             {
                 offset[i] = 4;
-                bit[i] = 1;
-            }
-            else
-            {
-                bit[i] = nextBit++;
             }
         }
 
@@ -212,9 +227,14 @@ public sealed class TableContextBuilder
 
         int end1 = at;
         ends = [end4, end2, end1, end1 + ((sorted.Count + 7) / 8)];
-        for (int i = 0; i < sorted.Count; i++)
+
+        // The format fixes only two bit positions: PidTagLtpRowId is bit 0 and PidTagLtpRowVer bit 1 (MS-PST 2.3.4.4.1). The rest are numbered
+        // in the order the cells sit in the row, so they follow from the layout.
+        int[] byOffset = [.. Enumerable.Range(0, sorted.Count).OrderBy(i => offset[i])];
+        for (int rank = 0; rank < byOffset.Length; rank++)
         {
-            result[i] = new TcColumn(sorted[i].Id, sorted[i].Type, offset[i], size[i], bit[i]);
+            int i = byOffset[rank];
+            result[i] = new TcColumn(sorted[i].Id, sorted[i].Type, offset[i], size[i], rank);
         }
 
         return result;
@@ -380,10 +400,11 @@ public sealed class TableContextBuilder
         _rowCount++;
         if (_rowsInBlock == _rowsPerBlock)
         {
-            // MS-PST 2.3.4.4: every block but the last holds the same number of whole rows. A full block is always more than 3,580
-            // bytes, so the matrix is a subnode from here on.
+            // MS-PST 2.3.4.4: every block but the last holds the same number of whole rows and is a full 8,192 bytes, so it is written as
+            // 8,176 bytes of data with the zero "dead space" after the last row that readers must ignore. A full block is always more than
+            // 3,580 bytes, so the matrix is a subnode from here on.
             _tree ??= _blocks.BeginDataTree();
-            _tree.AddBlock(_matrix.AsSpan(0, _rowsInBlock * RowSize));
+            _tree.AddBlock(_matrix);
             _rowsInBlock = 0;
         }
     }

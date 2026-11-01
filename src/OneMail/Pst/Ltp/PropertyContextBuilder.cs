@@ -153,13 +153,27 @@ public sealed class PropertyContextBuilder
         Span<byte> entry = stackalloc byte[6];
         foreach ((ushort id, Pending p) in _properties)
         {
-            uint hnid = p.Small is null ? p.Hnid : heap.Allocate(p.Small).Value;
             BinaryPrimitives.WriteUInt16LittleEndian(entry, p.Type);
-            BinaryPrimitives.WriteUInt32LittleEndian(entry[2..], hnid);
+            BinaryPrimitives.WriteUInt32LittleEndian(entry[2..], p.Hnid);
             bth.Add(id, entry);
         }
 
+        // The tree's nodes come first in the heap and the values after them, the order the property contexts in real files mostly have
+        // (MS-PST 3.8 shows it too); the records are then patched with the values' HIDs.
         bth.Build();
+        int rank = 0;
+        foreach ((_, Pending p) in _properties)
+        {
+            if (p.Small is not null)
+            {
+                BinaryPrimitives.WriteUInt16LittleEndian(entry, p.Type);
+                BinaryPrimitives.WriteUInt32LittleEndian(entry[2..], heap.Allocate(p.Small).Value);
+                bth.SetData(rank, entry);
+            }
+
+            rank++;
+        }
+
         return LtpNodeResult.WriteHeap(_blocks, heap, _values.Subnodes);
     }
 }

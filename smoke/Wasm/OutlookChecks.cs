@@ -12,6 +12,8 @@ using RecursiveAI.OneMail.Conversion.OxcIcal;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
+using RecursiveAI.OneMail.Pst.Ltp;
+using RecursiveAI.OneMail.Pst.Ndb;
 using RecursiveAI.OneMail.Rtf;
 using RecursiveAI.OneMail.Rtf.Compression;
 using RecursiveAI.OneMail.Sources;
@@ -51,7 +53,7 @@ internal static class OutlookChecks
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText);
+        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("ltp-write", LtpWrite);
 
     public static bool Msg()
     {
@@ -95,6 +97,76 @@ internal static class OutlookChecks
         IMailItem? hello = opened.Enumerate().FirstOrDefault(x => x.Subject == "Hello world");
         return ok && opened.Format == MailFormat.Pst && hello is not null && hello.Attachments.Count == 4 && hello.ToRecipients[0].Address == "ann@example.com"
             && hello.TextBody!.ReadText() == "Plain body" && hello.Attachments[1].Size == 70_000 && hello.Attachments[3].Embedded!.Subject == "Forwarded inner";
+    }
+
+    private sealed class BlockList : INdbBlockSink
+    {
+        public readonly List<NdbBlock> Blocks = [];
+
+        public void Place(NdbBlock block) => Blocks.Add(block);
+    }
+
+    /// <summary>The PST write primitives: a property context with a large value and a table whose rows overflow into a subnode, built, placed and read back.</summary>
+    public static bool LtpWrite()
+    {
+        var sink = new BlockList();
+        var blocks = new NdbBlockBuilder(new SequentialBidAllocator(), sink);
+        var pcb = new PropertyContextBuilder(blocks);
+        pcb.Set(0x0037, LtpPropertyTypes.PtypString, Encoding.Unicode.GetBytes("Subject"));
+        pcb.Set(0x0E07, LtpPropertyTypes.PtypInteger32, [8, 0, 0, 0]);
+        byte[] big = new byte[20_000];
+        for (int i = 0; i < big.Length; i++)
+        {
+            big[i] = (byte)(i * 7);
+        }
+
+        pcb.Set(0x1000, LtpPropertyTypes.PtypBinary, big);
+        LtpNodeResult pc = pcb.Build();
+        var tcb = new TableContextBuilder(blocks, [(0x0037, LtpPropertyTypes.PtypString), (0x0E07, LtpPropertyTypes.PtypInteger32)]);
+        for (uint i = 1; i <= 1500; i++)
+        {
+            tcb.BeginRow(i * 4);
+            tcb.SetCell(0, Encoding.Unicode.GetBytes("Row " + i));
+            tcb.SetCell(tcb.FindColumn(0x0E07), BitConverter.GetBytes(i));
+            tcb.EndRow();
+        }
+
+        LtpNodeResult tc = tcb.Build();
+        var nodes = new List<TestNode>
+        {
+            new() { Nid = 0x101, DataBid = pc.Data.Value, SubBid = pc.WriteSubnodes(blocks).Value },
+            new() { Nid = 0x12E, DataBid = tc.Data.Value, SubBid = tc.WriteSubnodes(blocks).Value },
+        };
+        byte[] file = NdbTestBuilder.Build(NdbFormat.Unicode, nodes, new TestBuild { Prebuilt = sink.Blocks }).Bytes;
+        if (!NdbFile.TryOpen(file, out NdbFile? f, out _) || f is null)
+        {
+            return false;
+        }
+
+        using (f)
+        {
+            if (!PropertyContext.TryOpen(f, new Nid(0x101), out PropertyContext? pcRead, out _) || !TableContext.TryOpen(f, new Nid(0x12E), out TableContext? tcRead, out _))
+            {
+                return false;
+            }
+
+            using (pcRead)
+            using (tcRead)
+            {
+                bool ok = pcRead!.TryGet(0x1000, out PcProperty p) && p.Value.Kind == LtpValueKind.Subnode && pcRead.ReadValue(p)!.AsSpan().SequenceEqual(big)
+                    && tcRead!.RowCount == 1500 && tcRead.TryFindRow(1500 * 4, out uint index);
+                if (!ok)
+                {
+                    return false;
+                }
+
+                var row = new byte[tcRead!.RowSize];
+                tcRead.TryFindRow(777 * 4, out index);
+                ok = tcRead.TryReadRow(index, row) && tcRead.GetRow(row).TryGetCell(0, out LtpValueRef cell)
+                    && Encoding.Unicode.GetString(tcRead.ReadValue(cell)!) == "Row 777";
+                return ok && f.Defects.Count == 0 && pcRead.Defects.Count == 0 && tcRead.Defects.Count == 0;
+            }
+        }
     }
 
     public static bool Tnef()
