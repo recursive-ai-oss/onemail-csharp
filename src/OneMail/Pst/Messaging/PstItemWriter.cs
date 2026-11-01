@@ -13,6 +13,9 @@ internal sealed class PstWrittenMessage
     public byte[]?[] ContentsRow { get; init; } = [];
     public byte[]?[] AssocRow { get; init; } = [];
     public int Flags { get; init; }
+
+    /// <summary>The values the tables carry for this message beyond its own properties (flags, size, status, last modification time), by column ID.</summary>
+    public Dictionary<ushort, byte[]> Effective { get; init; } = [];
 }
 
 /// <summary>
@@ -57,7 +60,7 @@ internal sealed class PstItemWriter
 
     private static readonly (ushort Id, ushort Type)[] AttachmentColumns = [(0x0E20, 3), (0x3704, 0x1F), (0x3705, 3), (0x370B, 3)];
 
-    private readonly PstFileWriter _file;
+    private readonly INdbNodeSink _file;
     private readonly PstBuilderOptions _options;
     private readonly DateTimeOffset _timestamp;
     private readonly List<PstWriteDefect> _defects;
@@ -82,7 +85,7 @@ internal sealed class PstItemWriter
         public Nid NextAttachment() => new((Attach++ << 5) | (uint)NidType.Attachment);
     }
 
-    public PstItemWriter(PstFileWriter file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects)
+    public PstItemWriter(INdbNodeSink file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects)
     {
         _file = file;
         _options = options;
@@ -114,6 +117,34 @@ internal sealed class PstItemWriter
 
     // ---- named properties (MS-PST 2.4.7) --------------------------------------------------------------------------------------------------
 
+    private bool _namesFrozen;
+
+    /// <summary>
+    /// Starts from the names an existing file's map defines, so that a new item uses the same property IDs for them (ID 0x8000 + index). A map with gaps
+    /// cannot be extended without renumbering, so new names are then refused with a defect.
+    /// </summary>
+    internal void SeedNames(IEnumerable<KeyValuePair<ushort, MapiNamedProperty>> existing)
+    {
+        var sorted = existing.OrderBy(static e => e.Key).ToList();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            if (sorted[i].Key != 0x8000 + i)
+            {
+                _namesFrozen = true;
+                _names.Clear();
+                _nameIds.Clear();
+                return;
+            }
+
+            _names.Add(sorted[i].Value);
+            _nameIds.TryAdd(sorted[i].Value, sorted[i].Key);
+        }
+    }
+
+    internal int NameCount => _names.Count;
+
+    internal LtpNodeResult BuildNameMapNode() => BuildNameMap();
+
     private ushort NameId(MapiNamedProperty name)
     {
         if (_nameIds.TryGetValue(name, out ushort id))
@@ -121,7 +152,7 @@ internal sealed class PstItemWriter
             return id;
         }
 
-        if (_names.Count >= MaxNamedProperties)
+        if (_namesFrozen || _names.Count >= MaxNamedProperties)
         {
             return 0;
         }
@@ -242,7 +273,7 @@ internal sealed class PstItemWriter
     // ---- tables --------------------------------------------------------------------------------------------------------------------------------
 
     /// <summary>Writes a top-level table node: its columns and rows (cells in column order; null for an absent cell).</summary>
-    public static void WriteTable(PstFileWriter file, Nid nid, (ushort Id, ushort Type)[] columns, IEnumerable<(uint RowId, byte[]?[] Cells)> rows, bool streamHeap = false)
+    public static void WriteTable(INdbNodeSink file, Nid nid, (ushort Id, ushort Type)[] columns, IEnumerable<(uint RowId, byte[]?[] Cells)> rows, bool streamHeap = false)
     {
         var tc = new TableContextBuilder(file.Blocks, columns, streamHeap: streamHeap, rowIdsAscending: streamHeap);
         int[] map = ColumnMap(tc, columns);
@@ -492,12 +523,13 @@ internal sealed class PstItemWriter
         return new PstWrittenMessage
         {
             Flags = o.Flags,
+            Effective = eff,
             ContentsRow = associated ? [] : MakeRow(message, ContentsColumns, eff),
             AssocRow = associated ? MakeRow(message, AssocColumns, eff) : [],
         };
     }
 
-    private static byte[]?[] MakeRow(MapiMessage m, (ushort Id, ushort Type)[] columns, Dictionary<ushort, byte[]> effective)
+    internal static byte[]?[] MakeRow(MapiMessage m, (ushort Id, ushort Type)[] columns, Dictionary<ushort, byte[]> effective)
     {
         var cells = new byte[]?[columns.Length];
         for (int i = 0; i < columns.Length; i++)

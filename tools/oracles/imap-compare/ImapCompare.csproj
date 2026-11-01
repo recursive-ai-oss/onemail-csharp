@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Indicative IMAP fetch comparison: this library's client against the released MailKit package on one server, same mailbox, same work
+       (tools/oracles/README.md). A tool, never packed; the benchmark rows are in bench/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ImapCompare</AssemblyName>
+    <RootNamespace>OneMail.Oracles.ImapCompare</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MailKit" />
+    <ProjectReference Include="../../../src/OneMail.Client/OneMail.Client.csproj" />
+  </ItemGroup>
+
+</Project>

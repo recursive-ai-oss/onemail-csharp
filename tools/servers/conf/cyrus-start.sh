@@ -11,6 +11,10 @@ perl /srv/testserver/env-replace.pl /srv/testserver/imapd.conf /etc/imapd.conf
   echo "tls_server_key: /onemail/tls.key"
   echo "tls_versions: tls1_2 tls1_3"
   echo "allowstarttls: 1"
+  # Without the idle daemon a session polls for other sessions' changes; the default is a minute.
+  echo "imapidlepoll: 1"
+  # Cyrus replaces 8-bit bytes in appended headers with X unless told otherwise; the round-trip tests compare bytes.
+  echo "munge8bit: 0"
 } >> /etc/imapd.conf
 perl /srv/testserver/env-replace.pl /srv/testserver/cyrus.conf /etc/cyrus.conf
 # Implicit-TLS twins of the IMAP and POP3 services.

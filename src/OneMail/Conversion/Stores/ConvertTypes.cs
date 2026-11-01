@@ -83,6 +83,14 @@ public sealed class StoreConversionOptions
 
     /// <summary>The most distinct loss codes kept in the totals before the rest are folded into one <c>(other)</c> row. Default 10,000.</summary>
     public int MaxDistinctLosses { get; init; } = 10_000;
+
+    /// <summary>
+    /// For <see cref="ConvertFormat.Pst"/>: add the items to the existing Unicode PST at the destination, in place, instead of making a new file. The
+    /// file is opened exclusively and refused if it looks suspicious (see <see cref="Pst.Ndb.NdbOpenRisks"/>); the changes are committed once, when the
+    /// conversion completes, and dropped if it fails. Items go in the folder of the same path under "Top of Personal Folders", created as needed.
+    /// </summary>
+    public bool AddToExistingPst { get; init; }
+
 }
 
 /// <summary>What happened to one item.</summary>
