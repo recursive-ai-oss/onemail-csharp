@@ -53,6 +53,10 @@ case "$target" in
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;
   dbx) maxlen=4096 ;;
+  span-ndb) maxlen=70000 ;;
+  span-mime) maxlen=8192 ;;
+  span-cfb) maxlen=1024 ;;
+  dbx-recovery|olm-recovery) maxlen=2048 ;;
   reports|authres|mhtml-uri) maxlen=4096 ;;
   mail-open) maxlen=65536 ;;
   rtf-decompress) maxlen=65536 ;;

@@ -384,6 +384,25 @@ internal static class Program
 
         Console.WriteLine("dbx: " + (dbxOk ? "ok" : "FAILED"));
 
+        // Forensic recovery: one message freed the way Outlook Express frees it, one unlinked; both come back tagged and neither as Live.
+        bool recoveryOk;
+        {
+            List<RecursiveAI.OneMail.Tests.Stores.DbxTestMessage> rm = [];
+            for (int i = 0; i < 5; i++)
+            {
+                rm.Add(new RecursiveAI.OneMail.Tests.Stores.DbxTestMessage { Text = System.Text.Encoding.ASCII.GetBytes("Subject: r" + i + "\r\n\r\n" + new string('y', 900)), Subject = "r" + i });
+            }
+
+            byte[] rf = RecursiveAI.OneMail.Tests.Stores.DbxTestBuilder.MessageDatabase(rm, new RecursiveAI.OneMail.Tests.Stores.DbxBuild { Deleted = new HashSet<int> { 1 }, Unlinked = new HashSet<int> { 3 } });
+            using RecursiveAI.OneMail.Sources.MemorySource rs = new(rf);
+            var found = new RecursiveAI.OneMail.Stores.Dbx.DbxReader(rs).RecoverDeleted().ToArray();
+            recoveryOk = found.Length == 2 && found.All(f => f.Provenance.Status != RecursiveAI.OneMail.Recovery.RecoveryStatus.Live)
+                && found.Any(f => f.Provenance.Status == RecursiveAI.OneMail.Recovery.RecoveryStatus.Orphaned && f.Content.Span.SequenceEqual(rm[3].Text))
+                && RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Recovery();
+        }
+
+        Console.WriteLine("recovery: " + (recoveryOk ? "ok" : "FAILED"));
+
         bool calcardOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Calcard();
         Console.WriteLine("calcard: " + (calcardOk ? "ok" : "FAILED"));
 
@@ -483,7 +502,7 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && recoveryOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

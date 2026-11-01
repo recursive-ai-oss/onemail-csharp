@@ -1,3 +1,4 @@
+using RecursiveAI.OneMail.Recovery;
 using System.Text;
 using System.Text.Unicode;
 using RecursiveAI.OneMail.Mime;
@@ -45,6 +46,11 @@ public class MimeMailItem : IMailItem
 
     /// <inheritdoc/>
     public MailProvenance Provenance => _provenance;
+
+    /// <inheritdoc/>
+    public RecoveryProvenance? Recovery => RecoveryInfo;
+
+    internal RecoveryProvenance? RecoveryInfo { get; init; }
 
     /// <inheritdoc/>
     public MailItemKind Kind => MailItemKind.Message;

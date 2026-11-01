@@ -27,11 +27,20 @@ internal static class Program
             return rc;
         }
 
+        if (args.Length > 0 && args[0] == "recover")
+        {
+            using StreamWriter stdout = new(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false), 1 << 16) { AutoFlush = false };
+            int rc = RecoverCommand.Run(args[1..], stdout, Console.Error);
+            stdout.Flush();
+            return rc;
+        }
+
         Console.Error.WriteLine("onemail " + Version());
         Console.Error.WriteLine("usage: onemail --version");
         Console.Error.WriteLine("       onemail inspect [--json] [--sizes] [--defects] <file-or-directory>...");
         Console.Error.WriteLine("       " + ConvertCommand.ConvertUsage.Replace("usage: ", "", StringComparison.Ordinal));
         Console.Error.WriteLine("       " + ConvertCommand.ExportUsage.Replace("usage: ", "", StringComparison.Ordinal));
+        Console.Error.WriteLine("       " + RecoverCommand.Usage.Replace("usage: ", "", StringComparison.Ordinal));
         return args.Length == 0 || args[0] == "--help" ? 0 : 2;
     }
 

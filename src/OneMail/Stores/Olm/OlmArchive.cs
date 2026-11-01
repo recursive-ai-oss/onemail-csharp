@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using RecursiveAI.OneArchive;
 using RecursiveAI.OneArchive.Zip;
 using RecursiveAI.OneCompress;
+using RecursiveAI.OneMail.Recovery;
 using RecursiveAI.OneMail.Sources;
 
 namespace RecursiveAI.OneMail.Stores.Olm;
@@ -30,6 +31,11 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
     private readonly List<ArchiveEntry> _records = [];
     private readonly SortedSet<string> _folders = new(StringComparer.Ordinal);
     private readonly List<OlmDefect> _defects = [];
+    private readonly List<OlmDamage> _damage = [];
+    private readonly Dictionary<string, List<OlmDamage>> _entryDamage = new(StringComparer.Ordinal);
+    private readonly List<long> _headerOffsets = [];
+    private readonly Dictionary<string, bool> _verified = new(StringComparer.Ordinal);
+    private int _damageSeen;
     private bool _disposed;
 
     private OlmArchive(IRandomAccessSource source, bool ownsSource, string? location, OlmReaderOptions options, ZipReader index)
@@ -46,6 +52,19 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
 
     /// <summary>Defects of the archive as a whole and of the entries read so far (a damaged XML entry, a refused zip). Entries are read as the items are enumerated, so this grows during enumeration.</summary>
     public IReadOnlyList<OlmDefect> Defects => _defects;
+
+    /// <summary>
+    /// Recovery mode only (<see cref="OlmReaderOptions.Recovery"/>): where the zip was skipped over or found damaged, in the order found, with offsets in the file. Grows while
+    /// entries are read. Always empty when recovery is off and for an undamaged archive.
+    /// </summary>
+    public IReadOnlyList<OlmDamage> Damage
+    {
+        get
+        {
+            SyncDamage();
+            return _damage;
+        }
+    }
 
     /// <summary>The number of attachment-like entries (every file that is not XML) found in the zip directory.</summary>
     public int AttachmentEntryCount => _attachments.Count;
@@ -144,6 +163,15 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             throw new InvalidDataException("The OLM archive's zip directory cannot be read: " + a._defects[0]);
         }
 
+        if (options.Recovery)
+        {
+            a.SyncDamage();
+            if (a._damage.Count > 0)
+            {
+                a.Report(OlmDefectKind.ArchiveRecovered, string.Empty, a._damage.Count + " damaged place(s)");
+            }
+        }
+
         return a;
     }
 
@@ -173,6 +201,11 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         foreach (ArchiveEntry entry in _records)
         {
             ThrowIfDisposed();
+            if (_options.Recovery && !VerifyEntry(entry))
+            {
+                Report(OlmDefectKind.EntryDamaged, entry.Name, "records before the damage are kept");
+            }
+
             // On failure OpenEntry has already put the defect on the archive.
             Stream? data = OpenEntry(entry, out _);
             if (data is null)
@@ -273,7 +306,7 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         failure = null;
         try
         {
-            return _index.OpenEntryStream(entry);
+            return _index.SupportsRandomAccess ? _index.OpenEntryStream(entry) : OpenForward(entry);
         }
         catch (Exception ex) when (OlmPaths.IsReadFailure(ex))
         {
@@ -282,6 +315,231 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             return null;
         }
     }
+
+    // A zip read forward through its local headers cannot reopen an entry, so a fresh forward reader starts at the entry's own local header.
+    // Its damage records are relative to that start and are moved to file offsets here.
+    private ForwardEntryStream OpenForward(ArchiveEntry entry)
+    {
+        if (entry is not ZipEntry ze)
+        {
+            throw new InvalidOperationException("The entry did not come from the zip reader.");
+        }
+
+        long start = ze.LocalHeaderOffset;
+        Stream raw = _source.OpenRead(start, _source.Length - start);
+        ZipReader? zr = null;
+        try
+        {
+            var zo = new ZipReaderOptions
+            {
+                Limits = new ArchiveLimits { MaxEntryCount = _options.MaxEntryCount, MaxTotalSize = _options.MaxTotalSize, MaxExpansionRatio = _options.MaxExpansionRatio },
+                VerifyChecksum = _options.VerifyChecksums,
+                ForceStreaming = true,
+                Recovery = true,
+            };
+            zr = new ZipReader(raw, zo, leaveOpen: false);
+            ArchiveEntry? first = zr.GetNextEntry();
+            if (first is null || first.Name != entry.Name)
+            {
+                throw new InvalidDataException("The entry's local header is not where the scan found it.");
+            }
+
+            return new ForwardEntryStream(zr.OpenEntryStream(), zr, this, start);
+        }
+        catch
+        {
+            if (zr is not null)
+            {
+                zr.Dispose();
+            }
+            else
+            {
+                raw.Dispose();
+            }
+
+            throw;
+        }
+    }
+
+    // Copies a forward reader's damage records, moved to file offsets, into the archive's list.
+    internal void AddDamage(IEnumerable<ZipDamage> records, long shift)
+    {
+        foreach (ZipDamage z in records)
+        {
+            var d = new OlmDamage((OlmDamageKind)(int)z.Kind, z.Offset + shift, z.Length, z.EntryName, z.Reason);
+            if (_damage.Contains(d))
+            {
+                continue;
+            }
+
+            _damage.Add(d);
+            if (d.Entry is not null)
+            {
+                if (!_entryDamage.TryGetValue(d.Entry, out List<OlmDamage>? l))
+                {
+                    _entryDamage[d.Entry] = l = [];
+                }
+
+                l.Add(d);
+            }
+        }
+    }
+
+    private void SyncDamage()
+    {
+        if (!_options.Recovery)
+        {
+            return;
+        }
+
+        IReadOnlyList<ZipDamage> z = _index.Damage;
+        if (z.Count > _damageSeen)
+        {
+            AddDamage(z.Skip(_damageSeen), 0);
+            _damageSeen = z.Count;
+        }
+    }
+
+    // Reads an entry to its end and throws the bytes away, so that damage, a short entry or a bad CRC is known before the records of the entry
+    // are handed out. Cached by name. Returns true when the entry reads clean.
+    internal bool VerifyEntry(ArchiveEntry entry)
+    {
+        if (_verified.TryGetValue(entry.Name, out bool known))
+        {
+            return known;
+        }
+
+        bool ok = true;
+        Stream? s = null;
+        try
+        {
+            s = OpenEntry(entry, out _);
+            if (s is null)
+            {
+                ok = false;
+            }
+            else
+            {
+                byte[] buf = new byte[1 << 16];
+                while (s.Read(buf, 0, buf.Length) > 0)
+                {
+                }
+            }
+        }
+        catch (Exception ex) when (OlmPaths.IsReadFailure(ex))
+        {
+            ok = false;
+        }
+        finally
+        {
+            s?.Dispose();
+        }
+
+        SyncDamage();
+        if (!ok && !_entryDamage.ContainsKey(entry.Name))
+        {
+            long at = entry is ZipEntry z ? z.LocalHeaderOffset : -1;
+            AddDamage([new ZipDamage(ZipDamageKind.DamagedEntry, at, 0, entry.Name, "the entry could not be read to its end")], 0);
+        }
+
+        _verified[entry.Name] = ok && !_entryDamage.ContainsKey(entry.Name);
+        return _verified[entry.Name];
+    }
+
+    /// <summary>The ranges and damage that decide a record's recovery tag; null when recovery is off.</summary>
+    internal RecoveryProvenance? RecoveryOf(string recordEntry, IEnumerable<string> attachmentEntries, bool attachmentMissing)
+    {
+        if (!_options.Recovery)
+        {
+            return null;
+        }
+
+        var damage = new List<OlmDamage>();
+        var ranges = new List<ByteRange>();
+        var defects = new List<MailDefect>();
+        bool partial = false;
+        foreach (string name in new[] { recordEntry }.Concat(attachmentEntries))
+        {
+            if (!_recordIndex.TryGetValue(name, out ArchiveEntry? e) && !_attachments.TryGetValue(name, out e))
+            {
+                continue;
+            }
+
+            if (!VerifyEntry(e))
+            {
+                partial = true;
+            }
+
+            if (e is ZipEntry ze)
+            {
+                ranges.Add(EntryRange(ze));
+            }
+
+            if (_entryDamage.TryGetValue(name, out List<OlmDamage>? l))
+            {
+                damage.AddRange(l);
+            }
+        }
+
+        if (attachmentMissing)
+        {
+            SyncDamage();
+            foreach (OlmDamage d in _damage)
+            {
+                // Bytes skipped or a cut-off archive may have taken the attachment's entry with them.
+                if (d.Kind is OlmDamageKind.SkippedBytes or OlmDamageKind.Truncated or OlmDamageKind.DirectoryUnusable)
+                {
+                    partial = true;
+                    damage.Add(d);
+                }
+            }
+        }
+
+        return Build(partial, ranges, damage, defects);
+    }
+
+    private static RecoveryProvenance Build(bool partial, List<ByteRange> ranges, List<OlmDamage> damage, List<MailDefect> defects)
+    {
+        foreach (OlmDamage d in damage)
+        {
+            defects.Add(new MailDefect("olm-recovery", d.Kind.ToString(), d.Offset, false));
+        }
+
+        var lost = new List<ByteRange>();
+        foreach (OlmDamage d in damage)
+        {
+            if (d.Length > 0)
+            {
+                lost.Add(new ByteRange(d.Offset, d.Length));
+            }
+        }
+
+        return new RecoveryProvenance(partial ? RecoveryStatus.Partial : RecoveryStatus.Live)
+        {
+            Format = MailFormat.Olm,
+            Ranges = RecoveryProvenance.Merge(ranges),
+            Lost = lost,
+            Defects = defects,
+            Reason = partial ? "the zip entry holding the record is damaged or cut short" : "read from an intact zip entry",
+        };
+    }
+
+    // The bytes an entry occupies: from its local header to the next entry's local header (or the end of the file).
+    private ByteRange EntryRange(ZipEntry e)
+    {
+        if (_sortedOffsets is null)
+        {
+            _sortedOffsets = [.. _headerOffsets];
+            Array.Sort(_sortedOffsets);
+        }
+
+        int i = Array.BinarySearch(_sortedOffsets, e.LocalHeaderOffset);
+        long end = i >= 0 && i + 1 < _sortedOffsets.Length ? _sortedOffsets[i + 1] : _source.Length;
+        return new ByteRange(e.LocalHeaderOffset, Math.Max(0, end - e.LocalHeaderOffset));
+    }
+
+    private long[]? _sortedOffsets;
+    private readonly Dictionary<string, ArchiveEntry> _recordIndex = new(StringComparer.Ordinal);
 
     private const OlmDefectKind ArchiveDefect = OlmDefectKind.ArchiveUnreadable;
 
@@ -296,7 +554,8 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
         // LazyDirectory reads the central directory as entries are asked for, so the zip reader's memory does not grow with the entry count
         // (mail exports hold hundreds of thousands of entries). The directory is still validated as a whole before the first entry is returned.
         // The limits are the large-archive profile with this reader's own entry and size bounds on top.
-        var zo = new ZipReaderOptions { Limits = limits, VerifyChecksum = o.VerifyChecksums, MaxCentralDirectorySize = o.MaxCentralDirectorySize, LazyDirectory = true };
+        // Recovery keeps the directory in memory: the damage checks need it, and a damaged archive is the rare case.
+        var zo = new ZipReaderOptions { Limits = limits, VerifyChecksum = o.VerifyChecksums, MaxCentralDirectorySize = o.MaxCentralDirectorySize, LazyDirectory = !o.Recovery, Recovery = o.Recovery };
         Stream s = source.OpenRead(0, source.Length);
         try
         {
@@ -321,6 +580,11 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             {
                 seen++;
                 string name = e.Name;
+                if (_options.Recovery && e is ZipEntry zh)
+                {
+                    _headerOffsets.Add(zh.LocalHeaderOffset);
+                }
+
                 if (e.Kind == ArchiveEntryKind.Directory)
                 {
                     AddFolder(name);
@@ -330,6 +594,11 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
                     if (OlmPaths.IsRecordFile(name))
                     {
                         _records.Add(e);
+                        if (_options.Recovery)
+                        {
+                            _recordIndex[name] = e;
+                        }
+
                         AddFolder(name);
                     }
                     else
@@ -475,4 +744,54 @@ internal static class OlmPaths
 
     public static OlmDefectKind Classify(Exception ex, OlmDefectKind fallback) =>
         ex is ArchiveSafetyException or CompressionLimitException ? OlmDefectKind.ArchiveLimitExceeded : fallback;
+}
+
+/// <summary>
+/// An entry's stream from a forward-only zip reader started at the entry's local header. Disposing it hands the reader's damage records, moved to
+/// file offsets, to the archive and then closes the reader.
+/// </summary>
+internal sealed class ForwardEntryStream(Stream inner, ZipReader reader, OlmArchive archive, long start) : Stream
+{
+    private bool _closed;
+
+    public override bool CanRead => true;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => false;
+
+    public override long Length => throw new NotSupportedException();
+
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+    public override int Read(Span<byte> buffer) => inner.Read(buffer);
+
+    public override void Flush()
+    {
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_closed)
+        {
+            _closed = true;
+            inner.Dispose();
+            archive.AddDamage(reader.Damage, start);
+            reader.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }

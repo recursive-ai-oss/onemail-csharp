@@ -24,7 +24,7 @@ namespace RecursiveAI.OneMail.Stores.Dbx;
 /// </para>
 /// <para>The reader needs a source that reads synchronously. It does not own the source.</para>
 /// </remarks>
-public sealed class DbxReader
+public sealed partial class DbxReader
 {
     // oedbx DBX format notes, OE_Dbx_FileHeader: the header is 0x24bc bytes; everything after it is the file info and the middle sector.
     internal const int HeaderLength = 0x24BC;
