@@ -248,6 +248,21 @@ RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: 
 | PDF structure | the 76 kept PDFs | poppler `pdfinfo` reads all 76 without a message, every one tagged, title = subject | `qpdf --check` and veraPDF were not run (no prebuilt copy on the worker) |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; renders one message to PDF and to PNG (`render: ok`); `.Render` is not referenced by the browser smoke | |
 
+## Android and iOS
+
+The mobile smoke apps (`smoke/Android`, `smoke/iOS`) reference the core, Calendar, Client, Cryptography and Render projects, build in Release
+with trimming (`TrimMode=full`), warnings as errors and no suppressions, and run the same checks as the NativeAOT smoke app on the
+device: the format core and Outlook formats (the browser smoke's checks), then the protocol layer against scripted streams and a loopback
+SMTP server, DKIM/ARC with generated keys, S/MIME with a test anchor, sanitiser and PDF/PNG rendering. They print one line,
+`mobile smoke: ok`, which `smoke/Android/run-emulator.sh` and `smoke/iOS/run-simulator.sh` wait for (logcat, the simulator console).
+
+| Platform | Run | Result | Notes |
+|---|---|---|---|
+| Android (`net10.0-android`, API 36, `android-x64`, workload 36.1.118) | headless emulator, x86_64 Google APIs image, Android 16, KVM | 39 checks `ok`, `mobile smoke: ok`; 0 build warnings; the trimmer cut `RecursiveAI.OneMail.dll` from 1,752,064 to 1,410,560 bytes; APK 15.1 MB (15,141,748 bytes) | the app needs the `INTERNET` permission for the loopback SMTP check. NativeAOT is not used on Android: this is the trimmed Mono runtime. A device (`android-arm64`) build compiles the same way; it was not run on hardware |
+| iOS (`net10.0-ios`, `iossimulator-arm64`, workload 27.1 with Xcode 27.1) | iPhone simulator, iOS 27.1, Apple silicon | 39 checks `ok`, `mobile smoke: ok`; 0 build warnings; the trimmer cut `RecursiveAI.OneMail.dll` from 1,752,064 to 1,402,880 bytes; app 37.0 MB | the runtime is Mono with `UseInterpreter`: with ahead-of-time compilation only, the first file open failed ("Attempting to JIT compile ... aot-only mode", the file handle marshaller), which is the runtime's, not ours. The app adopts the scene lifecycle that iOS 27 requires. The simulator build only: no device or signing. The `ios` workload must match the installed Xcode (`dotnet workload update`); with workload 26.0 and Xcode 27 the build runs but the app does not load |
+
+The `android` job in CI builds the Android app on every push (build only).
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio

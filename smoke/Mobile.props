@@ -1,0 +1,35 @@
+<Project>
+
+  <!-- What the Android and iOS smoke apps share with the NativeAOT smoke: its checks (the format core, Outlook formats, the
+       protocol layer against scripted streams and a loopback server, DKIM/ARC and S/MIME with generated test keys) and the
+       test-side file builders that make the MSG, PST, TNEF and DBX files those checks read back. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Aot/Program.cs" Link="Shared/AotChecks.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Wasm/OutlookChecks.cs" Link="Shared/OutlookChecks.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Pst/NdbTestBuilder.cs" Link="Shared/NdbTestBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Pst/LtpTestBuilder.cs" Link="Shared/LtpTestBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Pst/PstFixtureBuilder.cs" Link="Shared/PstFixtureBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Pst/PstFixtures.cs" Link="Shared/PstFixtures.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Stores/DbxTestBuilder.cs" Link="Shared/DbxTestBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" Link="Shared/MsgTestBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Msg/MsgFixtures.cs" Link="Shared/MsgFixtures.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Msg/MsgModelComparer.cs" Link="Shared/MsgModelComparer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" Link="Shared/TnefTestBuilder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/OneMail/OneMail.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/OneMail.Client/OneMail.Client.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/OneMail.Render/OneMail.Render.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+  </ItemGroup>
+
+</Project>

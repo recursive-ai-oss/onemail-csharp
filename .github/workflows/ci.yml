@@ -63,6 +63,26 @@ jobs:
       - name: Build the browser smoke app
         run: dotnet build smoke/Wasm -c Release
 
+  android:
+    # The Android smoke app builds trimmed in Release with warnings as errors. Build only: running it needs an emulator
+    # (smoke/Android/run-emulator.sh).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Artifacts directory
+        run: echo "ONEMAIL_ARTIFACTS=$RUNNER_TEMP/artifacts" >> "$GITHUB_ENV"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Install the Android workload
+        run: dotnet workload install android
+      - name: Install the Android SDK parts the build needs
+        run: dotnet build smoke/Android -c Release -t:InstallAndroidDependencies -p:AndroidSdkDirectory="$HOME/android-sdk" -p:AcceptAndroidSDKLicenses=True
+      - name: Build the Android smoke app
+        run: dotnet build smoke/Android -c Release -p:AndroidSdkDirectory="$HOME/android-sdk" -warnaserror
+
   pack:
     # Builds the packages as an artifact only; nothing is pushed anywhere.
     runs-on: ubuntu-latest
