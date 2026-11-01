@@ -17,7 +17,12 @@ dotnet build tests/OneMail.Tests -c Checked -v quiet -clp:NoSummary
 rc=0
 for s in ${servers//,/ }; do
   echo "##### $s"
-  "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
-    dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
+  if [ "$s" = postfix ]; then
+    # The guest uses the host network (forwards on high ports) and needs no user namespace.
+    "$D/servers.sh" --servers "$s" -- dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
+  else
+    "$D/userns.sh" -n "$D/servers.sh" --servers "$s" -- \
+      dotnet test --no-build -c Checked tests/OneMail.Tests --filter "$filter" || rc=1
+  fi
 done
 exit $rc

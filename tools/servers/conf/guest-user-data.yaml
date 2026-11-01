@@ -1,0 +1,52 @@
+#cloud-config
+# Postfix with submission (587 STARTTLS) and smtps (465) listeners authenticating through Dovecot's auth service, delivering
+# mail for example.test to the local user "test". Self-signed certificate (ssl-cert package). Powers off when done.
+package_update: true
+packages: [postfix, dovecot-core, ssl-cert]
+write_files:
+  - path: /etc/dovecot/dovecot.conf
+    content: |
+      protocols =
+      ssl = no
+      disable_plaintext_auth = no
+      auth_mechanisms = plain login
+      passdb {
+        driver = passwd-file
+        args = scheme=PLAIN username_format=%u /etc/dovecot/users
+      }
+      userdb {
+        driver = static
+        args = uid=nobody gid=nogroup home=/tmp
+      }
+      service auth {
+        unix_listener /var/spool/postfix/private/auth {
+          mode = 0660
+          user = postfix
+          group = postfix
+        }
+      }
+  - path: /etc/dovecot/users
+    content: |
+      test:{PLAIN}onemail-test
+  - path: /root/postfix-setup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      postconf -e 'myhostname = mail.example.test' 'mydestination = example.test, localhost' 'inet_interfaces = all' 'inet_protocols = ipv4' \
+        'smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem' 'smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key' \
+        'smtpd_tls_security_level = may' 'smtpd_sasl_type = dovecot' 'smtpd_sasl_path = private/auth' 'smtpd_tls_auth_only = yes'
+      cat >> /etc/postfix/master.cf <<'EOF'
+      submission inet n - y - - smtpd -o syslog_name=postfix/submission -o smtpd_tls_security_level=encrypt -o smtpd_sasl_auth_enable=yes -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+      smtps inet n - y - - smtpd -o syslog_name=postfix/smtps -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes -o smtpd_relay_restrictions=permit_sasl_authenticated,reject -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+      EOF
+      useradd -m test
+      systemctl enable postfix dovecot
+      touch /etc/cloud/cloud-init.disabled
+runcmd:
+  - [sh, /root/postfix-setup.sh]
+power_state:
+  mode: poweroff
+  timeout: 30
+  condition: true

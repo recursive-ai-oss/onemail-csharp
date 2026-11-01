@@ -23,6 +23,7 @@ cleanup() {
   for c in dovecot stalwart cyrus postfix; do "$PODMAN" rm -f -t 2 "onemail-$c" >/dev/null 2>&1; done
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
   wait 2>/dev/null
+  "$D/guest-run.sh" stop
   "$D/cleanup.sh" >/dev/null
 }
 trap cleanup EXIT
@@ -118,8 +119,21 @@ PY
          ONEMAIL_CYRUS_USER=user1 ONEMAIL_CYRUS_PASSWORD=x
 }
 
+start_postfix() {
+  "$D/guest-run.sh" start || return 1
+  GUEST_STARTED=1
+  local ok=
+  for _ in $(seq 1 120); do
+    if (exec 3<>/dev/tcp/127.0.0.1/32587; read -r -t 3 line <&3; case "$line" in 220*) exit 0 ;; *) exit 1 ;; esac) 2>/dev/null; then ok=1; break; fi
+    sleep 2
+  done
+  [ -n "$ok" ] || { echo "postfix guest did not answer; see its console log" >&2; return 1; }
+  export ONEMAIL_POSTFIX_SMTP_PORT=32025 ONEMAIL_POSTFIX_SUBMISSION_PORT=32587 ONEMAIL_POSTFIX_SUBMISSIONS_PORT=32465 \
+         ONEMAIL_POSTFIX_USER=test ONEMAIL_POSTFIX_PASSWORD=onemail-test
+}
+
 # Stalwart first: its provisioning step needs port 8080, which Dovecot and Cyrus also open for their HTTP services.
-for s in stalwart dovecot cyrus; do
+for s in stalwart dovecot cyrus postfix; do
   case ",$want," in *",$s,"*) ;; *) continue ;; esac
   if "start_$s"; then UP+=("$s"); else echo "failed to start $s" >&2; fi
 done

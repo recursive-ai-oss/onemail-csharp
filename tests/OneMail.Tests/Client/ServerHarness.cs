@@ -25,6 +25,7 @@ public static class ServerHarness
         ["dovecot"] = new("dovecot", "test", "onemail-test", "someone@example.com"),
         ["stalwart"] = new("stalwart", "test@example.test", "onemail-test", "test@example.test"),
         ["cyrus"] = new("cyrus", "user1", "x", "user1@example.com"),
+        ["postfix"] = new("postfix", "test", "onemail-test", "test@example.test"),
     };
 
     public static IEnumerable<ServerInfo> Up =>
