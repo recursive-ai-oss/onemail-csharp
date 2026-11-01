@@ -48,6 +48,7 @@ case "$target" in
   ltp) maxlen=8192 ;;
   pst-messaging) maxlen=8192 ;;
   msg) maxlen=2048 ;;
+  msg-write) maxlen=4096 ;;
   tnef) maxlen=2048 ;;
   mbox) maxlen=65536 ;;
   emlx) maxlen=16384 ;;

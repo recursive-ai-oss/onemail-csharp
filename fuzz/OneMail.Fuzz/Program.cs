@@ -24,6 +24,7 @@ internal static class Program
             ["mime-tree"] = MimeTargets.Tree,
             ["ndb"] = NdbTarget.Run,
             ["msg"] = MsgTarget.Run,
+            ["msg-write"] = MsgWriteTarget.Run,
             ["tnef"] = TnefTarget.Run,
             ["mail-open"] = MailTarget.Run,
             ["ltp"] = LtpTarget.Run,

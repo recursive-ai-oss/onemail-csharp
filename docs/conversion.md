@@ -219,7 +219,8 @@ codes (folders, flags, keywords, mbox line endings). The matrix of what each sou
 `RtfRedundant`, `RtfUndecodable`, `SignatureNotVerifiable`, `StoreBookkeeping`, `SubjectPrefixMarkerRemoved`,
 `SubjectWhitespaceTrimmed`, `TextFromRtf`, `ThreadIndexNotBase64`, `TransportHeaderLineSkipped`, `TransportHeaderOverridden`,
 `TransportHeadersRewritten`, `ValueOutOfRange`; TNEF: `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefTrailingCrLfIgnored`,
-`TnefPlainTextNotRendered`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefWriterLimit`.
+`TnefPlainTextNotRendered`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefWriterLimit`; MSG: `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`,
+`MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized`.
 
 ## Limits
 

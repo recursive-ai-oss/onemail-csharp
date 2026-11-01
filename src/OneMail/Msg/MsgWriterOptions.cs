@@ -38,7 +38,7 @@ public sealed class MsgWriterOptions
     public bool Template { get; init; }
 
     /// <summary>
-    /// Whether a string property with no characters is written (as a stream holding only its terminator). MS-OXMSG 2.4.2.2 requires at least one character and
+    /// Whether a string property with no characters is written (as a zero-length stream). MS-OXMSG 2.4.2.2 requires at least one character and
     /// Outlook 2010 and earlier refuse such files, so by default an empty string is left out and reported. Default false.
     /// </summary>
     public bool KeepEmptyStrings { get; init; }

@@ -193,7 +193,8 @@ public class MsgWriterItemTests
             + "TEL;TYPE=VOICE,WORK:+1-206-555-0102\r\nEMAIL;TYPE=INTERNET,PREF:dan.fennell@contoso.com\r\nBDAY:1980-02-29\r\nCATEGORIES:Work,Friends\r\nNOTE:A \u00fcnicode note\r\nEND:VCARD\r\n";
         RecursiveAI.OneMail.Calendar.Component card = ContentDocument.Parse(Encoding.UTF8.GetBytes(vcf)).Components.Single();
         MapiMessage m = new VCardToContactConverter().Convert(card).Value;
-        AssertSame(m);
+        // The default mode terminates multi-valued strings, so the bytes differ from the converter's; the exact mode shows nothing else does.
+        AssertSame(m, Exact);
         using MsgFile f = OpenAll(MsgWriter.ToArray(m));
         var before = new MapiContact(m);
         var after = new MapiContact(f.Message);

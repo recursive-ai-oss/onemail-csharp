@@ -11,6 +11,7 @@ using RecursiveAI.OneMail.Conversion.OxcIcal;
 using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
+using RecursiveAI.OneMail.Msg;
 using RecursiveAI.OneMail.Rtf;
 using RecursiveAI.OneMail.Rtf.Compression;
 using RecursiveAI.OneMail.Sources;
@@ -50,7 +51,41 @@ internal static class OutlookChecks
     public static bool RunAll() =>
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
-        & Guard("oxocal", Oxocal) & Guard("olm", Olm);
+        & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("msg-write", MsgWrite);
+
+    // Writes an Outlook message with a named property, a recipient, an attachment and an embedded message, and reads it back property-exact.
+    public static bool MsgWrite()
+    {
+        static MapiProperty Str(ushort id, string v, MapiNamedProperty? n = null) => MapiProperty.CreateOwned(new MapiTag(id, MapiType.UnicodeString), Encoding.Unicode.GetBytes(v), n);
+        var m = new MapiMessage();
+        m.Properties.Add(Str(MapiPid.MessageClass, "IPM.Note"));
+        m.Properties.Add(Str(MapiPid.Subject, "caf\u00e9 \u2713"));
+        m.Properties.Add(Str(0x9000, "kept", new MapiNamedProperty(MapiPropertySets.PublicStrings, "Keywords")));
+        var r = new MapiRecipient(m);
+        r.Properties.Add(Str(MapiPid.DisplayName, "Ann"));
+        m.AddRecipient(r);
+        var a = new MapiAttachment(m);
+        a.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.AttachDataBinary, MapiType.Binary), [1, 2, 3]));
+        m.AddAttachment(a);
+        var e = new MapiAttachment(m);
+        e.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.AttachMethod, MapiType.Integer32), BitConverter.GetBytes(5)));
+        var inner = new MapiMessage(e);
+        inner.Properties.Add(Str(MapiPid.Subject, "inner"));
+        e.SetEmbeddedMessage(inner);
+        m.AddAttachment(e);
+        byte[] file = MsgWriter.ToArray(m, new MsgWriterOptions { Strings = MsgStringMode.AsGiven });
+        if (!MsgFile.TryOpen(file, out MsgFile? f, out _))
+        {
+            return false;
+        }
+
+        using (f)
+        {
+            f.ReadEverything();
+            return f.Defects.Count == 0 && MsgModelComparer.Differences(m, f.Message, ignore: k => k is "340D0003").Count == 0
+                && f.Message.Attachments[1].EmbeddedMessage?.Subject == "inner";
+        }
+    }
 
     public static bool Msg()
     {

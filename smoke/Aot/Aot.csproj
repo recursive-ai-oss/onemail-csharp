@@ -29,6 +29,7 @@
     <Compile Include="../../tests/OneMail.Tests/Stores/DbxTestBuilder.cs" />
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgTestBuilder.cs" />
     <Compile Include="../../tests/OneMail.Tests/Msg/MsgFixtures.cs" />
+    <Compile Include="../../tests/OneMail.Tests/Msg/MsgModelComparer.cs" />
     <Compile Include="../../tests/OneMail.Tests/Tnef/TnefTestBuilder.cs" />
     <!-- The browser smoke's Outlook checks; the NativeAOT smoke runs the TNEF-in-MIME one. -->
     <Compile Include="../Wasm/OutlookChecks.cs" />

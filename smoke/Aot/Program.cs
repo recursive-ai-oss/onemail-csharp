@@ -331,6 +331,8 @@ internal static class Program
         Console.WriteLine("contacts: " + (contactsOk ? "ok" : "FAILED"));
 
         bool olmOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Olm();
+        bool msgWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.MsgWrite();
+        Console.WriteLine("msg-write: " + (msgWriteOk ? "ok" : "FAILED"));
         Console.WriteLine("olm: " + (olmOk ? "ok" : "FAILED"));
 
         // Outlook Express database: a generated store read through the reader (shuffled chains, a narrow tree) and the happy path.
@@ -410,6 +412,6 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
