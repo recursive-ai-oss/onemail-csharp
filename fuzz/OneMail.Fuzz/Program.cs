@@ -42,6 +42,9 @@ internal static class Program
             ["sanitizer-reparse"] = SanitizerTargets.Reparse,
             ["render"] = RenderTarget.Run,
             ["render-datauri"] = RenderTarget.DataUri,
+            ["dkim-tags"] = DkimTargets.Tags,
+            ["dkim-key"] = DkimTargets.KeyRecord,
+            ["dns-reply"] = DkimTargets.DnsReply,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);
