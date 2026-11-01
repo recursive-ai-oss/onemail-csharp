@@ -1,0 +1,22 @@
++OK POP3 server ready <1896.697170952@dbc.mtview.ca.us>
++OK 2 320
++OK
+1 120
+2 200
+.
++OK
+1 uid-a
+2 uid-b
+.
++OK
+TOP
+UIDL
+SASL PLAIN SCRAM-SHA-256
+.
++OK 25 octets
+Subject: x
+
+..dot
+end
+.
+-ERR [IN-USE] busy

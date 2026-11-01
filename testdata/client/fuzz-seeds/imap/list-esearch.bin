@@ -1,0 +1,8 @@
+* LIST (\HasNoChildren \Sent) "/" "Entw&APw-rfe"
+* LIST () NIL {5}
+b"c d
+* ESEARCH (TAG "A282") UID MIN 2 MAX 47 COUNT 3 ALL 2,10:11
+* STATUS "x" (MESSAGES 231 UIDNEXT 44292)
+* NAMESPACE (("" "/")) NIL (("Public/" "/"))
+* VANISHED (EARLIER) 300:310,405
+* SEARCH 2 84 882

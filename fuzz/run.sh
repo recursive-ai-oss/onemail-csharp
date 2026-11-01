@@ -4,7 +4,7 @@
 #   fuzz/run.sh <target> <seconds> [corpus dir] [extra libFuzzer flags...]
 #   fuzz/run.sh replay <target> <file>...      # run saved inputs once, without libFuzzer (reproduce a finding)
 #
-# Targets: dkim-tags, dkim-key, dns-reply (DKIM/ARC headers, key records, DNS replies), text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
+# Targets: imap-response, smtp-reply, pop3-response, pop3-listings (protocol response readers), dkim-tags, dkim-key, dns-reply (DKIM/ARC headers, key records, DNS replies), text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
 #
 # Environment (nothing is baked into the script):
 #   ONEMAIL_FUZZ_WORK    required: where builds, corpora and findings go. Keep it outside the checkout.
@@ -70,6 +70,8 @@ case "$target" in
   dkim-tags) maxlen=4096 ;;
   dkim-key) maxlen=9000 ;;
   dns-reply) maxlen=2048 ;;
+  imap-response) maxlen=16384 ;;
+  smtp-reply|pop3-response|pop3-listings) maxlen=4096 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
@@ -107,6 +109,7 @@ mkdir -p "$corpus" "$findings"
 "$instrument" "$bin/RecursiveAI.OneMail.Calendar.dll" >/dev/null
 "$instrument" "$bin/RecursiveAI.OneMail.Render.dll" >/dev/null
 "$instrument" "$bin/RecursiveAI.OneMail.Cryptography.dll" >/dev/null
+"$instrument" "$bin/RecursiveAI.OneMail.Client.dll" >/dev/null
 
 # An extra seed directory is read-only for libFuzzer: new finds go to $corpus.
 dirs=("$corpus")

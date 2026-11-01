@@ -474,6 +474,35 @@ internal static class Program
         }
 
         Console.WriteLine("cryptography: " + (cryptoOk ? "ok" : "FAILED"));
+        bool clientOk;
+        {
+            // The protocol layer over in-memory streams: no sockets, so this runs anywhere, but it covers the readers, the command writer,
+            // the typed IMAP views and SASL PLAIN, which is what trimming and AOT could break.
+            var script = new ScriptStream(System.Text.Encoding.ASCII.GetBytes(
+                "* OK [CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN] ready\r\n" +
+                "A0001 OK [CAPABILITY IMAP4rev1] authenticated\r\n" +
+                "* 1 FETCH (UID 7 FLAGS (\\Seen) ENVELOPE (NIL \"hi\" NIL NIL NIL NIL NIL NIL NIL NIL) BODY[] {5}\r\nhello)\r\n" +
+                "A0002 OK done\r\n"));
+            using var conn = RecursiveAI.OneMail.Client.Protocol.ProtocolConnection.FromStream(script, "localhost",
+                new RecursiveAI.OneMail.Client.Protocol.ProtocolConnectionOptions { AllowInsecureAuthentication = true });
+            var imap = new RecursiveAI.OneMail.Client.Imap.Protocol.ImapRawConnection(conn);
+            var greeting = imap.ReadGreeting();
+            var auth = imap.Authenticate(new RecursiveAI.OneMail.Client.Sasl.SaslPlain("u", "p"));
+            string literal = "";
+            var fetch = imap.Execute(RecursiveAI.OneMail.Client.Imap.Protocol.ImapCommand.Create("FETCH").SequenceSet("1").Raw("(UID BODY[])"), (ctx, stream) =>
+            {
+                var buf = new byte[16];
+                literal = System.Text.Encoding.ASCII.GetString(buf, 0, stream.Read(buf, 0, buf.Length));
+                return true;
+            });
+            bool typed = fetch.Untagged.Count == 1 && fetch.Untagged[0].TryGetFetch(out var f) && f.Uid == 7 && f.Envelope?.Subject == "hi";
+            var smtp = RecursiveAI.OneMail.Client.Smtp.Protocol.SmtpRawConnection.MailFromArguments("a@example.com", new RecursiveAI.OneMail.Client.Smtp.Protocol.SmtpMailOptions { Size = 5 });
+            clientOk = greeting.Status == RecursiveAI.OneMail.Client.Imap.Protocol.ImapStatus.Ok && auth.IsOk && fetch.IsOk && literal == "hello" && typed
+                && script.SentText.StartsWith("A0001 AUTHENTICATE PLAIN AHAAcA==\r\n", StringComparison.Ordinal)
+                && smtp == "FROM:<a@example.com> SIZE=5";
+        }
+
+        Console.WriteLine("client: " + (clientOk ? "ok" : "FAILED"));
 
 
 
@@ -483,7 +512,7 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && clientOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 
@@ -500,4 +529,32 @@ internal sealed class CountingSink(Action<long> onWrite) : Stream
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
     public override void Write(byte[] buffer, int offset, int count) => onWrite(count);
+}
+
+/// <summary>Serves scripted bytes and records what is written, for the protocol-layer check.</summary>
+internal sealed class ScriptStream(byte[] script) : Stream
+{
+    private readonly MemoryStream _sent = new();
+    private int _pos;
+
+    public string SentText => System.Text.Encoding.ASCII.GetString(_sent.ToArray());
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+    public override int Read(Span<byte> buffer)
+    {
+        int n = Math.Min(Math.Min(buffer.Length, 5), script.Length - _pos);
+        script.AsSpan(_pos, n).CopyTo(buffer);
+        _pos += n;
+        return n;
+    }
+
+    public override void Write(byte[] buffer, int offset, int count) => _sent.Write(buffer, offset, count);
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
 }

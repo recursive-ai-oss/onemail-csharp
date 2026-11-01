@@ -1,0 +1,5 @@
+* OK [PERMANENTFLAGS (\Seen \Deleted \*)] Limited
+A9 NO [TRYCREATE] Mailbox doesn't exist: "x"
++ idling
+A3 OK [APPENDUID 38505 3955] APPEND completed
+* BYE bye

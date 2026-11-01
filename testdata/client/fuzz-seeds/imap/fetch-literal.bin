@@ -1,0 +1,7 @@
+* 3 FETCH (UID 9 BODY[HEADER.FIELDS (SUBJECT)] {15}
+Subject: hi
+
+ FLAGS (\Seen))
+* 4 FETCH (BODY[] {0}
+)
+A2 OK done
