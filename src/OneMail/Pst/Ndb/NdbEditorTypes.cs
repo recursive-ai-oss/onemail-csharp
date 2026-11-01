@@ -151,7 +151,8 @@ internal sealed class StreamEditorIo(Stream stream, bool leaveOpen) : EditorIo
 
     public override int Read(long offset, Span<byte> buffer)
     {
-        if (offset >= stream.Length)
+        // An offset taken from a header or tree entry can be anything, a 64-bit value above the signed range included; a read there finds nothing.
+        if (offset < 0 || offset >= stream.Length)
         {
             return 0;
         }

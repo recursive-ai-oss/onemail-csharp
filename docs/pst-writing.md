@@ -129,8 +129,7 @@ key opens without a repair prompt, and the `cRef` of blocks shared by several no
 ## In place
 
 `PstStore.OpenForWriting` (`RecursiveAI.OneMail.Pst.Messaging.PstWritableStore`) and, underneath it, `NdbEditor` (`RecursiveAI.OneMail.Pst.Ndb`) change an existing
-Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. **This code has not been through an independent review of its
-commit path yet, and has not been opened in Outlook or checked by `scanpst.exe`.** Treat it as preview quality and keep a copy of files you cannot lose.
+Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. Its commit path has had an independent review (*Review*, below). It has **not** been opened in Outlook or checked by `scanpst.exe`: treat it as preview quality and keep a copy of files you cannot lose.
 
 ### Opening
 
@@ -144,9 +143,19 @@ in `Allow` (`NdbOpenRisks`), one class at a time:
 | a header CRC or the sentinel does not match | `HeaderChecksum` | `HeaderChecksum` |
 | `fAMapValid` is not 1 or 2 (a writer stopped), or an AMap page fails its checks, or the AMaps' free space is not the header's `cbAMapFree` | `AllocationMaps` | `AllocationMaps`: every map is rebuilt from the two B-trees (MS-PST 2.6.1.3.7) before the first commit |
 | the density list page is damaged | `DensityList` | `DensityList`: rebuilt from the maps |
+| the maps' totals add up, but a tree reaches a page or block they call free | `AllocationMaps` | `AllocationMaps`: rebuilt as above |
 | more than `DefectThreshold` (default 0) other defects from the node database reader | `Damage` | `Damage` |
+| a B-tree page fails its checks, repeats, or sits at the wrong level; a page or block lies outside the allocated part of the file the header describes (below its first allocation map, or past `ibFileEof` or the end of the file); `ibFileEof` is smaller than the first allocation map; a BID is implausibly large | `Damage` | never (`CanAllow` false): such a file is repaired into a fresh PST (recovery), not edited |
 
-Bytes after the header's `ibFileEof` (a stopped commit that was growing the file) are not a finding; they are cut off at open.
+Opening walks both B-trees once (one pass over their pages and the block entries; no block is read), so a damaged page is found when the file is opened and not half-way through an edit.
+The sizes in the header are not trusted: the file is never taken to be longer than it is, so a made-up `ibFileEof` or `ibAMapLast` cannot make the editor loop over, or a commit grow the file to,
+a made-up number of ranges. `bidNextB` and `bidNextP` are raised above the BIDs the trees use when the header's are lower (a torn header write, another program's file), so new blocks never reuse a BID.
+
+Bytes after the header's `ibFileEof` (a stopped commit that was growing the file) are not a finding, **provided nothing in either tree reaches them**; they are then cut off at open, and a rolled-back
+transaction cuts the bytes it wrote past the end in the same way. If a tree does reach them, the file is refused for good and left as it was.
+
+The exclusive open is `FileShare.None`: on Windows the operating system enforces it, on Linux and macOS the BCL takes an advisory `flock`, which stops other .NET programs and other editors but not a program that
+does not look (such as the libpff tools or a backup that reads the file mid-commit).
 
 ### Allocation (MS-PST 2.2.2.7.2 to 2.2.2.7.4, 2.6.1.1)
 
@@ -219,6 +228,80 @@ Folder properties other than name and container class are not carried (the loss 
 * `tests/OneMail.Tests/Pst/NdbEditorTests.cs`, `PstWritableStoreTests.cs`, `PstWritableCorpusTests.cs`: allocation, growth past a range, splits and merges, reference counts, zeroing, exclusive open, rollback, refusals,
   item and folder operations, named properties, the Outlook-written Tika files edited and compared item by item, and the allocation maps of builder- and Outlook-written files agreeing with their block trees.
 * `tests/Durability` (run by `tools/pst/inplace-check.sh`): power-cut replays, process kills and a soak, then the libpff tools over the edited files. Results are in `benchmarks.md` (*PST in-place writing*).
+
+### Review
+
+The commit path was reviewed by an engineer who did not write it: `NdbEditor` and its map, page-store and B-tree helpers, `PstWritableStore` and its table rewrite, `PstCompaction`, the open-time
+refusals, and the durability harness itself. The review read the code against MS-PST (2.2.2.6, 2.2.2.7.x, 2.6.1.1.x, 2.6.1.3.7) and this document, then tried to break it with the runs below.
+
+**What was run** (Checked build, Linux x64, real files on local NVMe, libpff tools 20180714):
+
+* An independent checker (`tests/OneMail.Tests/Pst/NdbChecker.cs`) that parses the bytes itself and recomputes, from the two trees, what the bookkeeping must say: every page and block trailer and CRC; B-tree
+  order, levels and index keys; extents that overlap; every page and block marked used in the allocation maps (and used slots nothing reaches, reported separately as leaks); `cbAMapFree`; the density list;
+  `ibAMapLast`; each block's reference count against the users that name it (nodes, subnode entries, XBLOCK/XXBLOCK/SLBLOCK/SIBLOCK entries); `bidNextB`, `bidNextP` and the NID counters. Its sensitivity is
+  pinned by a test that damages each of those and expects the finding.
+* The soak (`Durability soak`) runs it after every commit: 27,000 random operations (adds, deletes, moves, replaces, folder create/rename/move/delete) over a builder-written file and the two Outlook-written test
+  files, 900 commits, 903 checker runs, **0 findings** (and 0 leaked slots); freed space was wiped and added items read back property for property each time.
+* Power-cut replays (`Durability campaign`): each scenario's every write, barrier and length change is recorded, and the file is rebuilt as a power cut at **every** point could leave it: all earlier writes; a random
+  subset of the writes since the last barrier (twice); the last write torn at a sector boundary; every write since the last barrier torn into a random subset of its 512-byte sectors. Each leftover must open, carry
+  no defect the flag does not explain, equal **by a whole-store snapshot** (every folder and item with every property, attachment and recipient) one of the states the scenario passes through, and pass the
+  checker; leftovers with invalid maps must also be repairable (open with `AllocationMaps`, add an item, check the result). 3 bases x 7 scenarios (add, delete, folders, grow past a range, split, named properties,
+  mixed): 36,840 leftovers, **0 failures**. By the step of the commit the stop fell in: 30,845 stopped while data blocks and pages were written (step 1), 360 at the invalid-flag header write (step 2), 800 during the map writes (step 3), 360 at the commit header write (step 4), 4,370 inside the wiping (step 5), 105 after the last commit.
+* Process kills (`Durability kill`): SIGKILL at the Nth write or barrier, and after a random time, on a real file: 2,520 runs (3 bases x 7 scenarios x 80 stops at the Nth write or barrier and 40 at random times), 2,137 killed before the scenario finished, **0 failures**; each file opened as the old state, the new state or a commit boundary.
+* Leftovers through libpff: 378 leftovers (3 bases x 7 scenarios x 6 commit steps x 3 kinds): `pffinfo` opened 378 of 378; `pffexport` compared with our reader (`tools/oracles/libpff-messaging.sh`) on every second leftover with valid maps: 130 files, 130 agree. Before R2 was fixed, 9 of 40 sampled leftovers of the Outlook-written test file differed.
+* Hostile files (`Durability hostile`): random byte, bit and 64-bit changes in the header, the ROOT and pages, with the checksums fixed up half the time so the change is judged on its content, then open (no flag,
+  and with every flag), add an item, commit, delete it, commit: 36,000 cases (3 bases x 2 modes x 6,000), 0 hangs, 0 crashes, and 5 exceptions that are not a typed refusal (below).
+
+**Verdict per question.**
+
+1. *A stop leaving a file that is neither the old nor the new state, or that readers reject:* no, under the assumptions below. Replays and kills above; every leftover was the old or the new state (or, for
+   multi-commit scenarios, one of the commit boundaries between), our reader and `pffinfo` opened all of them, and `pffexport` agreed with our reader on every leftover with valid maps that was compared. Leftovers
+   with invalid maps (a stop between steps 2 and 4) are the old state with the flag set; the next editor open needs `AllocationMaps` and rebuilds them, which the repair check exercised.
+2. *Overwriting a page or block the committed header still reaches; reusing freed space before the commit is durable:* no. Nothing is written to a committed page or block before the header switch except zeroing
+   of space *taken in the same transaction* and the allocation maps themselves (which are not part of either tree). The maps clear freed bits in step 3, **before** the header switch, so for the window between
+   steps 3 and 4 the on-disk maps call space free that the committed (old) state still reaches: the only protection is `fAMapValid` = 0, which every writer must honour (MS-PST 2.6.1.3.7). The editor honours it;
+   a program that ignores the flag could allocate over the old state. Allocation consults only maps that were checked at open (below), and a transaction's own allocations are never visible to the committed state.
+3. *Reference counts, AMap bits, `cbAMapFree`, the density list, `bidNextB/P`, NID counters, `dwUnique` consistent after commit and after a rebuild:* yes, as the soak and the checker above show, with three
+   defects found and fixed (the NID counter, lagging BID counters and the maps-versus-trees check; see the table). `dwUnique` only has to differ per header write (MS-PST 2.2.2.6) and is incremented per commit.
+   The checker still reports, as a soft finding, a NID of type 0x0D above its header counter in the two Outlook-written test files; it is in the files as received and the editor does not touch it.
+4. *Zeroing live data:* no. Space is wiped only when it is freed, which needs the block's reference count to reach 1 (counts above 2 are decremented and the block stays), and after this review only when the
+   block's own trailer (size and BID) agrees with the tree entry. Space taken and freed in one transaction is wiped at once and may be reused; space freed from the committed file is wiped after the
+   header switch. A stop during wiping leaves un-wiped free space, never a wiped block the state reaches (replays cut inside the wiping writes: 4,370 leftovers, 0 failures).
+5. *Completeness of the refusals and exclusive open:* see the table in *Opening*. OST, ANSI, 4 KiB, unknown encryption and unsupported versions are refused for good; checksum, map, density-list and
+   damage findings are refused unless allowed one class at a time. The review added the cases that were missing (a lowered or nonsensical `ibFileEof`, maps that disagree with the trees, damaged tree pages,
+   out-of-range BIDs). Exclusive open is advisory on Linux and macOS (above).
+6. *Hostile input:* an open-time hang and unbounded growth on a made-up size, one data-destroying truncation, two endless loops and several untyped exceptions were found and fixed (table). What remains are a few exceptions thrown **before any
+   write of the commit** while a folder's table or properties are rewritten from damaged data (`ArgumentException`: no such folder; a property whose value does not fit its type) or when a counter in the
+   header leaves no NID index free (`InvalidOperationException`). Nothing is written and the store can be disposed; they are not typed refusals and are listed as follow-ups.
+
+**Findings fixed.** R1-R5, R7, R8 and R10 have a regression test (`NdbReviewTests`) that failed before the fix; R6, R9 and the footer check of R5 are covered by the hostile runs and the replays.
+
+| # | Finding | Fix |
+|---|---|---|
+| R1 | A header with valid checksums and a lowered `ibFileEof` made `Open` cut the file at that size with no flag: everything after it was destroyed on open. (An `ibFileEof` above the signed range cast to a negative size and threw `ArgumentOutOfRangeException`.) | Both trees are walked at open; a page or block outside the allocated part of the file refuses the file for good, and the cut is made only after that proof. The header's size is clamped to the file's length. |
+| R2 | New NIDs started at the header's counter. `rgnid` is the last index allocated (MS-PST 2.2.2.6), and a file Outlook wrote uses the counter's own value for the embedded message of an attachment (a subnode): the first item added took that NID, and `pffexport` then exported the new item in place of the embedded message (9 of 40 sampled leftovers of the Outlook-written test file differed). | `AllocateNid` starts after the counter. 0 of 87 differ afterwards. |
+| R3 | Maps whose totals add up but which call space free that a tree reaches passed the open checks; allocation would write over live data. | Refused (`AllocationMaps`), or rebuilt when allowed. |
+| R4 | `ibAMapLast` or `ibFileEof` made up: a rebuild looped over, or a commit grew the file to, that many ranges. | Sizes are clamped to the file's length. |
+| R5 | An index page naming itself or an ancestor, or at the wrong level, looped forever in lookups and inserts. A page whose footer was impossible indexed outside its buffer. | The child's level must be the parent's minus one on every step; the walk detects a page reached twice; footers are validated when a page is read. |
+| R6 | A damaged tree page was found half-way through an edit (`InvalidDataException`), or `ArgumentOutOfRangeException` on a 64-bit offset above the signed range. | Found at open and refused for good; a read at such an offset finds nothing. |
+| R7 | A header whose `bidNextB`/`bidNextP` lagged the trees (a torn header write that was allowed through, or another program's file) made new blocks reuse BIDs in use. | Raised above the largest BID in either tree at open and kept across rollbacks. |
+| R8 | A block-tree entry whose size disagreed with the block's trailer made freeing zero the neighbouring blocks. | The trailer must agree before space is freed; otherwise the block is left allocated (a leak, never a wipe). |
+| R9 | `DeleteFolder` followed any folder a hierarchy row named: a damaged table could delete an unrelated folder or recurse forever. | Only folders whose own node names this folder as parent are followed, each once. A chain of internal blocks deeper than any real file's is not followed. |
+| R10 | A rolled-back transaction that had grown the file left its writes past `ibFileEof`. | They are cut off at rollback. |
+
+**Assumptions that remain, stated plainly.**
+
+* *Atomic sectors.* Pages and blocks are written whole or not at all at 512-byte sector granularity (the replays tear them at that granularity and pass). The commit point is **one 564-byte write at offset 0**;
+  it fits one 4 KiB physical sector, which is what makes it atomic. If a device splits it at the 512-byte boundary, bytes 0-511 (the new roots) and 512-563 (`bidNextB` and the full CRC) can come from different
+  headers: the full CRC then fails and the file is refused without `HeaderChecksum`. The replays that tear the header there (`DURABILITY_TEAR_HEADER=1`) show exactly that: 7,512 leftovers, 12 failures in the main run and 16 in a re-run of three scenarios, every one `HeaderFullCrcMismatch`, all at the two header writes of a commit, all of them
+  `HeaderFullCrcMismatch`. With the flag, the new roots are used with the old `bidNextB`, which R7 now corrects. MS-PST has one header and no second copy, so this cannot be removed without leaving the format.
+* *Barriers.* `FileStream.Flush(true)` is taken to make earlier writes durable before it returns (fsync). Disks that lie about flushes, or a file system that reorders across fsync, are outside what any test here can show.
+* *Exclusive open* is advisory on Linux and macOS (above), so it protects against other .NET programs and other editors, not against a program that does not look.
+* *Free space is not wiped after a stop.* Content written by a stopped or rolled-back transaction, and blocks freed by a commit that stopped before step 5, stay in free space un-wiped until reused; `PstCompaction` writes a file without them.
+* *Sizes of blocks and pages* in the trees are trusted beyond the trailer check at free time; a crafted file whose extents overlap with consistent trailers is not detected at open (the checker detects it).
+
+**Not covered** (needs Outlook and `scanpst.exe`, listed under *Not verified* below): whether Outlook opens an edited file without a repair prompt, and how it treats the PMap, FMap and FPMap pages left as they were; Outlook's own
+behaviour on `fAMapValid` = 0; files over 2 GB, 4 KiB and ANSI files (never written).
 
 ### Not verified
 
