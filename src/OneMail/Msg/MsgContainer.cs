@@ -28,6 +28,11 @@ internal sealed class MsgContainer : IDisposable
 
     public IReadOnlyList<MapiDefect> Defects => _defects;
 
+    /// <summary>Whether the compound file needed recovery to open (always false unless <see cref="MsgReaderOptions.Recovery"/> is set).</summary>
+    public bool Recovered { get; private set; }
+
+    private readonly HashSet<int> _damagedReported = [];
+
     public int Dropped { get; private set; }
 
     /// <summary>Whether the root's PidTagStoreSupportMask says strings are Unicode; null until known or when there is none.</summary>
@@ -43,6 +48,44 @@ internal sealed class MsgContainer : IDisposable
             {
                 return _reader.Root;
             }
+        }
+    }
+
+    /// <summary>
+    /// Turns the compound file reader's damage list into defects on the file: one <see cref="MapiDefectKind.CompoundFileRecovered"/> summary, then one
+    /// <see cref="MapiDefectKind.CompoundFileDamage"/> per record. Their offsets are file offsets, so the location is empty.
+    /// </summary>
+    public void ReportRecovery()
+    {
+        IReadOnlyList<CfbDamage> damage;
+        lock (_gate)
+        {
+            damage = _reader.Damage;
+        }
+
+        if (damage.Count == 0)
+        {
+            return;
+        }
+
+        Recovered = true;
+        Report(null, MapiDefectKind.CompoundFileRecovered, string.Empty, 0, $"the compound file is damaged; it was opened by recovery, which found {damage.Count} problem(s). Properties and streams may be missing or cut short");
+        foreach (CfbDamage d in damage)
+        {
+            string who = d.EntryName is null ? string.Empty : $" (directory entry {d.StreamId} '{d.EntryName}')";
+            Report(null, MapiDefectKind.CompoundFileDamage, string.Empty, d.Offset, $"{d.Kind}{who}, {d.Length} byte(s) at file offset {d.Offset}: {d.Reason}");
+        }
+    }
+
+    /// <summary>
+    /// Reports a stream that recovery shortened: its sector chain stopped before the size the directory declares. The bytes before the break
+    /// are what a read returns. Reported once per directory entry.
+    /// </summary>
+    public void CheckDamaged(MapiObject? owner, CfbEntry stream, string location)
+    {
+        if (stream.IsDamaged && stream.ObjectType == CfbObjectType.Stream && stream.Size < stream.DeclaredSize && _damagedReported.Add(stream.StreamId))
+        {
+            Report(owner, MapiDefectKind.StreamDamaged, location, stream.Size, $"the stream holds {stream.Size} of the {stream.DeclaredSize} byte(s) its directory entry declares; the rest is lost");
         }
     }
 
@@ -93,6 +136,7 @@ internal sealed class MsgContainer : IDisposable
             return null;
         }
 
+        CheckDamaged(null, stream, location);
         lock (_gate)
         {
             try

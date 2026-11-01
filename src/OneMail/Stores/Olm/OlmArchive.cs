@@ -293,7 +293,10 @@ public sealed class OlmArchive : IDisposable, IAsyncDisposable
             MaxTotalSize = o.MaxTotalSize,
             MaxExpansionRatio = o.MaxExpansionRatio,
         };
-        var zo = new ZipReaderOptions { Limits = limits, VerifyChecksum = o.VerifyChecksums, MaxCentralDirectorySize = o.MaxCentralDirectorySize };
+        // LazyDirectory reads the central directory as entries are asked for, so the zip reader's memory does not grow with the entry count
+        // (mail exports hold hundreds of thousands of entries). The directory is still validated as a whole before the first entry is returned.
+        // The limits are the large-archive profile with this reader's own entry and size bounds on top.
+        var zo = new ZipReaderOptions { Limits = limits, VerifyChecksum = o.VerifyChecksums, MaxCentralDirectorySize = o.MaxCentralDirectorySize, LazyDirectory = true };
         Stream s = source.OpenRead(0, source.Length);
         try
         {

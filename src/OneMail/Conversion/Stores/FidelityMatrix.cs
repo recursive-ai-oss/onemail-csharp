@@ -222,7 +222,7 @@ public static class FidelityMatrix
             {
                 ConvertFormat.Ics or ConvertFormat.JCal or ConvertFormat.XCal => "NotCalendarItem",
                 ConvertFormat.VCard or ConvertFormat.JCard or ConvertFormat.XCard => "NotContactItem",
-                ConvertFormat.Tnef => "NotMapiConvertible",
+                ConvertFormat.Tnef or ConvertFormat.Msg => "NotMapiConvertible",
                 _ => "NotMail",
             };
             l.Add(new FidelityCell("olm-other", t, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], reason, "A category or settings record is not mail, a calendar item or a contact; it is skipped and counted."));
@@ -251,6 +251,23 @@ public static class FidelityMatrix
         AddSkips(l, "card-file", cal, "NotCalendarItem");
         l.Add(new FidelityCell("calendar-file", ConvertFormat.Tnef, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], "NotMail", "A calendar file is not a message; it is skipped and counted."));
         l.Add(new FidelityCell("card-file", ConvertFormat.Tnef, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], "NotMail", "A card file is not a message; it is skipped and counted."));
+        // MSG: an Outlook item is written as it is; a MIME message or an OLM mail record becomes one first.
+        string[] msgCodes = ["MsgNamedPropertyUnmapped", "MsgEmptyStringDropped", "MsgDuplicatePropertyDropped", "MsgValueResized", "MsgStorageEntryDropped", "MsgStorageDropped", "MsgStringsConverted", "MsgPropertyAdjusted", "FolderNameChanged"];
+        string[] notKept = ["FlagsNotCarried", "KeywordsNotCarried"];
+        l.Add(new FidelityCell("mime", ConvertFormat.Msg, Fidelity.Approximated, Fidelity.None, Fidelity.Lost, Fidelity.Lost, [.. MimeToOutlook, .. msgCodes, .. notKept], string.Empty,
+            "The message is converted to an Outlook item (MS-OXCMAIL) and written as an MSG file. A file has no folder or store flags, so the flags and keywords are reported."));
+        foreach (string family in new[] { "outlook-mail", "outlook-calendar", "outlook-contact" })
+        {
+            l.Add(new FidelityCell(family, ConvertFormat.Msg, Fidelity.Exact, Fidelity.Exact, Fidelity.Exact, Fidelity.Lost, msgCodes, string.Empty,
+                "Every property is written, with its named-property name, recipients, attachments and embedded messages. Strings are written as Unicode and the store support mask says so."));
+        }
+
+        l.Add(new FidelityCell("olm-mail", ConvertFormat.Msg, Fidelity.Approximated, Fidelity.Lost, Fidelity.Lost, Fidelity.Lost, [.. OlmToMime, .. MimeToOutlook, .. msgCodes, .. notKept], string.Empty,
+            "The record becomes a MIME message (its own source when it kept one), then an Outlook item."));
+        l.Add(new FidelityCell("olm-calendar", ConvertFormat.Msg, Fidelity.Lost, Fidelity.Lost, Fidelity.None, Fidelity.Lost, [], "NotMapiConvertible", "An OLM record has no property bag; it is skipped and counted."));
+        l.Add(new FidelityCell("olm-contact", ConvertFormat.Msg, Fidelity.Lost, Fidelity.Lost, Fidelity.None, Fidelity.Lost, [], "NotMapiConvertible", "An OLM record has no property bag; it is skipped and counted."));
+        l.Add(new FidelityCell("calendar-file", ConvertFormat.Msg, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], "NotMail", "A calendar file is not a message; it is skipped and counted."));
+        l.Add(new FidelityCell("card-file", ConvertFormat.Msg, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], "NotMail", "A card file is not a message; it is skipped and counted."));
         return l;
     }
 

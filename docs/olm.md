@@ -101,7 +101,8 @@ All are on by default (`OlmReaderOptions`); a limit that is hit is a typed defec
 | `MaxElementsPerItem` | 1,000,000 | `XmlTooManyElements`; that record is dropped |
 | `MaxTextLength` (one text run or attribute) | 256 Mi characters | `XmlTooLarge`; that record is dropped |
 | `MaxExpansionRatio` (decompressed per compressed byte, from OneArchive) | 1000, after 32 MiB | `ArchiveLimitExceeded` or `EntryUnreadable` |
-| `MaxEntryCount`, `MaxTotalSize`, `MaxCentralDirectorySize` | 50 million, 1 TiB, 4 GiB | `ArchiveLimitExceeded`; entries listed before the limit are kept |
+| `MaxEntryCount`, `MaxTotalSize` | 50 million, 1 TiB | `ArchiveLimitExceeded`; entries listed before the limit are kept |
+| `MaxCentralDirectorySize` | 4 GiB | `ArchiveLimitExceeded`; not applied by the lazy directory the reader now uses (see Memory) |
 
 XML is read with DTDs ignored and no resolver, so an entity bomb has nothing to expand; invalid characters are read, not refused.
 
@@ -116,21 +117,28 @@ in [`ambiguities.md`](ambiguities.md). Through the shared view they surface as `
 ## Memory
 
 Records, attachments and bodies stream: one record is built at a time and attachments are lazy streams over zip entries, so
-the working set does not depend on the size of the data. It does depend on the **number of zip entries**, because OneArchive's
-zip reader keeps the whole central directory in memory (about 1 KB per entry) and OneMail adds a table of attachment entries
-and a list of record entries on top (about 0.3 KB per entry). Measured on the worker (AMD Ryzen 9 7950X3D, .NET 10.0.402,
-Release, workstation GC), generated archives of stored entries (`tools/olm/memory.sh`), every field of every item read and every
-attachment streamed:
+the working set does not depend on the size of the data. The archive opens OneArchive's zip reader with `LazyDirectory`: the
+central directory is read as entries are asked for instead of being held whole (it is still checked as a whole before the first
+entry), and an entry returned earlier opens by seeking to its local header. The zip limits are the large-archive profile (path length
+and depth, expansion ratio) with `OlmReaderOptions.MaxEntryCount` and `MaxTotalSize` on top: 50 million entries and 1 TiB, more than
+`ArchiveLimits.LargeArchive` allows, because archives of that size are what OLM is.
 
-| Archive | Entries | Zip reader alone, peak working set | OneMail, peak working set | Allocated per item |
-|---|---|---|---|---|
-| 20,000 messages, 191 MiB | 26,678 | 62 MiB | 123 MiB | 84 KB |
-| 80,000 messages, 762 MiB | about 107,000 | not measured | 197 MiB | 84 KB |
-| 160,000 messages, 1,524 MiB | 213,345 | 242 MiB | 309 MiB | 84 KB |
+OneMail still keeps one small record per entry: the record entries it will read and the attachment entries it resolves by name
+(about 0.5 KB per entry). So the working set still grows with the **number of zip entries**, now without the zip reader's own
+1 KB per entry. Measured on the worker (AMD Ryzen 9 7950X3D, .NET 10.0.402, Release, workstation GC; indicative, a heavy-class job
+beside other work), with a generated archive of stored entries (`tools/olm/before-after.sh`), every field of every item read and
+every attachment streamed:
 
-So the working set is flat in data size and per-item state, and grows with entry count at about 1.3 KB per entry; it is **not
-constant in the number of entries**. A lazy directory in the zip reader would remove that term; it is raised with OneArchive's
-owners rather than worked around with a second zip reader here.
+| Archive | Entries | Peak working set, whole directory (before) | Peak working set, lazy directory |
+|---|---|---|---|
+| `bill_rapp.olm` (sample) | | 71 MiB | 71 MiB |
+| `outlook_example.olm` (sample) | | 40 MiB | 40 MiB |
+| 100,000 messages, 953 MiB (generated) | 133,345 | 234 MiB | 185 MiB |
+
+Items, allocation per item and every field read are the same as before (property dumps of the three archives hash the same).
+Earlier measurements of the whole-directory reader: 123 MiB at 26,678 entries, 197 MiB at about 107,000, 309 MiB at 213,345.
+The working set is flat in data size and per-item state; it is **not constant in the number of entries**, because the record and
+attachment tables are held. Dropping them would take a second pass over the directory per record, which is not done.
 
 ## How it was checked
 

@@ -56,8 +56,29 @@ stream's bytes are the value.
 | Strings of the other kind than the store mask says | read by their own type: `AmbiguousStringType` |
 | Unknown streams | ignored: `UnreferencedStream` |
 
-The full list is `MapiDefectKind`. Truncated or damaged compound files that OneArchive's reader rejects cannot be opened at
-all; two minimised fuzzer files in the Apache POI set are in that class.
+The full list is `MapiDefectKind`. By default a compound file that breaks the format is refused (`CompoundFileInvalid`); two
+minimised fuzzer files in the Apache POI set are in that class. `MsgReaderOptions.Recovery` opens them (next section).
+
+## Recovery (`MsgReaderOptions.Recovery`, `MaxRecoveryBytes`)
+
+Off by default. When on, a file that passes the strict checks is read exactly as before (`MsgFile.IsRecovered` is false, no extra
+defects). Otherwise OneArchive's compound file recovery opens what it can (a file cut short, FAT, DIFAT or mini FAT entries that point
+outside the file or at another chain's sectors, chains that loop or end early, a lost directory chain, invalid directory entries or
+links) and the message is read from what survives:
+
+| Defect | Meaning |
+|---|---|
+| `CompoundFileRecovered` | once per file: recovery ran; the offset is 0 |
+| `CompoundFileDamage` | one per repair the compound file reader made. The offset is a **file offset**, the location is empty, the detail names the damage kind (`HeaderInconsistent`, `Truncated`, `AllocationTableUnusable`, `MiniStreamUnusable`, `DirectoryUnusable`, `BadEntry`, `BadLink`, `OrphanedEntry`, `DamagedStream`), the directory entry, the length and the reason |
+| `StreamDamaged` | a stream whose sector chain ends before the size its directory entry declares. The location is the stream's path, the offset the length kept, the detail the declared size. Reported once per stream, on the object that owns it |
+
+A stream cut short gives the bytes before the break, so a property stream yields the entries it holds (`PropertyStreamTruncated` for
+a partial one) and a value stream gives a shorter value (`ValueSizeMismatch`). Nothing throws. Damage inside a stream's bytes is not
+detected. A file with no usable header, FAT or directory is still refused, as is one whose tables sit in a lost tail; the limits
+(`MaxRecoveryBytes` and the compound file entry limits) are never recovered from. `MsgFile.IsMsg` and format sniffing stay strict, so
+`Mail.Open` does not open a damaged file; use `MsgFile.TryOpen(..., new MsgReaderOptions { Recovery = true })`.
+`MsgTool damage` and `tools/msg/regress.sh` damage messages in memory in about 30 ways and report what recovery returns against the
+intact original.
 
 ## Limits (`MsgReaderOptions`)
 
@@ -86,3 +107,48 @@ properties, 9,822 value streams, 6,131 decoded strings, 955 named properties, **
 with no message code page (the oracle uses a fixed default; ours follows the rule above), one orphan stream, one signed
 attachment the oracle exposes no properties for. Not compared: the two refused files, a generated empty file and a generated
 file with an OLE attachment (the oracle cannot open them).
+
+# MSG and OFT writing
+
+`MsgWriter` (`RecursiveAI.OneMail.Msg`) writes a `MapiMessage` as a compound file with OneArchive's writer: `Write(model, stream | path)`,
+`WriteAsync`, `ToArray`, and `Check`, which plans the file without writing and returns the findings. Everything the reader exposes the writer
+accepts: properties, named properties, recipients, attachments, embedded messages and raw object storages (OLE). `MapiStreamValue` lets a
+property take its bytes lazily from a caller's stream, so a large attachment is copied to the file without being held in memory.
+
+## Layout written (MS-OXMSG 2.1-2.4)
+
+- Root: the message class ID `00020D0B-0000-0000-C000-000000000046`, the property stream `__properties_version1.0` (32-byte header for the top
+  level, 24 for recipients and attachments, 16-byte entries sorted by tag; fixed values inline, variable values as `__substg1.0_<tag>`
+  streams with the size in the entry), `__recip_version1.0_#nnnnnnnn` and `__attach_version1.0_#nnnnnnnn` storages numbered from zero, and
+  `__nameid_version1.0` for named properties.
+- The next-recipient and next-attachment counts and the named-property count in the header are the real counts.
+- Named properties get IDs from 0x8000 in order of first use, one ID per distinct name; GUID, entry and string streams are the MS-OXMSG 2.2.3
+  layout. An entry's stream key is the CRC-32 of the name (see W1 in `ambiguities.md`).
+- An embedded message is a storage named `__substg1.0_3701000D` holding a full message; its attachment gets `PidTagAttachMethod` 5.
+- Strings are Unicode (`PtypString`) by default, with `PidTagStoreSupportMask` having the Unicode bit set; `Strings = Ansi` writes `PtypString8`
+  in `AnsiCodePage` and sets `PidTagMessageCodepage`, replacing what the page cannot hold with `?` (reported); `AsGiven` writes each string
+  in the type it already has and changes nothing, for exact write-back of what was read.
+- Multi-valued strings and binaries are one stream per element with a length table, as MS-OXMSG 2.4.2.1 describes.
+- `Template = true` writes an OFT: the same file with `MSGFLAG_UNSENT`, so Outlook opens it as a new item to fill in. Nothing else differs.
+
+## Options and limits (`MsgWriterOptions`)
+
+Every limit is checked while planning, before the first byte is written; a model over a limit throws `MsgWriteException` with all findings
+and the output stays empty (a path is not created). Defaults: 2,048 recipients and 2,048 attachments (the format's own limit), 32 levels of
+embedding (a message that contains itself is caught the same way), 64 Ki properties per object, 1 GiB per value and 1 GiB in total, 0x7FFF
+named properties. `KeepEmptyStrings` writes an empty string as a zero-length stream; by default it is left out (MS-OXMSG 2.4.2.2).
+
+## Findings that do not stop the write (`MsgWriteDefectKind`)
+
+`NamedPropertyUnmapped` (a named property with no name is left out), `DuplicateProperty` (the later value is kept), `EmptyStringDropped`,
+`FixedValueResized`, `StringConverted`, `UnencodableCharacter`, `OddUnicodeLength`, `EmbeddedAndStorage`, `AttachMethodWithoutObject`,
+`PropertyAdjusted` (store support mask, message code page, message flags, attach method), `RawStorageEntryDropped`. The conversion layer maps
+them to the `Msg*` loss codes in `conversion.md`.
+
+## How it is checked
+
+- Every readable corpus MSG, PST/OST item and TNEF message written and read back by our reader is property-exact (counts in
+  `docs/compatibility.md`); extract-msg 0.55.0 reads every written file with no unexplained difference (`tools/msg/check-write.sh`).
+- Fuzz target `msg-write`: a random model (every fixed and multi-valued type, named properties, recipients, attachments, embedded messages) is written
+  and read back and must be exact; refusals must be typed.
+- Not yet verified: that Outlook opens the files, and that it accepts the entry flags and the Unicode-only store support mask written here.

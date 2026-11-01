@@ -39,6 +39,9 @@ public enum ConvertFormat
 
     /// <summary>One TNEF stream (<c>.tnef</c>, MS-OXTNEF) per message, carrying every property.</summary>
     Tnef,
+
+    /// <summary>One Outlook item file (<c>.msg</c>, MS-OXMSG) per message, appointment, contact, task, note or distribution list; a MIME message is converted to an Outlook item first (MS-OXCMAIL).</summary>
+    Msg,
 }
 
 /// <summary>What a mail-store target does with calendar and contact items.</summary>

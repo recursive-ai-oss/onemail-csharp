@@ -24,6 +24,7 @@ internal static class Program
             ["mime-tree"] = MimeTargets.Tree,
             ["ndb"] = NdbTarget.Run,
             ["msg"] = MsgTarget.Run,
+            ["msg-write"] = MsgWriteTarget.Run,
             ["tnef"] = TnefTarget.Run,
             ["mail-open"] = MailTarget.Run,
             ["ltp"] = LtpTarget.Run,
@@ -43,6 +44,9 @@ internal static class Program
             ["render"] = RenderTarget.Run,
             ["render-datauri"] = RenderTarget.DataUri,
             ["sanitizer-display"] = SanitizerTargets.Display,
+            ["dkim-tags"] = DkimTargets.Tags,
+            ["dkim-key"] = DkimTargets.KeyRecord,
+            ["dns-reply"] = DkimTargets.DnsReply,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

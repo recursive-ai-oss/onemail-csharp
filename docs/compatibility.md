@@ -45,7 +45,7 @@ No Outlook has been run yet.
 
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
 |---|---|---|---|---|---|---|
-| MSG / OFT (MS-OXMSG) | yes | no | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by the compound file reader (typed defect); MSG writing is not available yet |
+| MSG / OFT (MS-OXMSG) | yes | yes | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by default (typed defect) and open with `MsgReaderOptions.Recovery`, which turns the compound file reader's damage list into defects ([`msg.md`](msg.md)); writing: property-exact read-back (see below); **Outlook open: not yet verified** |
 | PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | Apache Tika's `testPST.pst` and `testPST_variousBodyTypes.pst` are real Unicode PSTs with 512-byte pages (wVer 23, checked on the header); no ANSI PST and no 4 KiB multi-map store from Outlook is public, so those are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
 | PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world ANSI sample; generated stores only |
 | TNEF / winmail.dat (MS-OXTNEF) | yes | yes | 0 against tnefparse, tnef and ytnef: 563 checks, 125 explained | attributes identical 17 / 17; MAPI property-exact 17 / 17 | yes | no TNEF-in-MIME message in the public corpora; checked on generated wrappers (64 messages) |
@@ -186,6 +186,20 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 | DOMPurify 3.4.17, default configuration, same scorer in the same page | the same 233 vectors | ours 0 findings, DOMPurify 89, raw 194; ours looser in 0 categories | |
 | Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
 | Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
+
+## DKIM and ARC (`RecursiveAI.OneMail.Cryptography`)
+
+OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Node 22.22.1) as black-box oracles, run only. Rules, choices and method: [`dkim-arc.md`](dkim-arc.md); the checks are `tools/dkim/`.
+
+| Check | Input | Result | Known gaps |
+|---|---|---|---|
+| RFC 8463 Appendix A | Ed25519 and RSA signatures | both verify | the RFC 6376 Appendix A.2 example does not verify as printed (its `bh=` is the relaxed-body hash under `c=simple/simple`); reported as a body hash mismatch |
+| DKIM interop, both directions | 320 messages (10 bodies, RSA/Ed25519, 4 canonicalisations, `l=`, over-signing; LF and 8-bit included) | dkimpy 320/320 and 320/320; mailauth 320/320 and 320/320; 24/24 tampered copies rejected by all three | internationalised `d=`/`s=` (RFC 8616) are not supported |
+| ARC test suite | 171 validation scenarios | 171/171 agree (dkimpy 168, mailauth 166) | the 17 signing scenarios do not verify as assembled messages with any implementation, so are not counted |
+| ARC interop | chains of 1 to 3 hops, RSA and Ed25519, a body edit between hops | mailauth verifies ours 6/6 and we verify mailauth's 7/7; dkimpy verifies the RSA chain | dkimpy cannot verify Ed25519 ARC |
+| DNS client | stub server (UDP, TCP fallback, CNAME, NXDOMAIN, hostile replies, silence) and the system resolver | see `dkim-arc.md` | no DNSSEC |
+| Fuzzed | tag lists with the signature and ARC parsers, key records, DNS replies | yes | |
+| AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | `cryptography: ok` | not in the browser smoke (native only) |
 
 ## Rendering to PDF and PNG
 

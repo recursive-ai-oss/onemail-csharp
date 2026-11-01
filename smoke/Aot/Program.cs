@@ -212,6 +212,26 @@ internal static class Program
             }
         }
 
+        // Recovery: a broken FAT slot (MS-CFB 2.3) is refused by default and opens, with defects, when recovery is asked for.
+        {
+            byte[] cut = (byte[])msgBytes.Clone();
+            uint fat0 = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(cut.AsSpan(0x4C));
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(cut.AsSpan(512 + (int)(fat0 * 512L) + 12), 0xFFFFFFFE);
+            RecursiveAI.OneMail.Msg.MsgFile? rec = null;
+            bool recOk = !RecursiveAI.OneMail.Msg.MsgFile.TryOpen(cut, out _, out _)
+                && RecursiveAI.OneMail.Msg.MsgFile.TryOpen(cut, out rec, out _, new RecursiveAI.OneMail.Msg.MsgReaderOptions { Recovery = true });
+            if (recOk)
+            {
+                using (rec)
+                {
+                    rec!.ReadEverything();
+                    recOk = rec.IsRecovered && rec.Defects.Any(d => d.Kind == RecursiveAI.OneMail.Mapi.MapiDefectKind.CompoundFileDamage);
+                }
+            }
+
+            msgOk &= recOk;
+        }
+
         Console.WriteLine("msg: " + (msgOk ? "ok" : "FAILED"));
 
         // PST: build a small store, open it through the messaging layer and through Mail.Open, read an attachment and an embedded message.
@@ -331,6 +351,8 @@ internal static class Program
         Console.WriteLine("contacts: " + (contactsOk ? "ok" : "FAILED"));
 
         bool olmOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.Olm();
+        bool msgWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.MsgWrite();
+        Console.WriteLine("msg-write: " + (msgWriteOk ? "ok" : "FAILED"));
         Console.WriteLine("olm: " + (olmOk ? "ok" : "FAILED"));
 
         // Outlook Express database: a generated store read through the reader (shuffled chains, a narrow tree) and the happy path.
@@ -370,6 +392,9 @@ internal static class Program
 
         bool htmltextOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.HtmlText();
         Console.WriteLine("htmltext: " + (htmltextOk ? "ok" : "FAILED"));
+
+        bool ltpWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.LtpWrite();
+        Console.WriteLine("ltp-write: " + (ltpWriteOk ? "ok" : "FAILED"));
 
         // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
         bool convertOk;
@@ -427,11 +452,38 @@ internal static class Program
             && renderPngPages == 1 && renderPngBytes > 500 && renderPngResult.PagesWritten == 1 && renderPdfResult.UnservedRequests.Count == 0;
         Console.WriteLine("render: " + (renderOk ? "ok" : "FAILED"));
 
+        // DKIM and ARC under NativeAOT: RSA (BCL) and Ed25519 (OneCrypto) sign and verify, an ARC set is sealed and validated, and a DNS reply is parsed.
+        bool cryptoOk;
+        {
+            using var cryptoRsa = System.Security.Cryptography.RSA.Create(2048);
+            using var rsaKey = RecursiveAI.OneMail.Cryptography.Dkim.DkimSigningKey.FromRsa(cryptoRsa);
+            using var edKey = RecursiveAI.OneMail.Cryptography.Dkim.DkimSigningKey.FromEd25519Seed(new byte[32] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 });
+            var dns = new RecursiveAI.OneMail.Cryptography.Dns.InMemoryTxtResolver().Add("r._domainkey.example.com", rsaKey.ToKeyRecord()).Add("e._domainkey.example.com", edKey.ToKeyRecord());
+            byte[] plain = System.Text.Encoding.ASCII.GetBytes("From: a@example.com\r\nSubject: s\r\n\r\nbody\r\n");
+            byte[] signed = new RecursiveAI.OneMail.Cryptography.Dkim.DkimSigner(edKey, new RecursiveAI.OneMail.Cryptography.Dkim.DkimSignerOptions { Domain = "example.com", Selector = "e" })
+                .Sign(new RecursiveAI.OneMail.Cryptography.Dkim.DkimSigner(rsaKey, new RecursiveAI.OneMail.Cryptography.Dkim.DkimSignerOptions { Domain = "example.com", Selector = "r" }).Sign(plain));
+            var opts = new RecursiveAI.OneMail.Cryptography.Dkim.DkimVerifierOptions { Resolver = dns };
+            var dk = new RecursiveAI.OneMail.Cryptography.Dkim.DkimVerifier(opts).VerifyAsync(signed).GetAwaiter().GetResult();
+            var sealedMsg = new RecursiveAI.OneMail.Cryptography.Arc.ArcSealer(edKey, new RecursiveAI.OneMail.Cryptography.Arc.ArcSealerOptions { Domain = "example.com", Selector = "e" })
+                .SealAsync(signed, "mx.example.com; dkim=pass").GetAwaiter().GetResult();
+            var arc = new RecursiveAI.OneMail.Cryptography.Arc.ArcVerifier(opts).VerifyAsync(sealedMsg.Message).GetAwaiter().GetResult();
+            // A lookup against a port nobody listens on exercises the socket and RNG paths and must end as a temporary failure.
+            var client = new RecursiveAI.OneMail.Cryptography.Dns.DnsTxtClient(new RecursiveAI.OneMail.Cryptography.Dns.DnsTxtClientOptions { Servers = [new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 9)], Timeout = TimeSpan.FromMilliseconds(300), Attempts = 1 });
+            bool dnsOk = client.LookupTxtAsync("x._domainkey.example.com").AsTask().GetAwaiter().GetResult().Status == RecursiveAI.OneMail.Cryptography.Dns.TxtLookupStatus.TemporaryFailure;
+            cryptoOk = dk.Count == 2 && dk.All(x => x.IsPass) && arc.Status == RecursiveAI.OneMail.Cryptography.Arc.ArcChainStatus.Pass && dnsOk;
+        }
+
+        Console.WriteLine("cryptography: " + (cryptoOk ? "ok" : "FAILED"));
 
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+
+
+
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

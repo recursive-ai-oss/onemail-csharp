@@ -47,6 +47,10 @@ internal static class MsgObjectReader
         Dictionary<string, int>.AlternateLookup<ReadOnlySpan<char>> lookup = index.GetAlternateLookup<ReadOnlySpan<char>>();
         var claimed = new bool[kids.Count];
         string Where(string name) => path.Length == 0 ? "/" + name : path + "/" + name;
+        foreach (CfbEntry k in kids)
+        {
+            c.CheckDamaged(target, k, Where(k.RawName));
+        }
 
         // ---- the property stream and its header (MS-OXMSG 2.4)
         int headerSize = HeaderSize(kind);

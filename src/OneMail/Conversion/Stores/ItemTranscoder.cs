@@ -5,6 +5,7 @@ using RecursiveAI.OneMail.Conversion.OxcMail;
 using RecursiveAI.OneMail.Conversion.OxVCard;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Mime;
+using RecursiveAI.OneMail.Msg;
 using RecursiveAI.OneMail.Stores;
 using RecursiveAI.OneMail.Stores.Olm;
 using RecursiveAI.OneMail.Tnef;
@@ -57,6 +58,8 @@ internal static class ItemTranscoder
                 return Contact(item, target, report, out reason);
             case ConvertFormat.Tnef:
                 return Tnef(item, options, report, out reason);
+            case ConvertFormat.Msg:
+                return Msg(item, options, report, out reason);
             default:
                 return Skip(out reason, "Unconvertible");
         }
@@ -182,6 +185,68 @@ internal static class ItemTranscoder
         }
 
         return new Payload(PayloadKind.Message, ms.ToArray(), ".tnef");
+    }
+
+    private static Payload? Msg(IMailItem item, StoreConversionOptions o, LossReport report, out string reason)
+    {
+        reason = string.Empty;
+        MapiMessage message;
+        switch (item)
+        {
+            case MapiMailItem mi:
+                message = mi.Message;
+                break;
+            case MimeMailItem m:
+                ConversionResult<MapiMessage> r = new MimeToMapiConverter().Convert(m.Entity);
+                Merge(report, r.Report);
+                message = r.Value;
+                break;
+            case OlmItem { OlmKind: OlmItemKind.Email }:
+                // The record becomes a MIME message first (its own source when it kept one), and that becomes the item.
+                Payload mime = Mime(item, o, report);
+                ConversionResult<MapiMessage> converted = new MimeToMapiConverter().Convert(MimeEntity.Parse(mime.Content, o.Mime));
+                Merge(report, converted.Report);
+                message = converted.Value;
+                break;
+            default:
+                reason = "NotMapiConvertible";
+                return null;
+        }
+
+        using MemoryStream ms = new();
+        MsgWriteResult written = MsgWriter.Write(message, ms);
+        foreach (MsgWriteDefect d in written.Defects)
+        {
+            switch (d.Kind)
+            {
+                case MsgWriteDefectKind.NamedPropertyUnmapped:
+                    report.Add("mapi", d.Location, LossKind.Dropped, "MsgNamedPropertyUnmapped", "A named property without a name cannot be stored in an MSG file: " + d.Detail);
+                    break;
+                case MsgWriteDefectKind.EmptyStringDropped:
+                    report.Add("mapi", d.Location, LossKind.Dropped, "MsgEmptyStringDropped", "An MSG file cannot hold a string with no characters.");
+                    break;
+                case MsgWriteDefectKind.DuplicateProperty:
+                    report.Add("mapi", d.Location, LossKind.Dropped, "MsgDuplicatePropertyDropped", "A property appeared twice; one value was kept.");
+                    break;
+                case MsgWriteDefectKind.FixedValueResized:
+                    report.Add("mapi", d.Location, LossKind.Approximated, "MsgValueResized", d.Detail);
+                    break;
+                case MsgWriteDefectKind.RawStorageEntryDropped:
+                    report.Add("mapi", d.Location, LossKind.Dropped, "MsgStorageEntryDropped", d.Detail);
+                    break;
+                case MsgWriteDefectKind.EmbeddedAndStorage:
+                    report.Add("mapi", d.Location, LossKind.Dropped, "MsgStorageDropped", d.Detail);
+                    break;
+                case MsgWriteDefectKind.StringConverted:
+                    report.Add("mapi", d.Location, LossKind.Internal, "MsgStringsConverted", "An 8-bit string was written as Unicode, as the file format asks for one kind of string per message.");
+                    break;
+                case MsgWriteDefectKind.PropertyAdjusted:
+                    report.Add("mapi", d.Location, LossKind.Internal, "MsgPropertyAdjusted", d.Detail);
+                    break;
+            }
+        }
+
+        return new Payload(PayloadKind.Message, ms.ToArray(), ".msg");
     }
 
     /// <summary>Writes a document in the calendar or card format and folds the form's own losses into the report.</summary>

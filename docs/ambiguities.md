@@ -549,6 +549,13 @@ olm-reader 1.0.0 npm package as black-box oracles. No Outlook for Mac has been o
 | O8 | Recurrence with both a count and an end date | n/a | The count (`COUNT`) when the record says it is numbered, else the end date as a UTC `UNTIL` | `RecurrenceEnd` (loss entry) | prov.; all four sample patterns are numbered |
 | O9 | An attachment URL that matches no entry | the jar returns no bytes | Listed with no content | `AttachmentMissing` | prov. |
 
+## MSG writing
+
+| ID | Case | Other writers | Resolution | Defect | Evidence |
+|---|---|---|---|---|---|
+| W1 | The stream key of a named property with a string name in `__nameid_version1.0` (MS-OXMSG 2.2.3.1.2 has the key as a hash of the name) | Outlook files: CRC-32, reflected polynomial 0xEDB88320, start 0, **no final complement**, over the UTF-16LE name, and the same function as the distribution-list checksum in MS-OXOCNTC; 6 names in files from other writers use the name's original case | Written as Outlook files have it; names in the `PS_INTERNET_HEADERS` set are lower-cased first (the spec footnote). Readers match streams by the key, so the reader also accepts the other case | none | 878 of 878 names in our output and 1,163 of 1,169 in Outlook and other files agree with the formula; the six exceptions agree with the lenient rule; prov. until Outlook opens a written file |
+| W2 | A multi-valued string element in the model has no NUL terminator | n/a | In the default modes each element stream is written with its terminator, as MS-OXMSG 2.1.4.2.2 requires; `AsGiven` writes the bytes as they are | none | spec; prov. until Outlook opens a written file |
+
 ## Bodies (HTML to text, text to HTML, `format=flowed`, best body)
 
 Observed against `w3m` 0.5.3, `lynx` 2.9.0 and `html2text` 2025.4.15 as black-box programs, and on 3,237 Dovecot messages for the flowed and alternative-order cases. No
