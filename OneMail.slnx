@@ -11,6 +11,7 @@
     <Project Path="tests/OneMail.Tests/OneMail.Tests.csproj" />
     <Project Path="tests/CorpusRoundTrip/CorpusRoundTrip.csproj" />
     <Project Path="tests/PstOracle/PstOracle.csproj" />
+    <Project Path="tests/Durability/Durability.csproj" />
   </Folder>
   <Folder Name="/bench/">
     <Project Path="bench/OneMail.Benchmarks/OneMail.Benchmarks.csproj" />
