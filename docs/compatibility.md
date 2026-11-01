@@ -187,6 +187,20 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 | Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
 | Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
 
+## DKIM and ARC (`RecursiveAI.OneMail.Cryptography`)
+
+OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Node 22.22.1) as black-box oracles, run only. Rules, choices and method: [`dkim-arc.md`](dkim-arc.md); the checks are `tools/dkim/`.
+
+| Check | Input | Result | Known gaps |
+|---|---|---|---|
+| RFC 8463 Appendix A | Ed25519 and RSA signatures | both verify | the RFC 6376 Appendix A.2 example does not verify as printed (its `bh=` is the relaxed-body hash under `c=simple/simple`); reported as a body hash mismatch |
+| DKIM interop, both directions | 320 messages (10 bodies, RSA/Ed25519, 4 canonicalisations, `l=`, over-signing; LF and 8-bit included) | dkimpy 320/320 and 320/320; mailauth 320/320 and 320/320; 24/24 tampered copies rejected by all three | internationalised `d=`/`s=` (RFC 8616) are not supported |
+| ARC test suite | 171 validation scenarios | 171/171 agree (dkimpy 168, mailauth 166) | the 17 signing scenarios do not verify as assembled messages with any implementation, so are not counted |
+| ARC interop | chains of 1 to 3 hops, RSA and Ed25519, a body edit between hops | mailauth verifies ours 6/6 and we verify mailauth's 7/7; dkimpy verifies the RSA chain | dkimpy cannot verify Ed25519 ARC |
+| DNS client | stub server (UDP, TCP fallback, CNAME, NXDOMAIN, hostile replies, silence) and the system resolver | see `dkim-arc.md` | no DNSSEC |
+| Fuzzed | tag lists with the signature and ARC parsers, key records, DNS replies | yes | |
+| AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | `cryptography: ok` | not in the browser smoke (native only) |
+
 ## Rendering to PDF and PNG
 
 `RecursiveAI.OneMail.Render` on OneRender 1.3.2 (OneHtml 1.5.1, the same as ours); poppler `pdftotext` and Google Chrome (headless) from the distribution packages, run only. Method and options: [`render.md`](render.md); the checks are `tools/render/run.sh`.

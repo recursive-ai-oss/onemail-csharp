@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Not packed until it has content: an empty package would only reserve the name. -->
-    <IsPackable>false</IsPackable>
-    <Description>Signing, verification and encryption of email for .NET: DKIM, ARC, S/MIME and OpenPGP.</Description>
-    <PackageTags>$(PackageTags);dkim;arc;smime;openpgp</PackageTags>
+    <Description>Mail authentication signatures for .NET: DKIM and ARC signing and verification (RSA and Ed25519) with a DNS TXT client. Native platforms only (not browser WebAssembly).</Description>
+    <PackageTags>$(PackageTags);dkim;arc;dns</PackageTags>
+    <!-- This package's own readme replaces the shared one; it is stamped with the release tag like the shared one. -->
+    <PackageReadmeSource>$(MSBuildProjectDirectory)/PACKAGE.md</PackageReadmeSource>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../OneMail/OneMail.csproj" />
+    <PackageReference Include="RecursiveAI.OneCrypto" />
   </ItemGroup>
 
 </Project>

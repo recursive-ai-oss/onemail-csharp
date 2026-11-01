@@ -4,7 +4,7 @@
 #   fuzz/run.sh <target> <seconds> [corpus dir] [extra libFuzzer flags...]
 #   fuzz/run.sh replay <target> <file>...      # run saved inputs once, without libFuzzer (reproduce a finding)
 #
-# Targets: text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
+# Targets: dkim-tags, dkim-key, dns-reply (DKIM/ARC headers, key records, DNS replies), text (encoded words, RFC 2231 parameters, UTF-7, charset decoders), mime-reader, mime-tree (each parser adds its own; see fuzz/README.md)
 #
 # Environment (nothing is baked into the script):
 #   ONEMAIL_FUZZ_WORK    required: where builds, corpora and findings go. Keep it outside the checkout.
@@ -67,6 +67,9 @@ case "$target" in
   olm) maxlen=65536 ;;
   render) maxlen=8192 ;;
   render-datauri) maxlen=65536 ;;
+  dkim-tags) maxlen=4096 ;;
+  dkim-key) maxlen=9000 ;;
+  dns-reply) maxlen=2048 ;;
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
@@ -103,6 +106,7 @@ mkdir -p "$corpus" "$findings"
 "$instrument" "$bin/RecursiveAI.OneMail.dll" >/dev/null
 "$instrument" "$bin/RecursiveAI.OneMail.Calendar.dll" >/dev/null
 "$instrument" "$bin/RecursiveAI.OneMail.Render.dll" >/dev/null
+"$instrument" "$bin/RecursiveAI.OneMail.Cryptography.dll" >/dev/null
 
 # An extra seed directory is read-only for libFuzzer: new finds go to $corpus.
 dirs=("$corpus")
