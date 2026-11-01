@@ -47,6 +47,7 @@ internal static class Program
             ["dkim-tags"] = DkimTargets.Tags,
             ["dkim-key"] = DkimTargets.KeyRecord,
             ["dns-reply"] = DkimTargets.DnsReply,
+            ["smime-structure"] = SmimeTargets.Run,
         };
         Dictionary<string, Action<ReadOnlySpan<byte>>> reports = new(StringComparer.Ordinal);
         ReportTargets.Register(reports);

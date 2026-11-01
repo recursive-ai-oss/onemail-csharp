@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Interoperability harness for S/MIME: makes messages with this library and has OpenSSL and MimeKit (released builds, run as black boxes)
+       open them, and the reverse (tools/smime/README.md). A tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>SmimeInterop</AssemblyName>
+    <RootNamespace>OneMail.Tools.SmimeInterop</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+    <PackageReference Include="MimeKit" />
+  </ItemGroup>
+
+</Project>

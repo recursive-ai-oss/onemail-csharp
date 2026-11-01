@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Mail authentication signatures for .NET: DKIM and ARC signing and verification (RSA and Ed25519) with a DNS TXT client. Native platforms only (not browser WebAssembly).</Description>
-    <PackageTags>$(PackageTags);dkim;arc;dns</PackageTags>
+    <Description>Mail cryptography for .NET: S/MIME (RFC 8551) signing, verification, encryption and decryption on OneCrypto's CMS, with structured results; DKIM and ARC signing and verification (RSA and Ed25519) with a DNS TXT client. Native platforms only (not browser WebAssembly).</Description>
+    <PackageTags>$(PackageTags);smime;cms;dkim;arc;dns</PackageTags>
     <!-- This package's own readme replaces the shared one; it is stamped with the release tag like the shared one. -->
     <PackageReadmeSource>$(MSBuildProjectDirectory)/PACKAGE.md</PackageReadmeSource>
   </PropertyGroup>
