@@ -7,8 +7,6 @@
     <AssemblyName>OlmTool</AssemblyName>
     <RootNamespace>OneMail.Tools.Olm</RootNamespace>
     <IsPackable>false</IsPackable>
-    <!-- OneArchive's zip reader is a preview API; this is its documented opt-in. -->
-    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 

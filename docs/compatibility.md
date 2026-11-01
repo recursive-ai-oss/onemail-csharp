@@ -12,6 +12,21 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## Calendar card
+
+`CalendarCard` ([`calendar-card.md`](calendar-card.md)), checked on the calendar corpora (libical, ical.js, biweekly, sabre/vobject, Thunderbird holidays, the
+RFC examples) and the generated fixtures `testdata/calendar/card`, the MSG, OLM, TNEF and PST/OST corpora, and Outlook items generated from the
+iCalendar files by the MS-OXCICAL import. Cards: 3,524 from the fetched corpora (ics 3,502, msg 2, olm 8 appointments; Add 96, Cancel 161, Counter 65,
+DeclineCounter 32, Publish 171, Refresh 64, Reply 309, Request 790, none 1,816, other 10), 0 exceptions, 0 OneHtml parse errors over 7,048 documents.
+Recurrence sentences: 336 of 337 real rules described, the other "Repeats (custom rule)"; every described rule of the corpora (1,070) and of 2,700
+generated shapes parses back to the same frequency, interval, weekdays, days, month, count and until date. Occurrence lists (50 per series) against the
+expansion they are built on and against `recurring-ical-events` 3.8.2 over 2,384 recurring components: 2,357 equal, 14 stopped early by the card's own scan
+limit with a typed defect, 13 outside the naive case window, 0 unexplained; against the oracle 2,248 equal, 98 where the expansion itself differs
+from the oracle (explained in `recurrence.md`), 0 unexplained. XSS: the 233 sanitiser vectors in every text field (summary, location, description,
+URL, conference, attachment and its name, organizer and attendee names and addresses, role, status), rendered in headless Chromium without a sanitiser:
+0 scripts run, 0 requests (the raw vectors as control: 42 scripts, 58 requests). The Outlook meeting items in the corpora are few (two appointments in
+MSG); the Outlook-item path is checked on generated items only, and Outlook-produced meeting items wait for Outlook.
+
 ## 0.3.0-preview.1
 
 Calendar and contacts, the other stores and the Outlook item semantics on read are complete for this stage; the sections below
@@ -23,7 +38,7 @@ review.
 
 ## 0.2.0-preview.1
 
-Added since 0.1. The 0.1 rows below still hold. Further oracles for these rows, all run as released programs: Python `extract-msg` 0.55.0,
+Added since 0.1; the 0.1 section further down lists what that first release read and wrote, and each row there is still current except where a later section says otherwise. Further oracles for these rows, all run as released programs: Python `extract-msg` 0.55.0,
 `compressed-rtf` 1.0.7, `RTFDE` 0.1.2.2 and `tnefparse` 1.4.0; `tnef` 1.4.18 and `ytnef` 2.1.2 (distribution packages); `recurring-ical-events`
 3.8.2 and `python-dateutil` 2.9.0; Ical.Net 5.2.3 (NuGet, public API). Further corpora, fetched and never committed: the NIST CFReDS Data
 Leakage case OST, and MSG, PST and TNEF test files from Apache Tika and Apache POI ([`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)).
@@ -32,16 +47,14 @@ No Outlook has been run yet.
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
 |---|---|---|---|---|---|---|
 | MSG / OFT (MS-OXMSG) | yes | yes | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by the compound file reader (typed defect); writing: property-exact read-back (see below); **Outlook open: not yet verified** |
-| PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | no public ANSI or 512-byte-page Unicode PST from Outlook exists; those layouts and 4 KiB multi-map stores are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
-| PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world sample |
+| PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | Apache Tika's `testPST.pst` and `testPST_variousBodyTypes.pst` are real Unicode PSTs with 512-byte pages (wVer 23, checked on the header); no ANSI PST and no 4 KiB multi-map store from Outlook is public, so those are checked only on files we generate. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
+| PST ANSI | yes | no | generated stores only (see above) | n/a | yes | no real-world ANSI sample; generated stores only |
 | TNEF / winmail.dat (MS-OXTNEF) | yes | yes | 0 against tnefparse, tnef and ytnef: 563 checks, 125 explained | attributes identical 17 / 17; MAPI property-exact 17 / 17 | yes | no TNEF-in-MIME message in the public corpora; checked on generated wrappers (64 messages) |
 | Compressed RTF (MS-OXRTFCP) | yes | yes | decompression identical to compressed-rtf on 45 / 45 bodies, CRC 45 / 45; our output read back by both readers 45 / 45 | 97 exact + 1 line-ending | yes | `\objattph` positions become placeholders |
 | HTML and text from RTF (MS-OXRTFEX); native RTF to HTML | yes | encapsulation only | against RTFDE on 35 bodies: only line-ending and no-break-space differences (documented); native RTF to HTML on 123 documents: 0 unexplained against LibreOffice 24.2.7, pandoc 3.13 and unrtf 0.21.10 (pandoc/unrtf rules are class-level) | n/a | yes | |
 | MAPI and MIME conversion (MS-OXCMAIL) | yes | yes | see the conversion table below | 0 silent losses both ways | yes | |
 | ICS recurrence and time zones (RFC 5545 3.8.5, VTIMEZONE, IANA, Windows names) | yes | n/a | 2,384 recurring components: 0 unexplained against recurring-ical-events (2,372 compared), python-dateutil (2,378) and Ical.Net (2,188); every RFC 5545 example passes; DST transitions 108 / 108 in four zones | n/a | yes | |
-| Outlook calendar and task items; DBX; OLM; jCal/jCard/xCal/xCard | not yet | not yet | | | | in progress |
-
-| Outlook calendar, contact and task items; OLM; jCal/jCard/xCal/xCard | not yet | not yet | | | | in progress |
+| jCal, jCard, xCal, xCard (RFC 7265, 7095, 6321, 6351) | yes | yes, with a loss report | against ical.js, Python icalendar, biweekly and ez-vcard in three directions, every difference mapped to a rule ([`jcal-xcal.md`](jcal-xcal.md)); xCal and xCard have one oracle each | form to tree to form per [`jcal-xcal.md`](jcal-xcal.md) | yes | |
 
 Speed: PST/OST against XstReader.Api, MSG against MsgReader and TNEF against MimeKit all meet the bar on x64 and arm64 (geometric means
 0.197 / 0.320, 0.096 / 0.101, 0.312 / 0.287; worst row 0.569). Working set stays near 100 MB (x64) from 1,000 to 50,000 messages (826 MB
@@ -68,9 +81,9 @@ Windows file names cannot hold, while both are read everywhere ([`mailboxes.md`]
 | Maildir (Courier and Dovecot flags and keywords) | yes | yes | 0 against Python `mailbox` | 48 / 48 | via store tests | Courier keyword file line format unverified against a real store; one directory listing held in memory |
 | Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21: 2,053 real records (34 with text) in 13 folders, 3,512 generated messages in 12 folders | n/a | dbx | one real store (a Windows XP laptop image, 28 files); OE4 files and deleted messages are not read |
 | EMLX and Apple Mail `.mbox` bundles | yes | yes | ground truth 14 / 14 | 14 / 14 | yes | flag bits unverified against a real Apple Mail store |
-| ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines, component trees, typed views; contacts below) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and j/x forms come later |
-| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | DBX items not in the view yet |
-| PST / OST node database (MS-PST NDB) | yes (lower layer only) | no | NIST CFReDS OST: every node and block enumerates, header agrees with libpff | n/a | yes | no messages from PST yet; ANSI and 512-byte-page Unicode PSTs untested on real files (no public sample) |
+| ICS (RFC 5545, 5546, 7986), vCard 2.1 / 3.0 / 4.0 | yes (content lines, component trees, typed views; contacts below) | yes | see [`calendar.md`](calendar.md) | 1,372 / 1,372 | yes | recurrence expansion, time zones and the JSON and XML forms are in their own sections below |
+| The shared read view, `Mail.Open`, `Mail.Parse`, format sniffing | yes | n/a | agrees with the tree on 8,566 messages; attachment lists agree with Python except documented choices (V1-V8) | n/a | yes | |
+| PST / OST node database (MS-PST NDB) | yes (lower layer only) | no | NIST CFReDS OST: every node and block enumerates, header agrees with libpff | n/a | yes | messages from PST and OST are in the view (rows above); ANSI and 4 KiB multi-map stores untested on real files (no public sample) |
 
 
 ## Contacts (vCard typed view, Outlook contacts, MS-OXVCARD)
@@ -175,7 +188,37 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 | Real mail HTML kept | HTML bodies of 45 MSG, 18 PST, 6 TNEF, 5 Mime4j messages, plus 123 RTF-to-HTML outputs | text preserved in every body (0 differ), output unchanged by a second pass (0 unstable); 22 remote references and 4 tracking indications reported in the mail bodies | the CMU Enron maildir has no HTML parts |
 | Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
 
+## Rendering to PDF and PNG
+
+`RecursiveAI.OneMail.Render` on OneRender 1.3.2 (OneHtml 1.5.1, the same as ours); poppler `pdftotext` and Google Chrome (headless) from the distribution packages, run only. Method and options: [`render.md`](render.md); the checks are `tools/render/run.sh`.
+
+| Check | Input | Result | Known gaps |
+|---|---|---|---|
+| Every item rendered to PDF and to PNG pages | 8,757 items: MSG/OFT, PST/OST, TNEF, OLM, DBX, Mime4j, dovecot and Enron-sample files (every HTML, text and RTF-derived body), plus 16 generated cases (long and wide tables, 6,000 px image, RTL, CJK, emoji, 10,000 images, 3,000-deep nesting, 100,000-row table, 5,000 columns, 200,000-character word, 30,000-line text) | 8,757 and 16 rendered, **0 exceptions**; 8 files in the corpus folders are not mail (7z parts, three header-less messages, two fuzz-minimised MSGs OneArchive refuses) and are skipped | PNG pages are strips of one layout and can cut a line |
+| PDF text against the display HTML's text (`pdftotext -raw`, white space and bidi controls removed, compatibility forms folded) | the same 8,757 | 8,751 equal, 6 the same characters in a different order, **0 missing or extra**: 1 Hebrew/Arabic (visual against logical order), 5 messages built from nested tables with percentage heights, where content-stream order differs from document order | the text check cannot see a glyph the fonts lack: OneRender 1.3.2 draws nothing for it and keeps the text extractable |
+| Same with the CJK, emoji, Arabic and Hebrew font packages referenced | the same | identical counts (8,751 / 6); the generated CJK, emoji and RTL cases show their glyphs | without the packages those scripts render blank, silently |
+| Generated cases | 16 | 13 equal, 1 reordered (RTL), 2 missing: a 60-column and a 5,000-column table are clipped at the right margin, as print layout does | no scale-to-fit |
+| Nothing fetched | remote content allowed by policy, no `Resources` callback; 8,420 items | 10 items ask for 33 remote addresses (images, a background, a style sheet); all are listed in `UnservedRequests`, none is fetched (the loader decodes `data:` and otherwise asks only the caller). With the default policy no item asks for any | |
+| Page count against headless Chrome printing the same HTML (A4, 48 px margins) | 75 documents (the first 60 corpus items, 15 generated) | 70 equal, 5 differ: three copies of one Outlook newsletter template with `height:100%` tables (ours 3 pages, Chrome 1), one other mail (3 against 2), the 200,000-character word (39 against 42) | the 100,000-row table could not be printed by Chrome within its limit |
+| Page 1 pixels against Chrome (mean absolute grey difference at 48 dpi, 0 identical, 255 opposite) | the same 75 | median 1.6, p90 22.1, max 25.5 | different fonts and line breaking |
+| Time and memory (indicative, one process on the worker, not a benchmark row) | the 8,757 items | PDF median 2 ms, p90 7 ms, max 276 ms; PNG median 14 ms, p90 39 ms, max 191 ms; process peak 697 MB resident over the whole sweep | the 3,000-row to 100,000-row hostile cases take 0.3 to 6.3 s and 1,662 pages (PDF) |
+| Hostile bodies | 3,000-deep blockquotes, 150 nested tables, 100,000-row table, 10,000 images | the sanitiser's limits cut the deep-nesting, nested-table and 100,000-row cases (`DisplayTruncated`); the 10,000 images render in 0.26 s; `MaxPdfPages`, `MaxPngPages`, `MaxDuration` and a 40-million-pixel page cap bound the rest | |
+| PDF structure | the 76 kept PDFs | poppler `pdfinfo` reads all 76 without a message, every one tagged, title = subject | `qpdf --check` and veraPDF were not run (no prebuilt copy on the worker) |
+| AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; renders one message to PDF and to PNG (`render: ok`); `.Render` is not referenced by the browser smoke | |
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio
 0.091 on x64 and 0.093 on arm64; worst row 0.584).
+
+## Bodies
+
+HTML to text, text to HTML, `format=flowed` (RFC 3676) and best-body selection (`RecursiveAI.OneMail.Bodies`, [`bodies.md`](bodies.md)). Oracles, run as released
+programs: `w3m` 0.5.3, `lynx` 2.9.0 (distribution packages) and Python `html2text` 2025.4.15.
+
+| Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
+|---|---|---|---|---|---|---|
+| HTML to text | yes | n/a | 0 / 461 against each of w3m, lynx and html2text (118 corpus bodies, 43 constructs, 300 generated); every difference classed | n/a | yes (`htmltext`) | rules from linked style sheets are not applied; no column alignment in tables |
+| Text to HTML | n/a | yes | output of 1,715 inputs parses with 0 errors in OneHtml | quote levels kept | yes | link detection is conservative by design |
+| `format=flowed` | yes | yes | no oracle (Python `email` has none); RFC 3676 cases | encode then decode returns the paragraphs, 600 generated cases | yes | trailing spaces of a paragraph are dropped on encode |
+| Best body (MIME, MAPI, TNEF, OLM, DBX items) | yes | n/a | n/a | n/a | yes | no mail client observed for the selection rules (BD1 to BD5) |

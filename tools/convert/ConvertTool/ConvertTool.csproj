@@ -8,7 +8,6 @@
     <AssemblyName>ConvertTool</AssemblyName>
     <RootNamespace>ConvertTool</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
-    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

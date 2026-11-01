@@ -23,7 +23,7 @@
     <Copyright>Copyright (c) Recursive AI, LLC</Copyright>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <!-- The one place the package version lives; all packages share it. -->
-    <Version>0.3.0-preview.1</Version>
+    <Version>0.3.0-preview.2</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/recursive-ai-oss/onemail-csharp</RepositoryUrl>
     <PackageProjectUrl>https://recursiveai.org/onemail/</PackageProjectUrl>
@@ -36,12 +36,11 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <!-- The last version on nuget.org. Each published package sets PackageValidationBaselineVersion from it in its project file; a package
          that has never been published has no baseline. Bump after every release. -->
-    <OneMailPublishedVersion>0.2.0-preview.2</OneMailPublishedVersion>
+    <OneMailPublishedVersion>0.3.0-preview.2</OneMailPublishedVersion>
     <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
   <ItemGroup Label="Packed files">
-    <None Include="$(MSBuildThisFileDirectory)../PACKAGE.md" Pack="true" PackagePath="/" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)../LICENSE-MIT" Pack="true" PackagePath="/" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)../LICENSE-APACHE" Pack="true" PackagePath="/" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" Visible="false" />
@@ -61,4 +60,19 @@
     <InternalsVisibleTo Include="$(PackagePrefix).OneMail.Fuzz" />
   </ItemGroup>
 
+
+  <!-- The package page links to files in the repository. PACKAGE.md (or the project's PackageReadmeSource) says blob/main/; the packed copy points at the release tag
+       for $(Version) so the page shown for a version describes that version. -->
+  <Target Name="StampPackageReadme" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <PropertyGroup>
+      <StampedReadme>$(IntermediateOutputPath)PACKAGE.md</StampedReadme>
+      <PackageReadmeSource Condition="'$(PackageReadmeSource)' == ''">$(MSBuildThisFileDirectory)../PACKAGE.md</PackageReadmeSource>
+      <ReadmeText>$([System.IO.File]::ReadAllText('$(PackageReadmeSource)'))</ReadmeText>
+      <ReadmeText>$(ReadmeText.Replace('/blob/main/', '/blob/v$(Version)/'))</ReadmeText>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(StampedReadme)" Lines="$([MSBuild]::Escape($(ReadmeText)))" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Include="$(StampedReadme)" Pack="true" PackagePath="/" Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -6,9 +6,6 @@
     <RootNamespace>$(PackagePrefix).OneMail.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- OneArchive's compound file writer builds the MSG fixtures; its preview opt-in as in the library project. -->
-    <!-- OneArchive's compound-file reader is a preview API; this is its documented opt-in. -->
-    <NoWarn>$(NoWarn);ONEARCHIVE001;ONECOMPRESS001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +26,7 @@
     <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
     <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
     <ProjectReference Include="../../src/OneMail.Client/OneMail.Client.csproj" />
+    <ProjectReference Include="../../src/OneMail.Cli/OneMail.Cli.csproj" />
     <ProjectReference Include="../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
     <ProjectReference Include="../../src/OneMail.Render/OneMail.Render.csproj" />
   </ItemGroup>

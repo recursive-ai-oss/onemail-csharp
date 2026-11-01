@@ -1,8 +1,10 @@
 # OneMail
 
-An email library for .NET with no dependency beyond the .NET base class library and its sibling libraries (OneArchive, OneHtml, OneRender). It reads and writes the formats mail lives in, keeps what it reads lossless, and says what it repaired instead of throwing.
+An email library for .NET with no dependency beyond the .NET base class library and its sibling libraries: the published packages use OneArchive and OneHtml (the unpublished `.Render` package adds OneRender). It reads and writes the formats mail lives in, keeps what it reads lossless, and says what it repaired instead of throwing.
 
 > **Early preview.** MIME, the mailbox stores, ICS/vCard trees with recurrence and time zones, and Outlook items on read (MSG/OFT, PST/OST, TNEF, compressed RTF, MAPI↔MIME conversion) work today; Outlook writing, protocols and cryptography are still to come. Nothing here is a stable API yet. What is checked, and the known gaps: [docs/compatibility.md](docs/compatibility.md).
+>
+> **Display HTML is not yet independently reviewed.** The sanitiser behind `ToDisplayHtml` (`RecursiveAI.OneMail.Display`) has not had its independent security review. Do not rely on it to make untrusted mail safe to show until a release says the review has passed.
 
 ```csharp
 using RecursiveAI.OneMail;
@@ -34,10 +36,9 @@ All packages target `net10.0` and share one version.
 |---|---|---|
 | `RecursiveAI.OneMail.Calendar` | ICS, vCard, JSON/XML forms, recurrence, time zones | .NET only |
 | `RecursiveAI.OneMail` | the formats, the models and the one-line entry points | `.Calendar`, `RecursiveAI.OneArchive`, `RecursiveAI.OneHtml` |
-| `RecursiveAI.OneMail.Client` | SMTP, IMAP, POP3, SASL and the raw protocol layer | `RecursiveAI.OneMail` |
-| `RecursiveAI.OneMail.Cryptography` | DKIM, ARC, S/MIME, OpenPGP | `RecursiveAI.OneMail` |
-| `RecursiveAI.OneMail.Render` | a message to PDF or an image | `RecursiveAI.OneMail`, `RecursiveAI.OneRender` |
 | `RecursiveAI.OneMail.Cli` | the `onemail` command-line tool | `RecursiveAI.OneMail` |
+
+These three are on nuget.org. `RecursiveAI.OneMail.Client` (SMTP, IMAP, POP3, SASL), `.Cryptography` (DKIM, ARC, S/MIME, OpenPGP) and `.Render` (a message to PDF or an image) come in later previews.
 
 ## Clean room
 

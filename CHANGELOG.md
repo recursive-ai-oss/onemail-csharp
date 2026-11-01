@@ -9,6 +9,26 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - `MsgWriter` (`RecursiveAI.OneMail.Msg`): writes MSG and OFT files from the MAPI model (named properties, recipients, attachments, embedded messages, OLE storages), Unicode or code page strings, limits checked before the first byte, large attachment data copied from the caller's stream (`MapiStreamValue`). Outlook opening the files is not yet verified.
 - `ConvertFormat.Msg`, `StoreConverter` and `onemail convert --to msg`: any readable store to MSG files with loss reports.
 - `MapiDistributionList.Create` and `Notes.MapiNote`: builders for distribution list and sticky note items.
+- `RecursiveAI.OneMail.Render`: `ToPdfAsync` and `ToPngAsync` on any item render the display HTML to a tagged PDF or PNG pages through OneRender, with page size and margins, header and attachment-list switches, fonts, PNG scale and page range, limits on pages and time, and a loader that decodes `data:` URIs and fetches nothing else. See `docs/render.md`.
+- `onemail inspect` reads ICS, vCard, jCal, jCard, xCal and xCard files: the number of calendars or cards, the kinds of components in them and the reader's defects (`--json` and `--defects` supported).
+- Bodies (`RecursiveAI.OneMail.Bodies`): HTML to text on OneHtml's DOM (blocks, lists, tables, quotes, links, images, `pre`, hidden content, optional wrapping, limits), text to HTML with quote levels and conservative links, `format=flowed` decode and encode (RFC 3676, DelSp), and best-body selection across MIME, Outlook, TNEF, OLM and DBX items (`BodySelector`, `IMailItem.BestBody`). Every body carries one `MailBody.Origin` (stored, RTF-encapsulated, RTF-converted, HTML-to-text, text-to-HTML, flowed-decoded); a reply to an HTML-only message now carries a text alternative made from its HTML.
+
+## [0.3.0-preview.2]
+
+A fix release for 0.2.0-preview.2, on top of 0.3.0-preview.1.
+
+### Added
+
+- `RecursiveAI.OneMail.Display.CalendarCard`: the compact card mail clients show for a calendar object, as an HTML fragment and as plain text. It covers iMIP/iTIP methods (invitation, update, cancellation, reply, counter-proposal, ...), the time in a caller-chosen zone with the organizer's time kept, a plain-English recurrence sentence ("Every 2 weeks on Monday and Wednesday, until 30 Nov 2026", or "Repeats (custom rule)" when it cannot be said exactly) with the next occurrences, location and conference URLs, organizer, attendees and a truncated description, from `.ics` files, `text/calendar` parts and Outlook appointment and meeting items (`FromIcs`, `FromMime`, `FromMapi`, `FromItem`). The HTML is built from escaped text and passes the display sanitiser unchanged. See `docs/calendar-card.md`.
+- `OutlookNames.NetShowUrl` (`PidLidNetShowUrl`).
+- `IMailAttachment.ContentTypeInferred` (a default interface member): true when `ContentType` was guessed from the file name's extension because the item stored no specific type.
+
+### Fixed
+
+- `RecursiveAI.OneMail` now depends on `RecursiveAI.OneArchive` 1.1.0 (it was 0.7.0-preview.1), so an app that also uses OneArchive 1.x no longer hits a version conflict. The compound-file and zip readers are no longer preview APIs, so the build opt-outs are gone.
+- Attachments with no stored content type, or the generic `application/octet-stream` (Outlook, TNEF, OLM, and MIME parts), report a type from a built-in table when the file name's extension is known (`.pdf` is `application/pdf`); a stored specific type always wins. See `docs/shared-view.md`.
+- The package page (`PACKAGE.md`) links to the files of the release tag instead of `main`; the link is stamped from the package version when packing.
+- The README lists only the packages that are on nuget.org.
 
 ## [0.3.0-preview.1]
 
@@ -25,6 +45,7 @@ On the local feed. Calendar and contacts close with this preview (speed rows in 
 - Display HTML (`RecursiveAI.OneMail.Display`): an allowlist sanitiser on the HTML DOM, a remote-content policy (block, allow or a rewrite callback), `cid:` and attachment resolution, and optional header and attachment blocks. It has not had its independent review yet.
 - Calendar and contact benchmark rows against Ical.Net and FolkerKinzel.VCards, with a libical reference, in `docs/benchmarks.md`.
 - `RtfHtmlConverter`: RTF written as RTF (no encapsulated HTML or text) becomes HTML and plain text with typed defects and limits; the Outlook item view uses it when no other body exists (`MailBody.Origin`).
+
 
 ### Changed
 

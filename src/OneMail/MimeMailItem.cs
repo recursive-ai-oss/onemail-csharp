@@ -381,6 +381,11 @@ public class MimeMailItem : IMailItem
 
         public override Stream Open() => part.OpenDecodedContent();
 
+        // RFC 3676 §3: Content-Type: text/plain; format=flowed [; delsp=yes]
+        public override bool IsFormatFlowed => part.MediaType == "text/plain" && string.Equals(part.GetContentTypeParameter("format"), "flowed", StringComparison.OrdinalIgnoreCase);
+
+        public override bool FlowedDelSp => IsFormatFlowed && string.Equals(part.GetContentTypeParameter("delsp"), "yes", StringComparison.OrdinalIgnoreCase);
+
         public override string ReadText()
         {
             byte[] bytes = part.GetDecodedContent();
@@ -402,7 +407,9 @@ public class MimeMailItem : IMailItem
 
         public string? FileName => entity.FileName;
 
-        public string ContentType => entity.MediaType;
+        public string ContentType => ContentTypeInferred ? AttachmentMediaTypes.Infer(FileName)! : entity.MediaType;
+
+        public bool ContentTypeInferred => entity.MediaType == "application/octet-stream" && AttachmentMediaTypes.Infer(FileName) is not null;
 
         public string? ContentId => entity.GetContentId();
 

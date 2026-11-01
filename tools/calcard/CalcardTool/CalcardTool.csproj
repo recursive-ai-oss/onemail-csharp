@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Builds calendar cards over a corpus and reports counts per source format and method, the recurrence sentence parse-back and the
+       occurrence lists for the comparison with other expanders (tools/calcard/README.md). A tool project: nothing in src/ references it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>CalcardTool</AssemblyName>
+    <RootNamespace>CalcardTool</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail/OneMail.csproj" />
+    <Compile Include="../../../tests/OneMail.Tests/Display/SentenceParser.cs" Link="SentenceParser.cs" />
+  </ItemGroup>
+
+</Project>

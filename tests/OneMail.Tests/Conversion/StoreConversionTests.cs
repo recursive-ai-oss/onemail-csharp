@@ -330,8 +330,8 @@ public class StoreConversionTests
         string inbox = System.IO.Path.Combine(dest, "Inbox");
         string[] files = Directory.GetFiles(inbox, "*.eml");
         Assert.Equal(2, files.Length);
-        IMailItem back = Mail.Parse(File.ReadAllBytes(files[0]));
-        Assert.Equal("Hello world", back.Subject);
+        // The file system lists files in no fixed order, so pick the message by its subject.
+        IMailItem back = Assert.Single(files.Select(f => Mail.Parse(File.ReadAllBytes(f))), i => i.Subject == "Hello world");
         Assert.Equal(4, back.Attachments.Count);
         Assert.Equal(["Ann <ann@example.com>"], back.ToRecipients.Select(a => a.ToString()));
     }
