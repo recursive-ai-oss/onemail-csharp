@@ -210,6 +210,19 @@ public class SmtpClientTests
         client.Quit();
     }
 
+    [Fact]
+    public async Task AnEmptyResponseToAChallengeIsAnEmptyLine()
+    {
+        // RFC 4954 §4: "=" stands for an empty response only in place of an initial response; after a challenge it is an empty line.
+        (RecursiveAI.OneMail.Client.Protocol.ProtocolConnection conn, ScriptedStream wire) = ClientTestSupport.Scripted(
+            "334 eyJzdGF0dXMiOiI0MDEifQ==\r\n535 5.7.8 rejected\r\n", new RecursiveAI.OneMail.Client.Protocol.ProtocolConnectionOptions { AllowInsecureAuthentication = true });
+        await using var raw = new RecursiveAI.OneMail.Client.Smtp.Protocol.SmtpRawConnection(conn);
+        var reply = await raw.AuthenticateAsync(new RecursiveAI.OneMail.Client.Sasl.SaslXOAuth2("u", "t"), Ct);
+        Assert.Equal(535, reply.Code);
+        Assert.EndsWith("\r\n\r\n", wire.SentText, StringComparison.Ordinal);
+        Assert.DoesNotContain("=\r\n", wire.SentText.Replace("==\r\n", "", StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
     private static SmtpMessage Msg(string text, bool requireAll = false, SmtpDsnOptions? dsn = null, bool requireTls = false)
     {
         SmtpMessage m = SmtpMessage.FromBytes(Encoding.ASCII.GetBytes(text));

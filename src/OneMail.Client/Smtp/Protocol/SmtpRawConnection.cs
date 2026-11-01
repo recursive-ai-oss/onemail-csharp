@@ -346,7 +346,8 @@ public sealed class SmtpRawConnection : IAsyncDisposable, IDisposable
                 continue;
             }
 
-            if (response.Length == 0) { w.WriteAscii("="); } else { w.WriteSecretAscii(Convert.ToBase64String(response)); }
+            // RFC 4954 §4: an empty response to a challenge is an empty line; "=" means an empty response only in place of an initial response.
+            if (response.Length > 0) { w.WriteSecretAscii(Convert.ToBase64String(response)); }
             w.WriteCrLf();
             if (sync) { w.Flush(); } else { await w.FlushAsync(ct).ConfigureAwait(false); }
         }
