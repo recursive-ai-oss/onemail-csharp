@@ -60,6 +60,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | JCard | Lost | None | None | Lost | skipped: `NotContactItem` | A message is not a contact; it is skipped and counted. |
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | A message is not a contact; it is skipped and counted. |
 | Msg | Approximated | None | Lost | Lost | `DateZoneNotStored`, `DefaultValueNotWritten`, `EmbeddedMessageTooDeep`, `EmptyValueNotWritten`, `ExtraAuthorsNotMapped`, `FlagsNotCarried`, `FolderNameChanged`, `GroupFlattened`, `InReplyToFirstOnly`, `InvalidMediaType`, `KeywordsNotCarried`, `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`, `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized`, `NamedPropertyValueSetAside`, `PartHeaderNotMapped`, `PartsTooDeep`, `RepeatedHeaderNotMapped`, `SignatureNotVerifiable`, `StoreBookkeeping`, `ThreadIndexNotBase64`, `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefTrailingCrLfIgnored`, `ValueOutOfRange` | The message is converted to an Outlook item (MS-OXCMAIL) and written as an MSG file. A file has no folder or store flags, so the flags and keywords are reported. |
+| Pst | Approximated | None | Lost | Lost | `DateZoneNotStored`, `DefaultValueNotWritten`, `EmbeddedMessageTooDeep`, `EmptyValueNotWritten`, `ExtraAuthorsNotMapped`, `FlagsNotCarried`, `GroupFlattened`, `InReplyToFirstOnly`, `InvalidMediaType`, `KeywordsNotCarried`, `NamedPropertyValueSetAside`, `PartHeaderNotMapped`, `PartsTooDeep`, `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`, `PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded`, `PstTooManyChildren`, `PstUnsupportedType`, `RepeatedHeaderNotMapped`, `SignatureNotVerifiable`, `StoreBookkeeping`, `ThreadIndexNotBase64`, `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefTrailingCrLfIgnored`, `ValueOutOfRange` | The message is converted to an Outlook item (MS-OXCMAIL) and written into the folder it came from. A PST holds flags as properties; a MIME message's flags and keywords are reported. |
 
 ### Outlook mail (MSG, OFT, PST, OST, TNEF)
 
@@ -77,6 +78,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | JCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | Msg | Exact | Exact | Exact | Lost | `FolderNameChanged`, `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`, `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized` | Every property is written, with its named-property name, recipients, attachments and embedded messages. Strings are written as Unicode and the store support mask says so. |
+| Pst | Exact | Exact | Exact | Exact | `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`, `PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded`, `PstTooManyChildren`, `PstUnsupportedType` | Every property is written as it is, with its named-property name, recipients, attachments and embedded messages, into the same folder. Properties a PST item must have and the item lacks are added and listed (PstPropertyAdded). |
 
 ### Outlook appointment, meeting or task (MSG, PST, OST, TNEF)
 
@@ -94,6 +96,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | JCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | Msg | Exact | Exact | Exact | Lost | `FolderNameChanged`, `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`, `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized` | Every property is written, with its named-property name, recipients, attachments and embedded messages. Strings are written as Unicode and the store support mask says so. |
+| Pst | Exact | Exact | Exact | Exact | `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`, `PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded`, `PstTooManyChildren`, `PstUnsupportedType` | Every property is written as it is, with its named-property name, recipients, attachments and embedded messages, into the same folder. Properties a PST item must have and the item lacks are added and listed (PstPropertyAdded). |
 
 ### Outlook contact (MSG, PST, OST, TNEF)
 
@@ -111,6 +114,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | JCal | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
 | XCal | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
 | Msg | Exact | Exact | Exact | Lost | `FolderNameChanged`, `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`, `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized` | Every property is written, with its named-property name, recipients, attachments and embedded messages. Strings are written as Unicode and the store support mask says so. |
+| Pst | Exact | Exact | Exact | Exact | `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`, `PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded`, `PstTooManyChildren`, `PstUnsupportedType` | Every property is written as it is, with its named-property name, recipients, attachments and embedded messages, into the same folder. Properties a PST item must have and the item lacks are added and listed (PstPropertyAdded). |
 
 ### Outlook for Mac mail (OLM)
 
@@ -128,6 +132,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | JCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | Msg | Approximated | Lost | Lost | Lost | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `DateZoneNotStored`, `DefaultValueNotWritten`, `EmbeddedMessageAsData`, `EmbeddedMessageTooDeep`, `EmptyValueNotWritten`, `ExtraAuthorsNotMapped`, `FlagsNotCarried`, `FolderNameChanged`, `GroupFlattened`, `InReplyToFirstOnly`, `InvalidMediaType`, `KeywordsNotCarried`, `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`, `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized`, `NamedPropertyValueSetAside`, `OlmFieldDiffersFromSource`, `PartHeaderNotMapped`, `PartsTooDeep`, `RepeatedHeaderNotMapped`, `SignatureNotVerifiable`, `StoreBookkeeping`, `ThreadIndexNotBase64`, `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefTrailingCrLfIgnored`, `Unmapped`, `ValueOutOfRange` | The record becomes a MIME message (its own source when it kept one), then an Outlook item. |
+| Pst | Approximated | Lost | Lost | Lost | `AddressUnresolved`, `BccNotWritten`, `ConversationTopicWhitespaceTrimmed`, `DateZoneNotStored`, `DateZoneNotStored`, `DefaultValueNotWritten`, `EmbeddedMessageAsData`, `EmbeddedMessageTooDeep`, `EmptyValueNotWritten`, `ExtraAuthorsNotMapped`, `FlagsNotCarried`, `GroupFlattened`, `InReplyToFirstOnly`, `InvalidMediaType`, `KeywordsNotCarried`, `NamedPropertyValueSetAside`, `OlmFieldDiffersFromSource`, `PartHeaderNotMapped`, `PartsTooDeep`, `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`, `PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded`, `PstTooManyChildren`, `PstUnsupportedType`, `RepeatedHeaderNotMapped`, `SignatureNotVerifiable`, `StoreBookkeeping`, `ThreadIndexNotBase64`, `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefTrailingCrLfIgnored`, `Unmapped`, `ValueOutOfRange` | The record becomes a MIME message (its own source when it kept one), then an Outlook item. |
 
 ### Outlook for Mac appointment, task or note (OLM)
 
@@ -145,6 +150,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | Tnef | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
 | Msg | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
+| Pst | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
 
 ### Outlook for Mac contact or group (OLM)
 
@@ -162,6 +168,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | XCal | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
 | Tnef | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
 | Msg | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
+| Pst | Lost | Lost | None | Lost | skipped: `NotMapiConvertible` | An OLM record has no property bag; it is skipped and counted. |
 
 ### Outlook for Mac categories and other records (OLM)
 
@@ -179,6 +186,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | A category or settings record is not mail, a calendar item or a contact; it is skipped and counted. |
 | Tnef | Lost | None | None | Lost | skipped: `NotMapiConvertible` | A category or settings record is not mail, a calendar item or a contact; it is skipped and counted. |
 | Msg | Lost | None | None | Lost | skipped: `NotMapiConvertible` | A category or settings record is not mail, a calendar item or a contact; it is skipped and counted. |
+| Pst | Lost | None | None | Lost | skipped: `NotMapiConvertible` | A category or settings record is not mail, a calendar item or a contact; it is skipped and counted. |
 
 ### Calendar file (ICS, jCal, xCal)
 
@@ -196,6 +204,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | XCard | Lost | None | None | Lost | skipped: `NotContactItem` | Not an item of that family; it is skipped and counted. |
 | Tnef | Lost | None | None | Lost | skipped: `NotMail` | A calendar file is not a message; it is skipped and counted. |
 | Msg | Lost | None | None | Lost | skipped: `NotMail` | A calendar file is not a message; it is skipped and counted. |
+| Pst | Lost | None | None | Lost | skipped: `NotMail` | A calendar file is not a message; it is skipped and counted. |
 
 ### Card file (vCard, jCard, xCard)
 
@@ -213,6 +222,7 @@ destination stops the run; an item that cannot be read or converted is skipped a
 | XCal | Lost | None | None | Lost | skipped: `NotCalendarItem` | Not an item of that family; it is skipped and counted. |
 | Tnef | Lost | None | None | Lost | skipped: `NotMail` | A card file is not a message; it is skipped and counted. |
 | Msg | Lost | None | None | Lost | skipped: `NotMail` | A card file is not a message; it is skipped and counted. |
+| Pst | Lost | None | None | Lost | skipped: `NotMail` | A card file is not a message; it is skipped and counted. |
 
 <!-- matrix:end -->
 
