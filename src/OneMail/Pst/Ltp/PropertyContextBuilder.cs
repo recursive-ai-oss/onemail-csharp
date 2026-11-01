@@ -157,7 +157,7 @@ public sealed class PropertyContextBuilder
         var heap = new HeapNodeBuilder(0xBC);   // bTypePC
         var bth = new BthTreeBuilder(heap, 2, 6);
         heap.UserRoot = bth.Header;
-        Span<byte> entry = stackalloc byte[6];
+        Span<byte> entry = new byte[6];
         foreach ((ushort id, Pending p) in _properties)
         {
             BinaryPrimitives.WriteUInt16LittleEndian(entry, p.Type);

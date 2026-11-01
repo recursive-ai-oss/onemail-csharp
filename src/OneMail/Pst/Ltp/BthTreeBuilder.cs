@@ -26,6 +26,7 @@ public sealed class BthTreeBuilder
     private int _count;
     private bool _sorted = true;
     private bool _built;
+    private readonly byte[] _keyScratch = new byte[8];
     private readonly List<Hid> _leaves = [];
     private int _perLeaf;
 
@@ -111,9 +112,8 @@ public sealed class BthTreeBuilder
             throw new ArgumentException($"key 0x{key:x} does not fit in cbKey {KeySize}", nameof(key));
         }
 
-        Span<byte> k = stackalloc byte[8];
-        BinaryPrimitives.WriteUInt64LittleEndian(k, key);
-        Add(k[..KeySize], data);
+        BinaryPrimitives.WriteUInt64LittleEndian(_keyScratch, key);
+        Add(_keyScratch.AsSpan(0, KeySize), data);
     }
 
     // Little-endian unsigned integers compare from the last byte.

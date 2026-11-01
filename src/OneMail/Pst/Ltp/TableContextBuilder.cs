@@ -42,6 +42,7 @@ public sealed class TableContextBuilder
     private readonly int[] _ends;      // TCI_4b, TCI_2b, TCI_1b, TCI_bm
     private readonly int _rowsPerBlock;
     private readonly byte[] _row;
+    private readonly byte[] _indexScratch = new byte[4];
     private readonly byte[] _matrix;   // the block of rows being filled
     private readonly HashSet<uint> _rowIds = [];
     private readonly bool _rowVerAdded;
@@ -398,9 +399,8 @@ public sealed class TableContextBuilder
         _inRow = false;
         // The row ID is the first cell of the row (offset 0).
         uint rowId = BinaryPrimitives.ReadUInt32LittleEndian(_row);
-        Span<byte> index = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(index, checked((uint)_rowCount));
-        _rowIndex.Add(rowId, index);
+        BinaryPrimitives.WriteUInt32LittleEndian(_indexScratch, checked((uint)_rowCount));
+        _rowIndex.Add(rowId, _indexScratch);
 
         _row.CopyTo(_matrix.AsSpan(_rowsInBlock * RowSize));
         _rowsInBlock++;
