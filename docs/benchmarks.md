@@ -380,6 +380,11 @@ Geometric mean 0.71, worst row 0.99: the bar is met. MailKit as it ships (Nagle 
 2,931 ms (0.23x). `ours-data`: 911 ms and 697 ms. Ours holds more at the 1 MB peak because the prepared messages are held as an
 entity tree plus the converted SMTP message. `imap-full` is dominated by the server and the copy of each body, so the two sides land together.
 
+**Re-run of the IMAP rows** (same code and harness, a second exclusive bench job, load 2.5-4.0 before, during and after): imap-summary
+144.6 ms vs 148.9 ms (**0.97**), imap-full 177.5 ms vs 186.2 ms (**0.95**); allocations and peaks as above (MailKit summary peak 137 MiB).
+MailKit's summary median moved from 248 ms to 149 ms between the two runs (its first repetition was 301 ms in both), so treat
+imap-summary as roughly at parity rather than 0.58. With the re-run IMAP rows the geometric mean is 0.80 and the worst row 0.97: the bar still holds.
+
 ### Allocation per message in enumeration and download
 
 Measured by `ImapMemoryTests` (opt-in, `ONEMAIL_IMAP_PERF=1`) against the real servers, 10,000 results of
