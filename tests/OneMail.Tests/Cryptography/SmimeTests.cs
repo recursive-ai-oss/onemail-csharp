@@ -51,7 +51,7 @@ public sealed class SmimeTests : IDisposable
         Assert.Equal("application/pkcs7-signature", signed.GetContentTypeParameter("protocol"));
 
         MimeEntity wire = Transport(signed);
-        SmimeResult r = SmimeProcessor.Open(wire);
+        SmimeResult r = SmimeTestOptions.Open(wire);
         SmimeSignedLayer layer = Assert.IsType<SmimeSignedLayer>(Assert.Single(r.Layers));
         Assert.Equal(SmimeLayerKind.SignedDetached, layer.Kind);
         Assert.Equal(SmimeStatus.Valid, layer.Status);
@@ -87,7 +87,7 @@ public sealed class SmimeTests : IDisposable
         MimePart opaque = SmimeSigner.SignOpaque(SmimeIdentity.TextBody("opaque body\r\n"), Sign(Alice));
         Assert.Equal("application/pkcs7-mime", opaque.MediaType);
         Assert.Equal("signed-data", opaque.GetContentTypeParameter("smime-type"));
-        SmimeResult r = SmimeProcessor.Open(Transport(opaque));
+        SmimeResult r = SmimeTestOptions.Open(Transport(opaque));
         SmimeSignedLayer layer = Assert.IsType<SmimeSignedLayer>(Assert.Single(r.Layers));
         Assert.Equal(SmimeLayerKind.SignedOpaque, layer.Kind);
         Assert.True(layer.Succeeded);
@@ -111,10 +111,10 @@ public sealed class SmimeTests : IDisposable
         string from = who.Certificate.SubjectAlternativeName!.Names[0].Value!;
         MimeMultipart d = SmimeSigner.SignDetached(SmimeIdentity.TextBody(), Sign(who, spec, digest));
         Assert.Equal(micalg, d.GetContentTypeParameter("micalg"));
-        SmimeResult dr = SmimeProcessor.Open(Transport(d, from));
+        SmimeResult dr = SmimeTestOptions.Open(Transport(d, from));
         Assert.True(dr.Succeeded, dr.Layers[0].Detail);
         Assert.Equal(SmimeSenderMatch.Match, dr.Signers.Single().SenderMatch);
-        SmimeResult or = SmimeProcessor.Open(Transport(SmimeSigner.SignOpaque(SmimeIdentity.TextBody(), Sign(who, spec, digest)), from));
+        SmimeResult or = SmimeTestOptions.Open(Transport(SmimeSigner.SignOpaque(SmimeIdentity.TextBody(), Sign(who, spec, digest)), from));
         Assert.True(or.Succeeded, or.Layers[0].Detail);
     }
 
@@ -140,13 +140,13 @@ public sealed class SmimeTests : IDisposable
         };
         MimeMultipart d = SmimeSigner.SignDetached(SmimeIdentity.TextBody(), o);
         Assert.Equal("sha-1", d.GetContentTypeParameter("micalg"));
-        SmimeResult r = SmimeProcessor.Open(Transport(d));
+        SmimeResult r = SmimeTestOptions.Open(Transport(d));
         SmimeSignerResult s = r.Signers.Single();
         Assert.True(s.IsValid);
         Assert.Contains("digest:sha-1", s.WeakAlgorithms);
 
         // With a standard policy and a reference time the same signature is rejected, not just flagged.
-        SmimeResult strict = SmimeProcessor.Open(Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), o)),
+        SmimeResult strict = SmimeTestOptions.Open(Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), o)),
             new SmimeOpenOptions { Policy = CryptoPolicy.Strict, ReferenceTime = SmimeIdentity.Now });
         Assert.Equal(SmimeStatus.PolicyRejected, strict.Signers.Single().Status);
     }
@@ -159,7 +159,7 @@ public sealed class SmimeTests : IDisposable
         {
             Chain = new ValidationOptions { TrustAnchors = [TrustAnchor.FromCertificate(SmimeIdentity.Root)], ReferenceTime = SmimeIdentity.Now },
         };
-        SmimeSignerResult ok = SmimeProcessor.Open(wire, anchored).Signers.Single();
+        SmimeSignerResult ok = SmimeTestOptions.Open(wire, anchored).Signers.Single();
         Assert.Equal(SmimeChainStatus.Passed, ok.Chain);
         Assert.True(ok.IsValid);
 
@@ -168,17 +168,17 @@ public sealed class SmimeTests : IDisposable
         {
             Chain = new ValidationOptions { TrustAnchors = [TrustAnchor.FromCertificate(stranger.Certificate)], ReferenceTime = SmimeIdentity.Now },
         };
-        SmimeSignerResult bad = SmimeProcessor.Open(wire, wrongAnchor).Signers.Single();
+        SmimeSignerResult bad = SmimeTestOptions.Open(wire, wrongAnchor).Signers.Single();
         Assert.Equal(SmimeChainStatus.Failed, bad.Chain);
         Assert.Equal(SmimeStatus.UntrustedChain, bad.Status);
-        Assert.False(SmimeProcessor.Open(wire, wrongAnchor).Succeeded);
+        Assert.False(SmimeTestOptions.Open(wire, wrongAnchor).Succeeded);
     }
 
     [Fact]
     public void SenderMismatchIsReported()
     {
         MimeEntity wire = Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), Sign(Alice)), "mallory@example.test");
-        SmimeSignerResult s = SmimeProcessor.Open(wire).Signers.Single();
+        SmimeSignerResult s = SmimeTestOptions.Open(wire).Signers.Single();
         Assert.True(s.IsValid);
         Assert.Equal(SmimeSenderMatch.Mismatch, s.SenderMatch);
     }
@@ -187,7 +187,7 @@ public sealed class SmimeTests : IDisposable
 
     private static byte[] Wire(MimeEntity e, string from = "alice@example.test") => Transport(e, from).ToArray();
 
-    private static SmimeResult OpenBytes(byte[] b, SmimeOpenOptions? o = null) => SmimeProcessor.Open(b, o);
+    private static SmimeResult OpenBytes(byte[] b, SmimeOpenOptions? o = null) => SmimeTestOptions.Open(b, o);
 
     [Fact]
     public void ChangedBodyByteIsContentModified()
@@ -236,7 +236,7 @@ public sealed class SmimeTests : IDisposable
         string sigB = Text(((MimePart)b.Children[1]).GetDecodedContent());
         var swapped = (MimePart)a.Children[1];
         swapped.SetDecodedContent(Encoding.Latin1.GetBytes(sigB));
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(a.ToArray()));
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(a.ToArray()));
         Assert.Equal(SmimeStatus.ContentModified, r.Signers.Single().Status);
     }
 
@@ -248,7 +248,7 @@ public sealed class SmimeTests : IDisposable
         byte[] cms = sig.GetDecodedContent();
         cms[^3] ^= 0x55; // inside the signature value, the last element of the SignerInfo
         sig.SetDecodedContent(cms);
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(m.ToArray()));
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(m.ToArray()));
         Assert.Equal(SmimeStatus.SignatureInvalid, r.Signers.Single().Status);
     }
 
@@ -274,7 +274,7 @@ public sealed class SmimeTests : IDisposable
         Assert.True(sAt > 0);
         cms[at + aliceCert.Length + sAt + serial.Length - 1] ^= 0x01;
         sig.SetDecodedContent(cms);
-        SmimeSignerResult s = SmimeProcessor.Open(MimeEntity.Parse(wire.ToArray())).Signers.Single();
+        SmimeSignerResult s = SmimeTestOptions.Open(MimeEntity.Parse(wire.ToArray())).Signers.Single();
         Assert.Equal(SmimeStatus.CertificateNotFound, s.Status);
         Assert.Equal(SmimeSenderMatch.NoCertificate, s.SenderMatch);
     }
@@ -288,19 +288,19 @@ public sealed class SmimeTests : IDisposable
         for (int cut = 0; cut < cms.Length; cut += Math.Max(1, cms.Length / 40))
         {
             sig.SetDecodedContent(cms.AsSpan(0, cut));
-            SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(m.ToArray()));
+            SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(m.ToArray()));
             Assert.False(r.Succeeded);
             Assert.Equal(SmimeStatus.Malformed, r.Layers[0].Status);
         }
 
         sig.SetDecodedContent("not cms at all"u8);
-        Assert.Equal(SmimeStatus.Malformed, SmimeProcessor.Open(MimeEntity.Parse(m.ToArray())).Layers[0].Status);
+        Assert.Equal(SmimeStatus.Malformed, SmimeTestOptions.Open(MimeEntity.Parse(m.ToArray())).Layers[0].Status);
 
         // The same for an opaque part and an encrypted one.
         MimePart opaque = SmimeSigner.SignOpaque(SmimeIdentity.TextBody(), Sign(Alice));
         byte[] ocms = opaque.GetDecodedContent();
         opaque.SetDecodedContent(ocms.AsSpan(0, ocms.Length / 2));
-        Assert.Equal(SmimeStatus.Malformed, SmimeProcessor.Open(MimeEntity.Parse(opaque.ToArray())).Layers[0].Status);
+        Assert.Equal(SmimeStatus.Malformed, SmimeTestOptions.Open(MimeEntity.Parse(opaque.ToArray())).Layers[0].Status);
     }
 
     [Fact]
@@ -323,7 +323,7 @@ public sealed class SmimeTests : IDisposable
         byte[] signedPart = d.Children[0].ToArray();
         Assert.All(signedPart, b => Assert.True(b < 0x80));
         Assert.Contains("quoted-printable", Text(signedPart), StringComparison.OrdinalIgnoreCase);
-        SmimeResult r = SmimeProcessor.Open(Transport(d));
+        SmimeResult r = SmimeTestOptions.Open(Transport(d));
         Assert.True(r.Succeeded);
         Assert.Contains("caf\u00e9", r.InnerItem!.TextBody!.ReadText());
     }
@@ -336,11 +336,11 @@ public sealed class SmimeTests : IDisposable
         MimePart enc = SmimeEncryptor.Encrypt(SmimeIdentity.TextBody("secret\r\n"), new SmimeEncryptOptions { Recipients = [Bob.Certificate, Alice.Certificate] });
         Assert.Equal("enveloped-data", enc.GetContentTypeParameter("smime-type"));
         MimeEntity wire = Transport(enc);
-        SmimeResult closed = SmimeProcessor.Open(wire);
+        SmimeResult closed = SmimeTestOptions.Open(wire);
         Assert.Equal(SmimeStatus.NoDecryptionKey, closed.Layers[0].Status);
         Assert.Null(closed.InnerItem);
 
-        SmimeResult r = SmimeProcessor.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
+        SmimeResult r = SmimeTestOptions.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
         var layer = Assert.IsType<SmimeContentLayer>(Assert.Single(r.Layers));
         Assert.Equal(SmimeStatus.Decrypted, layer.Status);
         Assert.Equal(2, layer.RecipientCount);
@@ -358,7 +358,7 @@ public sealed class SmimeTests : IDisposable
         MimeEntity wire = Transport(enc);
         foreach (SmimeIdentity who in new[] { Bob, Carol })
         {
-            SmimeResult r = SmimeProcessor.Open(wire, new SmimeOpenOptions { DecryptionKeys = [who.Decrypt()] });
+            SmimeResult r = SmimeTestOptions.Open(wire, new SmimeOpenOptions { DecryptionKeys = [who.Decrypt()] });
             var layer = Assert.IsType<SmimeContentLayer>(r.Layers[0]);
             Assert.Equal(SmimeStatus.Decrypted, layer.Status);
             Assert.True(layer.IsAuthenticated);
@@ -373,7 +373,7 @@ public sealed class SmimeTests : IDisposable
         int at = cms.AsSpan().IndexOf(ad.EncryptedContent.Span);
         cms[at + 1] ^= 0x01;
         part.SetDecodedContent(cms);
-        SmimeResult bad = SmimeProcessor.Open(MimeEntity.Parse(part.ToArray()), new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
+        SmimeResult bad = SmimeTestOptions.Open(MimeEntity.Parse(part.ToArray()), new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
         Assert.Equal(SmimeStatus.DecryptionFailed, bad.Layers[0].Status);
         Assert.Null(bad.InnerItem);
     }
@@ -382,7 +382,7 @@ public sealed class SmimeTests : IDisposable
     public void EcdhEnvelopedRoundTrip()
     {
         MimePart enc = SmimeEncryptor.Encrypt(SmimeIdentity.TextBody("ecdh secret\r\n"), new SmimeEncryptOptions { Recipients = [Carol.Certificate] });
-        SmimeResult r = SmimeProcessor.Open(Transport(enc), new SmimeOpenOptions { DecryptionKeys = [Carol.Decrypt()] });
+        SmimeResult r = SmimeTestOptions.Open(Transport(enc), new SmimeOpenOptions { DecryptionKeys = [Carol.Decrypt()] });
         Assert.Equal(SmimeStatus.Decrypted, r.Layers[0].Status);
         Assert.Contains("ecdh secret", r.InnerItem!.TextBody!.ReadText());
     }
@@ -391,7 +391,7 @@ public sealed class SmimeTests : IDisposable
     public void WrongRecipientAndWrongKeyAreToldApart()
     {
         MimeEntity wire = Transport(SmimeEncryptor.Encrypt(SmimeIdentity.TextBody(), new SmimeEncryptOptions { Recipients = [Bob.Certificate] }));
-        SmimeResult notForAlice = SmimeProcessor.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Alice.Decrypt()] });
+        SmimeResult notForAlice = SmimeTestOptions.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Alice.Decrypt()] });
         Assert.Equal(SmimeStatus.NoMatchingRecipient, notForAlice.Layers[0].Status);
         Assert.Same(wire, notForAlice.Content);
     }
@@ -413,7 +413,7 @@ public sealed class SmimeTests : IDisposable
         MimeMultipart outer = SmimeSigner.SignDetached(enc, new SmimeSignOptions { Signers = [Carol.Signer()], Boundary = "outer-b" });
         MimeEntity wire = Transport(outer, "carol@example.test");
 
-        SmimeResult r = SmimeProcessor.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
+        SmimeResult r = SmimeTestOptions.Open(wire, new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] });
         Assert.Equal(3, r.Layers.Count);
         Assert.Equal([SmimeLayerKind.SignedDetached, SmimeLayerKind.Enveloped, SmimeLayerKind.SignedDetached], r.Layers.Select(static l => l.Kind));
         Assert.True(r.Succeeded);
@@ -422,7 +422,7 @@ public sealed class SmimeTests : IDisposable
         Assert.Contains("triple", r.InnerItem!.TextBody!.ReadText());
 
         // Without Bob's key it stops at the encrypted layer, with the outer signature still reported.
-        SmimeResult closed = SmimeProcessor.Open(wire);
+        SmimeResult closed = SmimeTestOptions.Open(wire);
         Assert.Equal(2, closed.Layers.Count);
         Assert.True(closed.Layers[0].Succeeded);
         Assert.Equal(SmimeStatus.NoDecryptionKey, closed.Layers[1].Status);
@@ -438,7 +438,7 @@ public sealed class SmimeTests : IDisposable
             e = SmimeSigner.SignOpaque(e, Sign(Alice));
         }
 
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(e.ToArray()), new SmimeOpenOptions { MaxDepth = 2 });
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(e.ToArray()), new SmimeOpenOptions { MaxDepth = 2 });
         Assert.Equal(2, r.Layers.Count);
         Assert.Contains(SmimeIssue.DepthLimitReached, r.Issues);
     }
@@ -453,7 +453,7 @@ public sealed class SmimeTests : IDisposable
         var extra = new MimePart("text/plain");
         extra.SetDecodedContent("added later\r\n"u8, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.SevenBit);
         wrapper.Add(extra);
-        SmimeResult r = SmimeProcessor.Open(Transport(wrapper));
+        SmimeResult r = SmimeTestOptions.Open(Transport(wrapper));
         Assert.False(r.Succeeded);
         Assert.True(r.Layers.Single().Succeeded);
         Assert.Contains(SmimeIssue.SignedPartInUnsignedWrapper, r.Issues);
@@ -465,7 +465,7 @@ public sealed class SmimeTests : IDisposable
     {
         var inner = MimeEntity.Parse("From: alice@example.test\r\nSubject: Protected subject\r\nContent-Type: text/plain\r\n\r\nbody\r\n"u8.ToArray());
         var msg = new MimeMessagePart { Message = inner };
-        SmimeResult r = SmimeProcessor.Open(Transport(SmimeSigner.SignDetached(msg, Sign(Alice))));
+        SmimeResult r = SmimeTestOptions.Open(Transport(SmimeSigner.SignDetached(msg, Sign(Alice))));
         Assert.True(r.Succeeded);
         Assert.Contains("Subject", r.Outside!.ProtectedHeaders);
     }
@@ -477,17 +477,17 @@ public sealed class SmimeTests : IDisposable
         var keys = new SmimeOpenOptions { DecryptionKeys = [Bob.Decrypt()] };
 
         p.Headers.Set("Content-Type", "application/x-pkcs7-mime; name=smime.p7m");
-        SmimeResult noType = SmimeProcessor.Open(MimeEntity.Parse(p.ToArray()), keys);
+        SmimeResult noType = SmimeTestOptions.Open(MimeEntity.Parse(p.ToArray()), keys);
         Assert.Equal(SmimeStatus.Decrypted, noType.Layers[0].Status);
         Assert.Contains(SmimeIssue.SmimeTypeMissing, noType.Layers[0].Issues);
 
         p.Headers.Set("Content-Type", "application/octet-stream; name=\"smime.p7m\"");
-        SmimeResult byName = SmimeProcessor.Open(MimeEntity.Parse(p.ToArray()), keys);
+        SmimeResult byName = SmimeTestOptions.Open(MimeEntity.Parse(p.ToArray()), keys);
         Assert.Equal(SmimeStatus.Decrypted, byName.Layers[0].Status);
         Assert.Contains(SmimeIssue.RecognisedByFileName, byName.Layers[0].Issues);
 
         p.Headers.Set("Content-Type", "application/pkcs7-mime; smime-type=signed-data");
-        SmimeResult mismatch = SmimeProcessor.Open(MimeEntity.Parse(p.ToArray()), keys);
+        SmimeResult mismatch = SmimeTestOptions.Open(MimeEntity.Parse(p.ToArray()), keys);
         Assert.Equal(SmimeStatus.Decrypted, mismatch.Layers[0].Status);
         Assert.Contains(SmimeIssue.SmimeTypeMismatch, mismatch.Layers[0].Issues);
     }
@@ -531,7 +531,7 @@ public sealed class SmimeTests : IDisposable
         MapiMessage item = OutlookItem("IPM.Note.SMIME.MultipartSigned", signed.ToArray(), "multipart/signed", null);
         foreach (MapiMessage m in new[] { item, ThroughMsg(item) })
         {
-            SmimeResult r = SmimeOutlook.Open(m);
+            SmimeResult r = SmimeOutlook.Open(m, new SmimeOpenOptions { AllowUntrustedSigner = true });
             Assert.True(r.Succeeded, r.Layers.Count > 0 ? r.Layers[0].Detail : null);
             Assert.Equal(SmimeLayerKind.SignedDetached, r.Layers[0].Kind);
             Assert.Contains("outlook clear", r.InnerItem!.TextBody!.ReadText());
@@ -543,7 +543,7 @@ public sealed class SmimeTests : IDisposable
     {
         MimePart opaque = SmimeSigner.SignOpaque(SmimeIdentity.TextBody("outlook opaque\r\n"), Sign(Alice));
         MapiMessage signedItem = OutlookItem("IPM.Note.SMIME", opaque.GetDecodedContent(), "application/x-pkcs7-mime", "application/x-pkcs7-mime; smime-type=signed-data; name=smime.p7m");
-        SmimeResult sr = SmimeOutlook.Open(ThroughMsg(signedItem));
+        SmimeResult sr = SmimeOutlook.Open(ThroughMsg(signedItem), new SmimeOpenOptions { AllowUntrustedSigner = true });
         Assert.True(sr.Succeeded);
         Assert.Contains("outlook opaque", sr.InnerItem!.TextBody!.ReadText());
 
@@ -571,12 +571,12 @@ public sealed class SmimeTests : IDisposable
     {
         byte[] inner = SmimeIdentity.TextBody("compressed text\r\n").ToArray();
         MimePart comp = SmimeContent(CompressedData.Create(inner).Encoded.ToArray(), "compressed-data");
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(comp.ToArray()));
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(comp.ToArray()));
         Assert.Equal(SmimeStatus.Decompressed, r.Layers[0].Status);
         Assert.Contains("compressed text", r.InnerItem!.TextBody!.ReadText());
 
         byte[] bomb = CompressedData.Create(new byte[20_000_000]).Encoded.ToArray();
-        SmimeResult b = SmimeProcessor.Open(MimeEntity.Parse(SmimeContent(bomb, "compressed-data").ToArray()));
+        SmimeResult b = SmimeTestOptions.Open(MimeEntity.Parse(SmimeContent(bomb, "compressed-data").ToArray()));
         Assert.Equal(SmimeStatus.LimitExceeded, b.Layers[0].Status);
         Assert.Null(b.InnerItem);
     }
@@ -592,7 +592,7 @@ public sealed class SmimeTests : IDisposable
     public void TwoSignersAreReportedIndividually()
     {
         var both = new SmimeSignOptions { Signers = [Alice.Signer(), Carol.Signer()], Boundary = "two-b" };
-        SmimeResult r = SmimeProcessor.Open(Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), both)));
+        SmimeResult r = SmimeTestOptions.Open(Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), both)));
         SmimeSignedLayer layer = (SmimeSignedLayer)r.Layers[0];
         Assert.Equal(2, layer.Signers.Count);
         Assert.All(layer.Signers, s => Assert.True(s.IsValid));
@@ -603,7 +603,7 @@ public sealed class SmimeTests : IDisposable
     public void CertificatesOnlyMessageIsRecognised()
     {
         SignedData sd = SignedData.Create(ReadOnlySpan<byte>.Empty, [], new SignedDataOptions { Certificates = [Alice.Certificate], Detached = true });
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse(SmimeContent(sd.Encoded.ToArray(), "certs-only").ToArray()));
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse(SmimeContent(sd.Encoded.ToArray(), "certs-only").ToArray()));
         Assert.Equal(SmimeLayerKind.CertsOnly, r.Layers[0].Kind);
         Assert.Equal(SmimeStatus.CertificatesOnly, r.Layers[0].Status);
         Assert.False(r.Succeeded);
@@ -612,7 +612,7 @@ public sealed class SmimeTests : IDisposable
     [Fact]
     public void NonSmimeMessageGivesEmptyResult()
     {
-        SmimeResult r = SmimeProcessor.Open(MimeEntity.Parse("Subject: x\r\n\r\nplain\r\n"u8.ToArray()));
+        SmimeResult r = SmimeTestOptions.Open(MimeEntity.Parse("Subject: x\r\n\r\nplain\r\n"u8.ToArray()));
         Assert.False(r.IsSmime);
         Assert.False(r.Succeeded);
         Assert.Null(r.Outside);
@@ -620,5 +620,5 @@ public sealed class SmimeTests : IDisposable
 
     [Fact]
     public void PolicyWithoutReferenceTimeIsRefused() =>
-        Assert.Throws<ArgumentException>(() => SmimeProcessor.Open(MimeEntity.Parse("Subject: x\r\n\r\n"u8.ToArray()), new SmimeOpenOptions { Policy = CryptoPolicy.Standard }));
+        Assert.Throws<ArgumentException>(() => SmimeTestOptions.Open(MimeEntity.Parse("Subject: x\r\n\r\n"u8.ToArray()), new SmimeOpenOptions { Policy = CryptoPolicy.Standard }));
 }

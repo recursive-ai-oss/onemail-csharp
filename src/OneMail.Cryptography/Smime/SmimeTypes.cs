@@ -33,7 +33,7 @@ public enum SmimeLayerKind
 /// </summary>
 public enum SmimeStatus
 {
-    /// <summary>Signer or signed layer: every signature check passed (and the chain check, when it was asked for).</summary>
+    /// <summary>Signer: every signature check passed (and the chain check, when it was asked for). Signed layer: the same, and every signer's chain was built to a caller-supplied anchor (or <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> is set).</summary>
     Valid,
 
     /// <summary>Signer: the signature value does not verify over the signed attributes.</summary>
@@ -45,7 +45,7 @@ public enum SmimeStatus
     /// <summary>Signer: no certificate in the message or the supplied collection matches the signer identifier.</summary>
     CertificateNotFound,
 
-    /// <summary>Signer: the signature is sound but the certificate did not validate to a trust anchor.</summary>
+    /// <summary>Signer: the signature is sound but the certificate did not validate to a trust anchor. Signed layer: also when no chain was asked for and <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> is off.</summary>
     UntrustedChain,
 
     /// <summary>Signer or decryption: the algorithm or key is refused by the crypto policy the caller supplied.</summary>
@@ -322,7 +322,7 @@ public sealed class SmimeSignedLayer : SmimeLayer
     /// <inheritdoc/>
     public override bool Succeeded => Status == SmimeStatus.Valid;
 
-    /// <summary>True when the layer succeeded and every signer is trusted (<see cref="SmimeSignerResult.IsTrusted"/>).</summary>
+    /// <summary>True when the layer succeeded and every signer is trusted (<see cref="SmimeSignerResult.IsTrusted"/>); with <see cref="SmimeOpenOptions.AllowUntrustedSigner"/> a layer can succeed without this.</summary>
     public bool IsTrusted => Succeeded && Signers.Count > 0 && Signers.All(static s => s.IsTrusted);
 }
 

@@ -30,6 +30,13 @@ public sealed class SmimeOpenOptions
     /// <summary>The instant <see cref="Policy"/> is asked about; required with it. The library never reads a clock.</summary>
     public DateTimeOffset? ReferenceTime { get; init; }
 
+    /// <summary>
+    /// Let a signed layer succeed although no signer's certificate chain was built to an anchor the caller supplied (<see cref="Chain"/> unset).
+    /// Default false: such a layer ends as <see cref="SmimeStatus.UntrustedChain"/> and <see cref="SmimeResult.Succeeded"/> is false, because anyone can
+    /// sign with a certificate they made themselves and put any address in it. When true the layer can succeed, and <see cref="SmimeResult.IsTrusted"/> stays false.
+    /// </summary>
+    public bool AllowUntrustedSigner { get; init; }
+
     /// <summary>Decrypt Triple-DES content. Default false: such a layer ends as <see cref="SmimeStatus.Unsupported"/>.</summary>
     public bool AllowLegacyCiphers { get; init; }
 
@@ -686,7 +693,16 @@ public static class SmimeProcessor
         }
         else if (signers.All(static s => s.IsValid) && report.Checks.All(static c => c.Status is not (CmsCheckStatus.Failed or CmsCheckStatus.Unsupported)))
         {
-            layer.Status = SmimeStatus.Valid;
+            if (!options.AllowUntrustedSigner && !signers.All(static s => s.IsTrusted))
+            {
+                // The signature is sound, but nothing vouches for the certificate: not a success unless the caller said it may be.
+                layer.Status = SmimeStatus.UntrustedChain;
+                layer.Detail = "The signature is sound but no certificate chain to a trust anchor was built (SmimeOpenOptions.Chain); the signer is untrusted.";
+            }
+            else
+            {
+                layer.Status = SmimeStatus.Valid;
+            }
         }
         else
         {

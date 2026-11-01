@@ -33,7 +33,7 @@ foreach (SmimeSignerResult s in result.Signers)
 ```
 
 - Results are structured: every layer and signer has a status, OneCrypto's per-rule checks, the exact covered bytes, what of the message is outside the signature, whether the certificate matches the sender, and weak-algorithm flags. Nothing is a bare yes/no.
-- No trust is implied: without `Chain` options no chain is built and the operating-system store is never used. The library never reads a clock.
+- No trust is implied: without `Chain` options no chain is built and the operating-system store is never used, and a signed message then ends as `UntrustedChain` (`Succeeded` is false) because anyone can sign with a certificate they made themselves. Set `AllowUntrustedSigner` to judge the certificate yourself; `IsTrusted` says a chain to your anchor was built. The library never reads a clock.
 - New signatures and encryption refuse SHA-1, MD5 and RSA under 2048 bits; reading accepts and flags them. Triple DES is read only with `AllowLegacyCiphers`.
 - Outlook S/MIME items (`IPM.Note.SMIME`, `IPM.Note.SMIME.MultipartSigned`) open through `SmimeOutlook.Open`.
 

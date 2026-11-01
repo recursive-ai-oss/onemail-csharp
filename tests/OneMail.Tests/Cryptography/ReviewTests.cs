@@ -9,6 +9,28 @@ using RecursiveAI.OneMail.Mime;
 
 namespace RecursiveAI.OneMail.Tests.Cryptography;
 
+/// <summary>Opens S/MIME with untrusted signers allowed, for the tests that are about signatures and structure rather than trust.</summary>
+internal static class SmimeTestOptions
+{
+    public static SmimeOpenOptions Lax(SmimeOpenOptions? o) => new()
+    {
+        DecryptionKeys = o?.DecryptionKeys ?? [],
+        Certificates = o?.Certificates ?? [],
+        Chain = o?.Chain,
+        Policy = o?.Policy,
+        ReferenceTime = o?.ReferenceTime,
+        AllowLegacyCiphers = o?.AllowLegacyCiphers ?? false,
+        AllowPkcs1V15KeyTransport = o?.AllowPkcs1V15KeyTransport ?? true,
+        MaxDepth = o?.MaxDepth ?? 8,
+        Limits = o?.Limits ?? new SmimeOpenOptions().Limits,
+        AllowUntrustedSigner = true,
+    };
+
+    public static SmimeResult Open(MimeEntity message, SmimeOpenOptions? o = null) => SmimeProcessor.Open(message, Lax(o));
+
+    public static SmimeResult Open(byte[] message, SmimeOpenOptions? o = null) => SmimeProcessor.Open(message, Lax(o));
+}
+
 /// <summary>Cases found by reviewing the DKIM, ARC and S/MIME code for results that say more than was checked, and for hostile input.</summary>
 public class DkimReviewTests
 {
@@ -183,11 +205,20 @@ public sealed class SmimeReviewTests
         // Anyone can make a certificate that names alice@..., so a pass without a trust anchor must not read as "from Alice".
         MimeEntity wire = Transport(SmimeSigner.SignDetached(SmimeIdentity.TextBody(), new SmimeSignOptions { Signers = [Alice.Signer()], Certificates = [SmimeIdentity.Root], Boundary = "b" }), "alice-review@example.test");
 
+        // By default an untrusted signer is not a success, and the status says why.
         SmimeResult none = SmimeProcessor.Open(wire);
-        Assert.True(none.Succeeded);
+        Assert.False(none.Succeeded);
+        Assert.Equal(SmimeStatus.UntrustedChain, none.Layers.Single().Status);
+        Assert.Contains("untrusted", none.Layers.Single().Detail, StringComparison.Ordinal);
+        Assert.True(none.Signers.Single().IsValid);
         Assert.Equal(SmimeChainStatus.NotChecked, none.Signers.Single().Chain);
         Assert.False(none.Signers.Single().IsTrusted);
         Assert.False(none.IsTrusted);
+
+        // With the opt-out it succeeds, and is still not trusted.
+        SmimeResult lax = SmimeProcessor.Open(wire, new SmimeOpenOptions { AllowUntrustedSigner = true });
+        Assert.True(lax.Succeeded);
+        Assert.False(lax.IsTrusted);
 
         SmimeResult anchored = SmimeProcessor.Open(wire, Anchored);
         Assert.True(anchored.Signers.Single().IsTrusted);
