@@ -31,6 +31,24 @@ public sealed class DkimVerifierOptions
 
     /// <summary>The longest <c>h=</c> list accepted. Default 100.</summary>
     public int MaxSignedHeaders { get; init; } = 100;
+
+    /// <summary>
+    /// Whether a signature with <c>l=</c> may pass while content follows the signed part of the body. Default false: such a signature gets
+    /// <see cref="DkimReason.BodyLengthLimited"/> (status <see cref="DkimStatus.Fail"/>), because anyone can append text to the message and the
+    /// result would still say pass (RFC 6376 §8.2). When true the signature passes and says so in <see cref="DkimSignatureResult.BodyHasUnsignedContent"/>.
+    /// An <c>l=</c> that covers the whole body is always fine.
+    /// </summary>
+    public bool AllowBodyLengthLimit { get; init; }
+
+    /// <summary>
+    /// Whether a <c>DKIM-Signature</c> may pass while the message holds more <c>From</c> fields than it covers. Default false: it gets
+    /// <see cref="DkimReason.UnsignedFromHeader"/> (status <see cref="DkimStatus.Fail"/>), because a reader may show the unsigned one (RFC 6376 §8.15).
+    /// When true the signature passes and <see cref="DkimSignatureResult.UnsignedHeaderInstances"/> names the exposed headers. Other headers are only listed.
+    /// </summary>
+    public bool AllowUnsignedFromInstances { get; init; }
+
+    /// <summary>The most header fields read from a message; a message with more is not verified (<see cref="DkimReason.TooManyHeaders"/>). Default 10,000.</summary>
+    public int MaxHeaderFields { get; init; } = 10_000;
 }
 
 /// <summary>A parsed signature header, ready to verify.</summary>
@@ -561,23 +579,35 @@ internal static class SignatureEngine
     /// </summary>
     public static void AppendSelectedHeaders(MessageParts m, IReadOnlyList<string> names, DkimCanonicalization canon, int exclude, List<byte> output, List<DkimByteRange> covered, List<string> oversigned)
     {
-        var used = new bool[m.Headers.Count];
+        // Per name, how many instances (from the bottom) are already taken; the index keeps this independent of the number of fields in the message.
+        var taken = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (string name in names)
         {
             bool found = false;
-            for (int i = m.Headers.Count - 1; i >= 0; i--)
+            if (m.ByName.TryGetValue(name, out List<int>? at))
             {
-                if (used[i] || i == exclude || !m.Headers[i].Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                taken.TryGetValue(name, out int skip);
+                for (int k = at.Count - 1 - skip; k >= 0; k--)
                 {
-                    continue;
+                    int i = at[k];
+                    skip++;
+                    if (i == exclude)
+                    {
+                        continue;
+                    }
+
+                    taken[name] = skip;
+                    found = true;
+                    HeaderField f = m.Headers[i];
+                    DkimCanonicalizer.AppendHeader(output, m.Raw(f), canon, trailingCrlf: true);
+                    covered.Add(new DkimByteRange(f.Start, f.End - f.Start));
+                    break;
                 }
 
-                used[i] = true;
-                found = true;
-                HeaderField f = m.Headers[i];
-                DkimCanonicalizer.AppendHeader(output, m.Raw(f), canon, trailingCrlf: true);
-                covered.Add(new DkimByteRange(f.Start, f.End - f.Start));
-                break;
+                if (!found)
+                {
+                    taken[name] = skip;
+                }
             }
 
             if (!found && !oversigned.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -585,6 +615,30 @@ internal static class SignatureEngine
                 oversigned.Add(name);
             }
         }
+    }
+
+    /// <summary>
+    /// The names in <paramref name="names"/> (an <c>h=</c> list) of which the message holds more instances than the list takes, with the header being
+    /// verified left out. The signature does not cover the extra instances, yet a mail reader may show them (RFC 6376 §5.4.2, §8.15).
+    /// </summary>
+    public static List<string> UnsignedInstances(MessageParts m, IReadOnlyList<string> names, int exclude)
+    {
+        var asked = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (string name in names)
+        {
+            asked[name] = asked.GetValueOrDefault(name) + 1;
+        }
+
+        var result = new List<string>();
+        foreach ((string name, int count) in asked)
+        {
+            if (m.ByName.TryGetValue(name, out List<int>? at) && at.Count - (at.Contains(exclude) ? 1 : 0) > count)
+            {
+                result.Add(name);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>Appends the signature header itself with its <c>b=</c> value emptied and no final line end (RFC 6376 §3.7).</summary>

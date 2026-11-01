@@ -28,12 +28,21 @@ public sealed class DkimVerifier
     /// <summary>Verifies every DKIM signature on a message.</summary>
     /// <param name="message">The complete message as bytes: headers, blank line, body.</param>
     /// <param name="cancellationToken">Cancels pending DNS lookups.</param>
-    /// <returns>One result per <c>DKIM-Signature</c> header, top to bottom; empty if the message has none. Malformed signatures and DNS failures are results, not exceptions.</returns>
+    /// <returns>One result per <c>DKIM-Signature</c> header, top to bottom; empty if the message has none, or a single neutral result when it has more than <see cref="DkimVerifierOptions.MaxHeaderFields"/> header fields. Malformed signatures and DNS failures are results, not exceptions.</returns>
     public async Task<IReadOnlyList<DkimSignatureResult>> VerifyAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
     {
-        var parts = new MessageParts(message);
+        var parts = new MessageParts(message, _options.MaxHeaderFields);
         var ctx = new VerifyContext(parts, _options);
         var results = new List<DkimSignatureResult>();
+        if (parts.HeaderLimitExceeded)
+        {
+            // Fields past the limit were not read, so a signature may be among them: say so instead of reporting a message with no signature.
+            var refused = new DkimSignatureResult { HeaderName = "DKIM-Signature" };
+            refused.Fail(DkimStatus.Neutral, DkimReason.TooManyHeaders, "more than " + _options.MaxHeaderFields + " header fields; nothing was verified");
+            results.Add(refused);
+            return results;
+        }
+
         int index = 0;
         for (int i = 0; i < parts.Headers.Count; i++)
         {
@@ -118,6 +127,12 @@ public sealed class DkimVerifier
         SignatureEngine.AppendSignatureHeader(m, sig, sig.HeaderCanon, data);
         res.CoveredHeaders = covered;
         res.OversignedHeaders = oversigned;
+        List<string> unsignedInstances = SignatureEngine.UnsignedInstances(m, sig.SignedHeaders, headerIndex);
+        res.UnsignedHeaderInstances = unsignedInstances;
+        if (unsignedInstances.Count > 0)
+        {
+            res.Warnings |= DkimWarnings.UnsignedHeaderInstances;
+        }
         byte[] headerData = [.. data];
 
         (DkimStatus Status, DkimReason Reason, string Detail)? firstFailure = null;
@@ -136,6 +151,12 @@ public sealed class DkimVerifier
                 return;
             }
 
+            if (res.BodyHasUnsignedContent && !ctx.Options.AllowBodyLengthLimit)
+            {
+                res.Fail(DkimStatus.Fail, DkimReason.BodyLengthLimited, "l= leaves content after the signed part of the body unprotected");
+                return;
+            }
+
             if (!CryptographicOperations.FixedTimeEquals(body.Hash, sig.BodyHash))
             {
                 res.Fail(DkimStatus.Fail, DkimReason.BodyHashMismatch, "body hash did not verify");
@@ -144,6 +165,12 @@ public sealed class DkimVerifier
 
             if (SignatureEngine.CheckSignature(sig.Algorithm, key, headerData, sig.Signature))
             {
+                if (sig.Kind == SigKind.Dkim && !ctx.Options.AllowUnsignedFromInstances && unsignedInstances.Contains("From", StringComparer.OrdinalIgnoreCase))
+                {
+                    res.Fail(DkimStatus.Fail, DkimReason.UnsignedFromHeader, "the message holds a From header field the signature does not cover");
+                    return;
+                }
+
                 res.Status = DkimStatus.Pass;
                 res.Reason = DkimReason.None;
                 res.Detail = null;

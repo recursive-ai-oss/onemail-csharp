@@ -70,6 +70,9 @@ public sealed class ArcSealResult
 /// </summary>
 public sealed class ArcSealer
 {
+    // A message with more header fields than this is refused rather than read to the end.
+    private const int MaxHeaderFields = 10_000;
+
     private readonly DkimSigningKey _key;
     private readonly ArcSealerOptions _options;
 
@@ -107,7 +110,12 @@ public sealed class ArcSealer
             throw new ArgumentException("The results text must be one line of ASCII.", nameof(authenticationResults));
         }
 
-        var m = new MessageParts(message);
+        var m = new MessageParts(message, MaxHeaderFields);
+        if (m.HeaderLimitExceeded)
+        {
+            throw new ArgumentException("The message has more than " + MaxHeaderFields + " header fields.", nameof(message));
+        }
+
         ArcChain chain = ArcChain.Collect(m);
         string eol = message.Span.IndexOf("\r\n"u8) < 0 && message.Span.IndexOf((byte)'\n') >= 0 ? "\n" : "\r\n";
         ArcChainStatus cv;

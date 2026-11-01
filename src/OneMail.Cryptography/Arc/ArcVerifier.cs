@@ -279,6 +279,8 @@ public sealed class ArcVerifier
             ClockSkew = options.ClockSkew,
             MaxSignatures = options.MaxSignatures,
             MaxSignedHeaders = options.MaxSignedHeaders,
+            AllowBodyLengthLimit = options.AllowBodyLengthLimit,
+            MaxHeaderFields = options.MaxHeaderFields,
         };
     }
 
@@ -301,9 +303,18 @@ public sealed class ArcVerifier
     /// <returns>The chain status with every set. A message with no ARC headers has status <see cref="ArcChainStatus.None"/>. Never throws on message content.</returns>
     public async Task<ArcVerificationResult> VerifyAsync(ReadOnlyMemory<byte> message, CancellationToken cancellationToken = default)
     {
-        var m = new MessageParts(message);
+        var m = new MessageParts(message, _options.MaxHeaderFields);
         ArcChain chain = ArcChain.Collect(m);
         var result = new ArcVerificationResult { Status = ArcChainStatus.None, InstanceCount = chain.Highest };
+        if (m.HeaderLimitExceeded)
+        {
+            // Part of the header section was not read, so the chain cannot be judged complete.
+            result.Status = ArcChainStatus.Fail;
+            result.Failure = ArcFailure.InvalidHeader;
+            result.Detail = "more than " + _options.MaxHeaderFields + " header fields";
+            return result;
+        }
+
         if (chain.HeaderCount == 0)
         {
             return result;
