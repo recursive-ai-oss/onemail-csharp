@@ -67,6 +67,12 @@ public static class OutlookNames
     /// <summary>PidLidExceptionReplaceTime.</summary>
     public static readonly MapiNamedProperty ExceptionReplaceTime = Appt(0x8228);
 
+    /// <summary>PidLidRecurrenceType (MS-OXOCAL 2.2.1.45: 1 daily, 2 weekly, 3 monthly, 4 yearly).</summary>
+    public static readonly MapiNamedProperty RecurrenceType = Appt(0x8231);
+
+    /// <summary>PidLidAppointmentCounterProposal: true when a tentative response proposes a new time (ICS <c>METHOD:COUNTER</c>).</summary>
+    public static readonly MapiNamedProperty CounterProposal = Appt(0x8257);
+
     /// <summary>PidLidTimeZoneStruct.</summary>
     public static readonly MapiNamedProperty TimeZoneStruct = Appt(0x8233);
 

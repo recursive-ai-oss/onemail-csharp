@@ -206,6 +206,26 @@ destination stops the run; an item that cannot be read or converted is skipped a
 
 <!-- matrix:end -->
 
+## Calendar items and iCalendar, both ways
+
+The matrix above is the store conversions. The two item converters (`MapiToIcsConverter`, `IcsToMapiConverter`) have the loss codes of
+[`conversion.md`](conversion.md); this is what a round trip through an Outlook item gives back, by field, from the sweep in
+[`calendar-items.md`](calendar-items.md) ("How it is checked"). *Kept* means equal after the round trip for every event of the corpora.
+
+| Field | Result | What does not come back (loss code) |
+|---|---|---|
+| Subject, location, description, categories, sequence, alarm, class, priority | Kept | a second alarm (`AdditionalAlarms`), a CLASS outside public, private, confidential (`ClassNotMapped`) |
+| First start and length, all-day | Kept | a floating time reads as UTC (`FloatingTimeAssumedUtc`); seconds of a series (`SubMinuteTimeDropped`); a DTSTART the rule does not allow, or at another time than BYHOUR and BYMINUTE, starts the series at its first instance (`AmbiguousFirstInstance`) |
+| Series: daily, weekly, monthly, monthly-nth, yearly, yearly-nth, ending never, by count or by date | Kept (every occurrence in the window equal) | a monthly or yearly day 29 or 30 (`AmbiguousShortMonth`) |
+| Series: any other rule | One event; the series is not held | `RecurrenceNotMapped` with the cause, `MultipleRRules` |
+| EXDATE, RECURRENCE-ID overrides, RDATE paired with an EXDATE | Kept | `ExdateNotOnPattern`, `OverrideNotOnPattern`, `RdateWithoutException`, `RdatePeriodNotCarried`, `RangeThisAndFutureNotCarried` |
+| Time zone | Kept, one rule per change of the zone's rules over the series | `UnknownTimeZone` |
+| METHOD | PUBLISH, REQUEST, CANCEL, REPLY, COUNTER | other methods are an appointment (`MethodNotMapped`) |
+| Organizer, attendees, response status | Kept (a response is sent by the attendee to the organizer) | CHAIR and other roles, user types other than individual and resource, PARTSTAT beyond four values, RSVP per attendee (`AttendeeRoleNotCarried`, `AttendeeTypeApproximated`, `PartstatNotCarried`, `RsvpIsPerMessage`) |
+| Free/busy | Kept | |
+| STATUS | CANCELLED only | `StatusNotExported` |
+
+
 ## Codes added by the store layer
 
 | Code | Kind | Meaning |

@@ -69,6 +69,11 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             IcsComponent master = parts.Find(p => p.RecurrenceId is null) ?? parts[0];
             List<IcsComponent> overrides = parts.Where(p => p != master && p.RecurrenceId is not null).ToList();
             LossReport report = new();
+            foreach (IcsComponent extra in parts.Where(p => p != master && p.RecurrenceId is null))
+            {
+                report.Add("ics", "VEVENT", LossKind.Dropped, "DuplicateUidNotConverted", "A second VEVENT with the same UID and no readable RECURRENCE-ID is neither a series nor an override; it was not converted.");
+            }
+
             MapiMessage m = new EventBuilder(master, overrides, zones, method, report).Build();
             list.Add(new ConversionResult<MapiMessage>(m, report));
         }
@@ -141,18 +146,26 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
     // The time zone an item is written in, and the tools to move between its local clock and UTC.
     internal sealed class ItemZone
     {
-        public ItemZone(string id, IcsTimeZone zone, TzRule rule)
+        public ItemZone(string id, IcsTimeZone zone, TzRule rule, IReadOnlyList<TzRule>? rules = null)
         {
             Id = id;
             Zone = zone;
             Rule = rule;
+            Rules = rules ?? [rule];
         }
+
+        /// <summary>How many years past a series' start its zone's rule changes are followed.</summary>
+        private const int MaxRuleYears = 100;
 
         public string Id { get; }
 
         public IcsTimeZone Zone { get; }
 
+        /// <summary>The rule in force when the item starts: PidLidTimeZoneStruct and the effective rule of the definitions.</summary>
         public TzRule Rule { get; }
+
+        /// <summary>The rules of the definition (MS-OXOCAL 2.2.1.41), the first of them <see cref="Rule"/>, in ascending order of the year they take effect.</summary>
+        public IReadOnlyList<TzRule> Rules { get; }
 
         public DateTime ToUtc(DateTime local) => Zone.ToUtc(local, out _);
 
@@ -162,7 +175,29 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             new("UTC", zones.Resolve("UTC") ?? throw new InvalidOperationException("UTC zone missing"), new TzRule(0x0003, 0, 0, 0, 0, default, default));
 
         // The rule is read off the zone in the year of the item: offsets by hour, then the two changes (MS-OXOCAL 2.2.1.39 describes the result).
-        public static ItemZone From(string id, IcsTimeZone zone, int year)
+        public static ItemZone From(string id, IcsTimeZone zone, int year) => new(id, zone, RuleOf(zone, year));
+
+        /// <summary>
+        /// The same zone with a definition that covers every year up to <paramref name="lastYear"/>: a new rule wherever the zone's daylight saving
+        /// rule or offset changes (the United States in 2007, say), so that the series converts to UTC as the iCalendar says in every year.
+        /// </summary>
+        public ItemZone Through(int startYear, int lastYear)
+        {
+            List<TzRule> rules = [Rule];
+            lastYear = Math.Min(Math.Max(lastYear, startYear), Math.Min(startYear + MaxRuleYears, 9990));   // a hostile end date must not cost a scan of eight thousand years
+            for (int y = startYear + 1; y <= lastYear && rules.Count < 1024; y++)
+            {
+                TzRule r = RuleOf(Zone, y);
+                if (!r.SameAs(rules[^1]))
+                {
+                    rules.Add(r with { Flags = 0, Year = (ushort)y });
+                }
+            }
+
+            return rules.Count == 1 ? this : new ItemZone(Id, Zone, Rule, rules);
+        }
+
+        private static TzRule RuleOf(IcsTimeZone zone, int year)
         {
             DateTime t = new(Math.Clamp(year, 1, 9998), 1, 1, 0, 0, 0, DateTimeKind.Utc);   // the year after must exist
             DateTime end = t.AddYears(1);
@@ -170,28 +205,42 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             TimeSpan lo = prev;
             TimeSpan hi = prev;
             List<(DateTime At, TimeSpan From, TimeSpan To)> changes = [];
-            for (DateTime x = t.AddHours(1); x < end; x = x.AddHours(1))
+            // Day by day, then hour by hour inside the day on which the offset changed.
+            for (DateTime day = t; day < end; day = day.AddDays(1))
             {
-                TimeSpan o = zone.GetUtcOffset(x);
-                if (o != prev)
+                DateTime next = day.AddDays(1) < end ? day.AddDays(1) : end;
+                TimeSpan atNext = next == end ? zone.GetUtcOffset(end.AddTicks(-1)) : zone.GetUtcOffset(next);
+                TimeSpan atDay = zone.GetUtcOffset(day);
+                if (atNext == atDay && next != end)
                 {
-                    changes.Add((x, prev, o));
-                    prev = o;
+                    lo = atDay < lo ? atDay : lo;
+                    hi = atDay > hi ? atDay : hi;
+                    continue;
                 }
 
-                lo = o < lo ? o : lo;
-                hi = o > hi ? o : hi;
+                for (DateTime x = day.AddHours(1); x <= next && x < end; x = x.AddHours(1))
+                {
+                    TimeSpan o = zone.GetUtcOffset(x);
+                    if (o != prev)
+                    {
+                        changes.Add((x, prev, o));
+                        prev = o;
+                    }
+
+                    lo = o < lo ? o : lo;
+                    hi = o > hi ? o : hi;
+                }
             }
 
             if (changes.Count != 2 || lo == hi)
             {
                 TimeSpan fixedOffset = changes.Count == 0 ? lo : zone.GetUtcOffset(t);
-                return new ItemZone(id, zone, new TzRule(0x0003, 0, (int)-fixedOffset.TotalMinutes, 0, 0, default, default));
+                return new TzRule(0x0003, 0, (int)-fixedOffset.TotalMinutes, 0, 0, default, default);
             }
 
             SystemTime ToStd = Rel(changes.Find(c => c.To == lo).At, hi);   // standard time begins: the wall clock read daylight time just before
             SystemTime ToDst = Rel(changes.Find(c => c.To == hi).At, lo);
-            return new ItemZone(id, zone, new TzRule(0x0003, 0, (int)-lo.TotalMinutes, 0, (int)-(hi - lo).TotalMinutes, ToStd, ToDst));
+            return new TzRule(0x0003, 0, (int)-lo.TotalMinutes, 0, (int)-(hi - lo).TotalMinutes, ToStd, ToDst);
         }
 
         private static SystemTime Rel(DateTime utc, TimeSpan offsetBefore)
@@ -309,15 +358,22 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             {
                 "REQUEST" => "IPM.Schedule.Meeting.Request",
                 "CANCEL" => "IPM.Schedule.Meeting.Canceled",
+                // MS-OXCICAL 2.1.3.1.1.1: a COUNTER is always a tentative response that carries PidLidAppointmentCounterProposal.
+                "COUNTER" => "IPM.Schedule.Meeting.Resp.Tent",
                 "REPLY" => (ev.Attendees.Count > 0 ? ev.Attendees[0] : null)?.ParticipationStatus?.ToUpperInvariant() switch { "ACCEPTED" => "IPM.Schedule.Meeting.Resp.Pos", "TENTATIVE" => "IPM.Schedule.Meeting.Resp.Tent", _ => "IPM.Schedule.Meeting.Resp.Neg" },
                 _ => "IPM.Appointment",
             };
-            if (method is not (null or "PUBLISH" or "REQUEST" or "CANCEL" or "REPLY"))
+            if (method is not (null or "PUBLISH" or "REQUEST" or "CANCEL" or "REPLY" or "COUNTER"))
             {
                 report.Add("ics", "METHOD", LossKind.Approximated, "MethodNotMapped", $"METHOD:{method} has no Outlook message class; an appointment was made.");
             }
 
             _p.Str(MapiPid.MessageClass, cls);
+            if (method == "COUNTER")
+            {
+                _p.NBool(OutlookNames.CounterProposal, true);
+            }
+
             if (ev.Summary is { } sum)
             {
                 _p.Str(MapiPid.Subject, sum);
@@ -401,16 +457,47 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             }
 
             // MS-OXOCAL 2.2.1.44: the dates of the series are local calendar days in the zone of PidLidTimeZoneStruct.
+            // MS-OXCICAL 2.1.3.2.1.3 and .4: BYHOUR and BYMINUTE are the time of day of every instance (StartTimeOffset). A DTSTART at another
+            // time is not an instance of the series, which an Outlook pattern cannot say.
+            if (rules[0].ByHour.Count == 1 || rules[0].ByMinute.Count == 1)
+            {
+                TimeSpan tod = new(rules[0].ByHour.Count == 1 ? rules[0].ByHour[0] : startLocal.Hour, rules[0].ByMinute.Count == 1 ? rules[0].ByMinute[0] : startLocal.Minute, 0);
+                if (tod != new TimeSpan(startLocal.Hour, startLocal.Minute, 0))
+                {
+                    report.Add("ics", "DTSTART", LossKind.Approximated, nameof(CalendaringDefectKind.AmbiguousFirstInstance), "DTSTART is at another time than BYHOUR and BYMINUTE give; the series uses the rule's time (MS-OXCICAL 2.1.3.2.1.4).");
+                    TimeSpan len = endLocal - startLocal;
+                    startLocal = startLocal.Date + tod;
+                    endLocal = startLocal + len;
+                }
+            }
+
+            // MS-OXOCAL times in a series are minutes (StartTimeOffset, EndTimeOffset).
+            if (startLocal.Second != 0 || endLocal.Second != 0)
+            {
+                report.Add("ics", "DTSTART", LossKind.Approximated, "SubMinuteTimeDropped", "A recurring series keeps its times in whole minutes (MS-OXOCAL 2.2.1.44.5); the seconds were dropped.");
+                startLocal = new DateTime(startLocal.Year, startLocal.Month, startLocal.Day, startLocal.Hour, startLocal.Minute, 0);
+                endLocal = new DateTime(endLocal.Year, endLocal.Month, endLocal.Day, endLocal.Hour, endLocal.Minute, 0);
+            }
+
             pattern.StartDate = OutlookMinutes.FromDateTime(startLocal.Date);
-            pattern.FirstDateTime = OutlookRecurrence.FirstDateTimeFor(pattern, startLocal.Date);
-            Ends(pattern, rules[0]);
+            // A yearly series is anchored in the month of its rule, which BYMONTH may set apart from DTSTART's month.
+            DateTime anchor = pattern.RecurFrequency == 0x200D ? new DateTime(startLocal.Year, rules[0].ByMonth.Count == 1 ? rules[0].ByMonth[0] : startLocal.Month, 1) : startLocal.Date;
+            pattern.FirstDateTime = OutlookRecurrence.FirstDateTimeFor(pattern, anchor);
+            // MS-OXCICAL 2.1.3.2.3: a day that a shorter month lacks is the month's last day in Outlook and no instance at all in RFC 5545.
+            if (pattern.PatternType == 2 && rules[0].ByMonthDay is not [-1]
+                && (pattern.RecurFrequency == 0x200C ? pattern.DayOfMonth >= 29 : pattern.DayOfMonth > DateTime.DaysInMonth(2001, anchor.Month)))
+            {
+                report.Add("ics", "RRULE", LossKind.Approximated, nameof(CalendaringDefectKind.AmbiguousShortMonth), "BYMONTHDAY 29 to 31: Outlook puts the instance on the last day of a shorter month, RFC 5545 skips that month (MS-OXCICAL 2.1.3.2.3).");
+            }
+            Ends(pattern, rules[0], startLocal.TimeOfDay);
             if (OutlookRecurrence.FirstDay(pattern) is { } first && first != startLocal.Date)
             {
                 report.Add("ics", "DTSTART", LossKind.Approximated, nameof(CalendaringDefectKind.AmbiguousFirstInstance), "DTSTART is not a day the rule allows; Outlook starts the series at the first allowed day.");
                 pattern.StartDate = OutlookMinutes.FromDateTime(first);
+                TimeSpan length = endLocal - startLocal;
                 startLocal = first.Add(startLocal.TimeOfDay);
-                endLocal = first.Add(endLocal.TimeOfDay).Add(endLocal.Date - startLocal.Date) ;
-                Ends(pattern, rules[0]);
+                endLocal = startLocal + length;
+                Ends(pattern, rules[0], startLocal.TimeOfDay);
             }
 
             AppointmentRecurrencePattern r = new() { Pattern = pattern, StartTimeOffset = (uint)startLocal.TimeOfDay.TotalMinutes };
@@ -419,9 +506,11 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             Times(startLocal, endLocal);
             _p.NBool(OutlookNames.Recurring, true);
             _p.NBool(OutlookNames.IsRecurring, true);
-            _p.NInt(new MapiNamedProperty(MapiPropertySets.Appointment, 0x8231), pattern.RecurFrequency switch { 0x200A => 1, 0x200B => 2, 0x200C => 3, _ => 4 });
+            _p.NInt(OutlookNames.RecurrenceType, pattern.RecurFrequency switch { 0x200A => 1, 0x200B => 2, 0x200C => 3, _ => 4 });
             _p.NTime(OutlookNames.ClipStart, OutlookMinutes.ToDateTime(pattern.StartDate));
             _p.NTime(OutlookNames.ClipEnd, OutlookMinutes.ToDateTime(pattern.EndDate));
+            // A series that runs on past a change of the zone's rules needs each rule: through its last day (at most 100 years), or for 60 years when it never ends.
+            _zone = _zone.Through(startLocal.Year, pattern.EndType == RecurrencePattern.EndNever ? startLocal.Year + 60 : OutlookMinutes.ToDateTime(pattern.EndDate).Year);
             ZoneProps(true);
             Exceptions(r, startLocal, endLocal);
             _p.NBin(OutlookNames.AppointmentRecur, r.ToArray());
@@ -434,7 +523,8 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             TzRule rule = _zone.Rule;
             _p.NBin(OutlookNames.TimeZoneStruct, TimeZoneStruct.ToArray(rule));
             _p.NStr(OutlookNames.TimeZoneDescription, _zone.Id);
-            TimeZoneDefinition recur = new(_zone.Id, [rule with { Flags = 0x0003 }]);
+            // The series' definition holds a rule for every year the zone's rule changes in (MS-OXOCAL 2.2.1.41); the first one is the effective rule.
+            TimeZoneDefinition recur = new(_zone.Id, _zone.Rules.Select((r, i) => r with { Flags = (ushort)(i == 0 ? 0x0003 : 0) }).ToList());
             TimeZoneDefinition display = new(_zone.Id, [rule with { Flags = 0x0002 }]);
             if (recurring)
             {
@@ -445,7 +535,7 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             _p.NBin(OutlookNames.TimeZoneDefinitionEndDisplay, display.ToArray());
         }
 
-        private void Ends(RecurrencePattern p, RecurrenceRule rule)
+        private void Ends(RecurrencePattern p, RecurrenceRule rule, TimeSpan timeOfDay)
         {
             if (rule.Count is { } c)
             {
@@ -455,10 +545,17 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             }
             else if (rule.Until is { } u)
             {
-                DateTime until = u.Kind == IcsTimeKind.Utc ? _zone.ToLocal(u.Value) : u.Value;
+                // RFC 5545 3.3.10: UNTIL bounds the instance's start. A DATE value (a sloppy writer's) is taken to include its whole day.
+                DateTime until = u.Kind == IcsTimeKind.Utc ? _zone.ToLocal(u.Value) : u.IsDate ? u.Value.Date.AddDays(1).AddTicks(-1) : u.Value;
                 p.EndType = RecurrencePattern.EndAfterDate;
                 p.EndDate = OutlookMinutes.FromDateTime(until.Date);
                 List<DateTime> days = OutlookRecurrence.Days(p).ToList();
+                // MS-OXCICAL 2.1.3.2.2.1: EndDate is the start date of the last instance, so a last day whose start is after UNTIL is not one.
+                while (days.Count > 0 && days[^1] + timeOfDay > until)
+                {
+                    days.RemoveAt(days.Count - 1);
+                }
+
                 p.OccurrenceCount = (uint)days.Count;
                 p.EndDate = days.Count > 0 ? OutlookMinutes.FromDateTime(days[^1]) : p.StartDate;
             }
@@ -470,24 +567,51 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             }
         }
 
-        // The templates of MS-OXCICAL 2.1.3.2.2; a rule outside them has no Outlook form.
-        private static RecurrencePattern? MapRule(RecurrenceRule r, DateTime start, out string? why)
+        // The templates of MS-OXCICAL 2.1.3.2.2; a rule outside them has no Outlook form. Two rewrites that mean exactly the same thing are
+        // accepted too: a daily rule that only filters weekdays (every day, INTERVAL=1) is the weekly template, and BYDAY=1MO (the ordinal
+        // inside BYDAY) is BYDAY=MO;BYSETPOS=1.
+        internal static RecurrencePattern? MapRule(RecurrenceRule r, DateTime start, out string? why)
         {
             why = null;
-            if (r.BySecond.Count > 0 || r.ByYearDay.Count > 0 || r.ByWeekNo.Count > 0 || r.RScale is not null || r.ByMinute.Count > 1 || r.ByHour.Count > 1 || r.OtherParts.Count > 0)
+            if (r.Frequency is Calendar.Ics.RecurrenceFrequency.Hourly or Calendar.Ics.RecurrenceFrequency.Minutely or Calendar.Ics.RecurrenceFrequency.Secondly)
             {
-                why = "The rule uses parts outside the MS-OXCICAL templates.";
+                why = $"FREQ={r.Frequency.ToString().ToUpperInvariant()} repeats within a day; Outlook patterns step by days at the finest (MS-OXCICAL 2.1.3.2.1.1).";
+                return null;
+            }
+
+            if (r.RScale is not null)
+            {
+                why = "RSCALE (RFC 7529) names another calendar; MS-OXCICAL maps it only through X-MICROSOFT-CALSCALE.";
+                return null;
+            }
+
+            if (r.BySecond.Count > 0 || r.ByYearDay.Count > 0 || r.ByWeekNo.Count > 0 || r.OtherParts.Count > 0)
+            {
+                why = "BYSECOND, BYYEARDAY and BYWEEKNO are outside the MS-OXCICAL templates (2.1.3.2.2).";
+                return null;
+            }
+
+            if (r.ByMinute.Count > 1 || r.ByHour.Count > 1)
+            {
+                why = "Several BYHOUR or BYMINUTE values give several instances a day, which an Outlook pattern cannot hold (MS-OXCICAL 2.1.3.2.1.3, .4).";
                 return null;
             }
 
             RecurrencePattern p = new() { WriterVersion = 0x3004, ReaderVersion = 0x3004, FirstDayOfWeek = r.WeekStart is { } w ? (uint)w : 0 };
             int iv = Math.Max(1, r.Interval);
+            bool plainDays = r.ByDay.Count > 0 && r.ByDay.All(d => d.Ordinal is null);
             switch (r.Frequency)
             {
                 case Calendar.Ics.RecurrenceFrequency.Daily when r.ByDay.Count + r.ByMonthDay.Count + r.ByMonth.Count + r.BySetPos.Count == 0 && iv <= 999:
                     p.RecurFrequency = 0x200A;
                     p.PatternType = 0;
                     p.Period = (uint)iv * 1440;
+                    return p;
+                case Calendar.Ics.RecurrenceFrequency.Daily when plainDays && iv == 1 && r.ByMonthDay.Count + r.ByMonth.Count + r.BySetPos.Count == 0:
+                    p.RecurFrequency = 0x200B;
+                    p.PatternType = 1;
+                    p.Period = 1;
+                    p.WeekdayMask = r.ByDay.Aggregate(0u, (m, d) => m | (1u << (int)d.Day));
                     return p;
                 case Calendar.Ics.RecurrenceFrequency.Weekly when r.ByMonthDay.Count + r.ByMonth.Count + r.BySetPos.Count == 0 && iv <= 99 && r.ByDay.All(d => d.Ordinal is null):
                     p.RecurFrequency = 0x200B;
@@ -499,6 +623,22 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
                     p.RecurFrequency = 0x200C;
                     p.Period = (uint)iv;
                     return MonthlyOrYearly(r, p, start, ref why);
+                // RFC 5545 3.3.10: without BYMONTH a yearly BYMONTHDAY applies to every month and a yearly BYDAY counts weekdays over the whole year.
+                // Neither is "the month of DTSTART" (MS-OXCICAL 2.1.3.2.1.7 describes how Outlook reads the part when it is absent from its own output).
+                case Calendar.Ics.RecurrenceFrequency.Yearly when r.ByMonth.Count == 0 && r.ByDay.Count > 0:
+                    why = "A yearly rule with BYDAY and no BYMONTH counts weekdays across the whole year (RFC 5545 3.3.10); an Outlook pattern needs a month.";
+                    return null;
+                case Calendar.Ics.RecurrenceFrequency.Yearly when r.ByMonth.Count == 0 && r.ByMonthDay.Count > 0:
+                    if (r.ByMonthDay.Count == 1 && iv == 1 && r.BySetPos.Count == 0)
+                    {
+                        // Every month on that day is the monthly template.
+                        p.RecurFrequency = 0x200C;
+                        p.Period = 1;
+                        return MonthlyOrYearly(r, p, start, ref why);
+                    }
+
+                    why = "A yearly rule with BYMONTHDAY and no BYMONTH recurs in every month of every year in the interval (RFC 5545 3.3.10); only INTERVAL=1 with one day is the monthly template.";
+                    return null;
                 case Calendar.Ics.RecurrenceFrequency.Yearly when r.ByMonth.Count <= 1 && iv <= 8:
                     p.RecurFrequency = 0x200D;
                     p.Period = 12u * (uint)iv;
@@ -506,7 +646,13 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
                     start = new DateTime(start.Year, month, Math.Min(start.Day, DateTime.DaysInMonth(start.Year, month)));
                     return MonthlyOrYearly(r, p, start, ref why);
                 default:
-                    why = "The frequency or its parts have no Outlook pattern.";
+                    why = r.Frequency switch
+                    {
+                        Calendar.Ics.RecurrenceFrequency.Daily => "A daily rule with BYMONTHDAY, BYMONTH or BYSETPOS, or with BYDAY and an INTERVAL above 1, has no Outlook pattern; the interval is outside 1 to 999 otherwise (MS-OXCICAL 2.1.3.2.2.1).",
+                        Calendar.Ics.RecurrenceFrequency.Weekly => "A weekly rule with BYMONTHDAY, BYMONTH, BYSETPOS or ordinal weekdays has no Outlook pattern; the interval is outside 1 to 99 otherwise (MS-OXCICAL 2.1.3.2.2.2).",
+                        Calendar.Ics.RecurrenceFrequency.Monthly => "A monthly rule with BYMONTH has no Outlook pattern; the interval is outside 1 to 99 otherwise (MS-OXCICAL 2.1.3.2.2.3, .4).",
+                        _ => "A yearly rule with several BYMONTH values has no Outlook pattern; the interval is outside 1 to 8 otherwise (MS-OXCICAL 2.1.3.2.2.5, .6).",
+                    };
                     return null;
             }
         }
@@ -575,19 +721,109 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
                 }
             }
 
-            if (ev.Component.FindProperties("RDATE").Any())
+            PairRdates(r, startLocal, deleted);
+            r.Pattern.DeletedInstanceDates.AddRange(deleted);
+        }
+
+        private const int MaxPairedDates = 1000;
+
+        // RDATEs that move an EXDATEd instance (start, end and the instance's original start, all local).
+        private readonly List<(DateTime Orig, DateTime Start, DateTime End)> _moves = [];
+
+        // MS-OXCICAL 2.1.3.1.1.20.18: an RDATE is only carried as the new place of an instance that an EXDATE removes. The moved instance must stay
+        // between its neighbours, must not overlap them and must not share a calendar day with another instance. Whatever cannot be paired is reported.
+        private void PairRdates(AppointmentRecurrencePattern r, DateTime startLocal, SortedSet<uint> deleted)
+        {
+            List<DateTime> rdates = [];
+            foreach (ContentProperty p in ev.Component.FindProperties("RDATE"))
             {
-                report.Add("ics", "RDATE", LossKind.Dropped, "RdateWithoutException", "An RDATE adds an instance that is not a moved one; Outlook can only hold moved instances (MS-OXCICAL 2.1.3.1.1.20.18).");
+                foreach (string v in p.Value.Split(','))
+                {
+                    if (v.Contains('/', StringComparison.Ordinal))
+                    {
+                        report.Add("ics", "RDATE", LossKind.Dropped, "RdatePeriodNotCarried", "An RDATE with a period has no Outlook form and is ignored (MS-OXCICAL 2.1.3.1.1.20.18).");
+                    }
+                    else if (IcsTime.TryParse(v.Trim(), p.GetParameter("TZID"), out IcsTime t))
+                    {
+                        rdates.Add(LocalOf(t, _zone));
+                    }
+                }
             }
 
-            r.Pattern.DeletedInstanceDates.AddRange(deleted);
+            if (rdates.Count == 0)
+            {
+                return;
+            }
+
+            // Pairing looks at every EXDATE for every RDATE; a hostile file gets no more than this many of either.
+            if (rdates.Count > MaxPairedDates || deleted.Count > MaxPairedDates)
+            {
+                report.Add("ics", "RDATE", LossKind.Dropped, "RdateWithoutException", $"More than {MaxPairedDates} RDATEs or EXDATEs; none were paired with a moved instance.");
+                return;
+            }
+
+            TimeSpan offset = TimeSpan.FromMinutes(r.StartTimeOffset);
+            TimeSpan length = TimeSpan.FromMinutes(r.EndTimeOffset - r.StartTimeOffset);
+            List<DateTime> free = deleted.Select(d => OutlookMinutes.ToDateTime(d) + offset).ToList();   // EXDATEs still without an RDATE
+            HashSet<DateTime> usedDays = [];
+            bool Live(DateTime day) => day >= OutlookMinutes.ToDateTime(r.Pattern.StartDate) && OutlookRecurrence.IsValidDay(r.Pattern, day) && !deleted.Contains(OutlookMinutes.FromDateTime(day))
+                && (r.Pattern.EndType == RecurrencePattern.EndNever || day <= OutlookMinutes.ToDateTime(r.Pattern.EndDate));
+            foreach (DateTime rd in rdates.Distinct().Order())
+            {
+                if (Live(rd.Date) && rd - rd.Date == offset)
+                {
+                    continue;   // already an instance of the series: a repeated date, nothing to carry
+                }
+
+                DateTime? best = null;
+                foreach (DateTime ex in free)
+                {
+                    DateTime prev = ex.Date, next = ex.Date;
+                    for (int i = 0; i < 400 && !Live(prev = prev.AddDays(-1)) && prev.Year > 1601; i++)
+                    {
+                    }
+
+                    for (int i = 0; i < 400 && !Live(next = next.AddDays(1)) && next.Year < 9000; i++)
+                    {
+                    }
+
+                    DateTime prevStart = prev + offset, nextStart = next + offset;
+                    bool ok = Live(prev) ? rd >= prevStart + length && rd.Date != prev : true;
+                    ok &= !Live(next) || (rd + length <= nextStart && rd.Date != next);
+                    ok &= !usedDays.Contains(rd.Date);
+                    if (ok && (best is null || Math.Abs((rd - ex).Ticks) < Math.Abs((rd - best.Value).Ticks)))
+                    {
+                        best = ex;
+                    }
+                }
+
+                if (best is not { } pair)
+                {
+                    report.Add("ics", "RDATE", LossKind.Dropped, "RdateWithoutException", "An RDATE that is not the new place of an EXDATEd instance cannot be held; Outlook has only moved instances (MS-OXCICAL 2.1.3.1.1.20.18).");
+                    continue;
+                }
+
+                free.Remove(pair);
+                usedDays.Add(rd.Date);
+                _moves.Add((pair, rd, rd + length));
+            }
         }
 
         private void Exceptions(AppointmentRecurrencePattern r, DateTime startLocal, DateTime endLocal)
         {
-            List<(IcsComponent O, DateTime Orig, DateTime S, DateTime E)> list = [];
+            List<(IcsComponent? O, DateTime Orig, DateTime S, DateTime E)> list = [];
+            foreach ((DateTime mo, DateTime ms, DateTime me) in _moves)
+            {
+                list.Add((null, mo, ms, me));
+            }
+
             foreach (IcsComponent o in overrides)
             {
+                if (string.Equals(o.Component.FindProperty("RECURRENCE-ID")?.GetParameter("RANGE"), "THISANDFUTURE", StringComparison.OrdinalIgnoreCase))
+                {
+                    report.Add("ics", "RECURRENCE-ID", LossKind.Approximated, "RangeThisAndFutureNotCarried", "RANGE=THISANDFUTURE changes every later instance; an Outlook exception changes one, so only the named instance was changed.");
+                }
+
                 if (o.RecurrenceId is not { } rid || o.Start is not { } os)
                 {
                     report.Add("ics", "VEVENT", LossKind.Dropped, "OverrideWithoutTimes", "An override without RECURRENCE-ID or DTSTART was not converted.");
@@ -607,7 +843,7 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             }
 
             list.Sort((a, b) => a.S.CompareTo(b.S));
-            foreach ((IcsComponent o, DateTime orig, DateTime s, DateTime e) in list)
+            foreach ((IcsComponent? o, DateTime orig, DateTime s, DateTime e) in list)
             {
                 uint origDay = OutlookMinutes.FromDateTime(orig.Date);
                 if (!r.Pattern.DeletedInstanceDates.Contains(origDay))
@@ -617,26 +853,29 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
 
                 r.Pattern.ModifiedInstanceDates.Add(OutlookMinutes.FromDateTime(s.Date));
                 ExceptionInfo info = new() { StartDateTime = OutlookMinutes.FromDateTime(s), EndDateTime = OutlookMinutes.FromDateTime(e), OriginalStartTime = OutlookMinutes.FromDateTime(orig) };
-                if (o.Summary is { } subj)
+                if (o?.Summary is { } subj)
                 {
                     info.Overrides |= ExceptionOverrides.Subject;
                     info.Subject = subj;
                 }
 
-                if (o.Location is { } loc)
+                if (o?.Location is { } loc)
                 {
                     info.Overrides |= ExceptionOverrides.Location;
                     info.Location = loc;
                 }
 
-                if (o.GetText("TRANSP") is { } tr)
+                if (o?.GetText("TRANSP") is { } tr)
                 {
                     info.Overrides |= ExceptionOverrides.BusyStatus;
                     info.BusyStatus = string.Equals(tr, "TRANSPARENT", StringComparison.OrdinalIgnoreCase) ? 0u : 2u;
                 }
 
                 r.Exceptions.Add(info);
-                _p.Message.AddAttachment(ExceptionAttachment(o, info, orig, s, e));
+                if (o is not null)
+                {
+                    _p.Message.AddAttachment(ExceptionAttachment(o, info, orig, s, e));
+                }
             }
 
             r.Pattern.DeletedInstanceDates.Sort();
@@ -722,6 +961,12 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             bs ??= ev.Transparency?.ToUpperInvariant() switch { "TRANSPARENT" => 0, "OPAQUE" => 2, _ => null };
             bs ??= ev.Status?.ToUpperInvariant() switch { "CANCELLED" => 0, "TENTATIVE" => 1, "CONFIRMED" => 2, _ => null };
             _p.NInt(OutlookNames.BusyStatus, bs ?? 2);
+            // MS-OXCICAL 2.1.3.1.1.20.23: STATUS only stands in for a missing busy status and is never written back. A cancelled event is
+            // kept by the cancelled bit of PidLidAppointmentStateFlags; CONFIRMED, TENTATIVE and any other value are lost with the export.
+            if (ev.Status is { } statusText && !string.Equals(statusText.Trim(), "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                report.Add("ics", "STATUS", LossKind.Dropped, "StatusNotExported", "MS-OXCICAL 2.1.3.1.1.20.23: STATUS (other than CANCELLED) only feeds the busy status on import and is not exported.");
+            }
             if (ev.GetText("X-MICROSOFT-CDO-INTENDEDSTATUS")?.ToUpperInvariant() is { } ints)
             {
                 _p.NInt(OutlookNames.IntendedBusyStatus, ints switch { "FREE" => 0, "TENTATIVE" => 1, "OOF" => 3, "WORKINGELSEWHERE" => 4, _ => 2 });
@@ -752,36 +997,88 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
 
         private void People()
         {
+            // RFC 5546 3.2.3 and 3.2.7: in a REPLY or COUNTER the sender is the attendee who answers and the organizer is the addressee, which is
+            // how Outlook holds a meeting response (the sender is the responder, the recipient the organizer).
+            bool reply = method is "REPLY" or "COUNTER";
             IcsCalAddress? org = ev.Organizer;
-            bool meeting = method is "REQUEST" or "CANCEL" or "REPLY" || ev.Attendees.Count > 0;
+            IcsCalAddress? sender = reply ? ev.Attendees.Count > 0 ? ev.Attendees[0] : null : org;
+            bool meeting = method is "REQUEST" or "CANCEL" or "REPLY" or "COUNTER" || ev.Attendees.Count > 0;
             int state = (meeting ? 1 : 0) | (method is "REQUEST" or "CANCEL" ? 2 : 0) | (method == "CANCEL" || string.Equals(ev.Status, "CANCELLED", StringComparison.OrdinalIgnoreCase) ? 4 : 0);
             _p.NInt(OutlookNames.StateFlags, state);
-            if (org is not null && Mailto(org.Address) is { } oa)
+            if (sender is not null && Mailto(sender.Address) is { } oa)
             {
-                _p.Str(MapiPid.SentRepresentingName, org.CommonName ?? oa);
+                _p.Str(MapiPid.SentRepresentingName, sender.CommonName ?? oa);
                 _p.Str(MapiPid.SentRepresentingAddressType, "SMTP");
                 _p.Str(MapiPid.SentRepresentingEmailAddress, oa);
                 _p.Str(MapiPid.SentRepresentingSmtpAddress, oa);
             }
-            else if (org is not null)
+            else if (sender is not null)
             {
-                report.Add("ics", "ORGANIZER", LossKind.Dropped, "OrganizerNotMailto", "The ORGANIZER is not a mailto address.");
+                report.Add("ics", reply ? "ATTENDEE" : "ORGANIZER", LossKind.Dropped, "OrganizerNotMailto", $"The {(reply ? "replying ATTENDEE" : "ORGANIZER")} is not a mailto address.");
             }
 
-            bool rsvp = ev.Attendees.Any(a => a.Rsvp == true) || (method is null or "PUBLISH" && !meeting);
+            // MS-OXCICAL 2.1.3.1.1.20.2.5: PidTagResponseRequested is one flag for the whole message. It is true when any ATTENDEE asks for a
+            // response or the item is an appointment (IPM.Appointment), false otherwise; the export writes that one value on every ATTENDEE.
+            bool appointmentClass = method is not ("REQUEST" or "CANCEL" or "REPLY" or "COUNTER");
+            bool rsvp = ev.Attendees.Any(a => a.Rsvp == true) || appointmentClass;
+            _p.Message.Properties.Add(MapiProperty.CreateOwned(new MapiTag(OutlookNames.PidTagResponseRequested, MapiType.Boolean), [rsvp ? (byte)1 : (byte)0]));
+            _p.Message.Properties.Add(MapiProperty.CreateOwned(new MapiTag(0x0C17, MapiType.Boolean), [rsvp ? (byte)1 : (byte)0]));
             if (meeting)
             {
-                _p.Message.Properties.Add(MapiProperty.CreateOwned(new MapiTag(OutlookNames.PidTagResponseRequested, MapiType.Boolean), [rsvp ? (byte)1 : (byte)0]));
-                _p.Message.Properties.Add(MapiProperty.CreateOwned(new MapiTag(0x0C17, MapiType.Boolean), [rsvp ? (byte)1 : (byte)0]));
-                _p.NInt(OutlookNames.ResponseStatus, method == "REQUEST" ? 5 : method == "REPLY" ? 0 : 1);
+                _p.NInt(OutlookNames.ResponseStatus, method == "REQUEST" ? 5 : method is "REPLY" or "COUNTER" ? 0 : 1);
             }
 
             int row = 0;
+            if (reply)
+            {
+                if (org is not null && Mailto(org.Address) is { } toAddr)
+                {
+                    _p.Message.AddRecipient(Recipient(org.CommonName ?? toAddr, toAddr, 1, 1, 0, null, row++));
+                }
+                else if (org is not null)
+                {
+                    report.Add("ics", "ORGANIZER", LossKind.Dropped, "OrganizerNotMailto", "The ORGANIZER is not a mailto address.");
+                }
+
+                if (sender is not null)
+                {
+                    // The reply's answer is the message class (2.1.3.1.1.1); the other ATTENDEE parameters have no place in a response.
+                    string? psr = sender.ParticipationStatus?.ToUpperInvariant();
+                    if (psr is not ("ACCEPTED" or "TENTATIVE" or "DECLINED") && method == "REPLY")
+                    {
+                        report.Add("ics", "ATTENDEE;PARTSTAT", LossKind.Approximated, "PartstatNotCarried", $"A reply with PARTSTAT={sender.ParticipationStatus ?? "(none)"} has no message class of its own; it is a decline (MS-OXCICAL 2.1.3.1.1.1).");
+                    }
+
+                    if (sender.Role is { } rr && !rr.Equals("REQ-PARTICIPANT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        report.Add("ics", "ATTENDEE;ROLE", LossKind.Dropped, "AttendeeRoleNotCarried", "A response message has no recipient role for its sender.");
+                    }
+
+                    if (sender.CalendarUserType is { } cu && !cu.Equals("INDIVIDUAL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        report.Add("ics", "ATTENDEE;CUTYPE", LossKind.Dropped, "AttendeeTypeApproximated", "A response message has no user type for its sender.");
+                    }
+
+                    if (sender.Rsvp == true)
+                    {
+                        report.Add("ics", "ATTENDEE;RSVP", LossKind.Dropped, "RsvpIsPerMessage", "A response message asks for no response.");
+                    }
+                }
+
+                if (ev.Attendees.Count > 1)
+                {
+                    report.Add("ics", "ATTENDEE", LossKind.Dropped, "AdditionalAttendeesInReply", "A reply holds one ATTENDEE, the one who answers (MS-OXCICAL 2.1.3.1.1.1); the others were not converted.");
+                }
+
+                return;
+            }
+
             if (meeting && org is not null && Mailto(org.Address) is { } oaddr)
             {
                 _p.Message.AddRecipient(Recipient(org.CommonName ?? oaddr, oaddr, 1, 3, 0, null, row++));
             }
 
+            bool rsvpReported = false;
             foreach (IcsCalAddress a in ev.Attendees)
             {
                 string? addr = Mailto(a.Address);
@@ -792,9 +1089,47 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
                     addr = null;
                 }
 
-                bool resource = string.Equals(a.CalendarUserType, "RESOURCE", StringComparison.OrdinalIgnoreCase) || string.Equals(a.CalendarUserType, "ROOM", StringComparison.OrdinalIgnoreCase);
-                int type = resource || string.Equals(a.Role, "NON-PARTICIPANT", StringComparison.OrdinalIgnoreCase) ? 3 : string.Equals(a.Role, "OPT-PARTICIPANT", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
-                int track = a.ParticipationStatus?.ToUpperInvariant() switch { "ACCEPTED" => 3, "DECLINED" => 4, "TENTATIVE" => 2, _ => 0 };
+                string? cutype = a.CalendarUserType?.ToUpperInvariant();
+                bool resource = cutype is "RESOURCE" or "ROOM";
+                string? role = a.Role?.ToUpperInvariant();
+                // MS-OXCICAL 2.1.3.1.1.20.2: RESOURCE, ROOM and NON-PARTICIPANT are type 3 (Bcc), OPT-PARTICIPANT type 2, everything else type 1.
+                int type = resource || role == "NON-PARTICIPANT" ? 3 : role == "OPT-PARTICIPANT" ? 2 : 1;
+                // The export gives ROLE back only as OPT-PARTICIPANT or NON-PARTICIPANT and CUTYPE only as RESOURCE (2.1.3.1.1.20.2.2, .4).
+                if (role == "CHAIR")
+                {
+                    report.Add("ics", "ATTENDEE;ROLE", LossKind.Approximated, "AttendeeRoleNotCarried", "ROLE=CHAIR has no recipient form; the attendee is an ordinary required recipient (MS-OXCICAL 2.1.3.1.1.20.2.4).");
+                }
+                else if (role is not (null or "REQ-PARTICIPANT" or "OPT-PARTICIPANT" or "NON-PARTICIPANT"))
+                {
+                    report.Add("ics", "ATTENDEE;ROLE", LossKind.Approximated, "AttendeeRoleNotCarried", $"ROLE={a.Role} has no recipient form; the attendee is an ordinary required recipient.");
+                }
+
+                if (cutype == "ROOM")
+                {
+                    report.Add("ics", "ATTENDEE;CUTYPE", LossKind.Approximated, "AttendeeTypeApproximated", "CUTYPE=ROOM is carried as a resource (recipient type 3); the export writes CUTYPE=RESOURCE.");
+                }
+                else if (cutype is not (null or "INDIVIDUAL" or "RESOURCE"))
+                {
+                    report.Add("ics", "ATTENDEE;CUTYPE", LossKind.Dropped, "AttendeeTypeApproximated", $"CUTYPE={a.CalendarUserType} has no recipient form; the attendee is an individual (MS-OXCICAL 2.1.3.1.1.20.2.2).");
+                }
+                else if (role == "NON-PARTICIPANT" && !resource)
+                {
+                    report.Add("ics", "ATTENDEE;CUTYPE", LossKind.Approximated, "AttendeeTypeApproximated", "A non-participant is recipient type 3 (Bcc), which the export writes as CUTYPE=RESOURCE.");
+                }
+
+                if (!rsvpReported && (a.Rsvp == true) != rsvp)
+                {
+                    rsvpReported = true;
+                    report.Add("ics", "ATTENDEE;RSVP", LossKind.Approximated, "RsvpIsPerMessage", "Outlook keeps one response-requested flag for the item; every ATTENDEE gets that value back (MS-OXCICAL 2.1.3.1.1.20.2.5).");
+                }
+
+                string? ps = a.ParticipationStatus?.ToUpperInvariant();
+                if (ps is not (null or "NEEDS-ACTION" or "ACCEPTED" or "DECLINED" or "TENTATIVE"))
+                {
+                    report.Add("ics", "ATTENDEE;PARTSTAT", LossKind.Approximated, "PartstatNotCarried", $"PARTSTAT={a.ParticipationStatus} has no recipient track status; it is carried as no response (MS-OXCICAL 2.1.3.1.1.20.2).");
+                }
+
+                int track = ps switch { "ACCEPTED" => 3, "DECLINED" => 4, "TENTATIVE" => 2, _ => 0 };
                 string? rt = a.Property.GetParameter("X-MS-OLK-RESPTIME");
                 DateTime? respTime = rt is not null && IcsTime.TryParse(rt, null, out IcsTime rtt) ? rtt.Value : null;
                 foreach (ContentParameter prm in a.Property.Parameters)
@@ -941,6 +1276,11 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
                 report.Add("ics", "STATUS", LossKind.Approximated, "TaskCancelledAsDeferred", "A cancelled VTODO is stored as deferred.");
             }
 
+            if (status is not (null or "COMPLETED" or "IN-PROCESS" or "NEEDS-ACTION" or "CANCELLED"))
+            {
+                report.Add("ics", "STATUS", LossKind.Approximated, "StatusNotCarried", $"STATUS:{todo.Status} is not a VTODO status (RFC 5545 3.8.1.11); the task is {(ts == 2 ? "complete" : "not started")}.");
+            }
+
             p.NInt(OutlookNames.TaskStatus, ts);
             p.NBool(OutlookNames.TaskComplete, ts == 2);
             double pct = (todo.PercentComplete ?? (ts == 2 ? 100 : 0)) / 100.0;
@@ -975,11 +1315,7 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             if (todo.RecurrenceRules.Count == 1 && todo.Start is { } rs)
             {
                 RecurrencePattern? rp = MapSimple(todo.RecurrenceRules[0], rs.Value);
-                if (rp is null)
-                {
-                    report.Add("ics", "RRULE", LossKind.Dropped, "RecurrenceNotMapped", "The rule does not fit an Outlook recurrence pattern.");
-                }
-                else
+                if (rp is not null)
                 {
                     p.NBin(OutlookNames.TaskRecurrence, rp.ToArray());
                     p.NBool(OutlookNames.TaskFRecurring, true);
@@ -1005,20 +1341,48 @@ public sealed class IcsToMapiConverter : IItemConversion<IcsComponent, MapiMessa
             return p.Message;
         }
 
-        private static RecurrencePattern? MapSimple(RecurrenceRule r, DateTime start)
+        // A task's series is days only (MS-OXOTASK): the same templates as an appointment's, dates without a zone.
+        private RecurrencePattern? MapSimple(RecurrenceRule r, DateTime start)
         {
-            int iv = Math.Max(1, r.Interval);
-            if (r.Frequency == Calendar.Ics.RecurrenceFrequency.Daily && r.ByDay.Count + r.ByMonthDay.Count + r.ByMonth.Count == 0 && iv <= 999)
+            RecurrencePattern? p = EventBuilder.MapRule(r, start, out string? why);
+            if (p is null)
             {
-                RecurrencePattern p = new() { RecurFrequency = 0x200A, PatternType = 0, Period = (uint)iv * 1440, StartDate = OutlookMinutes.FromDateTime(start.Date) };
-                p.FirstDateTime = (uint)(((OutlookRecurrence.DayIndex(start) * 1440) % p.Period + p.Period) % p.Period);
-                p.EndType = r.Count is { } c ? RecurrencePattern.EndAfterCount : RecurrencePattern.EndNever;
-                p.OccurrenceCount = (uint)(r.Count ?? 10);
-                p.EndDate = OutlookMinutes.NeverEnds;
-                return r.Until is null ? p : null;
+                report.Add("ics", "RRULE", LossKind.Dropped, "RecurrenceNotMapped", why ?? "The rule does not fit an Outlook recurrence pattern.");
+                return null;
             }
 
-            return null;
+            DateTime day = start.Date;
+            p.StartDate = OutlookMinutes.FromDateTime(day);
+            DateTime anchor = p.RecurFrequency == 0x200D ? new DateTime(day.Year, r.ByMonth.Count == 1 ? r.ByMonth[0] : day.Month, 1) : day;
+            p.FirstDateTime = OutlookRecurrence.FirstDateTimeFor(p, anchor);
+            if (r.Count is { } c)
+            {
+                p.EndType = RecurrencePattern.EndAfterCount;
+                p.OccurrenceCount = (uint)Math.Max(1, c);
+                p.EndDate = OutlookMinutes.FromDateTime(OutlookRecurrence.Days(p).LastOrDefault(day));
+            }
+            else if (r.Until is { } u)
+            {
+                p.EndType = RecurrencePattern.EndAfterDate;
+                p.EndDate = OutlookMinutes.FromDateTime(u.Value.Date);
+                List<DateTime> days = OutlookRecurrence.Days(p).ToList();
+                p.OccurrenceCount = (uint)days.Count;
+                p.EndDate = days.Count > 0 ? OutlookMinutes.FromDateTime(days[^1]) : p.StartDate;
+            }
+            else
+            {
+                p.EndType = RecurrencePattern.EndNever;
+                p.OccurrenceCount = 10;
+                p.EndDate = OutlookMinutes.NeverEnds;
+            }
+
+            if (OutlookRecurrence.FirstDay(p) is { } first && first != day)
+            {
+                report.Add("ics", "DTSTART", LossKind.Approximated, nameof(CalendaringDefectKind.AmbiguousFirstInstance), "DTSTART is not a day the rule allows; the series starts at the first allowed day.");
+                p.StartDate = OutlookMinutes.FromDateTime(first);
+            }
+
+            return p;
         }
     }
 }

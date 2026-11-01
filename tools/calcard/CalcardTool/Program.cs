@@ -237,13 +237,15 @@ static int Sweep(string[] roots)
     {
         foreach (IcsComponent cal in cals)
         {
+            // The card of each original is paired with the card of its item by UID, never by title: titles repeat, and many events have none.
+            IReadOnlyList<CalendarCard> origCards = CalendarCard.CreateAll(cal);
             foreach (var r in IcsToMapiConverter.ConvertAll(cal))
             {
                 foreach (CalendarCard m in CalendarCard.FromMapi(r.Value))
                 {
                     mapiCards++;
                     Count("mapi-from-ics/" + m.Method);
-                    CalendarCard? o = original.FirstOrDefault(x => x.Uid is not null && x.Summary == m.Summary) ?? original.FirstOrDefault(x => x.Summary == m.Summary);
+                    CalendarCard? o = m.Uid is { Length: > 0 } uid ? origCards.FirstOrDefault(x => x.Uid == uid) : null;
                     if (o is null)
                     {
                         continue;

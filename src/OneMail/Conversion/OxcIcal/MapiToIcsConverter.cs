@@ -72,7 +72,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
         OutlookNames.TimeZoneDefinitionStartDisplay, OutlookNames.GlobalObjectId, OutlookNames.AppointmentSequence, OutlookNames.ReminderSet,
         OutlookNames.ReminderDelta, OutlookNames.ExceptionReplaceTime, OutlookNames.StateFlags,
         OutlookNames.TaskStatus, OutlookNames.PercentComplete, OutlookNames.TaskStartDate, OutlookNames.TaskDueDate, OutlookNames.TaskDateCompleted,
-        OutlookNames.TaskRecurrence, OutlookNames.TaskComplete, OutlookNames.MeetingType,
+        OutlookNames.TaskRecurrence, OutlookNames.TaskComplete, OutlookNames.MeetingType, OutlookNames.CounterProposal,
     ];
 
     internal static readonly HashSet<MapiNamedProperty> Derived =
@@ -80,6 +80,7 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
         OutlookNames.Duration, OutlookNames.ClipStart, OutlookNames.ClipEnd, OutlookNames.CleanGlobalObjectId, OutlookNames.Recurring, OutlookNames.IsRecurring,
         OutlookNames.AllAttendeesString, OutlookNames.ToAttendeesString, OutlookNames.CcAttendeesString, OutlookNames.ReminderTime, OutlookNames.ReminderSignalTime,
         OutlookNames.TimeZoneDescription, OutlookNames.CommonStart, OutlookNames.CommonEnd, OutlookNames.TaskFRecurring, OutlookNames.TaskState,
+        OutlookNames.RecurrenceType, OutlookNames.TimeZoneDefinitionEndDisplay, OutlookNames.ResponseStatus, OutlookNames.IsException,
     ];
 
     internal static readonly HashSet<ushort> CarriedTags =
@@ -107,6 +108,8 @@ public sealed class MapiToIcsConverter : IItemConversion<MapiMessage, Calendar.C
             {
                 OutlookAppointmentKind.Appointment => "PUBLISH",
                 OutlookAppointmentKind.MeetingRequest => "REQUEST",
+                // MS-OXCICAL 2.1.3.1.1.1: a tentative response that carries PidLidAppointmentCounterProposal is a COUNTER.
+                OutlookAppointmentKind.MeetingResponseTentative when m.Properties.Get(OutlookNames.CounterProposal, MapiType.Boolean)?.AsBoolean() == true => "COUNTER",
                 OutlookAppointmentKind.MeetingResponseAccepted or OutlookAppointmentKind.MeetingResponseTentative or OutlookAppointmentKind.MeetingResponseDeclined => "REPLY",
                 OutlookAppointmentKind.MeetingCancellation => "CANCEL",
                 _ => null,

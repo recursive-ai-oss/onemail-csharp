@@ -433,7 +433,8 @@ public sealed class OutlookAppointment
             }
 
             string id = recur?.KeyName is { Length: > 0 } k ? k : NameFor(description, structRule);
-            return new OutlookTimeZone(id, recur, structRule, [structRule]);
+            // A definition that agrees with the struct carries the rules of every year of the series (MS-OXOCAL 2.2.1.41); with none the struct is the one rule.
+            return new OutlookTimeZone(id, recur, structRule, recur is { Rules.Count: > 0 } ? recur.Rules : [structRule]);
         }
 
         TimeZoneDefinition? def = display ?? recur;
