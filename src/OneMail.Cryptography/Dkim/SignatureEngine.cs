@@ -239,8 +239,8 @@ internal static class SignatureEngine
             res.Warnings |= DkimWarnings.WeakAlgorithm;
         }
 
-        sig.HeaderCanon = DkimCanonicalization.Simple;
-        sig.BodyCanon = DkimCanonicalization.Simple;
+        sig.HeaderCanon = kind == SigKind.ArcMessageSignature ? DkimCanonicalization.Relaxed : DkimCanonicalization.Simple;
+        sig.BodyCanon = kind == SigKind.ArcMessageSignature ? DkimCanonicalization.Relaxed : DkimCanonicalization.Simple;
         if (kind == SigKind.ArcSeal)
         {
             // RFC 8617 §4.1.3: only relaxed header canonicalisation, and no body.
@@ -309,6 +309,15 @@ internal static class SignatureEngine
             }
 
             res.SignedHeaders = sig.SignedHeaders;
+            // RFC 8617 §4.1.2 says ARC headers must not be in an ARC-Message-Signature's h=. The ARC test suite, dkimpy and mailauth agree on a narrower
+            // rule that matches how the suite's own passing messages are signed: an ARC-Seal in h= fails the chain, while ARC-Authentication-Results and
+            // an earlier ARC-Message-Signature are tolerated.
+            if (kind == SigKind.ArcMessageSignature && sig.SignedHeaders.Any(x => x.Equals("arc-seal", StringComparison.OrdinalIgnoreCase)))
+            {
+                res.Fail(DkimStatus.Fail, DkimReason.ForbiddenHeader, "h= of an ARC-Message-Signature covers an ARC-Seal");
+                return false;
+            }
+
             // RFC 6376 §3.5: h= must include From.
             if (kind == SigKind.Dkim && !sig.SignedHeaders.Any(x => x.Equals("from", StringComparison.OrdinalIgnoreCase)))
             {

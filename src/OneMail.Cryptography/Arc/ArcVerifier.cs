@@ -160,7 +160,15 @@ internal sealed class ArcChain
             }
 
             c.HeaderCount++;
-            if (!TryInstance(m.ValueText(h), out int inst, out _))
+            // The ABNF puts the instance first (RFC 8617 §4.1), but the seal and message signature are tag lists whose order
+            // implementations do not keep (the ARC test suite sorts tags alphabetically), so the tag is found wherever it is.
+            // The results header is not a tag list, so there it must come first.
+            string value = m.ValueText(h);
+            int inst = 0;
+            bool found = bucket == c.Results
+                ? TryInstance(value, out inst, out _)
+                : TagList.TryParse(value, out List<Tag> tl, out _, out _) && TagList.Get(tl, "i") is { } iv && int.TryParse(iv, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out inst) && inst is >= 1 and <= 1000;
+            if (!found)
             {
                 c.Unparsable = true;
                 c.UnparsableDetail ??= h.Name + " without a valid i= instance";
@@ -255,11 +263,23 @@ public sealed class ArcVerifier
     public ArcVerifier(DkimVerifierOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _options = options;
         if (options.Resolver is null)
         {
             throw new ArgumentException("DkimVerifierOptions.Resolver is required.", nameof(options));
         }
+
+        // ARC is newer than RFC 8301 and has no legacy of rsa-sha1 signatures to keep working: the ARC test suite expects a sha1 seal or
+        // message signature to fail the chain, so it does here whatever AllowRsaSha1 says for DKIM.
+        _options = new DkimVerifierOptions
+        {
+            Resolver = options.Resolver,
+            TimeProvider = options.TimeProvider,
+            MinimumRsaBits = options.MinimumRsaBits,
+            AllowRsaSha1 = false,
+            ClockSkew = options.ClockSkew,
+            MaxSignatures = options.MaxSignatures,
+            MaxSignedHeaders = options.MaxSignedHeaders,
+        };
     }
 
     /// <summary>Whether to verify the older ARC-Message-Signatures to find the oldest-pass value. Default true.</summary>

@@ -12,6 +12,7 @@ internal enum TagListError
     MissingEquals,
     BadName,
     DuplicateTag,
+    EmptyElement,
 }
 
 /// <summary>
@@ -53,7 +54,15 @@ internal static class TagList
             pos = end + 1;
             if (a == b)
             {
-                continue;
+                // RFC 6376 §3.2: tag-list = tag-spec *( ";" tag-spec ) [ ";" ]. Only the last semicolon may be followed by nothing.
+                if (end >= s.Length)
+                {
+                    continue;
+                }
+
+                error = TagListError.EmptyElement;
+                detail = "empty tag between semicolons";
+                return false;
             }
 
             int eq = s.IndexOf('=', a, b - a);

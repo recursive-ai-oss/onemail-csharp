@@ -385,4 +385,19 @@ public class DkimNegativeTests
         Assert.True(DkimKeyRecord.TryParse(DkimFixtures.RsaRecord(), out DkimKeyRecord? good, out _, out _));
         Assert.Equal(2048, good!.KeyBits);
     }
+
+    [Theory]
+    [InlineData("a=1; b=2", true)]
+    [InlineData("a=1; b=2;", true)]
+    [InlineData("a=1; b=2; ", true)]
+    [InlineData("a=1;; b=2", false)]
+    [InlineData(";a=1", false)]
+    [InlineData("a=1; a=2", false)]
+    [InlineData("a", false)]
+    [InlineData("1a=2", false)]
+    [InlineData(" a = 1 ;b= two words ", true)]
+    public void TagListsFollowTheRfcGrammar(string text, bool ok)
+    {
+        Assert.Equal(ok, TagList.TryParse(text, out _, out _, out _));
+    }
 }

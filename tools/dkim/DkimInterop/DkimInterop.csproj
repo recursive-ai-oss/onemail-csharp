@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Interoperability harness for DKIM and ARC: makes the case set, signs with this library, verifies what other implementations signed,
+       and compares the results other implementations produced (tools/dkim/README.md). A tool, never referenced from src/. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>DkimInterop</AssemblyName>
+    <RootNamespace>OneMail.Tools.DkimInterop</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/OneMail.Cryptography/OneMail.Cryptography.csproj" />
+  </ItemGroup>
+
+</Project>
