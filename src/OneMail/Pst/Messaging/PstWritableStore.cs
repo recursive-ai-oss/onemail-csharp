@@ -264,17 +264,27 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         }
 
         FolderState from = FolderOrThrow(f.Parent);
-        if (f.IsNew)
+        // A folder moved twice in one transaction was never in the middle parent's committed table; one moved back is simply where it was.
+        Nid origin = f.Parent;
+        if (from.AddedChildren.Remove(folder.Value, out Nid cameFrom))
         {
-            from.AddedChildren.Remove(folder.Value);
+            origin = cameFrom;
         }
-        else
+        else if (!f.IsNew)
         {
             from.RemovedChildren.Add(folder.Value);
         }
 
         from.ChildrenChanged = true;
-        to.AddedChildren[folder.Value] = f.IsNew ? default : f.Parent;
+        if (!f.IsNew && origin == destination)
+        {
+            to.RemovedChildren.Remove(folder.Value);
+        }
+        else
+        {
+            to.AddedChildren[folder.Value] = f.IsNew ? default : origin;
+        }
+
         to.ChildrenChanged = true;
         f.Parent = destination;
         f.Moved = true;

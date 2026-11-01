@@ -134,6 +134,41 @@ public sealed class PstWritableStoreTests
     }
 
     [Fact]
+    public void AFolderMovedTwiceInOneCommitLeavesNoTraceInTheMiddleParent()
+    {
+        string path = NdbEditorTests.Build(4, folders: 3);
+        try
+        {
+            Nid f0, f1, f2;
+            using (PstWritableStore w = PstStore.OpenForWriting(path))
+            {
+                f0 = FolderNamed(w.View, "Folder 0");
+                f1 = FolderNamed(w.View, "Folder 1");
+                f2 = FolderNamed(w.View, "Folder 2");
+                Nid top = FolderNamed(w.View, "Top of Personal Folders");
+                w.MoveFolder(f0, f1);     // top -> f1 -> f2, then f0 -> f1 -> back to top: moved away and home again in one commit
+                w.MoveFolder(f0, f2);
+                w.MoveFolder(f0, top);
+                w.MoveFolder(f2, f1);
+                w.MoveFolder(f2, f0);
+                w.Commit();
+            }
+
+            AssertSound(path);
+            Assert.True(PstStore.TryOpen(path, out PstStore? s, out _));
+            using PstStore store = s!;
+            PstFolder fold1 = store.EnumerateFolders(TestContext.Current.CancellationToken).First(x => x.Nid == f1);
+            Assert.Empty(fold1.EnumerateSubfolders(TestContext.Current.CancellationToken));
+            PstFolder fold0 = store.EnumerateFolders(TestContext.Current.CancellationToken).First(x => x.Nid == f0);
+            Assert.Equal([f2], fold0.EnumerateSubfolders(TestContext.Current.CancellationToken).Select(x => x.Nid).ToArray());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void FoldersCanBeCreatedRenamedMovedAndDeleted()
     {
         string path = NdbEditorTests.Build(8, folders: 2);
@@ -263,7 +298,9 @@ public sealed class PstWritableStoreTests
     [Fact]
     public void SuspiciousFilesAreRefusedWithReasonsAndAcceptedOnRequest()
     {
+        var made = new List<string>();
         string path = NdbEditorTests.Build(3);
+        made.Add(path);
         try
         {
             // a header checksum that does not match
@@ -278,6 +315,7 @@ public sealed class PstWritableStoreTests
 
             // allocation maps marked invalid
             path = NdbEditorTests.Build(3);
+            made.Add(path);
             bytes = File.ReadAllBytes(path);
             bytes[180 + 68] = 0;
             RecomputeHeaderCrc(bytes);
@@ -296,6 +334,7 @@ public sealed class PstWritableStoreTests
             foreach ((ushort ver, ushort magic, NdbRefusalReason reason) in new[] { ((ushort)14, (ushort)0x4D53, NdbRefusalReason.Ansi), ((ushort)23, (ushort)0x4F53, NdbRefusalReason.OfflineStore), ((ushort)36, (ushort)0x4D53, NdbRefusalReason.LargePages) })
             {
                 path = NdbEditorTests.Build(1);
+                made.Add(path);
                 bytes = File.ReadAllBytes(path);
                 BitConverter.TryWriteBytes(bytes.AsSpan(10), ver);
                 BitConverter.TryWriteBytes(bytes.AsSpan(8), magic);
@@ -307,7 +346,7 @@ public sealed class PstWritableStoreTests
         }
         finally
         {
-            foreach (string f in Directory.GetFiles(Path.GetTempPath(), "onemail-edit-*.pst"))
+            foreach (string f in made)
             {
                 try
                 {
