@@ -396,6 +396,9 @@ internal static class Program
         bool ltpWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.LtpWrite();
         Console.WriteLine("ltp-write: " + (ltpWriteOk ? "ok" : "FAILED"));
 
+        bool pstWriteOk = RecursiveAI.OneMail.WasmSmoke.OutlookChecks.PstWrite();
+        Console.WriteLine("pst-write: " + (pstWriteOk ? "ok" : "FAILED"));
+
         // Store to store: an mbox of two messages written as a Maildir, an Apple Mail tree and .eml files, read back; one item to TNEF and a refused one.
         bool convertOk;
         {
@@ -406,7 +409,7 @@ internal static class Program
                 string box = Path.Combine(work, "in.mbox");
                 File.WriteAllBytes(box, System.Text.Encoding.ASCII.GetBytes("From a@b.c Mon Jan  1 00:00:00 2024\nFrom: a@b.c\nSubject: one\n\nbody\n\nFrom d@e.f Tue Jan  2 00:00:00 2024\nFrom: d@e.f\nSubject: two\n\nbody\n"));
                 bool all = true;
-                foreach (RecursiveAI.OneMail.Conversion.Stores.ConvertFormat f in new[] { RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Maildir, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.AppleMail, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Eml, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Mbox })
+                foreach (RecursiveAI.OneMail.Conversion.Stores.ConvertFormat f in new[] { RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Maildir, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.AppleMail, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Eml, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Mbox, RecursiveAI.OneMail.Conversion.Stores.ConvertFormat.Pst })
                 {
                     string dest = Path.Combine(work, "out-" + f);
                     RecursiveAI.OneMail.Conversion.Stores.StoreConversionReport rep = Mail.ConvertAsync(box, f, dest).GetAwaiter().GetResult();
@@ -483,7 +486,7 @@ internal static class Program
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

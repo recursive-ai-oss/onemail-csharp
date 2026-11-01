@@ -55,7 +55,41 @@ internal static class OutlookChecks
         Guard("msg", Msg) & Guard("pst", Pst) & Guard("tnef", Tnef) & Guard("rtf", Rtf) & Guard("recurrence-vtimezone", RecurrenceVtimezone)
         & Guard("recurrence-iana", RecurrenceIana) & Guard("oxcmail", OxcMail) & Guard("tnef-in-mime", TnefInMime) & Guard("contacts", Contacts)
         & Guard("oxocal", Oxocal) & Guard("olm", Olm) & Guard("calcard", Calcard) & Guard("htmltext", HtmlText) & Guard("msg-write", MsgWrite)
-        & Guard("ltp-write", LtpWrite);
+        & Guard("ltp-write", LtpWrite) & Guard("pst-write", PstWrite);
+
+    // Builds a small store with the PST builder (folders, a message with a recipient, an attachment and a named property), reads it back with no defect.
+    public static bool PstWrite()
+    {
+        var name = new MapiNamedProperty(MapiPropertySets.PublicStrings, "x-smoke");
+        var m = new MapiMessage();
+        m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.MessageClass, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+        m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.Subject, MapiType.UnicodeString), Encoding.Unicode.GetBytes("café")));
+        m.Properties.Add(MapiProperty.CreateOwned(new MapiTag(0x8001, MapiType.UnicodeString), Encoding.Unicode.GetBytes("named"), name));
+        var r = new MapiRecipient(m);
+        r.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.DisplayName, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Ann")));
+        m.AddRecipient(r);
+        var a = new MapiAttachment(m);
+        a.Properties.Add(MapiProperty.CreateOwned(new MapiTag(MapiPid.AttachDataBinary, MapiType.Binary), new byte[20_000]));
+        m.AddAttachment(a);
+        using var ms = new MemoryStream();
+        using (RecursiveAI.OneMail.Pst.Messaging.PstBuilder b = RecursiveAI.OneMail.Pst.Messaging.PstBuilder.Create(ms, leaveOpen: true))
+        {
+            b.IpmSubtree.CreateFolder("Inbox").AddMessage(m);
+            b.Complete();
+        }
+
+        if (!RecursiveAI.OneMail.Pst.Messaging.PstStore.TryOpen(ms.ToArray(), out RecursiveAI.OneMail.Pst.Messaging.PstStore? store, out _) || store is null)
+        {
+            return false;
+        }
+
+        using (store)
+        {
+            RecursiveAI.OneMail.Pst.Messaging.PstMessage? got = store.EnumerateMessages().FirstOrDefault();
+            return got is not null && got.Subject == "café" && got.Recipients.Count == 1 && got.Attachments.Count == 1 && got.Attachments[0].OpenData()!.Length == 20_000
+                && got.Properties.Any(p => p.Name == name) && store.Defects.Count == 0 && store.Database.Defects.Count == 0;
+        }
+    }
 
     // Writes an Outlook message with a named property, a recipient, an attachment and an embedded message, and reads it back property-exact.
     public static bool MsgWrite()
