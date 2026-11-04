@@ -658,7 +658,11 @@ internal static class Program
             smimeOk = !untrustedResult.Succeeded && untrustedResult.Layers[0].Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.UntrustedChain && !untrustedResult.IsTrusted
                 && detachedResult.Succeeded && !detachedResult.IsTrusted && detachedResult.Signers.Single().SenderMatch == RecursiveAI.OneMail.Cryptography.Smime.SmimeSenderMatch.Match
                 && opaqueResult.Succeeded && edResult.Succeeded && encOk
-                && tamperedResult.Signers.Single().Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.ContentModified;
+                && tamperedResult.Signers.Single().Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.ContentModified
+                // The status block: an untrusted signer is shown as not verified, and a failed signature is shown as not verified too.
+                && RecursiveAI.OneMail.Cryptography.Smime.SmimeDisplay.ToDisplayHtml(detachedResult).Html is var smimeHtml
+                && smimeHtml.Contains("omx-status", StringComparison.Ordinal) && smimeHtml.Contains("not checked against a trusted root", StringComparison.Ordinal)
+                && RecursiveAI.OneMail.Cryptography.Smime.SmimeDisplay.StatusHtml(tamperedResult).Contains("Not verified", StringComparison.Ordinal);
         }
 
         Console.WriteLine("smime: " + (smimeOk ? "ok" : "FAILED"));
