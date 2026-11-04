@@ -417,16 +417,82 @@ public sealed class VCardView : IEquatable<VCardView>
         return types.Any(t => t.Equals("pref", StringComparison.OrdinalIgnoreCase)) ? 1 : null;
     }
 
-    private List<VCardTyped> Typed(string name)
+    // The typed lists count their properties when asked for and build an item (its text, types and preference) only when it is first read, so a caller
+    // that wants "how many e-mail addresses" pays for a scan of the card and nothing else. The properties are taken when the list is made; the items
+    // reflect them as they are when first read.
+    private ContentProperty[] Named(string name)
     {
-        List<VCardTyped> result = [];
+        int n = 0;
         foreach (ContentProperty p in Component.FindProperties(name))
         {
-            IReadOnlyList<string> t = GetTypes(p);
-            result.Add(new VCardTyped(GetText(p), t, Preference(p, t), p));
+            n++;
         }
 
-        return result;
+        if (n == 0)
+        {
+            return [];
+        }
+
+        var found = new ContentProperty[n];
+        int i = 0;
+        foreach (ContentProperty p in Component.FindProperties(name))
+        {
+            found[i++] = p;
+        }
+
+        return found;
+    }
+
+    private IReadOnlyList<VCardTyped> Typed(string name)
+    {
+        ContentProperty[] props = Named(name);
+        if (props.Length == 0)
+        {
+            return Array.Empty<VCardTyped>();
+        }
+
+        return new LazyList<VCardTyped>(this, props, static (v, p) =>
+        {
+            IReadOnlyList<string> t = GetTypes(p);
+            return new VCardTyped(v.GetText(p), t, Preference(p, t), p);
+        });
+    }
+
+    private sealed class LazyList<T>(VCardView owner, ContentProperty[] props, Func<VCardView, ContentProperty, T> make) : IReadOnlyList<T>
+    {
+        private T[]? _items;
+
+        public int Count => props.Length;
+
+        public T this[int index]
+        {
+            get
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(index);
+                ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, props.Length);
+                return Items()[index];
+            }
+        }
+
+        private T[] Items()
+        {
+            if (_items is null)
+            {
+                var built = new T[props.Length];
+                for (int i = 0; i < built.Length; i++)
+                {
+                    built[i] = make(owner, props[i]);
+                }
+
+                _items = built;
+            }
+
+            return _items;
+        }
+
+        public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)Items()).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     /// <summary>Every EMAIL.</summary>
@@ -443,14 +509,17 @@ public sealed class VCardView : IEquatable<VCardView>
     {
         get
         {
-            List<VCardAddress> result = [];
-            foreach (ContentProperty p in Component.FindProperties("ADR"))
+            ContentProperty[] props = Named("ADR");
+            if (props.Length == 0)
             {
-                List<IReadOnlyList<string>> c = Structured(p, 7);
-                result.Add(new VCardAddress(c[0], c[1], c[2], c[3], c[4], c[5], c[6], GetTypes(p), p));
+                return Array.Empty<VCardAddress>();
             }
 
-            return result;
+            return new LazyList<VCardAddress>(this, props, static (v, p) =>
+            {
+                List<IReadOnlyList<string>> c = v.Structured(p, 7);
+                return new VCardAddress(c[0], c[1], c[2], c[3], c[4], c[5], c[6], GetTypes(p), p);
+            });
         }
     }
 

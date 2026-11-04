@@ -3,33 +3,32 @@ To: vector-v4-native-ed25519-x25519@example.org
 Subject: Interop vector
 MIME-Version: 1.0
 Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
- boundary="=_ff51f4a792765691dd21717f"
+ boundary="=_2cf3e9884fcf1f91bd414c84"
 
---=_ff51f4a792765691dd21717f
+--=_2cf3e9884fcf1f91bd414c84
 Content-Type: application/pgp-encrypted
 Content-Description: PGP/MIME version identification
 
 Version: 1
 
---=_ff51f4a792765691dd21717f
+--=_2cf3e9884fcf1f91bd414c84
 Content-Type: application/octet-stream; name="encrypted.asc"
 Content-Description: OpenPGP encrypted message
 Content-Disposition: inline; filename="encrypted.asc"
 
 -----BEGIN PGP MESSAGE-----
 
-wWEGFQSpKBjvLH2AlOmAREvMv0W0kbsdTRns4PHt1R14/STTDxXB+yaF42pOrcMf
-tddRs6NYNNrsCii6VPkGizK5Lbkx1Y7+xieZTz0XFUvMTHspmQhUVObOgh7b5LKq
-Q7m20sDoAgkCDFgKk4wvyfw7Ah0sgOZYM4907fdXuJP3bkMAIU8ABrTfwhBcaozU
-3/2UaIFn32VRD7XiFuPMIayz7349ZEPqfVnY8GALEk+db6E6xE5jkzJ1hKobd5+h
-SScbuw3dmbb0W0EDrVNl27pIHNQlc7um6ZPjFfJ0wG/8HBnzmkIup0ezxu7nSI2t
-dX1WAd/qMHz0um59kaOuNjk+aqG1otZ+qwlWqw9dCQ9+Ys8C0/gbjelXumVa/PGy
-48Gnp3xH30hS3PIuOgEjrEy9Kw8L7TDzkfUhIjjp31KgiBOyWZJO/3mNgt0miWq6
-EszW0KcZesD6yg8e/nfg/rqr7oS5nGB5wVjAFuMbVANHNnrRAqxvFcrzesscxG30
-4iVTqW7ALtPbbMQZGUso1ox7oQM9XC0DiVGyYLqWQxaVG9RtzlT4T1ZiXOUdYq9e
-k/u/Iu5TLjKTlD3X5KIa1/eybBTBbMfx+TQwmC27zO4iQkPOKXEqDDfyHzF6FPxT
-Q7TRjJdSBEhmM2k9UIIhkXJTjBXJ3gb4OVUq4o1X1ZcSM/Fn++R0Y5cF48XsKw==
-=9LSa
+wWEGFQQZjn+GWx9hTJpTK1Kw3KbPKCINwRkczh7MC1ezLoOQsV5voznPVtznB9C0
+WPXTjKcoqZjmUSh0vE3F4zxp1c8p9stvGuFszdcxUe1Vn9vxDPXz0fSemKnWHuJc
+QMck0sCqAgkCDPc426OjYwdj68aH0RVgSG8txYuJxvWFLHVfkH8Rm9sNK8+PHS77
+uPXTkLzFlLodsQ6Ra8g/tnQExYvByLrypE+3WNn2vFc6GtT8A3s1wxsvIxN1Kewi
+WDuEOrCCDvU80po7sj6ULgDORFdRCtc6FJY+8Xbk3EDDjFN9XiLfQ1ot8Jq98ECu
+65Xbbss2bFBoqNcNMflYg2V1TymiBhQKOO1g0SxmlumPY0HeVKt2p7ToM6f+tpgi
+1WVS7pETlsIaSs1PKXrkdY/caIjZPayRqUNXqaM9ZPOTBq9nkbkkRkOB+P1nFLsN
+NNEAd/aEri4vEt7bNPZ02XCPWoaQ3+7uC5Xifqsln2jfjHiFEM/KyMaz1V71o0Ex
+uszAPtNWY2TF7TSavTAsJOTChIQ/IUlJTnlrmWPFK4D7C2yoE4n1gBCI6QTsaDpZ
+K2yHKpFga4FY8/qNcbCV5tpUNXCdnZ099Ok5zWPMc14=
+=vTMZ
 -----END PGP MESSAGE-----
 
---=_ff51f4a792765691dd21717f--
+--=_2cf3e9884fcf1f91bd414c84--

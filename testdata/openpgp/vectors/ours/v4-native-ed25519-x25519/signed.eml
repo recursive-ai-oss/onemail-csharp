@@ -3,26 +3,26 @@ To: vector-v4-native-ed25519-x25519@example.org
 Subject: Interop vector
 MIME-Version: 1.0
 Content-Type: multipart/signed; protocol="application/pgp-signature";
- micalg=pgp-sha512; boundary="=_bf97366bcb860787ec20512a"
+ micalg=pgp-sha512; boundary="=_d076aa44292930aa880c003c"
 
---=_bf97366bcb860787ec20512a
+--=_d076aa44292930aa880c003c
 Content-Type: text/plain; charset=utf-8
 Content-Transfer-Encoding: base64
 
 SW50ZXJvcCB0ZXN0IGNhZsOpLg0KQSBsaW5lIHRoYXQgaXMgcXVpdGUgbG9uZyBlbm91Z2ggdG8g
 bmVlZCBzb21lIHdyYXBwaW5nIHdoZW4gaXQgaXMgZW5jb2RlZCwgYXMgbG9uZyBsaW5lcyBhcmUu
 ICAgDQpGcm9tIHRoZSBvdGhlciBzaWRlLg0K
---=_bf97366bcb860787ec20512a
+--=_d076aa44292930aa880c003c
 Content-Type: application/pgp-signature; name="signature.asc"
 Content-Description: OpenPGP digital signature
 Content-Disposition: attachment; filename="signature.asc"
 
 -----BEGIN PGP SIGNATURE-----
 
-wnEEABsKAB0FAmocy4AWIQSxpqt4PUm8EqghWbGjCPPJUY23sQAKCRCjCPPJUY23
-sZtacfRvOpT3Rh6zFCoCA+tuqdxEe0+VNH0pPlN6fQ0f/PwZfNjhP2isvvcu6U+1
-O2CnMbEUOl3lucBzHucv+tb6Bw==
-=FC2W
+wnEEABsKAB0FAmocy4AWIQSKuiPGPhQiUhdw6KS8YlFZl7VSBAAKCRC8YlFZl7VS
+BGWibxTBFjeOHqK9kB9D4elaVKB20LTItXs1xagmA/aW1+jDchBvWwu355CI47Ta
+6vi5lPGvqizIyjwfvd2SAw43DA==
+=N15d
 -----END PGP SIGNATURE-----
 
---=_bf97366bcb860787ec20512a--
+--=_d076aa44292930aa880c003c--

@@ -682,6 +682,20 @@ internal static class Program
             pgpOk = signedResult.Succeeded && signedResult.IsAuthenticated && encryptedResult.Succeeded && encryptedResult.IsAuthenticated
                 && encryptedResult.InnerItem?.TextBody?.ReadText().Contains("pgp smoke body", StringComparison.Ordinal) == true
                 && !tamperedPgp.Succeeded && tamperedPgp.Layers[0].Status == RecursiveAI.OneMail.Cryptography.OpenPgp.PgpStatus.SignatureInvalid;
+
+            // Protected headers on write, read back with the display status block, and the Web Key Directory source (constructed over a fetcher; nothing is sent).
+            MimeEntity draft = MimeEntity.Parse("From: Smoke <smoke@example.test>\r\nTo: smoke@example.test\r\nSubject: Real subject\r\nContent-Type: text/plain\r\n\r\nprotected smoke\r\n"u8.ToArray());
+            var protectedEnc = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptor.Encrypt(draft, new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptOptions
+            {
+                Now = now,
+                Recipients = [cert.ToPublicCertificate()],
+                Signers = [signer],
+                ProtectedHeaders = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpProtectedHeaders.FromMessage(draft, obscureSubject: true),
+            });
+            var protectedResult = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeProcessor.Open(protectedEnc.ToArray(), open);
+            var wkd = new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpWkdKeySource(new RecursiveAI.OneCrypto.Online.WkdClient(new RecursiveAI.OneCrypto.Online.Fetcher()));
+            pgpOk = pgpOk && protectedResult.HeadersProtected && protectedResult.InnerItem?.Subject == "Real subject" && wkd is not null
+                && RecursiveAI.OneMail.Cryptography.OpenPgp.PgpDisplay.ToDisplayHtml(protectedResult).Html.Contains("omx-status", StringComparison.Ordinal);
         }
 
         Console.WriteLine("pgp: " + (pgpOk ? "ok" : "FAILED"));
