@@ -143,7 +143,7 @@ internal sealed class HeapEditor : IDisposable
         return p;
     }
 
-    private Page Get(int index) => Load(index) ?? throw new HeapEditUnsupported($"heap block {index} cannot be read");
+    private Page Get(int index) => Load(index) ?? throw new TableEditUnsupportedException($"heap block {index} cannot be read");
 
     private static int Size(Page p, int slot) => (slot + 1 < p.Starts.Count ? p.Starts[slot + 1] : p.Used) - p.Starts[slot];
 
@@ -152,13 +152,13 @@ internal sealed class HeapEditor : IDisposable
         int slot = hid.Index - 1;
         if (hid.Type != 0 || slot < 0)
         {
-            throw new HeapEditUnsupported($"HID {hid} is not a heap ID");
+            throw new TableEditUnsupportedException($"HID {hid} is not a heap ID");
         }
 
         Page p = Get(hid.BlockIndex);
         if (slot >= p.Starts.Count)
         {
-            throw new HeapEditUnsupported($"HID {hid} is past the allocations of its block");
+            throw new TableEditUnsupportedException($"HID {hid} is past the allocations of its block");
         }
 
         return (p, slot);
@@ -171,7 +171,7 @@ internal sealed class HeapEditor : IDisposable
         int size = Size(p, slot);
         if (size == 0)
         {
-            throw new HeapEditUnsupported($"HID {hid} is a freed allocation");
+            throw new TableEditUnsupportedException($"HID {hid} is a freed allocation");
         }
 
         return p.Data.AsSpan(p.Starts[slot], size);
@@ -184,7 +184,7 @@ internal sealed class HeapEditor : IDisposable
         int size = Size(p, slot);
         if (size == 0)
         {
-            throw new HeapEditUnsupported($"HID {hid} is a freed allocation");
+            throw new TableEditUnsupportedException($"HID {hid} is a freed allocation");
         }
 
         p.Dirty = true;
@@ -199,7 +199,7 @@ internal sealed class HeapEditor : IDisposable
         int size = Size(p, slot);
         if (size == 0)
         {
-            throw new HeapEditUnsupported($"HID {hid} is already free");
+            throw new TableEditUnsupportedException($"HID {hid} is already free");
         }
 
         int start = p.Starts[slot];
@@ -286,7 +286,7 @@ internal sealed class HeapEditor : IDisposable
 
         if (_pageCount >= HeapNodeBuilder.MaxBlocks)
         {
-            throw new HeapEditUnsupported("the heap has the most blocks it can");
+            throw new TableEditUnsupportedException("the heap has the most blocks it can");
         }
 
         var np = new Page { Used = HeaderSize(_pageCount), Dirty = true };
@@ -295,7 +295,7 @@ internal sealed class HeapEditor : IDisposable
         Changed = true;
         if (!TryAllocate(index, size, out hid))
         {
-            throw new HeapEditUnsupported("an allocation does not fit an empty block");
+            throw new TableEditUnsupportedException("an allocation does not fit an empty block");
         }
 
         return hid;
@@ -458,5 +458,5 @@ internal sealed class HeapEditor : IDisposable
     public void Dispose() => _tree.Dispose();
 }
 
-/// <summary>An edit the heap editor cannot make; the caller rewrites the table whole instead. Nothing has been written when it is thrown.</summary>
-internal sealed class HeapEditUnsupported(string message) : Exception(message);
+/// <summary>Thrown by <see cref="TableContextEditor"/> before anything is written when the table or a value is not one the in-place editor handles; the caller rewrites the table whole instead.</summary>
+public sealed class TableEditUnsupportedException(string message) : Exception(message);

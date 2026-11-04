@@ -7,17 +7,17 @@ namespace RecursiveAI.OneMail.Pst.Ltp;
 
 /// <summary>
 /// Adds, replaces and removes rows of an existing table context (MS-PST 2.3.4) without writing the rest of it again: the row index BTH changes through
-/// <see cref="BthEditor"/> and the heap through <see cref="HeapEditor"/>, and the row matrix changes only in the blocks that hold the rows touched. The new
+/// the BTH editor and the heap through the heap editor, and the row matrix changes only in the blocks that hold the rows touched. The new
 /// tree shares every other block with the old one, and <see cref="Apply"/> replaces the node.
 /// </summary>
 /// <remarks>
 /// <para>A removed row's place is taken by the last row of the matrix, so the matrix stays dense (2.3.4.4); the row index follows. The matrix is not kept in row ID
 /// order, which the format does not ask for: the row index finds rows by ID.</para>
 /// <para>Only a table whose row matrix is a subnode and whose values fit heap allocations is edited this way (a smaller table is cheap to write whole). Anything else
-/// makes <see cref="TryOpen"/> return null, or a row operation throw <see cref="HeapEditUnsupported"/> before anything is written; the caller then rewrites the
+/// makes <see cref="TryOpen"/> return null, or a row operation throw <see cref="TableEditUnsupportedException"/> before anything is written; the caller then rewrites the
 /// table whole. The editor reads the committed file, so the node must be as committed.</para>
 /// </remarks>
-internal sealed class TableContextEditor : IDisposable
+public sealed class TableContextEditor : IDisposable
 {
     private const ushort RowIdColumn = 0x67F2;
     private const ushort RowVerColumn = 0x67F3;
@@ -232,7 +232,7 @@ internal sealed class TableContextEditor : IDisposable
 
             return editor;
         }
-        catch (HeapEditUnsupported)
+        catch (TableEditUnsupportedException)
         {
             matrix?.Dispose();
             heap?.Dispose();
@@ -255,7 +255,7 @@ internal sealed class TableContextEditor : IDisposable
         {
             if (!_file.TryReadBlock(_matrix.GetLeaf(leaf), b.Buf, out _, out _))
             {
-                throw new HeapEditUnsupported($"row matrix block {leaf} cannot be read");
+                throw new TableEditUnsupportedException($"row matrix block {leaf} cannot be read");
             }
         }
 
@@ -315,7 +315,7 @@ internal sealed class TableContextEditor : IDisposable
     }
 
     /// <summary>Removes a row; nothing happens when there is none with that ID.</summary>
-    /// <exception cref="HeapEditUnsupported">The table is not laid out as this editor handles; nothing has been written.</exception>
+    /// <exception cref="TableEditUnsupportedException">The table is not laid out as this editor handles; nothing has been written.</exception>
     public void Remove(uint rowId)
     {
         if (!TryFindRow(rowId, out int at))
@@ -351,7 +351,7 @@ internal sealed class TableContextEditor : IDisposable
     /// <summary>Adds a row, or replaces the row with that ID.</summary>
     /// <param name="rowId">dwRowID.</param>
     /// <param name="cells">One entry per column of <see cref="CellColumns"/>; null leaves the cell absent.</param>
-    /// <exception cref="HeapEditUnsupported">A value does not fit a heap allocation or has the wrong length for its type, or the table is not laid out as this editor handles; nothing has been written.</exception>
+    /// <exception cref="TableEditUnsupportedException">A value does not fit a heap allocation or has the wrong length for its type, or the table is not laid out as this editor handles; nothing has been written.</exception>
     public void Upsert(uint rowId, ReadOnlySpan<byte[]?> cells)
     {
         if (cells.Length != _cellColumns.Length)
@@ -371,7 +371,7 @@ internal sealed class TableContextEditor : IDisposable
             int fixedSize = LtpPropertyTypes.FixedSize(c.Type);
             if (IsInline(c) ? v.Length != c.Size : c.Size != 4 || (fixedSize > 0 && v.Length != fixedSize) || v.Length > HeapNodeBuilder.MaxAllocation)
             {
-                throw new HeapEditUnsupported($"the value of column 0x{c.Tag:x8} cannot be written in place");
+                throw new TableEditUnsupportedException($"the value of column 0x{c.Tag:x8} cannot be written in place");
             }
         }
 

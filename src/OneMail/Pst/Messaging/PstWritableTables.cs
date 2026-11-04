@@ -554,7 +554,7 @@ public sealed partial class PstWritableStore
             TablesUpdatedInPlace++;
             return true;
         }
-        catch (HeapEditUnsupported)
+        catch (TableEditUnsupportedException)
         {
             return false;
         }
