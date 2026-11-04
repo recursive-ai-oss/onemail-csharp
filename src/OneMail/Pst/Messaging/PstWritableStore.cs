@@ -277,6 +277,13 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
             throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root folder cannot be moved");
         }
 
+        // The root's children (the top of the store, the search root, the spam-search folder) are fixtures of the store: Outlook
+        // never moves them and its repair tool rejects a store where they have another parent.
+        if (to.Parent == destination || FolderOrThrow(f.Parent).Parent == f.Parent)
+        {
+            throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root's own subfolders cannot be moved, and nothing can be moved into the root");
+        }
+
         for (Nid at = destination; ; )
         {
             if (at == folder)
@@ -345,6 +352,11 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         if (f.Parent == folder)
         {
             throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root folder cannot be deleted");
+        }
+
+        if (FolderOrThrow(f.Parent).Parent == f.Parent)
+        {
+            throw new PstEditException(PstEditFailure.InvalidFolderOperation, "the root's own subfolders cannot be deleted");
         }
 
         FolderState parent = FolderOrThrow(f.Parent);

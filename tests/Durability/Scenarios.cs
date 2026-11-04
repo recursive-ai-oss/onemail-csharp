@@ -133,7 +133,8 @@ internal static class Scenarios
     public static void Run(string name, PstWritableStore w, Action commit)
     {
         List<PstFolder> folders = Folders(w.View);
-        PstFolder f = folders[0];
+        // A folder below the top of the store: the editor refuses to move the root's own subfolders.
+        PstFolder f = name == "folders" ? folders.FirstOrDefault(x => x.ParentFolder!.ParentFolder is not null) ?? folders[0] : folders[0];
         Nid parent = f.ParentFolder!.Nid;
         Nid fid = f.Nid;
         switch (name)
