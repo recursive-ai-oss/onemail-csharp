@@ -1,6 +1,6 @@
 # OpenPGP mail (`RecursiveAI.OneMail.Cryptography.OpenPgp`)
 
-Normative notes for signing, verifying, encrypting and decrypting mail with OpenPGP: PGP/MIME (RFC 3156), inline OpenPGP in text bodies (RFC 9580 §6 armor and §7 cleartext signatures, RFC 4880 for the older form), Autocrypt headers (Autocrypt Level 1) and protected headers. **All OpenPGP work is OneCrypto's** (`RecursiveAI.OneCrypto.OpenPgp` 0.4.0-preview.1): packets, keys and certificate validity, signatures, session keys, symmetric and AEAD encryption, compression, the crypto policy. This package does the mail side: which bytes are signed, how the MIME is framed, what the structure of a message means, and what lies outside the protection. The package has not had an independent security review; the OpenPGP path is due one.
+Normative notes for signing, verifying, encrypting and decrypting mail with OpenPGP: PGP/MIME (RFC 3156), inline OpenPGP in text bodies (RFC 9580 §6 armor and §7 cleartext signatures, RFC 4880 for the older form), Autocrypt headers (Autocrypt Level 1) and protected headers. **All OpenPGP work is OneCrypto's** (`RecursiveAI.OneCrypto.OpenPgp` 0.4.0-preview.1): packets, keys and certificate validity, signatures, session keys, symmetric and AEAD encryption, compression, the crypto policy. This package does the mail side: which bytes are signed, how the MIME is framed, what the structure of a message means, and what lies outside the protection. The mail path has had an adversarial review (see *Review* below).
 
 ## What it does
 
@@ -39,8 +39,9 @@ Keys and certificates are passed in by the caller: `PgpSecretKey` (unlocked, fro
 | `Layers` | each layer with `Kind`, `Status`, `Succeeded`, `Issues`, `Detail`, `Signers`, `Protection`, and the entity it came from |
 | `Content`, `InnerItem` | the innermost entity reached; the inner message in the shared view (`IMailItem`), with protected headers merged over the outer ones |
 | `Succeeded` | at least one layer, every layer succeeded, and the protected entity was not found inside an unprotected wrapper |
-| `IsAuthenticated` | `Succeeded` and at least one signature is valid. **An encrypted message with no signature is never authenticated**: decryption is not verification (RFC 9580 §13) |
-| `HeadersProtected` | authenticated, and the protected content repeats headers (`Outside.ProtectedHeaders`) |
+| `IsAuthenticated` | `Succeeded` and at least one signature is valid for a certificate the caller supplied. **An encrypted message with no signature is never authenticated**: decryption is not verification (RFC 9580 §13). It does not say who signed |
+| `IsSenderAuthenticated` | `IsAuthenticated` and a valid signature, made with a key that was usable at signing time, comes from a certificate whose certified User IDs name every address in `From`. The question a reader asks ("did the person shown as the sender sign this"); the `From` header is still outside a PGP/MIME signature unless `HeadersProtected` |
+| `HeadersProtected` | authenticated, and the protected content repeats headers (`Outside.ProtectedHeaders`). Headers repeated inside content that is not authenticated (an unsigned encrypted message, a failed signature) are neither listed nor merged into `InnerItem`: the item shows the outer headers |
 | `Signers` | all signatures of all layers |
 | `Outside` | `UnprotectedHeaders` (outermost message headers, which RFC 3156 never covers), `UnprotectedParts` (paths of parts beside the protected one inside a wrapper), `ProtectedHeaders` |
 
@@ -62,11 +63,11 @@ Resolutions for behaviour the RFCs leave open. No mail client has been observed 
 | PG6 | wrong or missing `protocol`, signature or control part of another content type, control part without `Version: 1` | Tolerated when the part decodes | `ProtocolParameterUnexpected`, `SignaturePartTypeUnexpected`, `ControlPartUnexpected` |
 | PG7 | the OpenPGP entity sits in a `multipart/mixed` beside other parts | Found and processed, the result is not `Succeeded`, the other parts are listed | `ProtectedPartInUnprotectedWrapper` |
 | PG8 | encrypted without a signature | `Succeeded` (it decrypted) but not `IsAuthenticated` | `EncryptedWithoutSignature` |
-| PG9 | the signer's user IDs do not name the `From` address | Reported (`UserIdMatchesSender` false), not enforced: the sender check belongs to the caller | |
+| PG9 | the signer's user IDs do not name the `From` address | Reported (`UserIdMatchesSender` false; `IsSenderAuthenticated` false), not enforced: acting on it belongs to the caller. Only User IDs the key itself certified (and had not revoked at signing time) count, and every address of every `From` header must be named | |
 | PG10 | inline: armor in a quoted-printable body whose escapes the transfer encoding did not account for | Escapes decoded, then read | `InlineQuotedPrintableRepaired` |
 | PG11 | inline: block surrounded by other text, or every line carrying the same quote prefix | The block is cut out; the prefix removed | `InlineTextOutsideArmor`, `InlineQuotePrefixRemoved` |
 | PG12 | inline: cleartext signature that verifies only after the text is converted from the declared charset to UTF-8 | Accepted; the signature covers the text as signed, and a gateway that transcoded it changed the bytes | `InlineCharsetReencoded` |
-| PG13 | protected headers (`protected-headers` on the decrypted top-level entity, or a `message/rfc822` inside) | Counted as protected only when some layer succeeded; they replace the outer headers of the same name in `InnerItem` | `ProtectedHeadersPresent`; otherwise `HeadersNotProtected` |
+| PG13 | protected headers (`protected-headers` on the decrypted top-level entity, or a `message/rfc822` inside) | Counted as protected only when the message is authenticated (`IsAuthenticated`); only then do they replace the outer headers of the same name in `InnerItem` | `ProtectedHeadersPresent`; otherwise `HeadersNotProtected` |
 
 ## Inline OpenPGP
 
@@ -79,7 +80,7 @@ A text body (`text/*` except `text/html`, or `application/pgp`) that holds `----
 
 ## Keys
 
-`IPgpKeySource.FindAsync(address)` is what a caller implements over its keyring, a GnuPG home read by OneCrypto, or WKD. `PgpKeySource.FromCertificates` is a list source that matches the address in each user ID; `ResolveRecipientsAsync` returns, per address, a certificate that can encrypt at the reference time, and the addresses with none; `RecipientAddresses` reads `To`, `Cc` and `Bcc`.
+`IPgpKeySource.FindAsync(address)` is what a caller implements over its keyring, a GnuPG home read by OneCrypto, or WKD. `PgpKeySource.FromCertificates` is a list source that matches the address in each user ID (candidates only); `ResolveRecipientsAsync` returns, per address, a certificate that can encrypt at the reference time **and whose own key certified a User ID naming the address**, and the addresses with none; `RecipientAddresses` reads `To`, `Cc` and `Bcc`.
 
 ## Safety defaults
 
@@ -97,3 +98,44 @@ New signatures and encryption go through OneCrypto's standard policy: SHA-1, MD5
 * GnuPG 2.5.24 reads our v4 EdDSA/Cv25519 messages for verification but did not decrypt to the Cv25519 subkey after importing a OneCrypto-generated secret key (the subkey is listed as not available); GnuPG 2.4.4 and Sequoia do. Reported to OneCrypto.
 * GnuPG does not read RFC 9580 version 6 keys or the native Ed25519/X25519 algorithms; those cells run against Sequoia only.
 * Not built: HTML bodies, `.pgp` attachments, writing protected headers, WKD lookups (OneCrypto's online package does them; wire one to `IPgpKeySource`), inline signing and encrypting (write with OneCrypto's `PgpMessageWriter`).
+
+## Review
+
+An adversarial review of the OpenPGP mail path (`PgpMimeSigner`, `PgpMimeEncryptor`, `PgpMimeProcessor`, `PgpResult` and its parts, `PgpKeySource`, `PgpAutocrypt`) against the question: what can make a reader believe a message is signed by someone, or private, when it is not, and what leaks plaintext or lets an attacker steer it. OneCrypto's packet and crypto layer was exercised through the mail path but not reviewed. Tests: `PgpReviewTests`; each bug below failed before its fix and passes after.
+
+**Verdict: passed.** No block-release finding remains open.
+
+### Fixed
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| 1 | block release | Headers repeated inside an **unsigned** encrypted message (anyone with the recipient's public key can make one) were counted as protected and replaced the outer headers in `InnerItem`: an attacker could show `From: boss`. `ProtectedHeaderNames` required only that *some* layer succeeded, and an unsigned decrypted layer succeeds | Protected headers count only when `IsAuthenticated`; otherwise `InnerItem` shows the outer headers and the content's own non-content headers are dropped |
+| 2 | block release | `ResolveRecipientsAsync` and `UserIdMatchesSender` trusted any User ID packet on a certificate. Such a packet can be added to a public certificate in transit or on a key server without the key's owner: mail for `boss@` would be encrypted to the key of whoever added it, and a signature by that key would be "from" `boss@` | Only User IDs that the key certified itself (`PgpUserIds.HasSelfSignature`, so revoked and unsigned ones are out), judged at signing time for signatures and at the reference time for recipients |
+| 3 | fix before advertising | `IsAuthenticated` meant "some supplied key signed", which a reader takes as "the sender signed" | Added `PgpResult.IsSenderAuthenticated` (additive) and documented the difference |
+| 4 | fix before advertising | `UserIdMatchesSender` was true if any one `From` address matched, so `From: alice, boss` or a second `From` header passed for a signer who only names alice | Every address of every `From` header must be named |
+| 5 | fix before advertising | Several signers with different hashes wrote `micalg=pgp-sha256,pgp-sha512` unquoted; a comma is a tspecial (RFC 2045 §5.1), so a reader sees only the first hash and our own reader reports `MicalgMismatch` | The value is quoted when it holds a comma |
+| 6 | note | `PgpMimeEncryptor.Encrypt` did not check a caller's `Boundary` against the ciphertext (the signer did) | Throws `ArgumentException` |
+
+### Checked and held
+
+* **Coverage.** The signed bytes are `signedPart.ToArray()` of the entity as received, never a re-serialisation; exactly two parts; a second part that is not a leaf fails; an OpenPGP entity inside `multipart/mixed` is flagged and the result is not `Succeeded` (the wrapper's other parts are listed). The signed content of a signature that fails is still returned in `Content` for display, but `Succeeded`, `IsAuthenticated`, `HeadersProtected` and the merged headers all say no. Written messages: awkward content (header lines with trailing white space, a preamble and epilogue, 8-bit and binary leaves, a line starting `From `, bare LF) verifies after a reparse **with no repair issue**, so the canonical form we sign is the form we send.
+* **Decryption.** A flipped character anywhere in the ciphertext of an SEIPD v1 (326 positions) or v2 (405) message gives `DecryptionFailed` with the same detail text; the only other statuses come from the packet headers in front of the ciphertext, which carry no secret. Cutting 1 to 40 bytes off the end (the MDC, or the AEAD tag and final chunk), adding a literal packet after, or putting one before, never yields a successful layer or the added text. Old unauthenticated encryption is refused unless `AllowUnauthenticatedEncryption` (OneCrypto's own tests build those packets). The plaintext is not shown on any failure: it is discarded with the buffer.
+* **Identity and time.** Hard revocation ("compromised") after signing invalidates the earlier signature; a soft one does not; a signature dated after `Now` is not valid; `Now` is never read from a clock. A User ID revoked before the signature stops matching the sender.
+* **Autocrypt.** An `Autocrypt` header whose `addr` is not the From address is not selected; two From headers, or two valid headers, select none.
+* **Limits.** 12 nested layers, 5 MB of armor, 3,000 parts, 3,000 nested multiparts and an over-limit plaintext end in statuses (existing tests); the fuzz target now also builds an unsigned encrypted message with protected headers, a signed part beside an unsigned one, and text around a cleartext signature, and checks that headers are never protected without authentication and that `IsSenderAuthenticated` implies a matching valid signer.
+
+### Open, by design or outside this package
+
+| Severity | Item |
+|---|---|
+| note | **Sign-then-encrypt is not bound to the recipient** (surreptitious forwarding): a recipient can re-encrypt a signed message to someone else and it still verifies as the original author's. The signature covers the entity, not the envelope. Putting `To` in protected headers (signed) lets a reader compare it; writing protected headers is not built |
+| note | **Inline text around a cleartext signature** (PG11) leaves `Succeeded` true. Only `Content` is signed; a UI that shows the original body next to a "verified" badge shows unsigned text as well. Show `Content`, and treat `InlineTextOutsideArmor` as "partly unsigned" |
+| note | **Repairs show bytes that were not signed** (PG4): after the line-ending or trailing-white-space repair, `Content` holds the received bytes and `CoveredBytes` the repaired ones. Trailing white space is meaningful in `format=flowed` text |
+| note | **Not normalised when signing:** trailing white space in a quoted-printable body, on a boundary line, or in a preamble or epilogue survives into the signed bytes and a relay that strips it breaks the signature. We never produce such bodies ourselves |
+| note | **Bcc recipients are visible** to every recipient through the key IDs in the public-key encrypted session key packets. `RecipientAddresses` includes `Bcc`; encrypt a separate message to each Bcc recipient. OneCrypto's writer has no hidden-recipient option (its reader accepts a zero key ID) |
+| note | **Depth limit:** when `MaxDepth` layers are used up, the content below is returned unprocessed with `DepthLimitReached` in `Issues`; `Succeeded` does not change. Anything a valid signature covers stays covered |
+| note | **Gossip:** `PgpAutocryptInfo.Gossip` lists the headers of the entity it is given. Gossip is trustworthy only from an authenticated encrypted payload and for addresses among that message's recipients; the caller checks both |
+| note | **Weak algorithms on read** are accepted and flagged (`WeakAlgorithms`); a SHA-1 signature before the policy's reject date is `IsAuthenticated`. Rejecting them is `PgpOpenOptions.Policy` |
+| note | **Memory:** decrypted plaintext, the armored input and the passwords the caller passes live in ordinary arrays and are not cleared. Session keys are OneCrypto's |
+| note | Inline block search stops at the first `-----END PGP SIGNATURE-----` substring, including inside a dash-escaped line of the signed text; such a message fails verification rather than verifying differently |
+| untested | Encrypting to a recipient with a weak key (for example RSA 1024) is refused by OneCrypto's policy; no such certificate can be generated here, so the mail path's refusal is not exercised |

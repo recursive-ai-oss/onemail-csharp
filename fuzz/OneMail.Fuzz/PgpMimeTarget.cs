@@ -40,6 +40,13 @@ internal static class PgpMimeTarget
             PgpMessageWriter.Write(new MemoryStream("fuzz secret\n"u8.ToArray()), armored, new PgpWriteOptions { Now = now, Recipients = [key.ToPublicCertificate()], Armor = true });
             static byte[] Text(byte[] t) => [.. "From: fuzz@example.test\r\nContent-Type: text/plain\r\n\r\n"u8, .. t];
 
+            // Shapes a reader can be fooled by: unsigned encrypted content repeating headers, a signed part beside an unsigned one in a wrapper,
+            // text around a cleartext signature.
+            MimeEntity inner = MimeEntity.Parse("Content-Type: text/plain; charset=utf-8; protected-headers=\"v1\"\r\nFrom: Boss <boss@example.test>\r\nSubject: s\r\n\r\nbody\r\n"u8.ToArray());
+            var mixed = new MimeMultipart("mixed", "fuzz-m");
+            mixed.Add(PgpMimeSigner.SignDetached(Body(), sign));
+            mixed.Add(Body());
+
             return new Templates
             {
                 Messages =
@@ -50,6 +57,9 @@ internal static class PgpMimeTarget
                     Wire(PgpMimeEncryptor.Encrypt(Body(), both)),
                     Text(clear.ToArray()),
                     Text(armored.ToArray()),
+                    Wire(PgpMimeEncryptor.Encrypt(inner, enc)),
+                    Wire(mixed),
+                    Text([.. "before\r\n"u8, .. clear.ToArray(), .. "\r\nafter\r\n"u8]),
                 ],
                 Options = new PgpOpenOptions { Now = now, Certificates = [key.ToPublicCertificate()], SecretKeys = [key], MaxPlaintextBytes = 1 << 20 },
             };
@@ -98,6 +108,16 @@ internal static class PgpMimeTarget
             {
                 throw new InvalidOperationException("a valid layer without a valid signer");
             }
+        }
+
+        if (!r.IsAuthenticated && r.Outside is { ProtectedHeaders.Count: > 0 })
+        {
+            throw new InvalidOperationException("headers counted as protected without authentication");
+        }
+
+        if (r.IsSenderAuthenticated && !r.Signers.Any(static s => s.IsValid && s.UserIdMatchesSender))
+        {
+            throw new InvalidOperationException("sender authenticated without a matching valid signer");
         }
 
         _ = PgpAutocrypt.Read(MimeEntity.Parse(message));

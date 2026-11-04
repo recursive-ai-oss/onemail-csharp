@@ -263,7 +263,9 @@ public static class PgpMimeSigner
         }
 
         var multipart = new MimeMultipart("signed", boundary);
-        multipart.Headers.Set("Content-Type", "multipart/signed; protocol=\"application/pgp-signature\"; micalg=" + micalg + "; boundary=\"" + boundary + "\"");
+        // A comma is a tspecial (RFC 2045 §5.1): several hashes need a quoted value, or a reader sees only the first.
+        string micalgValue = micalg.Contains(',', StringComparison.Ordinal) ? "\"" + micalg + "\"" : micalg;
+        multipart.Headers.Set("Content-Type", "multipart/signed; protocol=\"application/pgp-signature\"; micalg=" + micalgValue + "; boundary=\"" + boundary + "\"");
         // The signed part goes in as parsed bytes so nothing later can change what the signature covers (RFC 3156 §5 (6)).
         multipart.Add(MimeEntity.Parse(signedBytes));
         multipart.Add(PgpCanonical.ArmoredPart(armored.ToArray(), "application/pgp-signature", "signature.asc", "OpenPGP digital signature", inline: false));
@@ -285,7 +287,7 @@ public static class PgpMimeEncryptor
     /// <param name="options">Recipients, signers and choices.</param>
     /// <returns>The new entity.</returns>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    /// <exception cref="ArgumentException">Neither recipients nor passwords.</exception>
+    /// <exception cref="ArgumentException">Neither recipients nor passwords, or <see cref="PgpMimeEncryptOptions.Boundary"/> occurs in the encrypted data.</exception>
     /// <exception cref="PgpException">A recipient has no usable encryption key, a signer cannot sign, or the policy refuses the choice.</exception>
     public static MimeMultipart Encrypt(MimeEntity content, PgpMimeEncryptOptions options)
     {
@@ -321,6 +323,11 @@ public static class PgpMimeEncryptor
         });
         byte[] armoredBytes = armored.ToArray();
         string boundary = options.Boundary ?? PgpCanonical.RandomBoundary(armoredBytes);
+        if (options.Boundary is not null && SmimeContent.ContainsBoundary(armoredBytes, boundary))
+        {
+            throw new ArgumentException("The boundary occurs in the encrypted data.", nameof(options));
+        }
+
         var multipart = new MimeMultipart("encrypted", boundary);
         multipart.Headers.Set("Content-Type", "multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"" + boundary + "\"");
         var control = new MimePart();
