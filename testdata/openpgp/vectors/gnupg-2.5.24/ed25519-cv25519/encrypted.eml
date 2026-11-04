@@ -1,0 +1,28 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--vector-bnd
+Content-Type: application/octet-stream; name="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hF4Dz05k2c50MjQSAQdAYQCf7E91O6XHwdp6RHC5f4kU1eVLkbjgqF3ar0+d4hAw
+G24UcNzPHNzdccqSKsQZ/yRL31JwbQV+0UG76XvdyX8BBwtX2gM33yB51L2I1c4z
+1MBpAQkCEOh4q93+fLhryQeZT/hXOY6WrxKvOH7pO6dIy1OruC67cQI63SEFaagK
+br6xos40HuH7HkxewFQ8UVW0ahCJ/zk9dguwiWOV4gxOSPe94Iz3YeKIil6i4gYO
+wo1yKw9/IwQ3pFcxQDWfxxa6uzc7xKYVEA3HRg1cP9RqeAUTo7UM5zhHT/IrXtud
+uQ1LIrqrXcjlL/5vsF96W0CIbeuYJtJqcieOHRWuJFBEfv27rrTSxampw3wJozjH
+NTh88039C+tFy1abhI8sIkYHw+AeeYXsbdYAMh1n8u5LG/VYfWQABI5oDLBcNf4G
+hPHDWWfipUmF7DDs4JEAftspqZoced4GiHrci4Qt/UrBi1QPm0CWpP28UmNwEd8v
+nosowgN1Njh7pDZb
+=NqyR
+-----END PGP MESSAGE-----
+--vector-bnd--

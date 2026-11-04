@@ -1,0 +1,49 @@
+From: Vector <vector-v4-rsa3072@example.org>
+To: vector-v4-rsa3072@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_5b229ee25ce48b9f37eb22f8"
+
+--=_5b229ee25ce48b9f37eb22f8
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_5b229ee25ce48b9f37eb22f8
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wcDMA9FqdxnY3s3YAQwAvxKPXtOmvXAkeJ90ijfQG8o+a6bUD8vgss3mBLHROOSq
+zAAPOKaKogeS5pl7yal+hTcNLDS3P8vH/FT8vckQMQoLO0f7iVUGpzlHsc11tGVC
+sihUhRBWcn1l7pLqRriiOEbDGLiOjdmSkF6oFynCx0EEzPZFplUUAL6MRWn+SpXO
+JCz7oMKlvEz50YK1ZZbr5A6WnAWmkvGNAV9fahnHcsf5Sni1nBl5ORJbBCzN8d1x
+Z/cdy70fJFP/C/5d9bCqw4Y4kntHRYx9kOSYaFnf5Q54Z4vU8II/gbfnvYeSFmxw
+XCXnfNBV8WI1F+/wiGPJgWtSPbIrtFrPbUNYXtCJzaGGdLk0/FJJsD3FfLLcUx+X
+nZCvFaUQh1s1yCbRpYcNlKb2gVHI3aTQPYyC9I0udtcY3ITtoc0zaFa2yRxxyidn
+2IJ4j3hY66P7QcgC+O1Gfhp9cGPTY9hNuX5xh71xjqUhc3MlZWbYleCR1aGCzY0Y
+M28TUdu3Gf5JmCsZF7D10sJFAZnNa1aanj81d2AbYgzU3TWoDyTlUMwx0NaN0irL
+3x9PWCQFMqfOF8eEb4b51AUrD9sCr5N/CtVwZUmL2sQ2wLETBbFZXNLK+TIafYqd
+3GWQCFASIhFrzlyrWDaWaebVOcAKV3JkzwJH8RwRhEGJhG6P2dNNqW7RPn/RGPIW
+FRQ1kf0FJVwB1RN0DxgNVqsHqziV+mTivN6hwxo6nGo0wMir/EGYjtt7ETNH/mxW
+sWcR9VqfOc+eNNz8MF8VGDEQl36Y4k/lRvu7+Whz8KwcI+DsMH6q7iD/JRstnia7
+EeHEbVxv8vaAeX9bEo5Map45uv0NmuHjR3Fohtg3Tik1JedrnPFqcJ9wEmuIkG41
+rTAZza+4KUy7DWZsuuTW5Jt3nC9GG43baIG4tBaw8FytF+OzZApNphAFrD3yv9BT
+N00K4HHMtd+bmMLPyqBV/iK/4QENIAXpEQvLjR4SbnlutzT/p6OPEv3Zjxx75+Re
+DxSKC1f51km6x5sRDaALEzU0w3PzORNAdJNLH3gtPCbXJKfGEgSUn4QBtBCfQ8nO
+tpvHJGE+AbzEhHHDj7/ineyS3ZD3qMA2fEMIPbhf5TmkDAB4XYZgyopnJf0BY07q
+9RB8QMxClsa1lkYVsUOmyvNMZ1vtq1hZ/5EztQSin0T7rOOTYFxzAo8SI7CzMeL9
+MIDNHqpSkQNyJH7gGNwtXkDhZL6/pBTuzQ7aFgu5ezWpqvOVrlLNWI7dBOL4vmBt
+/y7XyzZkXVq3M1ZaaxLKQb/Zy1wvPsvgraEd3CVFKQUggcS5GDj+clNvbe2gFQ1d
+9OrxEj/kTYDwB/umhl6bJMC/hgcfq+JiVfk2qwnme6celdu30+PKj3w5XoZR6I0z
+E4urp4QeqPI7YbFzoDsxRKRudNIu2UyI2LOXfQEfZRTeT9luhaFBultUkPOqXvOO
+QZeWELFJkKp2K8DVTnq6g7HWbythHu2mZ/aE8BJYI+dCFRsBL39CU6HjqMvfLey0
+xLZq/FIL6ILStBACyaVdNUkY18G6HZo=
+=8qRP
+-----END PGP MESSAGE-----
+
+--=_5b229ee25ce48b9f37eb22f8--

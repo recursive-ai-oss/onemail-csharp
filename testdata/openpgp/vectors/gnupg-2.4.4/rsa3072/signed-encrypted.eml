@@ -1,0 +1,43 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--vector-bnd
+Content-Type: application/octet-stream; name="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQGMAxNxNnxZgD8vAQv/ao6dJ+5O3lpdDBy2OL6Kjw8g15oOCEb7xkW8OYslQhDN
+E2AgQY8uxSug3dC6QHQ0bq/Zu+FmXLMHUiC6z4MPO/JKSnBD0Mx6ghzCFqXRPdtP
+a3bEevzVZPCerrLDDYeCLD0f5Cr+YIyXNCdX+JyP0nElIclZC1n1Z6nd/3QwMr5I
+j+WbS9ebdhGzcRG2fK50BYXv/S0362uOwTHZI3Yj4xYIgHfJazup93lcEKkVu/eU
+HMJZpYExS8yBt0HsOO6U9E7+mXnA561kNcN0LQlJ7LWz9pB1jPrUNY84tQiYv2tY
++qN1xji5twCP/bqsk2vpxpVS+uqYeuPNDDd+pU62y5GtSCBkjiHzgYk2ZFqnAyTI
+VBYSWrECgmvNpdyvgzSbQaNNky67uwzdSkxeUvspU1zdobsx4IDI9yw21UogKMmk
+O0UOWkhaBY0zNFw5xpt2pk4kQjjJOSmHeEXZKEJETZwyXdYWKVc9kfK5f7EpBSaj
+BogPYD1siuU6DGNVa61q1OkBCQIQPzgnCoekrtvIJBCvKIeJsYGOSV9+ikybjBGt
+A3+e7TeAldq3a8mLHxnnsF59nzKXRhHbwpdwf8EvFX5P2OcCCX2vprxVq5juHwO/
+emKxpLNQKyEQYunJ44rnM3gyKgV+EpDWkm0RJvpRXnZyiOMyUjF1zZALPhcC9Dzu
+9YVbCZ3uj/jtLS5uOJgrU0dYrKTkClpgqfEYzyQrrxK0wcVS7+4Bqt+15qt1rFvp
+aBlzkPAig23pP5wZqDFITWuz5PTiHWrhmXW0GN0Fk12xx4bXhy9cBjFaXhbWy44J
+UupwlSULWqomUyfLGDIvD/cBCetmilSyRL2DAbeFFZCwO89oI3/eul9m5sEatBbF
+LgoFEWslxPGDmJh3gsp2XsKq67XE6sZbFfciAX6BnenBUizvW4PKTIDYj9me/NB5
+ODcHI+z0QzbEHr5fXuL2yk9Bq0+hgsxR23xxaOc3mhdC94Fxs10Ceu/NxCPNKzO6
+Owln+41WAUpLLXfJpqQe8ITD75zP/pWzLS3yvDKqL5bkjqgJr9FMo3dnlrJTPwSn
+UYO0JxF0IFYnBTpC5P1Rm67Gu/9xogW/Ia4yVEreIBAbvmHZs5gCGPINcCsLuf5l
+qxjF+r/kYhTigLPXNgml8oMDrBQVULIL0mf/XXuSl30bHz8WpWks0+LGlVRRS2NE
+RcAqNr7LPd8GPUanAnW1CV8e5OEyCic3ap5q9CVh7wH9tWoPRQDVFugb2A+NbaWq
+j/RFv9EyWrLTdVFlwE4kTwEM0hpY/WeKFTEsN/6+B3/tcZJqNPn1saiFyaLhqJhc
+rePX05HciLAJ7on+NPyidOLLuG3PmajQx+K5a2pH3bCl/CVKZkpDgPj9TZc7AGrb
+IAYMFynARZSqDh4Gyvniyhl/Gqr9kjquUJojrNJ0i4Fesu2liDEQrKY7LDLy3m9/
+mNxsWzs95Ot4VBJX3t8HrmlTBINckRSlxnnWYIn1wZ8yVDdaZSFVDCvEd7nR
+=8HQR
+-----END PGP MESSAGE-----
+--vector-bnd--

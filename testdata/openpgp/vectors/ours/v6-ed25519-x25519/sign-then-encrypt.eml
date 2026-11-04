@@ -1,0 +1,51 @@
+From: Vector <vector-v6-ed25519-x25519@example.org>
+To: vector-v6-ed25519-x25519@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_ef31d194cc9172554e5198d7"
+
+--=_ef31d194cc9172554e5198d7
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_ef31d194cc9172554e5198d7
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wW0GIQaPiWu9/yMGquP/dnu4QWWb0sIPDvH0nmvb77xU3xqPhRnVEEfwzxVTf7K+
+WI1Jtsd1k68Bh/c1s5xE/KE0su+NCyjzn+CTMonnGikGpbHUGKopv3BDq/wtlFqj
+EfLSHWxs/cGofg6UMOmJ0sPAAgkCDEUqZWJvFVUq2gKhEeBHhwrcrY2yTRryuX9a
+lYzah4EidaP1L2hjEmzqdrf8hthjy0eKNxpqe5c/r7ikudI+Ro45GNkq4NU66l1j
+19eRgwPkgyki4/7gASn39Bggr7m/5tIEPj+4xCrymQWl9wiEDDMLnPLwKaLEW8VR
+q8AT22U4ykTVNMVdC5HJRLUOa6MxzLlM5V/PvjH8Bzq4WhnioVug53vuELFGiVNI
+dH6FmG+pwT56e8Ozllof0SC5f82hNzMUprwMnzxv1Bwel0B2bNxfRzG0BgI9XLrJ
+zXroUsUA5nzkxxvf6ausmueTSw0RINn/s5hmmtXIxUE+ABcb0v5MTNYmiliZ9/4G
+Mbq8WPVRr54IZDeNux2W3+EPwTLhJ8FmuaILmhGMZLSoUvuo2AnTCTcrKTDpijUM
+0tSr71z6W24+c53evm+dSaOwwHoOhB6GG46/OdexnxbQw/py3HJ45k9z00HgGhxK
+t+vXp0e3Tw3t48Zp6xlbCuV6FnrBnJLDtaD3KYplAqqusAQaJflQofqB3os0Gv7Q
+pCSxMEqePO2IgmxMgeHOZJLmZ0P9TkkMFDbVvarxj9tp6jvmXRH2cG6LkHY3maHV
+d+YWxQ+HOPdcymyaLeLugha7+To047q0091yzGeCUzsACuCWOCuMQoofSSqTY5CC
+HQyBl8HcBp2nwDPF2qzv6/Z/quvRyUBAqlnYjpjUVzreZ/4F3M2bhylAsX+1rgJf
+t1q4glPAq6JpT2UmFRznA6y/xCa8s8AWeczWp9C4lK7UDUgvu60ZxAqxBddz4zOq
+MsqKugD2CEVFQB1jy95YmrSb+lOTXc9PKGIuN9W9Y4rTEBwgKD2BRbN/8WUln5Ei
+0rs6R3JK9NcsAfmBysh020H1zW2eUDSRXRjsT/cUTFEU+TjPeHdS6y/cy3rDdSEH
+wQKk+wZkUj6aBMPArc6QoczKJpT1kxuGcsBSqFX2+HdS026fHGLSRO/x+F5s8lI4
+iDU3ONnIYun4M/z9tKDpnucQjGgkeOi+ZoGReY4SaO5IsFDtdL6v4ctTvTcw2eGv
+vtn1C5G7MeQGEfpe+EK1bcQNOqahqiHKGU3J2UP3CHw1MTskPgEm9ivvfqjj5d1t
+snMZ8JA14Cn96kBTES4RPOmg2EG8F/PvGD+kkqF62bcWkvEk5cCqHsFLaS3yaDa3
+cUqvsEN4HePVA+39Y1KB3s2OS2SV6nWh8qZ1BfsSB+CrPSbL4sEMNqvAyeFp/mI9
+x4sCG/cl8zWVRZguu/PkE1BuwdWkv05M7pdMAoLdS2HrPuaMIRYjz3WAiN3E5LLF
+j13KQuEim1rS9emUBQKIPuQBuDhmEwdHUPtPRDvjB8OKIN1yWiy5OWtZLtbudBaa
+M3I+/NdJ9oKkwHrNsWeTtzSSFP5r8QgYhq3rxcjFhu++CKvRsj0Jm6Ji1Mm2rhri
+p6akmBLU2xir9JntwfHLvrH8uSgKOPWjWMdWbQDHUuL31p96Pggbi3JXUEb7UwAH
+q2IxhiU868unXo6ZM8I13T9b
+=S+1m
+-----END PGP MESSAGE-----
+
+--=_ef31d194cc9172554e5198d7--

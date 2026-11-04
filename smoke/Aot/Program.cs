@@ -663,11 +663,34 @@ internal static class Program
 
         Console.WriteLine("smime: " + (smimeOk ? "ok" : "FAILED"));
 
+        bool pgpOk;
+        {
+            var now = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+            var cert = RecursiveAI.OneCrypto.OpenPgp.PgpKeyGenerator.Generate(new RecursiveAI.OneCrypto.OpenPgp.PgpKeyGenerationOptions { Now = now.AddDays(-1), UserIds = ["Smoke <smoke@example.test>"] });
+            var signer = RecursiveAI.OneCrypto.OpenPgp.PgpSecretKey.Unlock(cert.FindSigningKey(now)!);
+            MimeEntity Content() => MimeEntity.Parse("Content-Type: text/plain\r\n\r\npgp smoke body\r\n"u8.ToArray());
+            var signed = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeSigner.SignDetached(Content(), new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeSignOptions { Now = now, Signers = [signer] });
+            signed.Headers.Add("From", "smoke@example.test");
+            var open = new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpOpenOptions { Now = now, Certificates = [cert.ToPublicCertificate()], SecretKeys = [cert] };
+            var signedResult = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeProcessor.Open(signed.ToArray(), open);
+            var encrypted = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptor.Encrypt(Content(), new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptOptions { Now = now, Recipients = [cert.ToPublicCertificate()], Signers = [signer] });
+            var encryptedResult = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeProcessor.Open(encrypted.ToArray(), open);
+            byte[] tamperedBytes = signed.ToArray();
+            int at = System.Text.Encoding.ASCII.GetString(tamperedBytes).IndexOf("smoke body", StringComparison.Ordinal);
+            tamperedBytes[at] ^= 1;
+            var tamperedPgp = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeProcessor.Open(tamperedBytes, open);
+            pgpOk = signedResult.Succeeded && signedResult.IsAuthenticated && encryptedResult.Succeeded && encryptedResult.IsAuthenticated
+                && encryptedResult.InnerItem?.TextBody?.ReadText().Contains("pgp smoke body", StringComparison.Ordinal) == true
+                && !tamperedPgp.Succeeded && tamperedPgp.Layers[0].Status == RecursiveAI.OneMail.Cryptography.OpenPgp.PgpStatus.SignatureInvalid;
+        }
+
+        Console.WriteLine("pgp: " + (pgpOk ? "ok" : "FAILED"));
 
 
 
 
-        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && clientOk && recoveryOk && pstRecoveryOk && pstEditOk && typedClientOk && smtpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
+
+        return contactsOk && tnefMimeOk && pstOk && textOk && mimeOk && ndbOk && structuredOk && storesOk && reportsOk && viewOk && ltpOk && msgOk && rtfOk && tnefOk && recurrenceOk && oxcOk && composeOk && jxformsOk && dbxOk && oxocalOk && calcardOk && olmOk && msgWriteOk && rtfHtmlOk && convertOk && sanitizerOk && htmltextOk && renderOk && ltpWriteOk && pstWriteOk && cryptoOk && smimeOk && pgpOk && clientOk && recoveryOk && pstRecoveryOk && pstEditOk && typedClientOk && smtpOk && OneMailLibrary.Describe() == "RecursiveAI.OneMail (on RecursiveAI.OneMail.Calendar)" ? 0 : 1;
     }
 }
 

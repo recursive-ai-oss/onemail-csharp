@@ -1,0 +1,49 @@
+From: Vector <vector-v4-native-ed25519-x25519@example.org>
+To: vector-v4-native-ed25519-x25519@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_c1951abbc1cc55b7868d6312"
+
+--=_c1951abbc1cc55b7868d6312
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_c1951abbc1cc55b7868d6312
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wWEGFQSpKBjvLH2AlOmAREvMv0W0kbsdTRm6qiOdq0NAqqsp/y4FAnyyC65L30Kj
+Rl828ICTfJVUACivRjNcN6Mq4ykRGleOoW1iI0l3mmKU09MgOxRGjB5vOA0oXmDx
+UZqz0sN5AgkCDBoVAshW9AdCNUve85EcpnSQZLax3EH5xBQujtGIQPGmTiXrb2uP
++MZisAe2Etm5olVD5LHcAzEmIBpeDOpdgsA4ieug+uA6mJXhaN3lZsRhDaM7z+MK
+uB74lygvUXW/B4XtBuRy/ZM+7QJDWsuTPTU5XuZu1KvS6LwNGSbBq/9IOdBgduEq
+3nHwoMsSPt1DgV6XpAm/xL4643WGD5yDV1FrojBI0XelD6ptlrs489hwxV+5wvE2
+r10z66dxj1WYUsUxVY+6+FzdKs/3wef2t+oR6cO4sIMWWjvHE8VKQ4D6G/5PKblf
+7e8yJgIcSfFFsX499OLta3TJOjPl228C1qtKnLh8X3Pi01U3fkq7AhrlvVT4jc96
+B1YmLxjI5Khg9hCcXUMUtA9mquRIhmYByQA0oMN26RdJEGV+xhYNWjLZPj0aAd91
+mzPnKwPg400HiBZPoT5otEC7rd60TciQGWhB/OZamINCpk6c6znSN5IQj1gxzBmr
+uiw1EFbwodbmErXilNH537sx3Orpf9AxXx5wimyLtFrFprWl+MR0e3NIdNxbWYk+
+90unotkeKqlGkyVemyBJKKsSRF5+wRUQdxCtkb24NvioKfEbV+nHR51fXE9nFxK6
+Kl2Q7TGJe5Fc7OiODPdELA3jB45wE+o7Jbmm3lSEPjXILMzodyMWMDPYW1QLPeqX
+KH4Bq62z8j+IZqXgwQZTs4kzy4G5pWyyk+k325qgSTWuASbI9uc7MWZ6utwSWiGa
+phcKzijQ7yNuFR8FE41Y7D2mvUeg9ljasUnc4OdZfsx9rXZjpBT+vGRyBpvpw/i1
+Uw71e/8Y2vIxGSANwbBfbwJHTZK7/KZf4h+z8MBgmtjnl8MLwfXtelFUMjJMZGUE
+7WaMfcxYIeYK+al/rkm6dyTOlp+HVgYYCvLsxy85ZhVoGjDmEo9h//MlwmbIb4c9
+ifbnYBM6blsh3DQeefOuskSgf5pOA7IWlUL/u60g81j8pimu6sJVQNwLhp7eakYG
+SocZUJNLK2R8MwxhBQjewn/Xor/OVMnCNeHSH2KeYVlJy2apWFwg1xfgBzSa7GB+
+sg5baL2sU7/J8hCg2MOQ4MnqCCXvWRWH78nbZY9euRtTardh/FaNNH/FV2A57CLW
+bl9qWnU2Kg/foc5kB+EhU2pGoO3p+Mp5puHIk+88sRhVzWKOKZIPzZtBzTyGL82w
+gGq0UP+GhjaDav/suPJC1gYtmtisTS+h53u7nsRLkhndYZTeSwj0Z5RKEqciWzVY
+eBhsbacH6ebMyVlW8elf47BjAwm1+vOZakmd45St/rFJsCitFZwTl87sTqNHfz39
+b0Myt/zdp3aQ1s8w6IYj5t3Px5flWIqPVxCsL/cMHjWpqtqGKc0saPUTUxZp1ZCL
+yeR5lxwtj0jdUtZyE5RQCpkX/XK1Z4PeggRJPHaolQ==
+=Lboy
+-----END PGP MESSAGE-----
+
+--=_c1951abbc1cc55b7868d6312--

@@ -1,0 +1,3 @@
+Interop test café.
+A line that is quite long enough to need some wrapping when it is encoded, as long lines are.   
+From the other side.

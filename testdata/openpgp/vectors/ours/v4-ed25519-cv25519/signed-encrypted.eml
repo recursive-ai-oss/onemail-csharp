@@ -1,0 +1,36 @@
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+To: vector-v4-ed25519-cv25519@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_0ed3c26bbdb01b2de894d5ca"
+
+--=_0ed3c26bbdb01b2de894d5ca
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_0ed3c26bbdb01b2de894d5ca
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wV4D0bBN7D9zhsUSAQdAlVQVsyMJvdqSmSWyq/J3JhNxLUG7EQKPuB7BZe5V32ow
+YsnL10tyVPk/GG53H8T06T43LCus3vbPY2AjckgW/FDOCqE1j3KpPnvzqfEdMYFQ
+0sEGAVHGyUCptBdQ2uOfCRedqwffLhI35sEnt229svBdGAMv+fEmc7/rr7SwTj5z
+B9t80DOEaXHcLRRIjHLP4fyd5SthmOaQYnFOZXhmfYcnVRGvU587hzPaK+RjU2Ur
++zxqD156JuPZBLhZa+oRRp2Yh5ChlsMGmferbfaZJIweNuFXAs2MT+yUOQ+S+GY9
+7dXI5q7PjchIb9fvQl3yXZxsgGmQtFVxTdKT4m/i7Jb4pAFxRRbeEer8Dv/OsfyS
+P7dGYd2abXIlqfXqp3DQGnC4DngfwLGlrC8+F7GNk/vs5Q0LtpFk6f6s1z9XuTHN
+KY2UdTaHpHG74oUAsQfiyiHmhvp2Nia0HM3O/VtN8z773mPAR4wpMSv0mhlRT9JQ
+DiZoNk1VMkqBMf9vMAmpNGftfCidTJIbfLDLn8Y0POEgurf8xpxW5FxnT8iyuYOv
+DH+278HENsZ6PtM9ugb1WqeMqKeLtcSXM6kiRz4X9U96VKBgojRziT+I34GfI0yx
+f+43B5fKKnD7Cn/Iw+CyonRUgDue+BvwwPV0k0UON6cw2BrRJgNTn5U0kFYvjzWK
+rmHvfXBqZPk6jThrnx2GyJ5VnNKq570gdQ==
+=xiY/
+-----END PGP MESSAGE-----
+
+--=_0ed3c26bbdb01b2de894d5ca--

@@ -215,6 +215,20 @@ OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Nod
 | Fuzzed | tag lists with the signature and ARC parsers, key records, DNS replies | yes | |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | `cryptography: ok` | not in the browser smoke (native only) |
 
+## OpenPGP mail (`RecursiveAI.OneMail.Cryptography.OpenPgp`)
+
+PGP/MIME (RFC 3156), inline OpenPGP and Autocrypt headers on OneCrypto 0.4.0-preview.1. Oracles, run as released programs: GnuPG 2.4.4 (Ubuntu package), GnuPG 2.5.24 (a release build pinned by OneCrypto), Sequoia `sqop` 0.38.0. Rules and method: [`openpgp.md`](openpgp.md), ambiguities PG1-PG13; the checks are `tools/openpgp/` and the committed vectors in `testdata/openpgp/vectors`. The package has not had an independent security review.
+
+| Area | Cases | Result | Gap |
+|---|---|---|---|
+| Ours to other programs | per key: signed, encrypted, signed+encrypted (combined), sign-then-encrypt | GnuPG 2.4.4: 8/8 (v4 EdDSA/Cv25519 4, RSA-3072 4). GnuPG 2.5.24: 5/8 (RSA-3072 4/4, EdDSA/Cv25519 signed 1/1; the 3 decryptions failed because 2.5.24 did not make the Cv25519 subkey available after importing a OneCrypto-generated secret key; 2.4.4 and Sequoia accept the same key). Sequoia sqop 0.38.0: 16/16 (v4 EdDSA/Cv25519, native v4 Ed25519/X25519, RSA-3072, v6 Ed25519/X25519) | GnuPG does not read native or v6 keys, so those cells run on Sequoia only |
+| Other programs to ours | the same four shapes over keys the program generated | GnuPG 2.4.4 8/8, GnuPG 2.5.24 8/8 (EdDSA/Cv25519 and RSA-3072), Sequoia sqop 0.38.0 8/8 (v6 Ed25519/X25519 and v4 EdDSA/Cv25519): 24/24 open, authenticated where signed | |
+| Tampering | changed byte, swapped signature part, stripped signature, empty signature part, wrong `micalg`, missing `micalg`, LF copy, unknown signer, weak hash on sign | each fails with its status and reason (PG1-PG4), or is accepted with the typed issue | |
+| Hostile input | 12 nested signed layers, 5 MB of armor, truncated cleartext signature, 3,000-part `multipart/signed`, 3,000 nested multiparts, decrypted size over the limit | typed statuses, no exceptions | |
+| Fuzz `pgp-mime` | `multipart/signed`, `multipart/encrypted` (encrypt-only and combined), cleartext-signed and armored bodies, raw and edited from valid ones; 600 s, `Checked` build | 9,952,860 executions, 0 findings, peak RSS 29 MB | OpenPGP packet parsing is fuzzed in OneCrypto |
+| AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; `pgp: ok` | native only |
+| Thunderbird | | not run | no released Thunderbird could be run headless here; see `openpgp.md`, *Not done* |
+
 ## S/MIME (`RecursiveAI.OneMail.Cryptography.Smime`)
 
 RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: OpenSSL `cms` 3.0.13 (worker) and 3.6.2 (a second build), MimeKit 4.18.2 (public S/MIME API, in `tools/smime`). Rules and method: [`smime.md`](smime.md), ambiguities SM1-SM8; the checks are `tools/smime/`. Reviewed as a crypto path (see the *Review* section of `smime.md`); the counts below are from the runs after the review fixes.
