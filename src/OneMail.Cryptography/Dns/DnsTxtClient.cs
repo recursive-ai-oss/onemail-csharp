@@ -118,7 +118,7 @@ public sealed class DnsTxtClient : ITxtResolver
                 switch (reply.Kind)
                 {
                     case DnsReplyKind.Records:
-                        return new TxtLookupResult(TxtLookupStatus.Success, reply.Records);
+                        return new TxtLookupResult(TxtLookupStatus.Success, reply.Records, null, reply.MinTtl is { } t ? TimeSpan.FromSeconds(t) : null);
                     case DnsReplyKind.NameNotFound:
                         return new TxtLookupResult(TxtLookupStatus.NameNotFound);
                     case DnsReplyKind.NoData:

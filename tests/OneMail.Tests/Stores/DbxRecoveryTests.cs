@@ -98,6 +98,28 @@ public class DbxRecoveryTests
     }
 
     [Fact]
+    public void FreedSegmentsThatTheClearedListDoesNotReachAreStillFoundAndFlagged()
+    {
+        List<DbxTestMessage> msgs = Messages(6);
+        byte[] file = DbxTestBuilder.MessageDatabase(msgs, new DbxBuild { Deleted = new HashSet<int> { 1, 3, 4 } });
+        List<DbxRecoveredMessage> withList = Recover(file);
+        Assert.DoesNotContain(withList.SelectMany(m => m.Provenance.Defects), x => x.Code == nameof(DbxRecoveryDefect.NotOnDeletedList));
+
+        // Outlook Express cleared the root of the list: the segments keep their freed headers but nothing names them.
+        byte[] cleared = (byte[])file.Clone();
+        BinaryPrimitives.WriteUInt32LittleEndian(cleared.AsSpan(0x48), 0);
+        List<DbxRecoveredMessage> got = Recover(cleared);
+        Assert.Equal(3, got.Count);
+        foreach (int d in new[] { 1, 3, 4 })
+        {
+            byte[] want = ExpectedAfterDeletion(msgs[d].Text);
+            DbxRecoveredMessage m = Assert.Single(got, g => g.Content.Span.SequenceEqual(want) || g.Content.Length >= want.Length - 0x200 && want.AsSpan(0, 0x1FC).SequenceEqual(g.Content.Span[..0x1FC]));
+            Assert.Equal(RecoveryStatus.FreeSpace, m.Provenance.Status);
+            Assert.Contains(m.Provenance.Defects, x => x.Code == nameof(DbxRecoveryDefect.NotOnDeletedList));
+        }
+    }
+
+    [Fact]
     public void NothingIsFoundInAFileWithoutDeletions()
     {
         byte[] file = DbxTestBuilder.MessageDatabase(Messages(6), new DbxBuild { ShuffleSeed = 3 });

@@ -77,12 +77,12 @@ internal sealed partial class MessagingCompare
     private void Items(PstFolder f, string dir, string logical, bool rootLevel)
     {
         var exported = Directory.GetDirectories(dir, "Message*").OrderBy(d => d, StringComparer.Ordinal).ToList();
-        var byKey = new Dictionary<string, Queue<string>>();
+        var byKey = new Dictionary<string, List<string>>();
         foreach (string m in exported)
         {
             string k = Key(Headers(m));
-            if (!byKey.TryGetValue(k, out Queue<string>? q)) byKey[k] = q = new Queue<string>();
-            q.Enqueue(m);
+            if (!byKey.TryGetValue(k, out List<string>? q)) byKey[k] = q = new List<string>();
+            q.Add(m);
         }
 
         // Folder-associated messages are in the export too when libpff lists them; they are paired by the same key.
@@ -97,10 +97,12 @@ internal sealed partial class MessagingCompare
             // libpff writes appointments, contacts, tasks and the like as AppointmentNNNNN, ContactNNNNN ... with other files; they are
             // counted here and read by the item-semantics layer later.
             if (!assoc && MapiMailItem.KindOf(m.MessageClass) != MailItemKind.Message) { otherOurs++; continue; }
-            if (byKey.TryGetValue(k, out Queue<string>? q) && q.Count > 0)
+            if (byKey.TryGetValue(k, out List<string>? q) && q.Count > 0)
             {
                 paired++;
-                Message(m, q.Dequeue(), logical + "#" + m.Nid);
+                string chosen = PickBySubject(m, q);
+                q.Remove(chosen);
+                Message(m, chosen, logical + "#" + m.Nid);
             }
             else if (assoc) _assocUnexported++;
             else if (m.MessageClass is { } mc && mc.StartsWith("IPM.Post", StringComparison.OrdinalIgnoreCase)) { }   // pffexport leaves posts out
@@ -110,8 +112,36 @@ internal sealed partial class MessagingCompare
         int otherTheirs = Directory.GetDirectories(dir).Count(d => ItemDir().IsMatch(Path.GetFileName(d)) && !Path.GetFileName(d).StartsWith("Message", StringComparison.Ordinal));
         _otherItems += otherOurs;
         if (otherOurs != otherTheirs) Diff($"{logical}: non-mail items ours {otherOurs} libpff {otherTheirs}");
-        foreach (Queue<string> q in byKey.Values) foreach (string left in q) Diff($"{logical}: libpff item {Path.GetFileName(left)} is not in ours");
+        foreach (List<string> q in byKey.Values) foreach (string left in q) Diff($"{logical}: libpff item {Path.GetFileName(left)} is not in ours");
         _ = paired; _ = unpairedAssoc; _ = rootLevel;
+    }
+
+    // Items with the same times, size and flags are told apart by subject, so a reordered table does not pair them wrongly. The subjects are compared
+    // tolerantly (letters and digits of ASCII only, so spacing, case, punctuation and the way a non-ASCII character was exported do not matter);
+    // when no candidate matches, or either side has nothing to compare, the first candidate in export order is taken as before.
+    private static string PickBySubject(PstMessage m, List<string> candidates)
+    {
+        if (candidates.Count == 1) return candidates[0];
+        string mine = SubjectKey(new MapiMailItem(m, default).Subject);
+        if (mine.Length == 0) return candidates[0];
+        foreach (string c in candidates)
+        {
+            if (Headers(c).TryGetValue("Subject", out string? theirs) && SubjectKey(theirs) == mine) return c;
+        }
+
+        return candidates[0];
+    }
+
+    private static string SubjectKey(string? subject)
+    {
+        if (string.IsNullOrEmpty(subject)) return "";
+        var sb = new StringBuilder(subject.Length);
+        foreach (char c in subject.Normalize(NormalizationForm.FormKC))
+        {
+            if (c < 128 && char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+        }
+
+        return sb.ToString();
     }
 
     [GeneratedRegex(@"^[A-Za-z]+\d{5}$")]

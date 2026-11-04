@@ -32,8 +32,22 @@ public sealed class TxtLookupResult
         Detail = detail;
     }
 
+    /// <summary>Creates a result that also says how long it may be reused.</summary>
+    /// <param name="status">How the lookup ended.</param>
+    /// <param name="records">The TXT records; null means none.</param>
+    /// <param name="detail">Optional human-readable detail for failures.</param>
+    /// <param name="ttl">How long the answer may be kept, from the records' DNS time to live; null when the resolver does not know.</param>
+    public TxtLookupResult(TxtLookupStatus status, IReadOnlyList<string>? records, string? detail, TimeSpan? ttl)
+        : this(status, records, detail)
+    {
+        Ttl = ttl;
+    }
+
     /// <summary>How the lookup ended.</summary>
     public TxtLookupStatus Status { get; }
+
+    /// <summary>How long the answer may be reused, as the DNS time to live said (the smallest of the records used). Null when the resolver does not know it; <see cref="CachingTxtResolver"/> then applies its own default.</summary>
+    public TimeSpan? Ttl { get; }
 
     /// <summary>The TXT records, each with its character-strings joined without separators. Empty unless <see cref="Status"/> is <see cref="TxtLookupStatus.Success"/>.</summary>
     public IReadOnlyList<string> Records { get; }
