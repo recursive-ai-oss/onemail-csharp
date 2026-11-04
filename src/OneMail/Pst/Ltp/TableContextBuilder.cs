@@ -519,9 +519,9 @@ public sealed class TableContextBuilder
         {
             _heap.Seal();
             DataTreeResult r = _heapTree.Complete();
-            return new LtpNodeResult(r.Root, r.Length, (int)r.BlockCount, _values.Subnodes);
+            return new LtpNodeResult(r.Root, r.Length, (int)r.BlockCount, _values.Subnodes, _values.SubnodeBytes);
         }
 
-        return LtpNodeResult.WriteHeap(_blocks, _heap, _values.Subnodes);
+        return LtpNodeResult.WriteHeap(_blocks, _heap, _values.Subnodes, _values.SubnodeBytes);
     }
 }

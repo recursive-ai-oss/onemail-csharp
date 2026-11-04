@@ -121,6 +121,88 @@ public sealed class PstBuilderTests
         File.Delete(path);
     }
 
+    // Bytes in the data trees of a node and of all its subnodes, nested ones included: what PidTagMessageSize holds in files Outlook wrote.
+    private static long NodeBytes(NdbFile file, Bid data, Bid sub)
+    {
+        long total = 0;
+        using (NdbDataTree? tree = file.OpenDataTree(data))
+        {
+            total += tree?.Length ?? 0;
+        }
+
+        foreach (SubnodeEntry e in file.OpenSubnodes(sub)?.Entries ?? [])
+        {
+            total += NodeBytes(file, e.Data, e.Sub);
+        }
+
+        return total;
+    }
+
+    [Fact]
+    public void MessageSizeIsTheBytesOfTheNodeAndItsSubnodes()
+    {
+        // Outlook's repair tool compares the folder's row with the message, and PidTagMessageSize in files Outlook wrote is the size of the whole node.
+        (PstStore store, string path) = Write(b =>
+        {
+            PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
+            inbox.AddMessage(Message("plain", recipients: 0));
+            inbox.AddMessage(Message("big", recipients: 3, attachments: 2, body: new string('b', 20_000)));
+        });
+        using (store)
+        {
+            int checkedMessages = 0;
+            foreach (PstMessage m in store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken))
+            {
+                Assert.True(store.Database.Nodes.TryGet(m.Nid, out NodeEntry node));
+                Assert.Equal<long?>(NodeBytes(store.Database, node.Data, node.Sub), m.GetInt32(0x0E08));
+                checkedMessages++;
+            }
+
+            Assert.Equal(2, checkedMessages);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void AttachSizeIsTheSumOfTheAttachmentsValueSizes()
+    {
+        // 0x3701 (20,000 bytes) + 0x3707 ("file0.bin", UTF-16) + 0x3705, 0x370B and 0x0E20 itself (four bytes each).
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(Message("with file", recipients: 0, attachments: 1)));
+        using (store)
+        {
+            PstMessage m = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal<int?>(20_000 + (2 * "file0.bin".Length) + 12, ((PstAttachment)m.Attachments.Single()).Size);
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void TheStoreHasTheNodesAndCountersOutlooksRepairToolLooksFor()
+    {
+        // Found by running Outlook's repair tool over stores written without them (none of this is in MS-PST's list of mandatory nodes).
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").CreateFolder("Archive"));
+        using (store)
+        {
+            NdbFile file = store.Database;
+            foreach (uint nid in new uint[] { 0x62B, 0x64C, 0x6B6, 0x6D7, 0x6F8, 0xC01, 0xEC1, 0x2226, 0x2227 })
+            {
+                Assert.True(file.Nodes.TryGet(new Nid(nid), out _), $"node 0x{nid:X} is missing");
+            }
+
+            // The hierarchy, contents and associated-contents counters reach the highest folder index in use.
+            uint folders = file.Header.NodeCounters[(int)NidType.NormalFolder];
+            Assert.True(folders >= 0x405);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.HierarchyTable]);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.ContentsTable]);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.AssocContentsTable]);
+        }
+
+        File.Delete(path);
+    }
+
     [Fact]
     public void String8TextTakesItsCodePageFromTheItemAndTheNameMapIsNeverEmpty()
     {

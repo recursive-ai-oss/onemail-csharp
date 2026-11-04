@@ -48,6 +48,207 @@ internal static class OutlookView
         return 0;
     }
 
+    // Writes a node's data to a file (all blocks): PstOracle noderaw <file> <nid hex> <out>
+    public static int NodeRaw(string path, string nidHex, string outPath)
+    {
+        if (!RecursiveAI.OneMail.Pst.Ndb.NdbFile.TryOpen(path, out var file, out _) || file is null)
+        {
+            return 4;
+        }
+
+        using (file)
+        {
+            if (!file.Nodes.TryGet(new RecursiveAI.OneMail.Pst.Ndb.Nid(Convert.ToUInt32(nidHex, 16)), out var e))
+            {
+                return 1;
+            }
+
+            using var raw = file.OpenDataTree(e.Data);
+            var bytes = new byte[raw?.Length ?? 0];
+            int o = 0;
+            for (int i = 0; raw is not null && i < raw.LeafCount; i++)
+            {
+                int n = raw.GetLeafSize(i);
+                raw.ReadLeaf(i, 0, bytes.AsSpan(o, n));
+                o += n;
+            }
+
+            File.WriteAllBytes(outPath, bytes);
+            return 0;
+        }
+    }
+
+    // Lists every node of the store (NID, type, data bytes, subnode BID, parent) and the header's NID counters: what a store Outlook wrote holds that ours lacks.
+    //   PstOracle nodes <file>
+    public static int Nodes(string path)
+    {
+        if (!RecursiveAI.OneMail.Pst.Ndb.NdbFile.TryOpen(path, out var file, out _) || file is null)
+        {
+            Console.WriteLine("open failed");
+            return 4;
+        }
+
+        using (file)
+        {
+            Console.WriteLine("counters: " + string.Join(' ', file.Header.NodeCounters.Select(c => c.ToString("x", System.Globalization.CultureInfo.InvariantCulture))));
+            foreach (var e in file.Nodes)
+            {
+                long len = 0;
+                using (var tree = file.OpenDataTree(e.Data))
+                {
+                    len = tree?.Length ?? -1;
+                }
+
+                Console.WriteLine($"{e.Nid.Value:x} type={e.Nid.Value & 0x1F:x} index={e.Nid.Value >> 5:x} data={len} sub={e.Sub.Value:x} parent={e.Parent.Value:x}");
+            }
+        }
+
+        return 0;
+    }
+
+    // Prints a node as a table context (columns, row bytes) or a property context (tag, type, value bytes).
+    //   PstOracle nodedump <file> <nid hex> [max rows = 5]
+    public static int NodeDump(string path, string nidHex, int maxRows)
+    {
+        if (!RecursiveAI.OneMail.Pst.Ndb.NdbFile.TryOpen(path, out var file, out _) || file is null)
+        {
+            Console.WriteLine("open failed");
+            return 4;
+        }
+
+        using (file)
+        {
+            string[] path_ = nidHex.Split('/');
+            var nid = new RecursiveAI.OneMail.Pst.Ndb.Nid(Convert.ToUInt32(path_[0], 16));
+            if (!file.Nodes.TryGet(nid, out var top))
+            {
+                Console.WriteLine("no such node");
+                return 1;
+            }
+
+            var sn = new RecursiveAI.OneMail.Pst.Ndb.SubnodeEntry(nid, top.Data, top.Sub);
+            foreach (string seg in path_.Skip(1))
+            {
+                if (seg == "**")
+                {
+                    long Total(RecursiveAI.OneMail.Pst.Ndb.SubnodeEntry n, bool self)
+                    {
+                        long t = 0;
+                        using (var dt = file.OpenDataTree(n.Data))
+                        {
+                            t = self ? dt?.Length ?? 0 : 0;
+                        }
+
+                        foreach (var c in file.OpenSubnodes(n.Sub)?.Entries ?? [])
+                        {
+                            t += Total(c, true);
+                        }
+
+                        return t;
+                    }
+
+                    Console.WriteLine($"total {Total(sn, true)} (node's own data {Total(sn, true) - Total(sn, false)})");
+                    return 0;
+                }
+
+                if (seg == "*")
+                {
+                    var all = file.OpenSubnodes(sn.Sub);
+                    foreach (var e in all?.Entries ?? [])
+                    {
+                        long dl = 0;
+                        using (var dt = file.OpenDataTree(e.Data))
+                        {
+                            dl = dt?.Length ?? 0;
+                        }
+
+                        Console.WriteLine($"sub {e.Nid.Value:x} type={e.Nid.Value & 0x1F:x} data={e.Data.Value:x} len={dl} sub={e.Sub.Value:x}");
+                    }
+
+                    return 0;
+                }
+
+                var st = file.OpenSubnodes(sn.Sub);
+                if (st is null || !st.TryGet(new RecursiveAI.OneMail.Pst.Ndb.Nid(Convert.ToUInt32(seg, 16)), out sn))
+                {
+                    Console.WriteLine("no such subnode " + seg);
+                    return 1;
+                }
+            }
+
+            string Hex(ReadOnlySpan<byte> b, int max = 48) => Convert.ToHexString(b[..Math.Min(max, b.Length)]).ToLowerInvariant() + (b.Length > max ? "…" : "");
+            if (RecursiveAI.OneMail.Pst.Ltp.TableContext.TryOpen(file, sn, out var tc, out _) && tc is not null)
+            {
+                using (tc)
+                {
+                    Console.WriteLine($"TC rows={tc.RowCount} rowSize={tc.RowSize}");
+                    foreach (var c in tc.Columns)
+                    {
+                        Console.WriteLine($"  col {c.Id:x4}{c.Type:x4} off={c.Offset} size={c.Size} bit={c.BitIndex}");
+                    }
+
+                    int n = 0;
+                    var buf = new byte[tc.RowSize];
+                    foreach (var r in tc.EnumerateRowIndex())
+                    {
+                        if (n++ >= maxRows)
+                        {
+                            break;
+                        }
+
+                        if (tc.TryReadRow(r.RowIndex, buf))
+                        {
+                            Console.WriteLine($"  row id={r.RowId:x} idx={r.RowIndex} ver={BitConverter.ToUInt32(buf, 4):x}:");
+                            var row = tc.GetRow(buf);
+                            for (int ci = 0; ci < tc.Columns.Count; ci++)
+                            {
+                                if (tc.Columns[ci].Id is 0x67F2 or 0x67F3 || !row.TryGetCell(ci, out var cell))
+                                {
+                                    continue;
+                                }
+
+                                byte[] cv = tc.ReadValue(cell) ?? [];
+                                Console.WriteLine($"    {tc.Columns[ci].Tag:x8} = {Hex(cv, 40)}");
+                            }
+                        }
+                    }
+                }
+
+                return 0;
+            }
+
+            if (RecursiveAI.OneMail.Pst.Ltp.PropertyContext.TryOpen(file, sn, out var pc, out _) && pc is not null)
+            {
+                using (pc)
+                {
+                    Console.WriteLine("PC");
+                    foreach (var p in pc)
+                    {
+                        byte[] v = pc.ReadValue(p) ?? [];
+                        Console.WriteLine($"  {p.Id:x4}{p.Type:x4} len={v.Length}: {Hex(v)}");
+                    }
+                }
+
+                return 0;
+            }
+
+            using (var raw = file.OpenDataTree(sn.Data))
+            {
+                if (raw is null || raw.Length == 0)
+                {
+                    Console.WriteLine("raw: empty");
+                    return 0;
+                }
+
+                var bytes = new byte[Math.Min(raw.Length, 256)];
+                raw.ReadLeaf(0, 0, bytes);
+                Console.WriteLine($"raw {raw.Length} bytes: {Hex(bytes, 256)}");
+            }
+
+            return 0;
+        }
+    }
+
     // Prints how each folder's contents table is laid out: row size, rows, and the sizes of the blocks of its row matrix.
     //   PstOracle tcinfo <file> [min rows = 1]
     public static int TcInfo(string path, int minRows)

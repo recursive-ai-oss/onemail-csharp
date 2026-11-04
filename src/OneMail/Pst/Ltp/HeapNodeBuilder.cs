@@ -108,6 +108,16 @@ public sealed class HeapNodeBuilder
         }
     }
 
+    /// <summary>The bytes <see cref="Finish"/> will return in all: every block but the last is a full block, the last ends at its page map. Not for a heap made with a data tree.</summary>
+    internal long FinishedLength
+    {
+        get
+        {
+            Block last = _blocks[_blockCount - 1]!;
+            return ((long)(_blockCount - 1) * BlockCapacity) + PageMapAt(last) + PageMapSize(last.Starts.Count);
+        }
+    }
+
     // The first block begins with an HNHDR, blocks 8, 136, 264... with an HNBITMAPHDR, all others with an HNPAGEHDR (MS-PST 2.3.1.2 to 2.3.1.4).
     private static int HeaderSize(int block) => block == 0 ? HnhdrSize : block >= 8 && (block - 8) % 128 == 0 ? BitmapHeaderSize : PageHeaderSize;
 

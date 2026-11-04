@@ -21,6 +21,20 @@ internal static class Variants
             ("body", m => Str(m, 0x1000, "x")),
             ("sender", m => Str(m, 0x0C1A, "Sender")),
             ("size", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E08, MapiType.Integer32), BitConverter.GetBytes(100)))),
+            ("g-0f03", m => Bin(m, 0x0F03, 16)),
+            ("g-3013", m => Bin(m, 0x3013, 16)),
+            ("g-0017", m => Int(m, 0x0017, 1)),
+            ("g-0036", m => Int(m, 0x0036, 0)),
+            ("g-0057", m => { Bool(m, 0x0057, true); Bool(m, 0x0058, false); }),
+            ("g-times", m => { Time(m, 0x0E06); Time(m, 0x0039); }),
+            ("g-0e04", m => { Str(m, 0x0E04, "To Someone"); Str(m, 0x0E03, ""); }),
+            ("g-topic", m => { Str(m, 0x0070, "x"); Bin(m, 0x0071, 22); Str(m, 0x0042, "Sender"); }),
+            ("g-65e2", m => Bin(m, 0x65E2, 22)),
+            ("g-all", m => { Bin(m, 0x0F03, 16); Bin(m, 0x3013, 16); Int(m, 0x0017, 1); Int(m, 0x0036, 0); Bool(m, 0x0057, true); Bool(m, 0x0058, false); Time(m, 0x0E06); Time(m, 0x0039); Str(m, 0x0E04, "To Someone"); Str(m, 0x0070, "x"); Bin(m, 0x0071, 22); Str(m, 0x0042, "Sender"); Bin(m, 0x65E2, 22); }),
+            ("size318", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E08, MapiType.Integer32), BitConverter.GetBytes(318)))),
+            ("size418", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E08, MapiType.Integer32), BitConverter.GetBytes(418)))),
+            ("size474", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E08, MapiType.Integer32), BitConverter.GetBytes(474)))),
+            ("size1000", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E08, MapiType.Integer32), BitConverter.GetBytes(1000)))),
             ("flags-read", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E07, MapiType.Integer32), BitConverter.GetBytes(1)))),
             ("submit", m => m.Properties.Add(MapiProperty.Create(new MapiTag(0x0039, MapiType.Time), BitConverter.GetBytes(133_500_000_000_000_000L)))),
             ("class-empty", m => Str(m, 0x001A, "")),
@@ -48,6 +62,34 @@ internal static class Variants
             b.Complete();
         }
 
+        // A small realistic store: two folders, five messages with recipients and bodies, one with an attachment.
+        {
+            string path = Path.Combine(dir, "full.pst");
+            File.Delete(path);
+            using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero) });
+            foreach (string fname in new[] { "Inbox", "Sent" })
+            {
+                PstFolderWriter folder = b.IpmSubtree.CreateFolder(fname);
+                for (int i = 0; i < 5; i++)
+                {
+                    var m = new MapiMessage();
+                    Str(m, 0x001A, "IPM.Note");
+                    Str(m, 0x0037, fname + " message " + i);
+                    Str(m, 0x1000, "Body of message " + i);
+                    Str(m, 0x0C1A, "Sender");
+                    Rcpt(m, true);
+                    if (i == 2)
+                    {
+                        Attach(m);
+                    }
+
+                    folder.AddMessage(m);
+                }
+            }
+
+            b.Complete();
+        }
+
         // Folders of many items, to find what Outlook cannot read in a large contents table: rows (the row matrix grows) against cell text (the heap grows).
         foreach ((string name, int count, int subjectChars) in new[] { ("rows300-short", 300, 1), ("rows100-long", 100, 200), ("rows60-long", 60, 200), ("rows600-short", 600, 1) })
         {
@@ -68,6 +110,18 @@ internal static class Variants
 
         return 0;
     }
+
+    private static void Bin(MapiMessage m, ushort id, int n) =>
+        m.Properties.Add(MapiProperty.Create(new MapiTag(id, MapiType.Binary), System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(System.Linq.Enumerable.Range(1, n), i => (byte)(i * 7)))));
+
+    private static void Int(MapiMessage m, ushort id, int v) =>
+        m.Properties.Add(MapiProperty.Create(new MapiTag(id, MapiType.Integer32), BitConverter.GetBytes(v)));
+
+    private static void Bool(MapiMessage m, ushort id, bool v) =>
+        m.Properties.Add(MapiProperty.Create(new MapiTag(id, MapiType.Boolean), [(byte)(v ? 1 : 0)]));
+
+    private static void Time(MapiMessage m, ushort id) =>
+        m.Properties.Add(MapiProperty.Create(new MapiTag(id, MapiType.Time), BitConverter.GetBytes(133_500_000_000_000_000L)));
 
     private static void Flags(MapiMessage m, int flags) =>
         m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E07, MapiType.Integer32), BitConverter.GetBytes(flags)));

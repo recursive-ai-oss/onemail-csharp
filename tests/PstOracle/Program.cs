@@ -18,6 +18,21 @@ if (args is ["outlookview", var ovPath, ..])
     return RecursiveAI.OneMail.PstOracle.OutlookView.Run(ovPath, args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 100000);
 }
 
+if (args is ["noderaw", var nrPath, var nrNid, var nrOut])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.NodeRaw(nrPath, nrNid, nrOut);
+}
+
+if (args is ["nodes", var ndPath])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.Nodes(ndPath);
+}
+
+if (args is ["nodedump", var ddPath, var ddNid, ..])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.NodeDump(ddPath, ddNid, args.Length > 3 ? int.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) : 5);
+}
+
 if (args is ["tcinfo", var tcPath, ..])
 {
     return RecursiveAI.OneMail.PstOracle.OutlookView.TcInfo(tcPath, args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 1);

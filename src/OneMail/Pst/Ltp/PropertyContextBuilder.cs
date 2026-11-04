@@ -146,7 +146,14 @@ public sealed class PropertyContextBuilder
     /// <summary>Writes the heap and returns where it and the value subnodes are.</summary>
     /// <returns>The result: the heap's BID and the subnodes the values needed.</returns>
     /// <exception cref="InvalidOperationException">Called twice.</exception>
-    public LtpNodeResult Build()
+    public LtpNodeResult Build() => Build(0, null);
+
+    /// <summary>
+    /// Builds like <see cref="Build()"/>, first setting the property <paramref name="lateId"/>, an Integer32 already set, to what
+    /// <paramref name="lateValue"/> returns for the bytes this context takes: its heap plus its value subnodes. Both are known only
+    /// after every other property is placed; the property's own size does not depend on its value.
+    /// </summary>
+    internal LtpNodeResult Build(ushort lateId, Func<long, uint>? lateValue)
     {
         if (_built)
         {
@@ -181,6 +188,23 @@ public sealed class PropertyContextBuilder
             rank++;
         }
 
-        return LtpNodeResult.WriteHeap(_blocks, heap, _values.Subnodes);
+        if (lateValue is not null)
+        {
+            rank = 0;
+            foreach ((ushort id, Pending p) in _properties)
+            {
+                if (id == lateId)
+                {
+                    BinaryPrimitives.WriteUInt16LittleEndian(entry, p.Type);
+                    BinaryPrimitives.WriteUInt32LittleEndian(entry[2..], lateValue(heap.FinishedLength + _values.SubnodeBytes));
+                    bth.SetData(rank, entry);
+                    break;
+                }
+
+                rank++;
+            }
+        }
+
+        return LtpNodeResult.WriteHeap(_blocks, heap, _values.Subnodes, _values.SubnodeBytes);
     }
 }
