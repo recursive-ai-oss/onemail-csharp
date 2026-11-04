@@ -59,7 +59,7 @@ Every difference maps to an entry in [`ambiguities.md`](ambiguities.md) or to a 
 | Mime4j test messages | 80 | 36 / 44 | 65 / 15 | 59 / 21 | 0 |
 | `testdata/differential` probes | 224 | 151 / 73 | 183 / 41 | 174 / 50 | 0 |
 
-The counts equal the stage-0.1 full run cell for cell. What the differences are, for Enron: against Go, 47,198 address lists Go's `net/mail` rejects
+The counts equal the 0.1.0-preview.1 full run cell for cell. What the differences are, for Enron: against Go, 47,198 address lists Go's `net/mail` rejects
 (`LIMIT-go-address-list`) plus H10 (1,693), E7 (971), D10 (271), address quoting (72) and H5 (29); against MimeKit A15 (47,171), N15 (409), H5 (82), A16 (3),
 E2 (2); against Python A10 (221), A16 (66), A12 (27), H10 (9), H4 (3), E1 and N11 (1 each). The other corpora spread over the same entries.
 
