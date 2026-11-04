@@ -156,6 +156,38 @@ internal static class OutlookView
         return 0;
     }
 
+    // Lists the recipients and attachments of every message with their property tags, to see what Outlook might not accept.
+    //   PstOracle msginfo <file>
+    public static int MsgInfo(string path)
+    {
+        if (!PstStore.TryOpen(path, out PstStore? store, out _) || store is null)
+        {
+            return 4;
+        }
+
+        using (store)
+        {
+            foreach (PstFolder f in store.EnumerateFolders())
+            {
+                foreach (PstMessage m in f.EnumerateMessages())
+                {
+                    Console.WriteLine($"{f.Path} :: {m.Subject} flags 0x{m.GetInt32(0x0E07) ?? 0:x} hasAttach {m.GetInt32(0x0E1B)}");
+                    foreach (var r in m.Recipients)
+                    {
+                        Console.WriteLine("   recipient " + string.Join(" ", r.Properties.Select(p => $"{p.Tag}")));
+                    }
+
+                    foreach (var a in m.Attachments)
+                    {
+                        Console.WriteLine("   attachment " + string.Join(" ", a.Properties.Select(p => $"{p.Tag}")) + $" method {a.GetInt32(0x3705)} flags {a.GetInt32(0x3714)}");
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+
     private static void Walk(Utf8JsonWriter w, PstFolder f, string path, int cap)
     {
         w.WriteStartObject();

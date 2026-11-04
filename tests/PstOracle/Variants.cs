@@ -29,6 +29,8 @@ internal static class Variants
             ("att-noflagprop", m => Attach(m)),
             ("att-flags10", m => { Flags(m, 0x10); Attach(m); }),
             ("flags10-noatt", m => Flags(m, 0x10)),
+            ("rcpt-nameonly", m => Rcpt(m, false)),
+            ("rcpt-type", m => Rcpt(m, true)),
         };
         foreach ((string name, Action<MapiMessage> fill) in cases)
         {
@@ -69,6 +71,18 @@ internal static class Variants
 
     private static void Flags(MapiMessage m, int flags) =>
         m.Properties.Add(MapiProperty.Create(new MapiTag(0x0E07, MapiType.Integer32), BitConverter.GetBytes(flags)));
+
+    private static void Rcpt(MapiMessage m, bool withType)
+    {
+        var r = new MapiRecipient(m);
+        r.Properties.Add(MapiProperty.Create(new MapiTag(0x3001, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Someone")));
+        if (withType)
+        {
+            r.Properties.Add(MapiProperty.Create(new MapiTag(0x0C15, MapiType.Integer32), BitConverter.GetBytes(1)));
+        }
+
+        m.AddRecipient(r);
+    }
 
     private static void Attach(MapiMessage m)
     {

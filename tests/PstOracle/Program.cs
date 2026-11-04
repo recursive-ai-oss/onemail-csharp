@@ -28,6 +28,11 @@ if (args is ["hninfo", var hnPath, var hnNid])
     return RecursiveAI.OneMail.PstOracle.OutlookView.HnInfo(hnPath, hnNid);
 }
 
+if (args is ["msginfo", var miPath])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.MsgInfo(miPath);
+}
+
 if (args is ["mkvariants", var mvDir])
 {
     return RecursiveAI.OneMail.PstOracle.Variants.Run(mvDir);
