@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `tools/providers`: OAuth token minting (Google loopback with PKCE, Microsoft device code) and a provider smoke runner for Gmail and Outlook.com over SMTP, IMAP and POP3; setup and endpoints in `docs/providers.md`.
+
 ### Changed
 
 - `VCardView.Emails`, `Phones`, `Urls`, `Addresses` and the other typed lists count their properties when asked and build an item the first time it is read, so counting costs a scan of the card: vCard parse with a typed pass over 10,000 cards, 79.7 ms to 55.8 ms (comparator 67.2 ms), 5,500 to 4,000 bytes per card (Apple M2, indicative).
