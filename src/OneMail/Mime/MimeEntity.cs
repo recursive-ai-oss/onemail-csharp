@@ -31,6 +31,11 @@ internal sealed class RawContent
 
     public static RawContent FromRange(IRandomAccessSource source, long offset, long length) => new(source, offset, Math.Max(0, length), null);
 
+    public static RawContent FromSource(IRandomAccessSource source) => new(source, 0, source.Length, null);
+
+    /// <summary>Takes the array without copying; the caller must not use it afterwards.</summary>
+    public static RawContent FromOwnedBytes(byte[] bytes) => new(null, 0, bytes.Length, bytes);
+
     public static RawContent FromBytes(ReadOnlyMemory<byte> bytes) => new(null, 0, bytes.Length, bytes.ToArray());
 
     public Stream Open() => _bytes is not null ? new MemoryStream(_bytes, writable: false) : _source!.OpenRead(_offset, Length);
@@ -510,9 +515,37 @@ public sealed class MimePart : MimeEntity
     public byte[] GetDecodedContent()
     {
         using Stream s = OpenDecodedContent();
-        using var ms = new MemoryStream();
-        s.CopyTo(ms);
-        return ms.ToArray();
+        // Base64 decodes to at most three bytes per four; other encodings to at most their own length. Starting there means the
+        // common case fills one array without growing a buffer and copying it.
+        long guess = TransferEncoding == ContentTransferEncoding.Base64 ? _body.Length / 4 * 3 + 3 : _body.Length;
+        byte[] buf = new byte[Math.Clamp(guess, 16, Array.MaxLength - 64)];
+        int n = 0;
+        while (true)
+        {
+            if (n == buf.Length)
+            {
+                // Full: one byte tells whether that was the end.
+                int next = s.ReadByte();
+                if (next < 0)
+                {
+                    break;
+                }
+
+                Array.Resize(ref buf, (int)Math.Min((long)buf.Length * 2, Array.MaxLength));
+                buf[n++] = (byte)next;
+                continue;
+            }
+
+            int r = s.Read(buf, n, buf.Length - n);
+            if (r == 0)
+            {
+                break;
+            }
+
+            n += r;
+        }
+
+        return n == buf.Length ? buf : buf.AsSpan(0, n).ToArray();
     }
 
     /// <summary>Replaces the body with bytes that are already encoded as the headers say.</summary>
@@ -528,13 +561,13 @@ public sealed class MimePart : MimeEntity
     /// <param name="encoding">Base64 (default), quoted-printable, or an identity encoding (7bit, 8bit, binary: bytes as given).</param>
     public void SetDecodedContent(ReadOnlySpan<byte> data, ContentTransferEncoding encoding = ContentTransferEncoding.Base64)
     {
-        byte[] encoded = encoding switch
+        // Base64 is encoded as the body is read or written, so a large attachment is held once, not twice.
+        _body = encoding switch
         {
-            ContentTransferEncoding.Base64 => TransferEncoder.Base64(data),
-            ContentTransferEncoding.QuotedPrintable => TransferEncoder.QuotedPrintable(data),
-            _ => data.ToArray(),
+            ContentTransferEncoding.Base64 => RawContent.FromSource(new Base64WrappedSource(CopyOf(data))),
+            ContentTransferEncoding.QuotedPrintable => RawContent.FromOwnedBytes(TransferEncoder.QuotedPrintable(data)),
+            _ => RawContent.FromOwnedBytes(data.ToArray()),
         };
-        _body = RawContent.FromBytes(encoded);
         if (encoding == ContentTransferEncoding.SevenBit)
         {
             Headers.RemoveAll("Content-Transfer-Encoding");
@@ -552,6 +585,13 @@ public sealed class MimePart : MimeEntity
         }
 
         MarkModified();
+    }
+
+    private static byte[] CopyOf(ReadOnlySpan<byte> data)
+    {
+        byte[] copy = GC.AllocateUninitializedArray<byte>(data.Length);
+        data.CopyTo(copy);
+        return copy;
     }
 
     internal override IEnumerable<MimeEntity> ChildEntities() => [];
@@ -902,10 +942,7 @@ internal sealed class MimeTreeBuilder
             MimeEntityType.Message => new MimeMessagePart(parsed: true),
             _ => new MimePart(parsed: true),
         };
-        foreach (MimeHeader h in p.Headers)
-        {
-            e.Headers.AddParsed(h);
-        }
+        e.Headers.AdoptParsed(p.Headers);
 
         e.Separator = r.Raw.ToArray();
         e.EnvelopeLine = p.Envelope ?? default;

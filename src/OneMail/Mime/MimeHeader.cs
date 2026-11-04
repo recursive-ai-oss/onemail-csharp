@@ -102,7 +102,22 @@ public sealed class MimeHeader
     /// <summary>Whether the field name equals <paramref name="name"/>, ignoring ASCII case.</summary>
     /// <param name="name">The name to compare.</param>
     /// <returns>True when they match.</returns>
-    public bool IsNamed(string name) => string.Equals(Name, name, StringComparison.OrdinalIgnoreCase);
+    public bool IsNamed(string name)
+    {
+        if (_name is not null)
+        {
+            return string.Equals(_name, name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Look-ups compare the bytes in place so that asking for one header does not build a string for every other one.
+        ReadOnlySpan<byte> bytes = NameBytes();
+        if (Ascii.IsValid(bytes))
+        {
+            return Ascii.EqualsIgnoreCase(bytes, name);
+        }
+
+        return string.Equals(Name, name, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Replaces the value, regenerating the field's bytes (folded, with the same line end style). The name keeps its case.</summary>
     /// <param name="value">The new value, one logical line.</param>
@@ -152,7 +167,7 @@ public sealed class MimeHeader
 /// <summary>The header fields of an entity, in order, duplicates included. Any change marks the entity (and its parents) modified.</summary>
 public sealed class MimeHeaderList : IReadOnlyList<MimeHeader>
 {
-    private readonly List<MimeHeader> _items = [];
+    private List<MimeHeader> _items = [];
     private readonly MimeEntity _owner;
 
     internal MimeHeaderList(MimeEntity owner) => _owner = owner;
@@ -289,6 +304,17 @@ public sealed class MimeHeaderList : IReadOnlyList<MimeHeader>
     {
         h.Owner = this;
         _items.Add(h);
+    }
+
+    // Takes the list the reader built instead of copying it field by field. The reader does not touch the list again.
+    internal void AdoptParsed(List<MimeHeader> parsed)
+    {
+        foreach (MimeHeader h in parsed)
+        {
+            h.Owner = this;
+        }
+
+        _items = parsed;
     }
 
     internal void Changed() => _owner.MarkModified();

@@ -65,64 +65,134 @@ public sealed class Base64Decoder
     /// <returns>Bytes written to <paramref name="output"/>.</returns>
     public int Decode(ReadOnlySpan<byte> input, Span<byte> output)
     {
-        sbyte[] table = Table;
         int o = 0;
-        int acc = _acc;
-        int count = _count;
-        foreach (byte c in input)
+        // Short pieces are not worth the vector path's setup.
+        while (!input.IsEmpty)
         {
-            int v = table[c];
-            if (v >= 0)
+            if (_count == 0 && !_secondPadPending && input.Length >= FastMinimum)
             {
-                acc = (acc << 6) | v;
-                if (++count == 4)
+                // On a group boundary: gather alphabet characters with the line breaks and blanks between them taken out,
+                // then let the BCL decode whole groups in one vectorised call. Anything else (padding, a stray character)
+                // is left for the byte-at-a-time path below, so repairs and issues come out exactly as before.
+                _scratch ??= new byte[ScratchSize];
+                int t = 0;
+                while (!input.IsEmpty && t < _scratch.Length)
                 {
-                    output[o++] = (byte)(acc >> 16);
-                    output[o++] = (byte)(acc >> 8);
-                    output[o++] = (byte)acc;
-                    count = 0;
-                    acc = 0;
+                    int run = input.IndexOfAnyExcept(Alphabet);
+                    if (run < 0)
+                    {
+                        run = input.Length;
+                    }
+
+                    run = Math.Min(run, _scratch.Length - t);
+                    input.Slice(0, run).CopyTo(_scratch.AsSpan(t));
+                    t += run;
+                    input = input.Slice(run);
+                    if (input.IsEmpty || Alphabet.Contains(input[0]))
+                    {
+                        continue; // the scratch is full
+                    }
+
+                    int blanks = input.IndexOfAnyExcept(Blanks);
+                    if (blanks < 0)
+                    {
+                        input = default;
+                    }
+                    else if (blanks == 0)
+                    {
+                        break; // padding or a character outside the alphabet
+                    }
+                    else
+                    {
+                        input = input.Slice(blanks);
+                    }
                 }
 
-                _secondPadPending = false;
+                int whole = t & ~3;
+                if (whole > 0)
+                {
+                    // Every byte here is in the alphabet and the length is a multiple of four, so this always completes.
+                    _ = System.Buffers.Text.Base64.DecodeFromUtf8(_scratch.AsSpan(0, whole), output.Slice(o), out _, out int written, isFinalBlock: false);
+                    o += written;
+                }
+
+                for (int i = whole; i < t; i++)
+                {
+                    _acc = (_acc << 6) | (Table[_scratch[i]] & 63);
+                    _count++;
+                }
+
+                if (!input.IsEmpty && _count == 0 && !Alphabet.Contains(input[0]) && !Blanks.Contains(input[0]))
+                {
+                    Step(input[0], output, ref o);
+                    input = input.Slice(1);
+                }
+
+                continue;
             }
-            else if (c == (byte)'=')
-            {
-                // RFC 2045 §6.8: "==" after two characters, "=" after three.
-                if (count == 2)
-                {
-                    output[o++] = (byte)(acc >> 4);
-                    count = 0;
-                    acc = 0;
-                    _secondPadPending = true;
-                }
-                else if (count == 3)
-                {
-                    output[o++] = (byte)(acc >> 10);
-                    output[o++] = (byte)(acc >> 2);
-                    count = 0;
-                    acc = 0;
-                }
-                else if (_secondPadPending)
-                {
-                    _secondPadPending = false;
-                }
-                else
-                {
-                    Issues |= TransferIssues.MisplacedBase64Padding;
-                    count = 0;
-                    acc = 0;
-                }
-            }
-            else if (c is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                Issues |= TransferIssues.InvalidBase64Character;
-            }
+
+            Step(input[0], output, ref o);
+            input = input.Slice(1);
         }
 
-        _acc = acc;
-        _count = count;
         return o;
+    }
+
+    private const int FastMinimum = 128;
+    private const int ScratchSize = 16384;
+    private static readonly System.Buffers.SearchValues<byte> Alphabet = System.Buffers.SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"u8);
+    private static readonly System.Buffers.SearchValues<byte> Blanks = System.Buffers.SearchValues.Create(" \t\r\n"u8);
+    private byte[]? _scratch;
+
+    private void Step(byte c, Span<byte> output, ref int o)
+    {
+        int v = Table[c];
+        if (v >= 0)
+        {
+            _acc = (_acc << 6) | (v & 63);
+            if (++_count == 4)
+            {
+                output[o++] = (byte)(_acc >> 16);
+                output[o++] = (byte)(_acc >> 8);
+                output[o++] = (byte)_acc;
+                _count = 0;
+                _acc = 0;
+            }
+
+            _secondPadPending = false;
+        }
+        else if (c == (byte)'=')
+        {
+            // RFC 2045 §6.8: "==" after two characters, "=" after three.
+            if (_count == 2)
+            {
+                output[o++] = (byte)(_acc >> 4);
+                _count = 0;
+                _acc = 0;
+                _secondPadPending = true;
+            }
+            else if (_count == 3)
+            {
+                output[o++] = (byte)(_acc >> 10);
+                output[o++] = (byte)(_acc >> 2);
+                _count = 0;
+                _acc = 0;
+            }
+            else if (_secondPadPending)
+            {
+                _secondPadPending = false;
+            }
+            else
+            {
+                Issues |= TransferIssues.MisplacedBase64Padding;
+                _count = 0;
+                _acc = 0;
+            }
+        }
+        else if (c is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+        {
+            Issues |= TransferIssues.InvalidBase64Character;
+        }
     }
 
     /// <summary>Ends the input, writing the bytes of a final partial group.</summary>
@@ -595,7 +665,8 @@ public static class TransferEncoder
 /// </summary>
 public sealed class TransferDecodingStream : Stream
 {
-    private const int ChunkSize = 8192;
+    private const int DefaultChunkSize = 8192;
+    private const int LargeChunkSize = 65536;
 
     private readonly Stream _inner;
     private readonly bool _leaveOpen;
@@ -635,8 +706,15 @@ public sealed class TransferDecodingStream : Stream
 
         if (_b64 is not null || _qp is not null || _uu is not null)
         {
-            _in = new byte[ChunkSize];
-            _out = new byte[ChunkSize + 128];
+            // A body of known length gets chunks as big as the body, up to 64 KiB; small parts stay cheap.
+            int chunk = DefaultChunkSize;
+            if (inner.CanSeek)
+            {
+                chunk = (int)Math.Clamp(inner.Length - inner.Position, 512, LargeChunkSize);
+            }
+
+            _in = new byte[chunk];
+            _out = new byte[chunk + 128];
         }
     }
 
@@ -681,6 +759,18 @@ public sealed class TransferDecodingStream : Stream
             }
 
             int n = _inner.Read(_in, 0, _in.Length);
+            if (n > 0 && buffer.Length >= MaxOutputLength(n))
+            {
+                // Room for the worst case: decode straight into the caller's buffer, with no copy through _out.
+                int w = _b64 is not null ? _b64.Decode(_in.AsSpan(0, n), buffer) : _qp is not null ? _qp.Decode(_in.AsSpan(0, n), buffer) : _uu!.Decode(_in.AsSpan(0, n), buffer);
+                if (w > 0)
+                {
+                    return w;
+                }
+
+                continue;
+            }
+
             Decode(n);
         }
 
@@ -712,6 +802,9 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+    private int MaxOutputLength(int n) =>
+        _b64 is not null ? Base64Decoder.MaxOutputLength(n) : _qp is not null ? QuotedPrintableDecoder.MaxOutputLength(n) : UuDecoder.MaxOutputLength(n);
 
     private void Decode(int n)
     {

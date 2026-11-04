@@ -39,6 +39,18 @@ public static class DateParser
         int rawLength = rawValue.Length;
         void D(MimeDefectKind k) => defects?.Add(new MimeDefect(k, baseOffset, rawLength, depth));
 
+        if (TryParseCanonical(rawValue, out date, out bool weekdayMismatch))
+        {
+            if (weekdayMismatch)
+            {
+                D(MimeDefectKind.WeekdayMismatch);
+            }
+
+            return true;
+        }
+
+        date = default;
+
         // Tokens: runs of non-white-space, with comments removed and commas treated as white space.
         var tokens = new List<string>();
         var sb = new StringBuilder();
@@ -221,6 +233,175 @@ public static class DateParser
         }
     }
 
+    // The form nearly every mailer writes: "[Www, ]D[D] Mon YYYY HH:MM:SS +ZZZZ[ (comment)]", single spaces, ASCII only. It is read
+    // straight from the bytes with the same results as the general path below; anything else (and every case that path would
+    // flag: short years, 60 seconds, -0000, odd zones, impossible days) returns false and goes there.
+    private static bool TryParseCanonical(ReadOnlySpan<byte> v, out MimeDate date, out bool weekdayMismatch)
+    {
+        date = default;
+        weekdayMismatch = false;
+        int p = 0;
+        int weekday = -1;
+        bool hasWeekday = v.Length > 5 && v[3] == (byte)',' && v[4] == (byte)' ';
+        if (hasWeekday)
+        {
+            weekday = IndexOfName(Days, v.Slice(0, 3));
+            if (weekday < 0)
+            {
+                return false;
+            }
+
+            p = 5;
+        }
+
+        // Anything below 0x20 or above 0x7E (folds, tabs, 8-bit) is the general path's business, as is a comma anywhere else.
+        for (int k = 0; k < v.Length; k++)
+        {
+            if (v[k] is < 0x20 or > 0x7E || (v[k] == (byte)',' && !(hasWeekday && k == 3)))
+            {
+                return false;
+            }
+        }
+
+        if (v.Length - p < 24)
+        {
+            return false;
+        }
+
+        int dateStart = p;
+        int day = v[p] - '0';
+        if ((uint)day > 9)
+        {
+            return false;
+        }
+
+        p++;
+        if (v[p] != (byte)' ')
+        {
+            int d2 = v[p] - '0';
+            if ((uint)d2 > 9)
+            {
+                return false;
+            }
+
+            day = (day * 10) + d2;
+            p++;
+        }
+
+        if (day is < 1 or > 31 || v[p] != (byte)' ' || v.Length - p < 19)
+        {
+            return false;
+        }
+
+        int month = IndexOfName(Months, v.Slice(p + 1, 3)) + 1;
+        if (month == 0 || v[p + 4] != (byte)' ')
+        {
+            return false;
+        }
+
+        p += 5;
+        if (v.Length - p < 19)
+        {
+            return false;
+        }
+
+        int year = 0;
+        for (int k = 0; k < 4; k++)
+        {
+            int d = v[p + k] - '0';
+            if ((uint)d > 9)
+            {
+                return false;
+            }
+
+            year = (year * 10) + d;
+        }
+
+        if (year < 1000 || v[p + 4] != (byte)' ' || v[p + 7] != (byte)':' || v[p + 10] != (byte)':' || v[p + 13] != (byte)' ')
+        {
+            return false;
+        }
+
+        if (!Two(v, p + 5, out int hour) || !Two(v, p + 8, out int minute) || !Two(v, p + 11, out int second) || hour > 23 || minute > 59 || second > 59)
+        {
+            return false;
+        }
+
+        byte sign = v[p + 14];
+        if ((sign != (byte)'+' && sign != (byte)'-') || v.Length - (p + 14) < 5 || !Two(v, p + 15, out int zh) || !Two(v, p + 17, out int zm) || zh > 14 || zm > 59)
+        {
+            return false;
+        }
+
+        int zoneMinutes = (zh * 60) + zm;
+        if (zoneMinutes > 14 * 60 || (sign == (byte)'-' && zoneMinutes == 0))
+        {
+            return false;
+        }
+
+        int end = p + 19;
+        if (end != v.Length)
+        {
+            // Only a trailing comment may follow: " (" text without parentheses ")".
+            if (v.Length - end < 4 || v[end] != (byte)' ' || v[end + 1] != (byte)'(' || v[^1] != (byte)')')
+            {
+                return false;
+            }
+
+            ReadOnlySpan<byte> inner = v.Slice(end + 2, v.Length - end - 3);
+            if (inner.IndexOfAny((byte)'(', (byte)')') >= 0)
+            {
+                return false;
+            }
+        }
+
+        if (day > DateTime.DaysInMonth(year, month))
+        {
+            return false;
+        }
+
+        var local = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified);
+        int offset = sign == (byte)'-' ? -zoneMinutes : zoneMinutes;
+        // The source text is the tokens joined by single spaces: the comma and any comment are gone.
+        Span<byte> text = stackalloc byte[48];
+        int n = 0;
+        if (hasWeekday)
+        {
+            v.Slice(0, 3).CopyTo(text);
+            n = 3;
+            text[n++] = (byte)' ';
+        }
+
+        v.Slice(dateStart, end - dateStart).CopyTo(text.Slice(n));
+        string source = Encoding.ASCII.GetString(text.Slice(0, n + end - dateStart));
+        weekdayMismatch = weekday >= 0 && (int)local.DayOfWeek != weekday;
+        date = new MimeDate(new DateTimeOffset(local, TimeSpan.FromMinutes(offset)), true, source);
+        return true;
+    }
+
+    private static bool Two(ReadOnlySpan<byte> v, int at, out int value)
+    {
+        int a = v[at] - '0';
+        int b = v[at + 1] - '0';
+        value = (a * 10) + b;
+        return (uint)a <= 9 && (uint)b <= 9;
+    }
+
+    // Case-insensitive match of a three-letter name against a lower-case table; -1 when absent.
+    private static int IndexOfName(string[] table, ReadOnlySpan<byte> name)
+    {
+        for (int i = 0; i < table.Length; i++)
+        {
+            string t = table[i];
+            if ((name[0] | 0x20) == t[0] && (name[1] | 0x20) == t[1] && (name[2] | 0x20) == t[2])
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private static bool TryDigits(string s, int maxLength, out int value)
     {
         value = 0;
@@ -358,16 +539,32 @@ public static class MessageIdParser
 
     private static string Decode(ReadOnlySpan<byte> id)
     {
-        var bytes = new List<byte>(id.Length);
-        foreach (byte b in id)
+        // White space inside an identifier (a fold) is dropped. Most identifiers have none and decode in place.
+        if (id.IndexOfAny(" \t\r\n"u8) < 0)
         {
-            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                bytes.Add(b);
-            }
+            return DecodeBytes(id);
         }
 
-        byte[] arr = [.. bytes];
-        return System.Text.Unicode.Utf8.IsValid(arr) ? Encoding.UTF8.GetString(arr) : Text.MailEncoding.Windows1252.GetString(arr);
+        byte[] rented = System.Buffers.ArrayPool<byte>.Shared.Rent(id.Length);
+        try
+        {
+            int n = 0;
+            foreach (byte b in id)
+            {
+                if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+                {
+                    rented[n++] = b;
+                }
+            }
+
+            return DecodeBytes(rented.AsSpan(0, n));
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+        }
     }
+
+    private static string DecodeBytes(ReadOnlySpan<byte> bytes) =>
+        System.Text.Unicode.Utf8.IsValid(bytes) ? Encoding.UTF8.GetString(bytes) : Text.MailEncoding.Windows1252.GetString(bytes);
 }
