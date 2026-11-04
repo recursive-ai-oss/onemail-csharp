@@ -22,6 +22,15 @@ sleep 1
 for p in $(pgrep -u "$(id -u)" -x -f podman 2>/dev/null); do
   [ "$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" = "podman " ] || continue
   [ "$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')" = 1 ] || continue
+  # Other projects run podman under the same user: stop only a helper that provably belongs to this harness, by its executable (the
+  # user-local podman in the tool directory) or, where the executable can't be read, by the config path its environment carries.
+  R=${ONEMAIL_CONTAINERS:-$HOME/onemail/containers}
+  exe=$(readlink "/proc/$p/exe" 2>/dev/null)
+  case "$exe" in
+    "$R"/tools/*) ;;
+    "") tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qxF "CONTAINERS_CONF=$R/conf/containers.conf" || continue ;;
+    *) continue ;;
+  esac
   age=$(ps -o etimes= -p "$p" 2>/dev/null | tr -d ' ')
   [ -n "$age" ] && [ "$age" -le "$((SECONDS + 2))" ] && kill "$p" 2>/dev/null
 done
