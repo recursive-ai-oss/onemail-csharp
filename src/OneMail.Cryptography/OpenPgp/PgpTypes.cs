@@ -122,6 +122,25 @@ public enum PgpIssue
 
     /// <summary>The decrypted entity carries <c>protected-headers</c> (draft-autocrypt-lamps-protected-headers); its headers are authenticated only when the layer was signed or the encryption is authenticated.</summary>
     ProtectedHeadersPresent,
+
+    /// <summary>
+    /// The protected <c>To</c> and <c>Cc</c> of an authenticated, encrypted message name none of the addresses the message was opened for
+    /// (<see cref="PgpOpenOptions.RecipientAddresses"/>, or the certified User IDs of <see cref="PgpOpenOptions.SecretKeys"/>). A recipient can re-encrypt a
+    /// signed message to someone else and it still verifies as the author's (surreptitious forwarding); this is the sign that it happened. Result-level.
+    /// </summary>
+    ProtectedRecipientMismatch,
+
+    /// <summary>
+    /// The message is authenticated and encrypted and has protected headers, but they hold no <c>To</c> or <c>Cc</c>, so the recipient cannot be checked against the signature.
+    /// Only raised when there were addresses to check. Result-level.
+    /// </summary>
+    ProtectedRecipientsMissing,
+
+    /// <summary>An inline OpenPGP block was read from a <c>text/html</c> part: the armor, and the text it signs or hides, are the part's raw markup, so the decrypted or signed content is typed <c>text/html</c>.</summary>
+    InlineHtmlPart,
+
+    /// <summary>A key attachment or encrypted attachment was left unread because the message holds more than the limit allows, or the part was larger than the limit.</summary>
+    AttachmentLimitReached,
 }
 
 /// <summary>Everything about one signature on a layer: who, with which key, when, and why it was or was not accepted.</summary>
@@ -153,10 +172,10 @@ public sealed class PgpSignerResult
     /// <summary>The user IDs of the signer's certificate (text of the User ID packets). The signature does not choose one; compare with <see cref="UserIdMatchesSender"/>.</summary>
     public IReadOnlyList<string> UserIds { get; internal set; } = [];
 
-    /// <summary>The first user ID that names the message's sender address, or the certificate's first user ID when none does; null when the key is unknown.</summary>
+    /// <summary>The first certified user ID that names an address of the message's sender, else the first certified one, else the first user ID of any kind; null when the key is unknown.</summary>
     public string? UserId { get; internal set; }
 
-    /// <summary>True when a user ID of the certificate names the address in the message's <c>From</c>. False when it does not or there is no <c>From</c> to compare. Only meaningful for a signature that is valid.</summary>
+    /// <summary>True when the certificate's certified user IDs name every address in the message's <c>From</c> headers (an uncertified or revoked user ID does not count; see <see cref="PgpUserIds.HasSelfSignature"/>). False when one does not, or there is no <c>From</c> to compare. Only meaningful for a signature that is valid.</summary>
     public bool UserIdMatchesSender { get; internal set; }
 
     /// <summary>The signature creation time, or null when the signature carries none.</summary>
@@ -273,6 +292,15 @@ public sealed class PgpResult
     /// <summary>Result-level defects (those that belong to no single layer).</summary>
     public IReadOnlyList<PgpIssue> Issues { get; internal set; } = [];
 
+    /// <summary>
+    /// Public keys attached to the message as <c>application/pgp-keys</c> parts (or <c>.asc</c> parts holding a public key block), found in the outer message and in the
+    /// protected content. Surfaced only: nothing is imported or stored, and a key is not trusted because a message carried it. Secret keys are never read.
+    /// </summary>
+    public IReadOnlyList<PgpAttachedKey> AttachedKeys { get; internal set; } = [];
+
+    /// <summary>Attachments that hold OpenPGP data (<c>.pgp</c>, <c>.gpg</c>, <c>.asc</c> or <c>application/pgp-encrypted</c> outside the PGP/MIME structure); open one with <see cref="PgpMimeProcessor.OpenAttachment"/>.</summary>
+    public IReadOnlyList<PgpAttachmentRef> OpenPgpAttachments { get; internal set; } = [];
+
     /// <summary>True when OpenPGP protection was found.</summary>
     public bool IsPgp => Layers.Count > 0;
 
@@ -287,6 +315,13 @@ public sealed class PgpResult
 
     /// <summary>True when the message was authenticated: at least one signature is valid and every layer succeeded. An encrypted message with no signature is never authenticated.</summary>
     public bool IsAuthenticated => Succeeded && Signers.Any(static s => s.IsValid);
+
+    /// <summary>
+    /// True when the message is authenticated and a signature that is valid for a key that was usable at signing time comes from a certificate whose certified User IDs
+    /// name every address in the message's <c>From</c>. This is the question a reader asks, "did the person shown as the sender sign this": <see cref="IsAuthenticated"/> alone says only that
+    /// some key the caller supplied signed. The <c>From</c> header itself is not covered by a PGP/MIME signature unless <see cref="HeadersProtected"/>.
+    /// </summary>
+    public bool IsSenderAuthenticated => IsAuthenticated && Signers.Any(static s => s.IsValid && s.UserIdMatchesSender && s.KeyValidAtSigning == true);
 
     /// <summary>True when the headers listed in <see cref="PgpOutside.ProtectedHeaders"/> were authenticated: the result is authenticated and the protected content repeats headers.</summary>
     public bool HeadersProtected => IsAuthenticated && Outside is { ProtectedHeaders.Count: > 0 };

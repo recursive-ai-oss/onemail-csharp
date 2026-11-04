@@ -145,6 +145,21 @@ public class OlmReaderTests
     }
 
     [Fact]
+    public void AnOlmTaskGetsACardAndANoteDoesNot()
+    {
+        byte[] zip = new OlmTestArchive()
+            .Add("Local/Tasks/Tasks.xml", $"<tasks{OlmTestArchive.X} elementCount=\"1\"><task{OlmTestArchive.X}>" + OlmTestArchive.El("OPFTaskCopyName", "File the report")
+                + OlmTestArchive.El("OPFTaskCopyDueDateTime", "2020-03-04T09:00:00") + "</task></tasks>")
+            .Add("Local/Notes/Notes.xml", $"<notes{OlmTestArchive.X} elementCount=\"1\"><note{OlmTestArchive.X}>" + OlmTestArchive.El("OPFNoteCopyTitle", "N") + "</note></notes>")
+            .Build();
+        using OlmArchive olm = Open(zip);
+        List<OlmItem> items = olm.Enumerate().ToList();
+        RecursiveAI.OneMail.Display.CalendarCard card = Assert.Single(RecursiveAI.OneMail.Display.CalendarCard.FromItem(items[0]));
+        Assert.Equal("File the report", card.Summary);
+        Assert.Empty(RecursiveAI.OneMail.Display.CalendarCard.FromItem(items[1]));
+    }
+
+    [Fact]
     public void EveryRecordKindIsAnItemAndNothingIsLostFromTheTree()
     {
         string appt = OlmTestArchive.El("OPFCalendarEventCopySummary", "Meet") + OlmTestArchive.El("OPFCalendarEventCopyStartTime", "2020-03-04T09:00:00")

@@ -33,6 +33,13 @@ public sealed class PgpOpenOptions
     /// <summary>Open old Symmetrically Encrypted Data, which has no integrity check. Default false.</summary>
     public bool AllowUnauthenticatedEncryption { get; init; }
 
+    /// <summary>
+    /// The addresses this message was opened for, bare (<c>bob@example.org</c>). They are compared with the protected <c>To</c> and <c>Cc</c> of an authenticated, encrypted message
+    /// to detect surreptitious forwarding (<see cref="PgpIssue.ProtectedRecipientMismatch"/>). Default none: the certified User IDs of <see cref="SecretKeys"/> are used instead.
+    /// With neither, the check is not made.
+    /// </summary>
+    public IReadOnlyList<string> RecipientAddresses { get; init; } = [];
+
     /// <summary>The most layers unwrapped one inside another. Default 8.</summary>
     public int MaxDepth { get; init; } = 8;
 
@@ -93,6 +100,7 @@ public static class PgpMimeProcessor
 
         if (start is null)
         {
+            Scan(result, options);
             return result;
         }
 
@@ -147,7 +155,9 @@ public static class PgpMimeProcessor
         result.Issues = resultIssues;
         if (layers.Count > 0)
         {
-            List<string> protectedHeaders = ProtectedHeaderNames(result.Content, layers);
+            // Headers repeated inside the protection are trusted only when the message is authenticated: an encrypted message with no
+            // signature can be made by anyone who holds the recipient's public key, so its inner headers prove nothing.
+            List<string> protectedHeaders = result.IsAuthenticated ? ProtectedHeaderNames(result.Content, layers) : [];
             result.Outside = new PgpOutside(
                 message.Headers.Where(static h => !IsContentHeader(h.Name)).Select(static h => h.Name).ToList(),
                 unprotectedParts,
@@ -160,6 +170,8 @@ public static class PgpMimeProcessor
             if (protectedHeaders.Count > 0)
             {
                 layers[^1].Issues = [.. layers[^1].Issues, PgpIssue.ProtectedHeadersPresent];
+                CheckRecipients(result, protectedHeaders, options, resultIssues);
+                result.Issues = resultIssues;
             }
             else if (layers.Any(static l => l.Succeeded))
             {
@@ -167,6 +179,7 @@ public static class PgpMimeProcessor
             }
         }
 
+        Scan(result, options);
         return result;
     }
 
@@ -206,14 +219,45 @@ public static class PgpMimeProcessor
             return Shape.None;
         }
 
-        if (e is MimePart part && (part.MediaTopLevelType == "text" && part.MediaSubType != "html" || type == "application/pgp")
+        if (e is MimePart part && (part.MediaTopLevelType == "text" || type == "application/pgp")
             && part.RawContentLength > 0 && part.RawContentLength <= options.MaxInlineBytes * 2L)
         {
             byte[] body = SafeDecode(part);
-            return body.AsSpan().IndexOf(BeginCleartext) >= 0 || body.AsSpan().IndexOf(BeginMessage) >= 0 ? Shape.Inline : Shape.None;
+            bool html = part.MediaSubType == "html";
+            // An HTML part is inline OpenPGP only when an armor line stands on its own line in the markup; an armored block quoted
+            // or shown inside ordinary HTML is not the message's own protection.
+            return (body.AsSpan().IndexOf(BeginCleartext) >= 0 || body.AsSpan().IndexOf(BeginMessage) >= 0) && (!html || HasArmorLine(body)) ? Shape.Inline : Shape.None;
         }
 
         return Shape.None;
+    }
+
+    private static bool HasArmorLine(byte[] body)
+    {
+        foreach (byte[] marker in new[] { BeginCleartext, BeginMessage })
+        {
+            ReadOnlySpan<byte> span = body;
+            int from = 0;
+            while (from < span.Length)
+            {
+                int at = span[from..].IndexOf(marker);
+                if (at < 0)
+                {
+                    break;
+                }
+
+                at += from;
+                bool lineStart = at == 0 || span[at - 1] == (byte)'\n';
+                if (lineStart)
+                {
+                    return true;
+                }
+
+                from = at + marker.Length;
+            }
+        }
+
+        return false;
     }
 
     private static MimeEntity? FindNested(MimeEntity e, PgpOpenOptions options, List<string> unprotectedParts, string path)
@@ -350,7 +394,7 @@ public static class PgpMimeProcessor
             }
         }
 
-        layer.Signers = MakeSigners(report, senderSource);
+        layer.Signers = MakeSigners(report, senderSource, options.Now);
         foreach (PgpSignerResult s in layer.Signers)
         {
             if (s.WeakAlgorithms.Count > 0 && !issues.Contains(PgpIssue.WeakAlgorithms))
@@ -484,7 +528,7 @@ public static class PgpMimeProcessor
         }
 
         next = MimeEntity.Parse(plain);
-        return Finish(layer, report!, issues, senderSource);
+        return Finish(layer, report!, issues, senderSource, options.Now);
     }
 
     /// <summary>Runs OneCrypto's reader and maps its failures to a layer status; null (with the layer filled in) on failure.</summary>
@@ -529,10 +573,10 @@ public static class PgpMimeProcessor
     }
 
     /// <summary>Common ending of an encrypted layer: signatures found inside, protection, issues.</summary>
-    private static PgpLayer Finish(PgpLayer layer, PgpReadResult report, List<PgpIssue> issues, MimeEntity senderSource)
+    private static PgpLayer Finish(PgpLayer layer, PgpReadResult report, List<PgpIssue> issues, MimeEntity senderSource, DateTimeOffset now)
     {
         layer.Protection = report.Protection;
-        layer.Signers = MakeSigners(report, senderSource);
+        layer.Signers = MakeSigners(report, senderSource, now);
         if (report.Protection == PgpProtection.None)
         {
             issues.Add(PgpIssue.UnauthenticatedEncryption);
@@ -669,7 +713,7 @@ public static class PgpMimeProcessor
         if (cleartext)
         {
             layer.Protection = PgpProtection.NotEncrypted;
-            layer.Signers = MakeSigners(report, senderSource);
+            layer.Signers = MakeSigners(report, senderSource, options.Now);
             PgpStatus status = Judge(layer.Signers);
             layer.Status = status;
             layer.Succeeded = status == PgpStatus.Valid;
@@ -683,10 +727,16 @@ public static class PgpMimeProcessor
         }
         else
         {
-            layer = Finish(layer, report, issues, senderSource);
+            layer = Finish(layer, report, issues, senderSource, options.Now);
         }
 
-        next = TextPart(text, charset);
+        bool htmlPart = part.MediaSubType == "html";
+        if (htmlPart)
+        {
+            layer.Issues = [.. layer.Issues, PgpIssue.InlineHtmlPart];
+        }
+
+        next = TextPart(text, charset, htmlPart);
         return layer;
     }
 
@@ -697,11 +747,12 @@ public static class PgpMimeProcessor
         Charset,
     }
 
-    private static MimePart TextPart(byte[] text, string declaredCharset)
+    private static MimePart TextPart(byte[] text, string declaredCharset, bool html = false)
     {
-        var part = new MimePart("text/plain");
+        string type = html ? "text/html" : "text/plain";
+        var part = new MimePart(type);
         string charset = IsValidUtf8(text) ? "utf-8" : declaredCharset;
-        part.Headers.Set("Content-Type", "text/plain; charset=" + charset);
+        part.Headers.Set("Content-Type", type + "; charset=" + charset);
         part.SetDecodedContent(text, ContentTransferEncoding.QuotedPrintable);
         return part;
     }
@@ -828,7 +879,7 @@ public static class PgpMimeProcessor
         Limits = o.Limits,
     };
 
-    private static List<PgpSignerResult> MakeSigners(PgpReadResult report, MimeEntity senderSource)
+    private static List<PgpSignerResult> MakeSigners(PgpReadResult report, MimeEntity senderSource, DateTimeOffset now)
     {
         List<string> senders = Senders(senderSource);
         var list = new List<PgpSignerResult>();
@@ -839,10 +890,15 @@ public static class PgpMimeProcessor
             {
                 List<string> uids = key.Certificate.UserIds.ToList();
                 s.UserIds = uids;
-                string? match = uids.FirstOrDefault(u => senders.Any(a => UserIdAddress(u).Equals(a, StringComparison.OrdinalIgnoreCase)));
-                s.UserIdMatchesSender = match is not null;
-                s.UserId = match ?? uids.FirstOrDefault();
-                s.KeyValidAtSigning = r.CreatedAt is { } at ? key.StateAt(at).IsValid : null;
+                // A User ID counts only when the key itself certified it (RFC 9580 §5.2.1.3) and had not revoked it by the time of signing:
+                // anyone can add an uncertified User ID packet to a public certificate, and a key server or a copy in transit will carry it.
+                DateTimeOffset at = r.CreatedAt ?? now;
+                List<string> bound = uids.Where(u => PgpUserIds.HasSelfSignature(key.Certificate, u, at)).ToList();
+                bool Names(string address) => bound.Any(u => UserIdAddress(u).Equals(address, StringComparison.OrdinalIgnoreCase));
+                // Every address shown as the sender must be named: a second mailbox or a second From header is another way to show a different sender.
+                s.UserIdMatchesSender = senders.Count > 0 && senders.All(Names);
+                s.UserId = bound.FirstOrDefault(u => senders.Any(a => UserIdAddress(u).Equals(a, StringComparison.OrdinalIgnoreCase))) ?? bound.FirstOrDefault() ?? uids.FirstOrDefault();
+                s.KeyValidAtSigning = r.CreatedAt is { } created ? key.StateAt(created).IsValid : null;
             }
 
             if (r.Policy is { Verdict: PolicyVerdict.Flagged } d)
@@ -947,6 +1003,317 @@ public static class PgpMimeProcessor
         return list;
     }
 
+    // ---- surreptitious forwarding ----
+
+    /// <summary>
+    /// draft-ietf-lamps-header-protection §4: the protected <c>To</c>/<c>Cc</c> of a signed and encrypted message must name the recipient who reads it;
+    /// otherwise someone may have decrypted it and re-encrypted the signed content to a third party.
+    /// </summary>
+    private static void CheckRecipients(PgpResult result, List<string> protectedHeaders, PgpOpenOptions options, List<PgpIssue> resultIssues)
+    {
+        if (!result.WasEncrypted)
+        {
+            return;
+        }
+
+        var mine = new List<string>(options.RecipientAddresses);
+        if (mine.Count == 0)
+        {
+            foreach (PgpCertificate cert in options.SecretKeys)
+            {
+                foreach (string uid in cert.UserIds)
+                {
+                    if (PgpUserIds.HasSelfSignature(cert, uid, options.Now))
+                    {
+                        mine.Add(UserIdAddress(uid));
+                    }
+                }
+            }
+        }
+
+        if (mine.Count == 0)
+        {
+            return;
+        }
+
+        MimeEntity? source = ProtectedHeaderSource(result.Content);
+        var named = new List<string>();
+        if (source is not null)
+        {
+            foreach (string field in new[] { "To", "Cc" })
+            {
+                if (!protectedHeaders.Contains(field, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (MimeHeader h in source.Headers.GetAll(field))
+                {
+                    foreach (MimeMailbox m in AddressParser.Flatten(AddressParser.Parse(h.RawValue.Span)))
+                    {
+                        named.Add(m.UnquotedAddress);
+                    }
+                }
+            }
+        }
+
+        if (named.Count == 0)
+        {
+            resultIssues.Add(PgpIssue.ProtectedRecipientsMissing);
+        }
+        else if (!named.Any(a => mine.Contains(a, StringComparer.OrdinalIgnoreCase)))
+        {
+            resultIssues.Add(PgpIssue.ProtectedRecipientMismatch);
+        }
+    }
+
+    private static MimeEntity? ProtectedHeaderSource(MimeEntity content) =>
+        content is MimeMessagePart { Message: { } inner } ? inner : content.GetContentTypeParameter("protected-headers") is not null ? content : null;
+
+    // ---- attachments ----
+
+    private const int MaxScannedParts = 3000;
+    private const int MaxAttachedKeys = 32;
+    private const int MaxKeyPartBytes = 1 << 20;
+    private const int MaxSniffedAttachmentBytes = 8 << 20;
+
+    /// <summary>Finds attached public keys and attachments that hold OpenPGP data, in the outer message and in the protected content.</summary>
+    private static void Scan(PgpResult result, PgpOpenOptions options)
+    {
+        var keys = new List<PgpAttachedKey>();
+        var attachments = new List<PgpAttachmentRef>();
+        var seen = new HashSet<MimeEntity>(ReferenceEqualityComparer.Instance);
+        int budget = MaxScannedParts;
+        var protectedRoots = new HashSet<MimeEntity>(ReferenceEqualityComparer.Instance);
+        foreach (PgpLayer l in result.Layers)
+        {
+            if (l.Content is not null)
+            {
+                protectedRoots.Add(l.Content);
+            }
+        }
+
+        bool limit = false;
+        ScanEntity(result.Root, "", false);
+        if (!ReferenceEquals(result.Content, result.Root) && !seen.Contains(result.Content))
+        {
+            ScanEntity(result.Content, "protected:", true);
+        }
+
+        if (limit)
+        {
+            result.Issues = [.. result.Issues, PgpIssue.AttachmentLimitReached];
+        }
+
+        result.AttachedKeys = keys;
+        result.OpenPgpAttachments = attachments;
+
+        void ScanEntity(MimeEntity e, string path, bool inProtected)
+        {
+            if (!seen.Add(e))
+            {
+                return;
+            }
+
+            if (budget-- <= 0)
+            {
+                limit = true;
+                return;
+            }
+
+            inProtected |= protectedRoots.Contains(e);
+            switch (e)
+            {
+                case MimeMultipart mp:
+                    if (IsPgpStructure(mp))
+                    {
+                        return;
+                    }
+
+                    for (int i = 0; i < mp.Children.Count; i++)
+                    {
+                        string child = path.Length == 0 || path == "protected:" ? path + (i + 1) : path + "." + (i + 1);
+                        ScanEntity(mp.Children[i], child, inProtected);
+                    }
+
+                    break;
+                case MimeMessagePart { Message: { } inner }:
+                    ScanEntity(inner, path, inProtected);
+                    break;
+                case MimePart part:
+                    Classify(part, path.Length == 0 || path == "protected:" ? path + "0" : path, inProtected);
+                    break;
+            }
+        }
+
+        void Classify(MimePart part, string at, bool inProtected)
+        {
+            string type = part.MediaType;
+            string? name = part.FileName;
+            bool nameKey = name is not null && (name.EndsWith(".asc", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".pkr", StringComparison.OrdinalIgnoreCase));
+            bool nameData = name is not null && (name.EndsWith(".pgp", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".gpg", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".asc", StringComparison.OrdinalIgnoreCase));
+            if (type == "application/pgp-signature")
+            {
+                return;
+            }
+
+            if (type == "application/pgp-keys" || (nameKey && type is "application/octet-stream" or "text/plain" or "application/pgp"))
+            {
+                if (part.RawContentLength > MaxKeyPartBytes * 2L)
+                {
+                    limit = true;
+                    return;
+                }
+
+                byte[] body = SafeDecode(part);
+                bool block = body.AsSpan().IndexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----"u8) >= 0;
+                bool packets = type == "application/pgp-keys" && body.Length > 0 && (body[0] & 0x80) != 0;
+                if (!block && !packets)
+                {
+                    if (type != "application/pgp-keys")
+                    {
+                        MaybeData(part, at, name, body);
+                    }
+
+                    return;
+                }
+
+                if (keys.Count >= MaxAttachedKeys || body.Length > MaxKeyPartBytes)
+                {
+                    limit = true;
+                    return;
+                }
+
+                IReadOnlyList<PgpCertificate> certs = KeyDiscovery.ReadAll(body, null).Certificates;
+                keys.Add(new PgpAttachedKey(at, name, certs, inProtected));
+                return;
+            }
+
+            if (type is "application/pgp-encrypted" or "application/pgp" or "application/x-pgp-encrypted" || (nameData && type is "application/octet-stream" or "application/x-pgp"))
+            {
+                if (part.RawContentLength > MaxSniffedAttachmentBytes * 2L)
+                {
+                    attachments.Add(new PgpAttachmentRef(at, part, name));
+                    return;
+                }
+
+                MaybeData(part, at, name, SafeDecode(part));
+            }
+        }
+
+        void MaybeData(MimePart part, string at, string? name, byte[] body)
+        {
+            if (LooksLikeOpenPgpData(body))
+            {
+                attachments.Add(new PgpAttachmentRef(at, part, name));
+            }
+        }
+    }
+
+    /// <summary>The control and data parts of a PGP/MIME wrapper are the structure, not attachments.</summary>
+    private static bool IsPgpStructure(MimeMultipart mp) =>
+        mp.MediaType == "multipart/encrypted" && mp.Children.Count >= 1 && mp.Children[0].MediaType == "application/pgp-encrypted";
+
+    /// <summary>An armored message (header within the first 4 KiB, after any preamble) or a binary packet whose tag is one a message starts with (RFC 9580 §4.2).</summary>
+    private static bool LooksLikeOpenPgpData(byte[] body)
+    {
+        if (body.Length == 0)
+        {
+            return false;
+        }
+
+        if (body.AsSpan(0, Math.Min(body.Length, 4096)).IndexOf(BeginMessage) >= 0)
+        {
+            return true;
+        }
+
+        byte b = body[0];
+        if ((b & 0x80) == 0)
+        {
+            return false;
+        }
+
+        // New format (bit 6): tag in bits 0-5. Old format: tag in bits 2-5.
+        int tag = (b & 0x40) != 0 ? b & 0x3F : (b >> 2) & 0x0F;
+        return tag is 1 or 3 or 4 or 8 or 9 or 18 or 20;
+    }
+
+    /// <summary>
+    /// Decrypts (or verifies the signature of) an attachment that holds an OpenPGP message: an armored block, or the binary packets of a <c>.pgp</c>/<c>.gpg</c> file.
+    /// The plaintext is the attachment's bytes, not MIME. Never throws for content; failures are the layer's status.
+    /// </summary>
+    /// <param name="part">The attachment part; transfer encoding is undone first.</param>
+    /// <param name="options">Keys, time, policy and limits; <see cref="PgpOpenOptions.MaxPlaintextBytes"/> bounds the output.</param>
+    /// <returns>The layer and the plaintext.</returns>
+    /// <exception cref="ArgumentNullException">An argument is null.</exception>
+    public static PgpAttachmentResult OpenAttachment(MimePart part, PgpOpenOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        ArgumentNullException.ThrowIfNull(options);
+        var layer = new PgpLayer(PgpLayerKind.Encrypted) { Entity = part };
+        var issues = new List<PgpIssue>();
+        string? name = StripPgpSuffix(part.FileName);
+        byte[] data;
+        try
+        {
+            data = part.GetDecodedContent();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            layer.Status = PgpStatus.Malformed;
+            layer.Detail = "The attachment could not be decoded: " + e.GetType().Name;
+            return new PgpAttachmentResult(layer, default, name);
+        }
+
+        if (!LooksLikeOpenPgpData(data))
+        {
+            layer.Status = PgpStatus.Malformed;
+            layer.Detail = "The attachment holds no OpenPGP message.";
+            return new PgpAttachmentResult(layer, default, name);
+        }
+
+        byte[] input = data;
+        if (data.AsSpan().IndexOf(BeginMessage) >= 0)
+        {
+            input = ExtractBlock(data, cleartext: false, issues);
+            if (input.Length == 0)
+            {
+                layer.Status = PgpStatus.Malformed;
+                layer.Detail = "No complete armored OpenPGP block was found in the attachment.";
+                layer.Issues = issues;
+                return new PgpAttachmentResult(layer, default, name);
+            }
+        }
+
+        byte[]? plain = DecryptBytes(input, options, layer, issues, part, part, out PgpReadResult? report);
+        if (plain is null)
+        {
+            layer.Issues = issues;
+            return new PgpAttachmentResult(layer, default, name);
+        }
+
+        Finish(layer, report!, issues, part, options.Now);
+        return new PgpAttachmentResult(layer, plain, name);
+    }
+
+    private static string? StripPgpSuffix(string? name)
+    {
+        if (name is null)
+        {
+            return null;
+        }
+
+        foreach (string suffix in new[] { ".pgp", ".gpg", ".asc" })
+        {
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && name.Length > suffix.Length)
+            {
+                return name[..^suffix.Length];
+            }
+        }
+
+        return name;
+    }
+
     // ---- protected headers ----
 
     /// <summary>
@@ -979,28 +1346,56 @@ public static class PgpMimeProcessor
     {
         try
         {
-            if (protectedHeaders.Count == 0 || content is MimeMessagePart)
+            MimeEntity target = content is MimeMessagePart { Message: { } m } ? m : content;
+            if (protectedHeaders.Count > 0 && content is not MimeMessagePart)
             {
-                MimeEntity target = content is MimeMessagePart { Message: { } m } ? m : content;
+                // The protected headers win over the outer, unprotected ones; the outer headers they do not replace stay (From, To, Date, Message-ID …).
+                MimeEntity merged = MimeEntity.Parse(content.ToArray());
+                foreach (MimeHeader h in outer.Headers.ToArray())
+                {
+                    if (!IsContentHeader(h.Name) && !protectedHeaders.Contains(h.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        merged.Headers.Add(h.Name, h.Value);
+                    }
+                }
+
+                if (merged.Headers.GetFirst("MIME-Version") is null)
+                {
+                    merged.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+                }
+
+                return MimeMailItem.Parse(merged.ToArray());
+            }
+
+            if (protectedHeaders.Count > 0)
+            {
                 return MimeMailItem.Parse(target.ToArray());
             }
 
-            // The protected headers win over the outer, unprotected ones; the outer headers they do not replace stay (From, To, Date, Message-ID …).
-            MimeEntity merged = MimeEntity.Parse(content.ToArray());
-            foreach (MimeHeader h in outer.Headers.ToArray())
+            // Nothing inside is vouched for, so the message headers are the outer ones: whatever the content says about From or Subject is not shown as the message's.
+            MimeEntity plain = MimeEntity.Parse(target.ToArray());
+            foreach (MimeHeader h in plain.Headers.ToArray())
             {
-                if (!IsContentHeader(h.Name) && !protectedHeaders.Contains(h.Name, StringComparer.OrdinalIgnoreCase))
+                if (!IsContentHeader(h.Name))
                 {
-                    merged.Headers.Add(h.Name, h.Value);
+                    plain.Headers.Remove(h);
                 }
             }
 
-            if (merged.Headers.GetFirst("MIME-Version") is null)
+            foreach (MimeHeader h in outer.Headers.ToArray())
             {
-                merged.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+                if (!IsContentHeader(h.Name))
+                {
+                    plain.Headers.Add(h.Name, h.Value);
+                }
             }
 
-            return MimeMailItem.Parse(merged.ToArray());
+            if (plain.Headers.GetFirst("MIME-Version") is null)
+            {
+                plain.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+            }
+
+            return MimeMailItem.Parse(plain.ToArray());
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {

@@ -39,6 +39,7 @@ public static class MessageRenderer
             MaxInlineImageBytes = d.MaxInlineImageBytes,
             MaxInlineTotalBytes = d.MaxInlineTotalBytes,
             CalendarCard = d.CalendarCard,
+            StatusBanner = d.StatusBanner,
         };
         display = item.ToDisplayHtml(effective);
         string title = item.Subject ?? string.Empty;

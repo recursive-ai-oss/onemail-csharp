@@ -658,7 +658,11 @@ internal static class Program
             smimeOk = !untrustedResult.Succeeded && untrustedResult.Layers[0].Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.UntrustedChain && !untrustedResult.IsTrusted
                 && detachedResult.Succeeded && !detachedResult.IsTrusted && detachedResult.Signers.Single().SenderMatch == RecursiveAI.OneMail.Cryptography.Smime.SmimeSenderMatch.Match
                 && opaqueResult.Succeeded && edResult.Succeeded && encOk
-                && tamperedResult.Signers.Single().Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.ContentModified;
+                && tamperedResult.Signers.Single().Status == RecursiveAI.OneMail.Cryptography.Smime.SmimeStatus.ContentModified
+                // The status block: an untrusted signer is shown as not verified, and a failed signature is shown as not verified too.
+                && RecursiveAI.OneMail.Cryptography.Smime.SmimeDisplay.ToDisplayHtml(detachedResult).Html is var smimeHtml
+                && smimeHtml.Contains("omx-status", StringComparison.Ordinal) && smimeHtml.Contains("not checked against a trusted root", StringComparison.Ordinal)
+                && RecursiveAI.OneMail.Cryptography.Smime.SmimeDisplay.StatusHtml(tamperedResult).Contains("Not verified", StringComparison.Ordinal);
         }
 
         Console.WriteLine("smime: " + (smimeOk ? "ok" : "FAILED"));
@@ -682,6 +686,20 @@ internal static class Program
             pgpOk = signedResult.Succeeded && signedResult.IsAuthenticated && encryptedResult.Succeeded && encryptedResult.IsAuthenticated
                 && encryptedResult.InnerItem?.TextBody?.ReadText().Contains("pgp smoke body", StringComparison.Ordinal) == true
                 && !tamperedPgp.Succeeded && tamperedPgp.Layers[0].Status == RecursiveAI.OneMail.Cryptography.OpenPgp.PgpStatus.SignatureInvalid;
+
+            // Protected headers on write, read back with the display status block, and the Web Key Directory source (constructed over a fetcher; nothing is sent).
+            MimeEntity draft = MimeEntity.Parse("From: Smoke <smoke@example.test>\r\nTo: smoke@example.test\r\nSubject: Real subject\r\nContent-Type: text/plain\r\n\r\nprotected smoke\r\n"u8.ToArray());
+            var protectedEnc = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptor.Encrypt(draft, new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeEncryptOptions
+            {
+                Now = now,
+                Recipients = [cert.ToPublicCertificate()],
+                Signers = [signer],
+                ProtectedHeaders = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpProtectedHeaders.FromMessage(draft, obscureSubject: true),
+            });
+            var protectedResult = RecursiveAI.OneMail.Cryptography.OpenPgp.PgpMimeProcessor.Open(protectedEnc.ToArray(), open);
+            var wkd = new RecursiveAI.OneMail.Cryptography.OpenPgp.PgpWkdKeySource(new RecursiveAI.OneCrypto.Online.WkdClient(new RecursiveAI.OneCrypto.Online.Fetcher()));
+            pgpOk = pgpOk && protectedResult.HeadersProtected && protectedResult.InnerItem?.Subject == "Real subject" && wkd is not null
+                && RecursiveAI.OneMail.Cryptography.OpenPgp.PgpDisplay.ToDisplayHtml(protectedResult).Html.Contains("omx-status", StringComparison.Ordinal);
         }
 
         Console.WriteLine("pgp: " + (pgpOk ? "ok" : "FAILED"));

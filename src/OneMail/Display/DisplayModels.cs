@@ -261,6 +261,13 @@ public sealed class DisplayOptions
     /// (the caller is responsible for it; it is not sanitised) before the body, or null for none.
     /// </summary>
     public Func<IMailItem, string?>? CalendarCard { get; init; }
+
+    /// <summary>
+    /// A place for a security status, such as "signed by …" or "encrypted, not signed": called with the item, it returns an HTML fragment that is written as given
+    /// (the caller is responsible for it; it is not sanitised; escape anything that came from the message) at the top of the display, before the header block, or null for none.
+    /// A failing hook shows nothing. Default null.
+    /// </summary>
+    public Func<IMailItem, string?>? StatusBanner { get; init; }
 }
 
 /// <summary>The result of <c>ToDisplayHtml</c>.</summary>

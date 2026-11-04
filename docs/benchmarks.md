@@ -286,6 +286,12 @@ jCal), run after the tuning above. The first column is before tuning (one 43-min
 vCard parse, 10k cards: 79.4 ms against 67.2 ms, 5,500 B per card against 7,770. The M2 runs the comparator's parser relatively
 faster than the x64 machine does (x64 ratio 1.046 on the same rows); a further cut needs fewer objects per property in the tree.
 
+**Follow-up tuning (indicative, not a bench-class row).** Splitting the vCard parse row into stages on the same M2 (heavy-class job, load about 1.8, 4 cores, Release,
+BenchmarkDotNet short job, 10,000 cards) showed the parse itself at 34 ms (26.9 MB) and the typed pass for the row's e-mail, phone and address counts at 29 ms (20 MB more):
+`Emails`, `Phones` and `Addresses` built every item (text, types, preference, a record) just to be counted. The typed lists now count when asked and build an item the first
+time it is read. The whole row went from 79.7 ms / 53.7 MB to 55.8 ms / 40.0 MB against the comparator's 67.2 ms / 75.9 MB (ratio 0.83; 1 card: 1.866 µs against 2.116 µs, 0.88,
+before 1.016). The bench-class rerun for the published table belongs to the next benchmark pass.
+
 # Benchmarks: PST building (memory)
 
 `tools/pst/memory.sh` runs `PstOracle pstgen`, which writes a generated store through `PstBuilder` (messages of about 2.5 KB with two recipients, spread over the

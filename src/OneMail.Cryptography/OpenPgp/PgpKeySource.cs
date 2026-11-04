@@ -41,7 +41,7 @@ public static class PgpKeySource
     }
 
     /// <summary>
-    /// Finds one certificate per address that can encrypt at <paramref name="at"/> (bound, unexpired, not revoked, with an encryption-capable key).
+    /// Finds one certificate per address that can encrypt at <paramref name="at"/> (bound, unexpired, not revoked, with an encryption-capable key) and whose own key certified a User ID naming the address.
     /// </summary>
     /// <param name="source">Where to look.</param>
     /// <param name="addresses">The recipient addresses.</param>
@@ -58,7 +58,10 @@ public static class PgpKeySource
         foreach (string address in addresses)
         {
             IReadOnlyList<PgpCertificate> found = await source.FindAsync(address, cancellationToken).ConfigureAwait(false);
-            PgpCertificate? usable = found.FirstOrDefault(c => c.Keys.Any(k => k.StateAt(at) is { IsValid: true } st && (st.Usage & (PgpKeyUsage.EncryptCommunications | PgpKeyUsage.EncryptStorage)) != 0));
+            // A User ID counts only when the certificate's own key certified it: an uncertified User ID packet can be added to anyone's public certificate,
+            // and mail encrypted to the address would then go to the key of whoever added it.
+            PgpCertificate? usable = found.Where(c => c.UserIds.Any(u => PgpMimeProcessor.UserIdAddress(u).Equals(address, StringComparison.OrdinalIgnoreCase) && PgpUserIds.HasSelfSignature(c, u, at)))
+                .FirstOrDefault(c => c.Keys.Any(k => k.StateAt(at) is { IsValid: true } st && (st.Usage & (PgpKeyUsage.EncryptCommunications | PgpKeyUsage.EncryptStorage)) != 0));
             if (usable is null)
             {
                 missing.Add(address);
