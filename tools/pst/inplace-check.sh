@@ -14,7 +14,8 @@
 set -u
 out="${1:?out dir}"; cases="${2:-300}"; kills="${3:-100}"; soakops="${4:-1000}"; phases="${5:-replay,kill,soak,libpff}"
 mkdir -p "$out"
-export PATH=~/dotnet10:$PATH DOTNET_ROOT=~/dotnet10 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 MSBUILDDISABLENODEREUSE=1
+dotnet_dir="${DOTNET_DIR:-$HOME/dotnet10}"   # where the .NET SDK lives; PARALLEL sets how many cases run at once
+export PATH="$dotnet_dir":$PATH DOTNET_ROOT="$dotnet_dir" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 MSBUILDDISABLENODEREUSE=1
 export ONEMAIL_ARTIFACTS="$out/artifacts" TMPDIR="$out/tmp"; mkdir -p "$TMPDIR"
 report="$out/report.txt"; : > "$report"
 log() { echo "$*" | tee -a "$report"; }
@@ -24,12 +25,12 @@ dur="$ONEMAIL_ARTIFACTS/bin/Durability/checked/RecursiveAI.OneMail.Durability.dl
 rc=0
 has() { case ",$phases," in *",$1,"*) return 0;; esac; return 1; }
 has replay && { log "== power-cut replays"
-dotnet "$dur" campaign "$out/campaign" --cases "$cases" --parallel 8 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1; }
+dotnet "$dur" campaign "$out/campaign" --cases "$cases" --parallel ${PARALLEL:-8} 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1; }
 has kill && { log "== process kills"
 for b in ours tika1 tika2; do
   for s in add delete folders grow split named mixed; do
-    dotnet "$dur" kill "$out/kills" $b $s "$kills" deterministic --parallel 6 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
-    dotnet "$dur" kill "$out/kills" $b $s "$((kills / 2))" random --parallel 6 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+    dotnet "$dur" kill "$out/kills" $b $s "$kills" deterministic --parallel ${PARALLEL:-6} 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+    dotnet "$dur" kill "$out/kills" $b $s "$((kills / 2))" random --parallel ${PARALLEL:-6} 2>&1 | tee -a "$report"; [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
   done
 done; }
 has soak && { log "== soak"

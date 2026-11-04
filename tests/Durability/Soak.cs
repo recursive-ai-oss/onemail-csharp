@@ -37,8 +37,9 @@ internal static class Soak
         var originals = new Dictionary<Nid, MapiMessage>();
         int adds = 0, deletes = 0, moves = 0, replaces = 0, folderOps = 0, commits = 0;
         var problems = new List<string>();
+        int tablesInPlace = 0;
 
-        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0 }))
+        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0, TableUpdates = Scenarios.TableUpdates }))
         {
             foreach (PstFolder f in w.View.EnumerateFolders().Where(f => !f.IsSearchFolder))
             {
@@ -136,6 +137,7 @@ internal static class Soak
                 {
                     w.Commit();
                     commits++;
+                    tablesInPlace = w.TablesUpdatedInPlace;
                     Check(w.View, baseProblems, originals, problems, op, initialFree, baseline, baseSoft, ref softSeen, ref checks);
                 }
             }
@@ -167,7 +169,7 @@ internal static class Soak
             }
         }
 
-        Console.WriteLine($"soak {baseName} seed {seed}: {ops} operations ({adds} adds, {deletes} deletes, {moves} moves, {replaces} replaces, {folderOps} folder operations), {commits} commits, {messages.Count} items kept in sight, {checks} checker runs ({softSeen} soft findings: leaks and lagging counters), {problems.Count} problems");
+        Console.WriteLine($"soak {baseName} seed {seed}: {ops} operations ({adds} adds, {deletes} deletes, {moves} moves, {replaces} replaces, {folderOps} folder operations), {commits} commits, {messages.Count} items kept in sight, {checks} checker runs ({softSeen} soft findings: leaks and lagging counters), {tablesInPlace} tables changed row by row, {problems.Count} problems");
         foreach (string k in SoftKinds)
         {
             Console.WriteLine("    soft: " + k);

@@ -165,6 +165,14 @@ Columns are sorted by tag; PidTagLtpRowId (0x67F2) and PidTagLtpRowVer (0x67F3) 
 
 Rows are added one at a time (`BeginRow`, `SetCell`…, `EndRow`, or `AddRow`) and packed into the row matrix. Up to 3,580 bytes the matrix is one heap allocation (HNID = HID); beyond that it is the data of a subnode (`NID_TYPE_LTP`) whose blocks each hold ⌊8,176 / row size⌋ whole rows: every block but the last is written as a full 8,176 bytes (the rows, then zero "dead space"), as 2.3.4.4 requires of a block that is "8192 bytes", and the last is as long as its rows. A full block is always more than 3,580 bytes, so the builder knows the matrix is a subnode the moment the first block fills and writes it out then; a row index (row ID to position, 4-byte keys and values) is built alongside and duplicates are refused.
 
+### Editing a table in place (`TableContextEditor`)
+
+`TableContextEditor.TryOpen(NdbEditor, Nid)` opens a committed table context node of an `NdbEditor` and changes its rows without writing the rest of the table: `Upsert(rowId, cells)` adds or replaces a row (one raw value per column of `CellColumns`, `null` for an absent cell), `Remove(rowId)` deletes one, `TryFindRow` looks one up, and `Apply()` writes the changed blocks and replaces the node. Nothing is written before `Apply`; dispose the editor to drop the changes.
+
+It handles the tables a big folder has: a row matrix that is a subnode, values that fit a heap allocation, a 4/4-byte row index. `TryOpen` returns null for any other table, and a row operation throws `TableEditUnsupportedException` before anything is written; the caller then writes the table whole with `TableContextBuilder`. `Apply` returns false when the table would be left without rows (write it whole). The editor changes the node in the editor's transaction only: it is on the caller to commit the `NdbEditor`, and the node must be as committed when the editor is opened. The row matrix is not kept in row ID order after a removal (the last row fills the gap, 2.3.4.4); the row index finds rows by ID.
+
+The heap and BTH editors under it stay internal: they only make sense inside a table edit that also fixes the row matrix and the block references, and used alone they could leave a node whose heap and index disagree.
+
 ### Working set
 
 `PropertyContextBuilder` and `TableContextBuilder` hold the heap being built (small values, the BTH, the row index) and one row-matrix block; values above 3,580 bytes and matrix blocks go to the block builder as they are produced. Light indicative run (release build, one thread, blocks discarded, a table of four columns, a 300-byte binary cell and a short string per row, 29-byte rows; `PstOracle ltpmem <rows>`):

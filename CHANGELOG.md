@@ -6,9 +6,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Changed
 
+- In-place PST writing changes a big folder's contents, associated-contents and hierarchy tables row by row at commit instead of writing them whole: with 100,000 rows a one-item add commits in about 0.15 s instead of 2.5 s and writes 0.2 MiB instead of 33 MiB; with 600,000 rows 0.45 s instead of 10.7 s (`docs/benchmarks.md`, `docs/pst-writing.md`). `DeleteMessage` and `MoveMessage` no longer read the folder's table again for every call. Small tables, tables of other layouts and large change sets are still written whole, with the same results.
+
 - Protocol clients allocate far less: IMAP `FetchAsync` decodes plain FETCH lines in place (about 1 KB per message for UID, FLAGS, INTERNALDATE and ENVELOPE against about 7 KB), downloads allocate a constant amount whatever the number of reads, SMTP sending and POP3 listings drop their per-message temporaries (about 10 KB per 4 KB message sent, from about 30 KB). Read and write time limits are checked by one coarse timer per direction, so a stall fails after 1 to 1.25 times the limit.
 
 ### Added
+
+- `TableContextEditor` and `TableEditUnsupportedException` (`RecursiveAI.OneMail.Pst.Ltp`): add, replace and remove rows of an existing table context node inside an `NdbEditor` transaction without writing the rest of the table (`docs/pst-ltp.md`).
 
 - `bench/ProtocolRows` and `bench/run-protocol-rows.sh`: the IMAP fetch and SMTP send rows against MailKit 4.18.2 on local Dovecot and Postfix (`docs/benchmarks.md`, Protocol rows); fuzz target `imap-fetch`.
 - Android and iOS smoke apps (`smoke/Android`, `smoke/iOS`; `smoke/Mobile.props` is what they share) with `run-emulator.sh` and `run-simulator.sh`: build trimmed in Release with warnings as errors, run the NativeAOT smoke app's checks on an emulator or simulator and exit 0 only on `mobile smoke: ok`. CI builds the Android app. `smoke/Aot` gained `Program.Run()` so the three apps share one set of checks.

@@ -36,7 +36,7 @@ internal static class Memory
         long afterBuild = Peak();
         sw.Restart();
         var rnd = new Random(5);
-        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0 }))
+        using (PstWritableStore w = PstStore.OpenForWriting(path, new PstWriteOptions { Timestamp = Scenarios.Stamp, AutoCommitRows = 0, TableUpdates = Scenarios.TableUpdates }))
         {
             var folderIds = w.View.EnumerateFolders().Where(f => f.ParentFolder is not null && !f.IsSearchFolder && f.Name?.StartsWith("Folder ", StringComparison.Ordinal) == true).Select(f => f.Nid).ToList();
             var added = new List<Nid>();

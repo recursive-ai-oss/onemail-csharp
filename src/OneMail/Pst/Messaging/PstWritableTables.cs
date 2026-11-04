@@ -112,11 +112,13 @@ internal sealed class OldTable : IDisposable
 }
 
 /// <summary>What a transaction has done to one folder, and what the commit must rewrite because of it.</summary>
-internal sealed class FolderState
+internal sealed class FolderState : IDisposable
 {
     private readonly PstWritableStore _store;
     private (ushort Id, ushort Type)[]? _contentsColumns;
     private (ushort Id, ushort Type)[]? _assocColumns;
+    private OldTable? _openContents;
+    private OldTable? _openAssoc;
     private bool _prepared;
     private Dictionary<ushort, (ushort Type, byte[] Value)>? _props;
 
@@ -188,24 +190,31 @@ internal sealed class FolderState
     private int _oldAssoc;
     private int _oldSubs;
 
+    // The committed contents or associated-contents table, opened once per transaction: finding a row's old cells is then a lookup, not a table open.
+    private OldTable CommittedTable(bool associated)
+    {
+        ref OldTable? slot = ref (associated ? ref _openAssoc : ref _openContents);
+        return slot ??= OldTable.Open(_store.Committed, PstWritableStore.TableNid(Nid, associated ? NidType.AssocContentsTable : NidType.ContentsTable),
+            associated ? PstItemWriter.AssocColumns : PstItemWriter.ContentsColumns);
+    }
+
     public (ushort Id, ushort Type)[] Columns(bool associated)
     {
         ref (ushort Id, ushort Type)[]? slot = ref (associated ? ref _assocColumns : ref _contentsColumns);
         if (slot is null)
         {
             (ushort Id, ushort Type)[] template = associated ? PstItemWriter.AssocColumns : PstItemWriter.ContentsColumns;
-            if (IsNew)
-            {
-                slot = [.. template];
-            }
-            else
-            {
-                using OldTable t = OldTable.Open(_store.Committed, PstWritableStore.TableNid(Nid, associated ? NidType.AssocContentsTable : NidType.ContentsTable), template);
-                slot = t.Columns;
-            }
+            slot = IsNew ? [.. template] : CommittedTable(associated).Columns;
         }
 
         return slot;
+    }
+
+    public void Dispose()
+    {
+        _openContents?.Dispose();
+        _openAssoc?.Dispose();
+        _openContents = _openAssoc = null;
     }
 
     public void AddRow(bool associated, uint id, byte[]?[] row, bool unread)
@@ -266,9 +275,7 @@ internal sealed class FolderState
             return null;
         }
 
-        using OldTable t = OldTable.Open(store.Committed, PstWritableStore.TableNid(Nid, associated ? NidType.AssocContentsTable : NidType.ContentsTable),
-            associated ? PstItemWriter.AssocColumns : PstItemWriter.ContentsColumns);
-        return t.TryGetRow(id, out byte[]?[] cells) ? cells : null;
+        return CommittedTable(associated).TryGetRow(id, out byte[]?[] cells) ? cells : null;
     }
 
     // ---- the commit ----------------------------------------------------------------------------------------------------------------------
@@ -467,6 +474,11 @@ public sealed partial class PstWritableStore
         using OldTable old = f.IsNew ? OldTable.Open(_ed.Committed, new Nid(0), template) : OldTable.Open(_ed.Committed, TableNid(f.Nid, type), template);
         HashSet<uint> removed = associated ? f.RemovedAssoc : f.Removed;
         SortedDictionary<uint, byte[]?[]> added = associated ? f.AddedAssoc : f.Added;
+        if (!f.IsNew && TryUpdateRows(TableNid(f.Nid, type), old.Columns, removed, added.Select(static r => (r.Key, r.Value)).ToList()))
+        {
+            return;
+        }
+
         PstItemWriter.WriteTable(_ed, TableNid(f.Nid, type), old.Columns, MergeRows(old, removed, added), streamHeap: true);
     }
 
@@ -498,9 +510,96 @@ public sealed partial class PstWritableStore
         }
     }
 
+    /// <summary>How many tables commits have changed row by row so far (the others were written whole); for tests and measurements.</summary>
+    internal int TablesUpdatedInPlace { get; private set; }
+
+    // Changes the rows of an existing table in place when it is big enough for that to pay (or the options say so). False means nothing was written and the caller writes
+    // the table whole.
+    private bool TryUpdateRows(Nid table, (ushort Id, ushort Type)[] columns, HashSet<uint> removed, List<(uint Key, byte[]?[] Value)> upserts)
+    {
+        if (_options.TableUpdates == PstTableUpdates.Rewrite)
+        {
+            return false;
+        }
+
+        using TableContextEditor? t = TableContextEditor.TryOpen(_ed, table);
+        if (t is null || !t.CellColumns.SequenceEqual(columns))
+        {
+            return false;
+        }
+
+        // Each change writes a row-index node and a matrix block again; with many changes, writing the table once is less work.
+        if (_options.TableUpdates == PstTableUpdates.Auto && (long)(removed.Count + upserts.Count) * 16 > t.RowCount)
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (uint id in removed)
+            {
+                t.Remove(id);
+            }
+
+            foreach ((uint id, byte[]?[] cells) in upserts)
+            {
+                t.Upsert(id, cells);
+            }
+
+            if (!t.Apply())
+            {
+                return false;
+            }
+
+            TablesUpdatedInPlace++;
+            return true;
+        }
+        catch (TableEditUnsupportedException)
+        {
+            return false;
+        }
+    }
+
+    private bool TryUpdateHierarchy(FolderState f, OldTable old)
+    {
+        Nid table = TableNid(f.Nid, NidType.HierarchyTable);
+        var upserts = new SortedDictionary<uint, byte[]?[]>();
+        foreach (uint id in f.ChildUpdates)
+        {
+            if (!f.RemovedChildren.Contains(id) && old.TryGetRow(id, out byte[]?[] cells))
+            {
+                upserts[id] = _folders[id].HierarchyCells(old.Columns, cells);
+            }
+        }
+
+        foreach ((uint child, Nid from) in f.AddedChildren)
+        {
+            byte[]?[]? existing = null;
+            if (from.Value != 0)
+            {
+                using OldTable src = OldTable.Open(_ed.Committed, TableNid(from, NidType.HierarchyTable), PstItemWriter.HierarchyColumns);
+                if (src.TryGetRow(child, out byte[]?[] cells))
+                {
+                    existing = Remap(cells, src.Columns, old.Columns);
+                }
+            }
+
+            upserts[child] = FolderOrThrow(new Nid(child)).HierarchyCells(old.Columns, existing);
+        }
+
+        return TryUpdateRows(table, old.Columns, f.RemovedChildren, upserts.Select(static r => (r.Key, r.Value)).ToList());
+    }
+
     private void WriteHierarchy(FolderState f)
     {
         using OldTable old = f.IsNew ? OldTable.Open(_ed.Committed, new Nid(0), PstItemWriter.HierarchyColumns) : OldTable.Open(_ed.Committed, TableNid(f.Nid, NidType.HierarchyTable), PstItemWriter.HierarchyColumns);
+        // A big hierarchy table changes row by row: the rows of children removed or moved away go, the rows of children whose counts or name changed are rebuilt from
+        // the row they have, and the rows of children added or moved here come in.
+        if (!f.IsNew && TryUpdateHierarchy(f, old))
+        {
+            return;
+        }
+
         var rows = new SortedDictionary<uint, byte[]?[]>();
         foreach ((uint id, byte[]?[] cells) in old.Rows())
         {

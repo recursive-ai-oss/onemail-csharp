@@ -66,6 +66,12 @@ public sealed class NdbDataTree : IDisposable
         return n;
     }
 
+    // The XBLOCKs the walk met, in order, with the leaves each names; a data tree rewritten in part keeps the XBLOCKs it did not change.
+    internal List<(Bid Bid, int FirstLeaf, int Count, int Entries)> XBlocks { get; } = [];
+
+    // 0 for a root that is a data block, 1 for an XBLOCK, 2 for an XXBLOCK.
+    internal int RootLevel { get; set; }
+
     internal void AddLeaf(in BlockEntry leaf, int logicalSize)
     {
         _leaves.Add(leaf);
@@ -325,6 +331,12 @@ public sealed partial class NdbFile
         }
 
         byte[]? child = null;
+        int firstLeaf = tree.LeafCount;
+        if (expectedLevel < 0)
+        {
+            tree.RootLevel = level;
+        }
+
         try
         {
             for (int i = 0; i < cEnt; i++)
@@ -367,6 +379,11 @@ public sealed partial class NdbFile
                         WalkDataTree(tree, entry, child.AsSpan(0, len), expectedLevel: 1);
                     }
                 }
+            }
+
+            if (level == 1)
+            {
+                tree.XBlocks.Add((block.Bid, firstLeaf, tree.LeafCount - firstLeaf, cEnt));
             }
         }
         finally

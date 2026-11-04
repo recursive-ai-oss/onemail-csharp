@@ -479,6 +479,38 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         Release(bid, 0);
     }
 
+    /// <summary>
+    /// Adds one reference to a block that a new parent block now names as well as the old one (MS-PST 2.6.1.1.7). A data tree rewritten in part keeps the leaves it did
+    /// not change this way: the old tree's release then takes the extra reference back instead of freeing them.
+    /// </summary>
+    /// <param name="bid">The block; a null BID does nothing.</param>
+    /// <exception cref="InvalidOperationException">The block is not in the block B-tree, or its count is at the largest the entry holds.</exception>
+    internal void AddReference(Bid bid)
+    {
+        ThrowIfUnusable();
+        if (bid.IsNull)
+        {
+            return;
+        }
+
+        Span<byte> e = stackalloc byte[24];
+        ulong key = bid.Normalized.Value;
+        if (!_bbt.TryGet(key, e))
+        {
+            throw new InvalidOperationException($"block {bid} is not in the block B-tree");
+        }
+
+        int cRef = BinaryPrimitives.ReadUInt16LittleEndian(e[18..]);
+        if (cRef >= ushort.MaxValue)
+        {
+            throw new InvalidOperationException($"block {bid} already has the largest reference count");
+        }
+
+        _changed = true;
+        BinaryPrimitives.WriteUInt16LittleEndian(e[18..], (ushort)(cRef + 1));
+        _bbt.Upsert(key, e);
+    }
+
     // Real block trees are at most three deep (a subnode tree's SIBLOCK, SLBLOCK, then data trees of an XXBLOCK, XBLOCK, data). A chain longer than that
     // is a crafted or damaged file; the rest of it is left allocated rather than followed.
     private const int MaxReleaseDepth = 12;

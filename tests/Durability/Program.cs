@@ -19,6 +19,8 @@ using RecursiveAI.OneMail.Tests.Pst;
 //       Random operations on a real file with a check after every commit.
 //   Durability child <scenario> <file> <killAtOp> <killAfterMs>        (used by kill)
 //   Durability make <dir> [--bases ...] [--scenarios ...]             writes each base after each scenario, finished, for the libpff comparison
+//   Durability tables-make <file> <rows>                              writes a store with one folder of <rows> items
+//   Durability tables <base> <work-file> incremental|rewrite add|delete|move <count>   one commit of <count> changes; prints time, bytes written, peak memory
 //   Durability pff <dir>                                              runs pffinfo over every .pst in a directory (needs PFFINFO)
 
 string Opt(string name, string fallback)
@@ -60,6 +62,10 @@ switch (args[0])
         return Hostile.Case(args[1], I(args[2]), args[3] == "permissive", corpus);
     case "one":
         return Hostile.One(args[1], args[2] == "permissive");
+    case "tables-make":
+        return TableUpdates.Make(args[1], I(args[2]));
+    case "tables":
+        return TableUpdates.Run(args[1], args[2], args[3], args[4], I(args[5]));
     case "memory":
         return Memory.Run(args[1], I(args[2]), I(args[3]));
     case "pff":
