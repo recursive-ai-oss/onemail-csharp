@@ -685,6 +685,16 @@ internal sealed class PstItemWriter
             Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageFlags lacked MSGFLAG_HASATTACH on a message with attachments; set");
         }
 
+        // The other way round, the repair tool rejects a message that claims attachments it does not have (a recovered message whose attachment
+        // table was lost keeps the flag it was saved with).
+        if (attachments.Count == 0 && (flags & 0x10) != 0 && Find(props, 0x0E07) is { } staleFlag)
+        {
+            flags &= ~0x10;
+            staleFlag.Source = null;
+            staleFlag.Bytes = I32(flags);
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageFlags had MSGFLAG_HASATTACH on a message with no attachments; cleared");
+        }
+
         byte[] lastModified = FileTime(_timestamp);
         int status = 0;
         bool sizeAdded = false;

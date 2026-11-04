@@ -278,4 +278,27 @@ public sealed class PstBuilderTests
 
         File.Delete(path);
     }
+
+    [Fact]
+    public void AttachmentFlagMatchesTheAttachmentsWritten()
+    {
+        MapiMessage stale = Message("claims attachments", recipients: 0);
+        stale.Properties.Add(Int(0x0E07, 0x11));   // READ | HASATTACH, but no attachment
+        MapiMessage real = Message("has attachment", recipients: 0, attachments: 1);
+        real.Properties.Add(Int(0x0E07, 0x01));
+        (PstStore store, string path) = Write(b =>
+        {
+            PstFolderWriter f = b.IpmSubtree.CreateFolder("Inbox");
+            f.AddMessage(stale);
+            f.AddMessage(real);
+        });
+        using (store)
+        {
+            PstMessage[] read = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).ToArray();
+            Assert.Equal(0x01, read.Single(m => m.Subject == "claims attachments").GetInt32(0x0E07));
+            Assert.Equal(0x11, read.Single(m => m.Subject == "has attachment").GetInt32(0x0E07));
+        }
+
+        File.Delete(path);
+    }
 }
