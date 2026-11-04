@@ -10,6 +10,9 @@
 # native reference for the parse rows only). Arguments replace the default filter and skip those extras.
 # Writes BenchmarkDotNet's results under OUTDIR/bdn, the table to OUTDIR/report.tsv, and the machine and its load before, during and after.
 set -euo pipefail
+# ROWS_STAGES picks which parts run (comma list of bdn, peak, native, curve; default all): the timed rows can then go to the bench queue on
+# their own while the memory measurements run as ordinary jobs.
+stage() { case ",${ROWS_STAGES:-bdn,peak,native,curve}," in *",$1,"*) return 0;; *) return 1;; esac; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="${1:?output directory}"; shift || true
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
@@ -35,11 +38,14 @@ mon=$!
 trap 'kill $mon 2>/dev/null || true' EXIT
 
 if [ $# -eq 0 ]; then set -- -f '*IcsParse*' '*IcsWrite*' '*IcsEdit*' '*VCardParseRow*' '*VCardWriteRow*' '*VCardEditRow*' '*RecurrenceRow*' '*Forms*'; full=1; else full=0; fi
-dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
-[ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+if stage bdn; then
+  dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
+  [ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+fi
 
 if [ "$full" = 1 ]; then
   : > "$out/peak.tsv"
+  if stage peak; then
   while IFS=$'\t' read -r row input; do
     for side in ours theirs; do
       DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" cpeak "$row" "$side" "$input" | grep '^PEAK' >> "$out/peak.tsv" || true
@@ -49,9 +55,10 @@ if [ "$full" = 1 ]; then
            for i in vcf-1 vcf-10k; do printf 'vcfparse\t%s\nvcfedit\t%s\n' $i $i; done
            for i in build-1 build-10k; do printf 'vcfwrite\t%s\n' $i; done
            for i in daily-utc weekly-floating monthly-ny yearly-berlin daily-ny-long; do printf 'recur\t%s\n' $i; done)
+  fi
 
   # libical's parser, from the distribution's runtime package (no source build): the C program declares the two public functions it calls.
-  if [ -e /usr/lib/x86_64-linux-gnu/libical.so.3 ] || [ -e /usr/lib/aarch64-linux-gnu/libical.so.3 ]; then
+  if stage native && { [ -e /usr/lib/x86_64-linux-gnu/libical.so.3 ] || [ -e /usr/lib/aarch64-linux-gnu/libical.so.3 ]; }; then
     if gcc -O2 "$here/native/libical_parse.c" -o "$out/libical_parse" -l:libical.so.3 2>"$out/libical-build.log"; then
       mkdir -p "$out/ics"
       dotnet "$dll" cwrite "$out/ics" > /dev/null
@@ -64,4 +71,4 @@ fi
 
 kill $mon 2>/dev/null || true
 { machine after; } | tee -a "$out/machine.txt"
-dotnet "$dll" report "$out/bdn/results" "$out/counts.tsv" | tee "$out/report.tsv"
+if stage bdn; then dotnet "$dll" report "$out/bdn/results" "$out/counts.tsv" | tee "$out/report.tsv"; fi
