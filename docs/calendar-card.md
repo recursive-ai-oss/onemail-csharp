@@ -14,11 +14,11 @@ All inputs end up as an iCalendar object (`IcsComponent`), so there is one card 
 | iCalendar bytes, an `.ics` file | `CalendarCard.FromIcs(bytes)` | parsed by `OneMail.Calendar` |
 | a `text/calendar` part (RFC 6047) | `FromMime(part)` | decoded content, then as above |
 | an Outlook appointment or meeting item from MSG, PST, OST, TNEF | `FromMapi(message)` | MS-OXCICAL export (`MapiToIcsConverter`), plus `PidLidNetShowUrl` as `X-MS-OLK-NETSHOWURL` |
-| an Outlook for Mac appointment | `FromItem(olmItem)` | `OlmToCalendarConverter` |
+| an Outlook for Mac appointment or task | `FromItem(olmItem)` | `OlmToCalendarConverter` (VEVENT, VTODO) |
 | any shared-view item | `FromItem(item)` | the item's `text/calendar` parts, or the Outlook item |
 | a parsed component | `Create`, `CreateAll` | one card per event series (same UID; overrides join their master) |
 
-A message that is not a calendar item gives no card. To-dos get a card too (their due time stands in for the end). Nothing is wired into the
+A message that is not a calendar item gives no card. An Outlook for Mac note gets none either: it has no time and Outlook does not treat it as a calendar object (the converter writes a `VJOURNAL`, which the card does not show). An `.ics` part typed `application/ics` is found like one typed `text/calendar`. To-dos get a card too (their due time stands in for the end). Nothing is wired into the
 display HTML of a whole message; a caller composes the card above it.
 
 ## What the card says

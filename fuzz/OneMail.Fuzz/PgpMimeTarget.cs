@@ -47,6 +47,30 @@ internal static class PgpMimeTarget
             mixed.Add(PgpMimeSigner.SignDetached(Body(), sign));
             mixed.Add(Body());
 
+            // Protected headers written by us, an attached public key, an encrypted attachment and a cleartext signature in an HTML part.
+            MimeEntity Draft()
+            {
+                MimeEntity d = Body();
+                d.Headers.Insert(0, new MimeHeader("From", "Fuzz <fuzz@example.test>"));
+                d.Headers.Insert(1, new MimeHeader("To", "fuzz@example.test"));
+                d.Headers.Insert(2, new MimeHeader("Subject", "Fuzz subject"));
+                return d;
+            }
+
+            var ph = PgpProtectedHeaders.FromMessage(Draft(), obscureSubject: true);
+            var keyed = new MimeMultipart("mixed", "fuzz-k");
+            keyed.Add(Body());
+            var keyPart = new MimePart("application/pgp-keys");
+            keyPart.SetRawContent(key.ToPublicCertificate().ExportPublic(true));
+            keyed.Add(keyPart);
+            var attData = new MemoryStream();
+            PgpMessageWriter.Write(new MemoryStream("fuzz attachment\n"u8.ToArray()), attData, new PgpWriteOptions { Now = now, Recipients = [key.ToPublicCertificate()], Armor = true });
+            var attPart = new MimePart("application/octet-stream");
+            attPart.Headers.Set("Content-Type", "application/octet-stream; name=\"a.txt.pgp\"");
+            attPart.SetRawContent(attData.ToArray());
+            keyed.Add(attPart);
+            byte[] htmlClear = [.. "From: fuzz@example.test\r\nContent-Type: text/html\r\n\r\n"u8, .. clear.ToArray()];
+
             return new Templates
             {
                 Messages =
@@ -60,6 +84,11 @@ internal static class PgpMimeTarget
                     Wire(PgpMimeEncryptor.Encrypt(inner, enc)),
                     Wire(mixed),
                     Text([.. "before\r\n"u8, .. clear.ToArray(), .. "\r\nafter\r\n"u8]),
+                    Wire(PgpMimeEncryptor.Encrypt(Draft(), new PgpMimeEncryptOptions { Now = now, Recipients = [key.ToPublicCertificate()], Signers = [signer], Boundary = "fuzz-h", ProtectedHeaders = ph })),
+                    Wire(PgpMimeSigner.SignDetached(Draft(), new PgpMimeSignOptions { Now = now, Signers = [signer], Boundary = "fuzz-s", ProtectedHeaders = ph })),
+                    Wire(PgpMimeEncryptor.Encrypt(keyed, both)),
+                    Wire(keyed),
+                    htmlClear,
                 ],
                 Options = new PgpOpenOptions { Now = now, Certificates = [key.ToPublicCertificate()], SecretKeys = [key], MaxPlaintextBytes = 1 << 20 },
             };
@@ -120,6 +149,21 @@ internal static class PgpMimeTarget
             throw new InvalidOperationException("sender authenticated without a matching valid signer");
         }
 
+        foreach (PgpAttachmentRef a in r.OpenPgpAttachments)
+        {
+            PgpAttachmentResult ar = PgpMimeProcessor.OpenAttachment(a.Part, t.Options);
+            if (ar.Succeeded != (ar.Layer.Status is PgpStatus.Valid or PgpStatus.Decrypted))
+            {
+                throw new InvalidOperationException("attachment success and status disagree");
+            }
+        }
+
+        if (r.AttachedKeys.Any(static k => k.Certificates.Any(static c => c.HasSecretKeyMaterial)))
+        {
+            throw new InvalidOperationException("a secret key surfaced from an attachment");
+        }
+
+        _ = PgpDisplay.StatusHtml(r);
         _ = PgpAutocrypt.Read(MimeEntity.Parse(message));
     }
 }

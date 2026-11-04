@@ -1,0 +1,27 @@
+Message-ID: <797ca559-725e-48a6-afd5-059db1e4a96b@example.org>
+Date: Wed, 4 Nov 2026 12:37:02 -0600
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+To: vector-ecdsa-p256@example.org
+Subject: Interop vector
+Content-Language: en-US
+From: Vector <vector-ecdsa-p256@example.org>
+Content-Type: application/pkcs7-mime; name="smime.p7m"; smime-type=enveloped-data
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Description: S/MIME Encrypted Message
+
+MIAGCSqGSIb3DQEHA6CAMIACAQIxggIMoYIBAgIBA6BRoU8wCQYHKoZIzj0CAQNCAATdeoCa
+/BDYjRZysW6Ffh1XDmk4YGSC6l7Ii22A3qtWPCOOkfv7L64BNC04gDc4Nfz2EERafZjHLiLD
++b4e1FMzoUIEQLba1lgcJdmqaay0xA8bmZqeibuODDP+/Qy5xt24dn/KpBFpvaPEUrcaesHN
+58eIj7rzeMzEfeUHccLMX1X4IfowFwYGK4EEAQsBMA0GCWCGSAFlAwQBBQUAME0wSzAvMBsx
+GTAXBgNVBAMMEFZlY3RvciBUZXN0IFJvb3QCEBoOatsPci74xE9Br13a0EkEGEp9zmER5siA
++JH8dWFsPSU02sk3QzUntKGCAQICAQOgUaFPMAkGByqGSM49AgEDQgAE6NuHVHe5OT5CliaT
+cVTNdGctfjXvIQZaeldwwuLO6+i+Kf38uWfB35HtjoWsBHNsPFFvqUF2uLwGrD5qQCsy86FC
+BEDl9ENuUhQ7qcqaH7WXAFxumUTPvPvPP5LNVrDu6xdUpNYeIa7wf67wunrgDeaIncUsoK/i
+P+w5ZhS6Zprbb9umMBcGBiuBBAELATANBglghkgBZQMEAQUFADBNMEswLzAbMRkwFwYDVQQD
+DBBWZWN0b3IgVGVzdCBSb290AhAaDmrbD3Iu+MRPQa9d2tBJBBhG9acs6/D9nZELrLMmmc7E
+xPpN98hH8ZswgAYJKoZIhvcNAQcBMB0GCWCGSAFlAwQBAgQQ/yP1w2RxofNglpozrjHG0KCA
+BIGAdpF9Jb33SlnQ7jE52SdahSm1EaqpL6MD1vpZhVMS0B9scO3K08+2Kzxjmg0Y1JU3KvS5
+EuTbM/fieTFDxVL8qYCtDnyBqq/icN5rsaG38j+jAc//QQU1qPlNOflcnCR1INavYC8Rnurn
+BTkGr3ma/MeYfW5CB+WYr6ViuQkMBtQEEExjPY1wmokW0zmOdWVsN1gAAAAAAAAAAAAA

@@ -50,7 +50,8 @@ def text_of(entity_bytes):
 
 def qp_part():
     lines = BODY.encode("utf-8").split(b"\r\n")[:-1]
-    enc = b"\r\n".join(quopri.encodestring(l) .rstrip(b"\n") for l in lines) + b"\r\n"
+    # quopri breaks long lines with a bare LF ("=\n"); a signed text has CRLF line ends only (RFC 3156 section 5), so the soft breaks get CRLF too.
+    enc = b"\r\n".join(quopri.encodestring(l).rstrip(b"\n").replace(b"=\n", b"=\r\n") for l in lines) + b"\r\n"
     return b"Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n" + enc
 
 
@@ -168,21 +169,25 @@ def ours(vectors, tools, work):
             t_h.import_key(open(d + "/key.sec.asc", "rb").read())
             t_h.fp = t_h.fingerprint() if t.kind == "gpg" else None
             expected = open(d + "/expected.txt", encoding="utf-8", newline="").read().strip()
-            for kind in ("signed", "encrypted", "signed-encrypted", "sign-then-encrypt"):
+            for kind in ("signed", "encrypted", "signed-encrypted", "sign-then-encrypt",
+                         "protected-signed", "protected-signed-encrypted", "protected-sign-then-encrypt"):
                 raw = open("%s/%s.eml" % (d, kind), "rb").read()
                 head, parts = split_multipart(raw)
-                if kind == "signed":
+                # The protected-headers forms carry the message headers inside the signed or encrypted entity as well;
+                # a program that does not know the scheme still has to verify and decrypt them as ordinary entities.
+                kind_base = kind[len("protected-"):] if kind.startswith("protected-") else kind
+                if kind_base == "signed":
                     ok, detail = t_h.verify_detached(parts[0], part_body(parts[1]))
                     ok = ok and text_of(parts[0]).strip() == expected
                 else:
                     plain, sig_ok, detail = t_h.decrypt(part_body(parts[1]))
                     ok = plain is not None
-                    if ok and kind == "sign-then-encrypt":
+                    if ok and kind_base == "sign-then-encrypt":
                         h2, p2 = split_multipart(plain)
                         v, detail = t_h.verify_detached(p2[0], part_body(p2[1]))
                         ok = v and text_of(p2[0]).strip() == expected
                     elif ok:
-                        ok = text_of(plain).strip() == expected and (sig_ok == (kind == "signed-encrypted"))
+                        ok = text_of(plain).strip() == expected and (sig_ok == (kind_base == "signed-encrypted"))
                 print("RESULT %s %s %s %s %s" % (t.name, name, kind, "ok" if ok else "FAIL", "" if ok else detail.replace("\n", " ")))
                 fails += 0 if ok else 1
     return fails

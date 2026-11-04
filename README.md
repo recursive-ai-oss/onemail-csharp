@@ -2,22 +2,49 @@
 
 An email library for .NET with no dependency beyond the .NET base class library and its sibling libraries: the published packages use OneArchive and OneHtml (the unpublished `.Render` package adds OneRender). It reads and writes the formats mail lives in, keeps what it reads lossless, and says what it repaired instead of throwing.
 
-> **Early preview.** MIME, the mailbox stores, ICS/vCard trees with recurrence and time zones, and Outlook items on read (MSG/OFT, PST/OST, TNEF, compressed RTF, MAPI↔MIME conversion) work today; Outlook writing, protocols and cryptography are still to come. Nothing here is a stable API yet. What is checked, and the known gaps: [docs/compatibility.md](docs/compatibility.md).
+> **Preview.** Reading works for MIME, the mailbox stores, ICS/vCard, MSG/OFT, PST/OST, TNEF, OLM and DBX; writing for MIME, the mailbox stores, ICS/vCard, MSG/OFT and Unicode PST (a new file, or in place in preview quality); recovery of damaged PST/OST, DBX and OLM; SMTP, IMAP and POP3 clients; S/MIME, OpenPGP, DKIM and ARC (`.Cryptography`, on OneCrypto). The PST commit path and the crypto paths have had independent reviews. Nothing here is a stable API yet. What is checked, and the known gaps: [docs/compatibility.md](docs/compatibility.md).
 >
 > **Display HTML has had its independent review.** Script execution and network fetch under the Block policy were checked in Chrome and Firefox; the threat model and what the output assumes (one message per frame or document) are in [docs/display-html.md](https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/display-html.md#review).
 
+## Quick start
+
+Each snippet is the whole task; the runnable versions are in [`samples/`](samples).
+
+**Reading** ([ParseMessage](samples/ParseMessage/Program.cs)):
+
 ```csharp
-using RecursiveAI.OneMail;
-
 IMailItem message = Mail.Parse(File.ReadAllBytes("message.eml"));
-Console.WriteLine($"{message.Subject} from {message.From[0].Address}");
-
-using MailContainer mbox = Mail.Open("archive.mbox");
-foreach (IMailItem item in mbox.Enumerate())
-{
-    Console.WriteLine(item.Subject);
-}
+Console.WriteLine($"{message.Subject} from {message.From[0]}: {message.BestBody?.ReadText()}");
 ```
+
+**Opening stores**: PST, OST, mbox, Maildir, OLM, DBX, MSG and EML, found by content ([OpenStore](samples/OpenStore/Program.cs)):
+
+```csharp
+await using MailContainer store = Mail.Open("archive.pst");
+await foreach (IMailItem item in store) Console.WriteLine(item.Subject);
+```
+
+**Converting**, with the loss report ([Convert](samples/Convert/Program.cs)):
+
+```csharp
+StoreConversionReport report = await Mail.ConvertAsync("archive.pst", ConvertFormat.Mbox, "out");
+```
+
+**Sending** (`RecursiveAI.OneMail.Client`; [Sending](samples/Sending/Program.cs)), and **replying** ([ReplyAndSend](samples/ReplyAndSend/Program.cs)):
+
+```csharp
+await Mail.SendAsync(new OutgoingMessage { From = me, To = [you], Subject = "Hello", Text = "Hi." }, new SmtpClientOptions { Host = "smtp.example.com", Credentials = creds });
+await Mail.SendAsync(original.CreateReply(new CompositionOptions { From = me }).Message, server);
+```
+
+**IMAP** ([Imap](samples/Imap/Program.cs)), **display HTML and PDF** ([Display](samples/Display/Program.cs)):
+
+```csharp
+await foreach (ImapEvent e in imap.IdleAsync(stop: token)) Console.WriteLine(e.Kind);
+DisplayResult html = message.ToDisplayHtml();   // sanitised; await message.ToPdfAsync(stream) with .Render
+```
+
+Coming from MimeKit or MailKit? [docs/migrating-from-mimekit.md](docs/migrating-from-mimekit.md) maps the calls.
 
 ## Goals
 

@@ -12,6 +12,90 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## Correctness sweep, 2026-11-04
+
+One pass of every correctness check (`Checked` build, x64, AMD Ryzen 9 7950X3D, 32 cores, shared with other jobs; the same oracle versions as above).
+The sweep changed no code: it found no crash, no unexplained difference and no non-identical round trip. It ran first on the tree before the OpenPGP
+follow-ups, the lazy vCard typed lists and the PST checker's table-NID rule; everything those touch was run again on the tree that includes them (the
+suite, the AOT smoke app, the ICS and vCard round trip, the PST write check, and the fuzz targets `pgp-mime`, `vcard-view`, `calcard`, `jcal-jcard`,
+`sanitizer-display`, `htmltext`, `mail-open`, whose rows below are the later run). The MIME, differential, MSG, TNEF and source-store libpff rows ran on
+the earlier tree; none of the later changes is in code they reach. The Outlook and `scanpst.exe` rows and the provider smoke rows are in progress and not part of these numbers.
+
+**Fuzzing:** every one of the 52 targets ran 600 s under libFuzzer (SharpFuzz-instrumented, `Checked`), one process each, nine at a time:
+0 findings (no crash, hang or out-of-memory input). Executions in millions, then the `ft` feature count libFuzzer reported at the end (the host reports a
+constant `cov: 3` for .NET targets, so only features are comparable):
+
+| Target | Exec (M) | ft | Target | Exec (M) | ft | Target | Exec (M) | ft |
+|---|---|---|---|---|---|---|---|---|
+| authres | 10.3 | 3,581 | imap-fetch | 5.9 | 6,703 | rtf-decompress | 21.8 | 104 |
+| calcard | 9.3 | 10,895 | imap-response | 8.1 | 4,204 | rtf-deencap | 20.3 | 1,401 |
+| calendar | 7.7 | 4,057 | jcal-jcard | 9.6 | 9,299 | rtf-html | 6.2 | 5,467 |
+| composition | 2.3 | 22,148 | ltp | 3.6 | 8,381 | sanitizer | 2.7 | 2,910 |
+| contentlines | 16.0 | 2,609 | mail-open | 4.8 | 9,330 | sanitizer-display | 3.0 | 9,242 |
+| dbx | 5.9 | 2,915 | mbox | 18.3 | 831 | sanitizer-reparse | 3.4 | 2,902 |
+| dbx-recovery | 2.3 | 2,486 | mhtml-uri | 19.0 | 1,269 | sasl-challenge | 24.3 | 357 |
+| dkim-key | 23.9 | 766 | mime-reader | 14.0 | 1,516 | smime-structure | 3.3 | 10,458 |
+| dkim-tags | 19.9 | 994 | mime-tree | 9.7 | 10,241 | smtp-reply | 7.7 | 2,300 |
+| dns-reply | 27.4 | 246 | msg | 5.3 | 4,166 | span-cfb | 27.1 | 70 |
+| emlx | 15.7 | 589 | msg-write | 1.2 | 7,573 | span-mime | 15.5 | 2,055 |
+| htmltext | 9.8 | 9,535 | ndb | 2.5 | 5,193 | span-ndb | 25.7 | 358 |
+| oxcmail | 1.8 | 30,481 | olm | 12.5 | 304 | text | 14.4 | 11,070 |
+| oxocal | 0.9 | 17,203 | olm-recovery | 5.2 | 2,612 | tnef | 6.7 | 8,193 |
+| pgp-mime | 3.6 | 15,779 | pop3-listings | 7.7 | 4,358 | vcard-view | 9.6 | 6,911 |
+| pst-messaging | 1.0 | 17,014 | pop3-response | 14.8 | 1,225 | xcal-xcard | 14.1 | 230 |
+| pst-recovery | 0.3 | 18,796 | recurrence | 1.6 | 5,407 | render | 0.04 | 2,380 |
+| render-datauri | 28.6 | 7 | reports | 5.2 | 2,788 | | | |
+
+`rtf-decompress`, `render-datauri`, `xcal-xcard` and `span-cfb` saturate early (a handful of new features after the first seconds); `render` is slow
+because each input renders to PDF.
+
+**MIME differential**, OneMail against each oracle (MimeKit 4.18.2, Python 3.13.17 `email`, Go 1.26.8), per corpus: messages identical / differing.
+Every difference maps to an entry in [`ambiguities.md`](ambiguities.md) or to a documented oracle limit (`LIMIT-*`); unexplained is 0 in all 12 runs.
+
+| Corpus | Messages | Go | MimeKit | Python | Unexplained |
+|---|---|---|---|---|---|
+| CMU Enron maildir | 517,401 | 467,377 / 50,024 | 469,819 / 47,582 | 517,075 / 326 | 0 |
+| Dovecot `dovecot-crlf` | 2,859 | 2,692 / 167 | 2,847 / 12 | 2,821 / 38 | 0 |
+| Mime4j test messages | 80 | 36 / 44 | 65 / 15 | 59 / 21 | 0 |
+| `testdata/differential` probes | 224 | 151 / 73 | 183 / 41 | 174 / 50 | 0 |
+
+The counts equal the 0.1.0-preview.1 full run cell for cell. What the differences are, for Enron: against Go, 47,198 address lists Go's `net/mail` rejects
+(`LIMIT-go-address-list`) plus H10 (1,693), E7 (971), D10 (271), address quoting (72) and H5 (29); against MimeKit A15 (47,171), N15 (409), H5 (82), A16 (3),
+E2 (2); against Python A10 (221), A16 (66), A12 (27), H10 (9), H4 (3), E1 and N11 (1 each). The other corpora spread over the same entries.
+
+**Round trips** (untouched input written back):
+
+| Format | Input | Result |
+|---|---|---|
+| MIME, entity tree parsed and written; reader events cover the input | Enron 517,401 (1.42 GB), dovecot messages 2,859, the dovecot mbox split into 2,859, Mime4j 80, probes 225 | byte-identical 523,424 / 523,424 |
+| ICS, vCard (content-line tree) | `testdata/calendar` 586 files and the fetched calendar corpora 813 files (libical 640, Thunderbird 86, ical.js 51, ez-vcard 18, biweekly 15, sabre 3) | byte-identical 1,399 / 1,399 |
+| MSG property and value streams re-encoded | 53 corpus + 7 generated | identical 60 / 60; the 2 fuzz-minimised corpus files are refused in strict mode by design (typed defect; they open with `Recovery`) |
+| TNEF attribute layer and MAPI properties | 7 files (Tika, POI) | identical and property-exact 7 / 7 |
+| PST written by `PstBuilder` from each source, then compared property by property | 8,922 messages from the Tika PSTs, the CFReDS OST, 53 MSG, 7 TNEF, 78 Mime4j, 5,032 Enron and 3,237 dovecot messages (the 490 OLM items are checked by `propexact` and libpff only) | 0 unmatched, 0 property differences, 0 defects; `pffinfo` opens every file |
+
+**libpff agreement** (`pffexport` 20180714, distribution package) on the source stores, Tika `testPST.pst`, `testPST_variousBodyTypes.pst` and the CFReDS OST:
+folders, items, recipients and attachments, 548 compared fields, 0 differences; lists-tables-properties layer 0 defects; no unreadable block, no invalid
+allocation map. On the PSTs we write, `pffexport` finds every item (5,032 of 5,032 Enron; 3,241 against 3,237 dovecot messages, the extra four being embedded
+messages it counts) and shows only its known reading limits ([`pst-writing.md`](pst-writing.md)): the narrow-string code page (it ignores
+`PidTagMessageCodepage`), `Attachment.txt` for an unnamed attachment (48 cases), a `_` in front of a numeric attachment name (11), and one POI MSG whose
+subject it reads as `Importance:` plus tabs (explained: `blank.msg` has an empty subject, and pffexport then writes `Subject:` with no line end, so the next label lands on the same line of `OutlookHeaders.txt`; ours is right).
+
+**Working set**, indicative runs on a loaded machine (release build). The largest real store in the corpora is a 16 MiB OST, so the large stores are generated.
+
+| Workload | Size | Peak working set |
+|---|---|---|
+| Enumerate an mbox (`OneMailRanges scan`) | 1, 4, 16 GiB (15,741 / 63,114 / 252,421 messages) | 46.7, 46.2, 46.6 MiB; 40 bytes allocated in total |
+| Build a PST (`PstBuilder`) | 100,000 and 1,000,000 messages (370 MiB and 3.7 GiB file) | 112 and 115 MiB |
+| Read every message of a generated PST, write an mbox (`onemail convert`) | 100,000 and 1,000,000 messages | 109 and 114 MiB |
+| CMU Enron maildir to mbox (`onemail convert`) | 517,401 messages, 1.45 GB | 133 MiB |
+
+All four are flat from 1x to 10x or 16x the size.
+
+The suite on the merged tree: 3,606 tests, 0 failed, 63 skipped; the AOT smoke app publishes with 0 warnings and every check in it passes.
+
+Gap found and left: one POI MSG (`0x2001a4` in the written PST) whose subject `pffexport` reads from the header-like line after it while ours reads an empty
+subject; not yet checked against the file's own properties.
+
 ## Calendar card
 
 `CalendarCard` ([`calendar-card.md`](calendar-card.md)), checked on the calendar corpora (libical, ical.js, biweekly, sabre/vobject, Thunderbird holidays, the
@@ -223,11 +307,12 @@ PGP/MIME (RFC 3156), inline OpenPGP and Autocrypt headers on OneCrypto 0.4.0-pre
 |---|---|---|---|
 | Ours to other programs | per key: signed, encrypted, signed+encrypted (combined), sign-then-encrypt | GnuPG 2.4.4: 8/8 (v4 EdDSA/Cv25519 4, RSA-3072 4). GnuPG 2.5.24: 5/8 (RSA-3072 4/4, EdDSA/Cv25519 signed 1/1; the 3 decryptions failed because 2.5.24 did not make the Cv25519 subkey available after importing a OneCrypto-generated secret key; 2.4.4 and Sequoia accept the same key). Sequoia sqop 0.38.0: 16/16 (v4 EdDSA/Cv25519, native v4 Ed25519/X25519, RSA-3072, v6 Ed25519/X25519) | GnuPG does not read native or v6 keys, so those cells run on Sequoia only |
 | Other programs to ours | the same four shapes over keys the program generated | GnuPG 2.4.4 8/8, GnuPG 2.5.24 8/8 (EdDSA/Cv25519 and RSA-3072), Sequoia sqop 0.38.0 8/8 (v6 Ed25519/X25519 and v4 EdDSA/Cv25519): 24/24 open, authenticated where signed | |
+| Protected headers (write) | per key, signed / combined / sign-then-encrypt with the headers inside and the outer Subject obscured when encrypting | GnuPG 2.4.4: 6/6 (v4 EdDSA/Cv25519, RSA-3072; the three shapes each). Sequoia sqop 0.38.0: 12/12 (the four key types). Our reader: all three shapes `HeadersProtected` with the real subject (committed vectors) | GnuPG 2.5.24 not run for these |
 | Tampering | changed byte, swapped signature part, stripped signature, empty signature part, wrong `micalg`, missing `micalg`, LF copy, unknown signer, weak hash on sign | each fails with its status and reason (PG1-PG4), or is accepted with the typed issue | |
 | Hostile input | 12 nested signed layers, 5 MB of armor, truncated cleartext signature, 3,000-part `multipart/signed`, 3,000 nested multiparts, decrypted size over the limit | typed statuses, no exceptions | |
-| Fuzz `pgp-mime` | `multipart/signed`, `multipart/encrypted` (encrypt-only and combined), cleartext-signed and armored bodies, raw and edited from valid ones; 600 s, `Checked` build | 9,952,860 executions, 0 findings, peak RSS 29 MB | OpenPGP packet parsing is fuzzed in OneCrypto |
+| Fuzz `pgp-mime` | `multipart/signed`, `multipart/encrypted` (encrypt-only and combined), cleartext-signed and armored bodies, raw and edited from valid ones; 600 s, `Checked` build | 9,952,860 executions, 0 findings, peak RSS 29 MB. After protected headers, attachments, HTML parts and the status block were added (14 start messages): 3,410,153 executions in 601 s, 0 findings, peak RSS 28 MB | OpenPGP packet parsing is fuzzed in OneCrypto |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; `pgp: ok` | native only |
-| Thunderbird | | not run | no released Thunderbird could be run headless here; see `openpgp.md`, *Not done* |
+| Thunderbird 159.0 (release tarball, headless; its built-in OpenPGP) | **Ours opened by Thunderbird:** per key, signed, encrypted, signed+encrypted, sign-then-encrypt, in a local Inbox. **Thunderbird to ours:** it composes signed, encrypted and signed+encrypted mail with the key, sent to a local SMTP sink | Ours to Thunderbird 8/8 (v4 EdDSA/Cv25519 and RSA-3072 x 4 shapes): signature valid and body right where signed, decrypted where encrypted. Thunderbird to ours 6/6 (the same two keys x 3 modes): all verify and decrypt in `PgpInteropVectors`, with Thunderbird's protected Subject. A correspondent's key: "not accepted" until accepted, then "unverified" (4/4). GnuPG 2.4.4 and 2.5.24 vectors in Thunderbird: encrypted and combined 8/8 | Thunderbird 159 refuses the native-Ed25519 v4 key and the version 6 keys (key import fails; 12 messages not opened), so those are not run. After the vector script wrote CRLF soft line breaks (the earlier 9 invalid signatures were a bare LF in the vectors) 28 messages are read with 25 ok, 0 failures and 3 explained: Sequoia messages with RFC 9580 version 6 session-key and version 2 data packets that Thunderbird cannot decrypt (GnuPG 2.4.4 8/8, GnuPG 2.5.24 8/8, ours 8/8, Sequoia 1/4 readable). Thunderbird's S/MIME has its own row in the S/MIME section. `tools/thunderbird/`; see `openpgp.md` |
 
 ## S/MIME (`RecursiveAI.OneMail.Cryptography.Smime`)
 
@@ -240,9 +325,10 @@ RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: 
 | RFC 9216 example keys and certificates (sha256 06fbf1ed...2b71) | Alice, Bob (RSA), Carlos, Dana (Ed25519 with X25519 keys): sign detached and opaque, encrypt Enveloped and AuthEnveloped | 16/16; chains validate to the published roots | the RFC's own messages are not used (its signed examples are not published as MIME) |
 | Tamper classes | body byte, signed header, boundary games, signature swapped, wrong recipient, truncated CMS (unit tests) | each gives its typed status (`ContentModified`, `SignatureInvalid`, `NoMatchingRecipient`, `StructureInvalid`, `Malformed` ...), never an exception | |
 | Outlook S/MIME items (MS-OXOSMIME) | generated `IPM.Note.SMIME` and `IPM.Note.SMIME.MultipartSigned` items in MSG and PST; the corpora | generated items verify and decrypt through the same path; the corpora hold 3,014 items, 78 from Outlook, with 1 S/MIME-class item (`IPM.Note.SMIME.MultipartSigned`, Valid) and 412 MIME messages with S/MIME parts; no Outlook-produced encrypted item | no Outlook-written sample beyond that one until the Outlook VM exists |
+| Thunderbird 159.0 (release tarball, headless Marionette; its NSS-based S/MIME), `tools/thunderbird/smime.py` | **Ours opened by Thunderbird:** per key type (RSA-2048, RSA-3072, ECDSA P-256), detached signed, opaque signed, encrypted, signed+encrypted (sign then encrypt), and a signed part beside an unsigned one; the test CA and the user's PKCS #12 file imported through `nsIX509CertDB` (CA trusted for email). **Thunderbird to ours:** it signs, encrypts and signs+encrypts to the key's own address with its own certificate and the mail goes to a local SMTP sink | Ours to Thunderbird 15/15: "Good signature" with the signer's address and the right body where signed (RSA-2048, RSA-3072, ECDSA P-256 x detached and opaque), "Decryption successful" where encrypted (RSA key transport and ECDH), both for signed+encrypted; the signed part beside an unsigned one shows no signature (and Thunderbird shows both parts). Control with the CA imported but not trusted for email: no "Good signature" on any of the 3 keys (3/3). Thunderbird to ours 9/9 (3 key types x signed, encrypted, signed+encrypted; micalg sha-256, enveloped-data, sign-then-encrypt for the combined mode): each verifies against the test CA with the sender matching and decrypts in `SmimeInteropVectors`, together with our 12 messages (21/21 read back with no Thunderbird). 0 unexplained | The harness did not make Thunderbird write opaque signatures, and AuthEnveloped, RSA-PSS and Ed25519 messages were not opened in it; revocation not checked. `smime.md` |
 | Structure fuzz `smime-structure` | multipart/signed, pkcs7-mime and triple-wrapped messages, raw and edited from valid ones; 600 s, `Checked` build | 7.7 M executions, 0 findings (peak RSS 33 MB). An earlier run found a certificate with a damaged extended-key-usage extension throwing out of the verifier (now reported as `eku:malformed`; repro `testdata/fuzz/smime-structure-malformed-eku-in-signer-cert.bin`) | CMS parsing is fuzzed in OneCrypto |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; `smime: ok` | native only |
-| Suite | `Checked` configuration | 3,348 / 3,348 pass | |
+| Suite | `Checked` configuration | 3,552 pass, 63 skipped, 0 fail (with the Thunderbird vector and display tests); AOT `smime: ok` including the status block | |
 
 ## Rendering to PDF and PNG
 

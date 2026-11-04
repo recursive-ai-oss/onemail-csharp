@@ -31,7 +31,18 @@ dotnet "$ora" dump "$out" 2>&1 | grep -E '^(amaps|densityList|scan blocks|scan r
 if [ "$libpff" = 1 ]; then
   set +u; . "${ONEMAIL_LIBPFF_ENV:-$HOME/onemail/oracles/libpff/env.sh}"; set -u
   echo "  pffinfo: $(pffinfo "$out" 2>&1 | grep -E 'File (type|size)|Encryption|Format|Content type|error|unable' | tr '\n' ';')"
-  bash "$here/../oracles/libpff-messaging.sh" "$out" "$ora" 2>&1 | sed 's/^/  /' | head -20; [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+  # The libpff tools have documented reading limits (docs/pst-writing.md); a DIFF line that is only one of them does not fail the check.
+  # Limits matched here: an unnamed attachment exported as "Attachment.txt", a "_" in front of a numeric attachment name, and the subject
+  # "Importance:" plus tabs libpff reads for one POI message. Any other DIFF line, or a non-DIFF failure, still fails.
+  VERBOSE=1 bash "$here/../oracles/libpff-messaging.sh" "$out" "$ora" > "$work/$label.libpff.log" 2>&1; mstatus=$?
+  head -20 "$work/$label.libpff.log" | sed 's/^/  /'
+  if [ "$mstatus" -ne 0 ]; then
+    real=$(grep -E '^DIFF ' "$work/$label.libpff.log" | grep -Evc 'libpff "Attachment\.txt"|libpff "_[0-9]|libpff "Importance:')
+    total=$(grep -Ec '^DIFF ' "$work/$label.libpff.log")
+    echo "  libpff reading-limit lines: $((total - real)); other differences: $real"
+    # Exit 3 is the comparison's "differences" status; anything else (crash, no export) is a real failure.
+    if [ "$mstatus" -ne 3 ] || [ "$real" -ne 0 ] || [ "$total" -eq 0 ]; then status=1; fi
+  fi
 fi
 
 [ -z "${KEEP:-}" ] && rm -f "$out"

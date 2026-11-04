@@ -10,6 +10,24 @@ public class ValueAndViewTests
 {
     private static ContentDocument Doc(string s) => ContentDocument.Parse(Encoding.UTF8.GetBytes(s));
 
+    [Fact]
+    public void TheTypedVCardListsCountWithoutBuildingAndReadTheSameAfterwards()
+    {
+        VCardView card = VCardDocument.Cards(Doc("BEGIN:VCARD\nVERSION:3.0\nFN:A B\nEMAIL;TYPE=work,pref:a@example.org\nEMAIL:b@example.org\nTEL;TYPE=cell:+1 555 0100\n"
+            + "ADR;TYPE=home:;;1 Main St;Town;;12345;Land\nEND:VCARD\n")).Single();
+        Assert.Equal(2, card.Emails.Count);
+        Assert.True(card.Phones.Count == 1);
+        Assert.True(card.Addresses.Count == 1);
+        Assert.Empty(card.Urls);
+        IReadOnlyList<VCardTyped> mail = card.Emails;
+        Assert.Equal(["a@example.org", "b@example.org"], mail.Select(static m => m.Value));
+        Assert.Equal(1, mail[0].Preference);
+        Assert.Equal(["work", "pref"], mail[0].Types);
+        Assert.Same(mail[1], mail[1]);
+        Assert.Equal(["1 Main St"], card.Addresses[0].Street);
+        Assert.Throws<ArgumentOutOfRangeException>(() => mail[2]);
+    }
+
     [Theory]
     [InlineData("20260131", IcsTimeKind.Date, "20260131")]
     [InlineData("20260131T090000", IcsTimeKind.Floating, "20260131T090000")]

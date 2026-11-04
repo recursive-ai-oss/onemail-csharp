@@ -1,0 +1,30 @@
+Message-ID: <ebd6b600-3f42-4d7e-9d9d-f87b020dccf3@example.org>
+Date: Wed, 4 Nov 2026 12:37:22 -0600
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+To: vector-rsa2048@example.org
+Subject: Interop vector
+Content-Language: en-US
+From: Vector <vector-rsa2048@example.org>
+Content-Type: application/pkcs7-mime; name="smime.p7m"; smime-type=enveloped-data
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Description: S/MIME Encrypted Message
+
+MIAGCSqGSIb3DQEHA6CAMIACAQAxggKWMIIBRwIBADAvMBsxGTAXBgNVBAMMEFZlY3RvciBU
+ZXN0IFJvb3QCEHgxOfWRkvFtD4sZvviSlmUwDQYJKoZIhvcNAQEBBQAEggEASw+Gu4OghZMi
+OOI2KIN+q8IGFqJiE4E8ihHnXKPZ4ur6FvwhrBEAukpYYK5lN7l1KAJp5aUmv1LteA8oUxQe
+c8uW90vhmRppl0yMx87fvHJJgEE/1+BkI9OIc16rFbeUNOm/wTRI22c+tRqH1bMqRVrie+Zi
+GRMnGYcEBzSBeNaj7fnSgwC5mbd54jeryWbdBLfXKNB/IrXMPREzo4tHxuGrip/beb51NS1W
+KzZPuqr78a8JNT4lDIFdcQHMzxo9NiyOkACHw0AytqS1x6LmkebxiAbiaDGitan/S5UwR1qR
+KI3srtMWZAMY6yoPqQvx6tN2lTwhztBmZWa/1pKm9jCCAUcCAQAwLzAbMRkwFwYDVQQDDBBW
+ZWN0b3IgVGVzdCBSb290AhB4MTn1kZLxbQ+LGb74kpZlMA0GCSqGSIb3DQEBAQUABIIBAG1l
+ga+M3BDu88zWtVt3klq9TE/H2OknFWCYHmmgo5cRIHAx2hSL1QPY3Zdp31gdy9vgnEUMfRMM
+53IhdvNmuNp2IP5RxjC3bYmdtF8YUSFa1hPhoJm7et+tvdRjCWHj5YTeXQz3qDJ1JGne1wkK
+0Ei4QRK9ox+GmcY26Z/OQTOzp74A6Y6xoOZEye3e6TVKqvFBGKlk1GBS0R/Ti+ofv3IgoE2A
+nnmIpIPEzsvao/ZVMiLDMo617oLkcj+2aB8xQmhwzdqt1O/Hf871B9DpZhxbFTSJAKMqlANF
+IQ01+kLvABg+g9d75xXs2Yjsnqk2velLtj67oIJzHO+48hRt1pwwgAYJKoZIhvcNAQcBMB0G
+CWCGSAFlAwQBAgQQPnp1cSmQDSPT45+4nMVIt6CABIGAeV11kekKuytHLRKJmhI2p14zdb1K
+RS42oAhHLk3P+kLtmE7TWN57mVCQSmzxrxKgtkpynso2NCXlPVpMWF8EGgfaBfehkHL+WdfZ
+DK8BBjD4l7c/hVbuNgihWXr6ddwR1LyttZ8GKQ9tyH4JDg6VNCTXNXtcvwTc2heIgqsgq0wE
+EKLsrxaVQp38/IQ8/nCJvD4AAAAAAAAAAAAA

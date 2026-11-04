@@ -23,6 +23,42 @@ public static class NdbChecker
     /// <param name="Blocks">Blocks in the block tree.</param>
     /// <param name="Nodes">Nodes in the node tree.</param>
     /// <param name="Unique">dwUnique from the header.</param>
+    internal const string AboveCounter = "NID counter";
+
+    /// <summary>Whether a soft finding is the NID-counter kind and no worse (not more nodes, not a higher index) than the same type's finding in <paramref name="before"/>.</summary>
+    public static bool NoWorseThanBefore(string finding, IEnumerable<string> before)
+    {
+        if (!finding.StartsWith(AboveCounter, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        static (string Type, int Count, string Max) Parse(string f)
+        {
+            int t = f.IndexOf(':', StringComparison.Ordinal);
+            int c = f.IndexOf(' ', t + 2);
+            int hi = f.LastIndexOf("highest ", StringComparison.Ordinal) + 8;
+            return (f[..t], int.Parse(f.AsSpan(t + 2, c - t - 2), System.Globalization.CultureInfo.InvariantCulture), f[hi..^1]);
+        }
+
+        (string type, int count, string max) = Parse(finding);
+        foreach (string b in before)
+        {
+            if (!b.StartsWith(AboveCounter, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            (string bt, int bc, string bm) = Parse(b);
+            if (bt == type && count <= bc && Convert.ToUInt32(max, 16) <= Convert.ToUInt32(bm, 16))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public sealed record Report(List<string> Errors, List<string> Soft, int Pages, int Blocks, int Nodes, uint Unique);
 
     private sealed class State
@@ -190,18 +226,30 @@ public static class NdbChecker
             s.Errors.Add($"bidNextP {bidNextP:x} does not pass the highest page BID {s.MaxPageBid:x}");
         }
 
+        // MS-PST 2.2.2.6: rgnid is the last index allocated, so an index above it is one the next allocation could hand out again.
+        // One finding per NID type with the count and the highest index, so a file that has the condition from the start (Outlook writes
+        // some) can be told apart from one whose condition got worse.
+        var above = new SortedDictionary<int, (int Count, uint Max, uint Counter)>();
         for (int i = 0; i < s.NodeEntries.Count; i++)
         {
             uint nid = s.NodeEntries[i].Nid;
             int type = (int)(nid & 0x1F);
             uint index = nid >> 5;
-            uint counter = BinaryPrimitives.ReadUInt32LittleEndian(h[(44 + (type * 4))..]);
+            // MS-PST 2.4.4: a folder's hierarchy, contents and associated contents tables (and a search folder's contents table) have the
+            // folder's own nidIndex with another type, so their index comes from the folder's counter (NID_TYPE_NORMAL_FOLDER 0x02,
+            // NID_TYPE_SEARCH_FOLDER 0x03), not from a counter of their own; neither Outlook nor the writer bumps the table types' counters.
+            int counterType = type switch { 0x0D or 0x0E or 0x0F => 0x02, 0x10 => 0x03, _ => type };
+            uint counter = BinaryPrimitives.ReadUInt32LittleEndian(h[(44 + (counterType * 4))..]);
             if (index >= 0x400 && counter < index)
             {
-                // MS-PST 2.2.2.6: rgnid is the last index allocated, so an index above it is one the next allocation could hand out again.
-                s.Soft.Add($"NID {nid:x} (type {type:x}) is above the header's counter {counter:x}");
-                break;
+                above.TryGetValue(type, out (int Count, uint Max, uint Counter) a);
+                above[type] = (a.Count + 1, Math.Max(a.Max, index), counter);
             }
+        }
+
+        foreach ((int type, (int count, uint max, uint counter)) in above)
+        {
+            s.Soft.Add($"{AboveCounter} type {type:x}: {count} NID(s) with an index above the header's counter {counter:x} (highest {max:x})");
         }
 
         // Allocation maps and density list.

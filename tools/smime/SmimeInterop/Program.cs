@@ -20,7 +20,7 @@ namespace OneMail.Tools.SmimeInterop;
 
 // Two-way S/MIME interop. Every cell makes a message with one implementation and has another open it. OpenSSL (`openssl cms`) and
 // MimeKit run as released binaries/packages, black box. Usage: SmimeInterop <work dir> [cells.tsv]
-internal static class Program
+internal static partial class Program
 {
     private sealed record Id(string Name, string Email, Certificate Cert, ISigningKey Key, string CrtPath, string KeyPath, string Pfx, Func<CmsDecryptionKey>? Decrypt);
 
@@ -39,6 +39,11 @@ internal static class Program
         if (args.Length > 1 && args[0] == "scan")
         {
             return Scan(args.Skip(1));
+        }
+
+        if (args.Length > 1 && args[0] == "thunderbird")
+        {
+            return ThunderbirdVectors(args[1]);
         }
 
         if (args.Length > 1 && args[0] == "rfc9216")
