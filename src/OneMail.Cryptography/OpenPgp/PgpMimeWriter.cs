@@ -25,6 +25,12 @@ public sealed class PgpMimeSignOptions
 
     /// <summary>The boundary of the <c>multipart/signed</c>; null generates a random one. Pass one for reproducible output. An error when it occurs in the content.</summary>
     public string? Boundary { get; init; }
+
+    /// <summary>
+    /// Headers to put inside the signed part and repeat on the returned <c>multipart/signed</c> (<see cref="PgpProtectedHeaders"/>). Default null: the signature covers only the content,
+    /// and the caller adds <c>From</c>, <c>To</c> … to the result, which then are not covered. The outer <c>Subject</c> is never obscured when only signing.
+    /// </summary>
+    public PgpProtectedHeaders? ProtectedHeaders { get; init; }
 }
 
 /// <summary>Choices for encrypting a message with <see cref="PgpMimeEncryptor"/>.</summary>
@@ -56,6 +62,13 @@ public sealed class PgpMimeEncryptOptions
 
     /// <summary>Force the older SEIPD v1 container (readable by every OpenPGP implementation). Default false: OneCrypto picks from the recipients' feature flags.</summary>
     public bool ForceSeipd1 { get; init; }
+
+    /// <summary>
+    /// Headers to put inside the encrypted content (and so, with <see cref="Signers"/>, inside the signature) and to repeat on the returned <c>multipart/encrypted</c>, with
+    /// the outer <c>Subject</c> optionally replaced by <c>...</c>. Default null. When the content is a <c>multipart/signed</c> whose signed part already has
+    /// <c>protected-headers</c> (made with <see cref="PgpMimeSignOptions.ProtectedHeaders"/>), the content is left as it is and only the outer fields are written; pass the same headers to both.
+    /// </summary>
+    public PgpProtectedHeaders? ProtectedHeaders { get; init; }
 }
 
 /// <summary>The canonical form RFC 3156 signs: 7 bit, CRLF line ends, no trailing white space.</summary>
@@ -241,7 +254,7 @@ public static class PgpMimeSigner
             throw new ArgumentException("At least one signer is required.", nameof(options));
         }
 
-        byte[] signedBytes = PgpCanonical.Canonicalise(content);
+        byte[] signedBytes = PgpCanonical.Canonicalise(options.ProtectedHeaders is { } ph ? ph.ApplyTo(content) : content);
         var armored = new MemoryStream();
         IReadOnlyList<PgpHashAlgorithm> hashes = PgpMessageWriter.SignDetached(new MemoryStream(signedBytes, writable: false), armored, new PgpWriteOptions
         {
@@ -269,6 +282,7 @@ public static class PgpMimeSigner
         // The signed part goes in as parsed bytes so nothing later can change what the signature covers (RFC 3156 §5 (6)).
         multipart.Add(MimeEntity.Parse(signedBytes));
         multipart.Add(PgpCanonical.ArmoredPart(armored.ToArray(), "application/pgp-signature", "signature.asc", "OpenPGP digital signature", inline: false));
+        options.ProtectedHeaders?.ApplyOuter(multipart, encrypted: false);
         return multipart;
     }
 }
@@ -296,6 +310,12 @@ public static class PgpMimeEncryptor
         if (options.Recipients.Count == 0 && options.Passwords.Count == 0)
         {
             throw new ArgumentException("At least one recipient or password is required.", nameof(options));
+        }
+
+        PgpProtectedHeaders? protectedHeaders = options.ProtectedHeaders;
+        if (protectedHeaders is not null && !PgpProtectedHeaders.IsSignedWrapperWithProtectedHeaders(content))
+        {
+            content = protectedHeaders.ApplyTo(content);
         }
 
         byte[] plain;
@@ -336,6 +356,7 @@ public static class PgpMimeEncryptor
         control.SetRawContent("Version: 1\r\n"u8.ToArray());
         multipart.Add(control);
         multipart.Add(PgpCanonical.ArmoredPart(armoredBytes, "application/octet-stream", "encrypted.asc", "OpenPGP encrypted message", inline: true));
+        protectedHeaders?.ApplyOuter(multipart, encrypted: true);
         return multipart;
     }
 }

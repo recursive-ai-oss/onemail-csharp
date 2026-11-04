@@ -149,7 +149,8 @@ public sealed partial class CalendarCard
         {
             MimeMailItem m => [.. m.CalendarParts.SelectMany(p => FromMime(p, options))],
             MapiMailItem a => FromMapi(a.Message, options),
-            OlmItem { OlmKind: OlmItemKind.Appointment } olm => CreateAll(new IcsComponent(new OlmToCalendarConverter().Convert(olm).Value), options),
+            // An Outlook for Mac task becomes a VTODO, which the card builder handles like any to-do. A note has no time and is not a calendar object, so it gets no card.
+            OlmItem { OlmKind: OlmItemKind.Appointment or OlmItemKind.Task } olm => CreateAll(new IcsComponent(new OlmToCalendarConverter().Convert(olm).Value), options),
             _ => [],
         };
     }

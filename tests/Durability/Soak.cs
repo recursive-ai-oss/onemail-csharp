@@ -218,12 +218,12 @@ internal static class Soak
             problems.Add($"op {op}: node database checker: {e}");
         }
 
-        foreach (string e in rep.Soft.Where(e => !baseSoft.Contains(e)))
+        foreach (string e in rep.Soft.Where(e => !baseSoft.Contains(e) && !NdbChecker.NoWorseThanBefore(e, baseSoft)))
         {
             softSeen++;
             if (SoftKinds.Count < 12)
             {
-                SoftKinds.Add(System.Text.RegularExpressions.Regex.Replace(e, "[0-9a-f]{3,}|[0-9]+", "#"));
+                SoftKinds.Add(e);
             }
         }
 
