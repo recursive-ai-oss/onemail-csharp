@@ -59,6 +59,10 @@ sealed class Smoke
             string? d = await body();
             Add(proto, feature, d is not null && d.StartsWith("not-offered", StringComparison.Ordinal) ? "not-offered" : "pass", d ?? "");
         }
+        catch (Exception e) when (e.Message.Contains("not enabled for POP", StringComparison.OrdinalIgnoreCase))
+        {
+            Add(proto, feature, "not-offered", "POP access is switched off in the account settings");
+        }
         catch (NotSupportedException e)
         {
             Add(proto, feature, "not-offered", Mask(e.Message));
@@ -318,7 +322,8 @@ sealed class Smoke
             first = (await imap.SearchAsync(ImapSearch.Header("X-OneMail-Smoke", _run), uid: true)).Numbers is { Count: > 0 } n1 ? n1[0] : 0;
             if (first is null or 0)
             {
-                throw new InvalidOperationException("no test message in INBOX");
+                // An imap-only run has no sent messages; append one to flag.
+                first = (await imap.AppendAsync("INBOX", Build("smoke flags", 0, "flags"))).Uids[0];
             }
 
             await imap.StoreAsync(ImapSet.Of(first.Value), ImapStoreMode.Add, ["\\Flagged", "$OneMailSmoke"], uid: true);
@@ -367,7 +372,7 @@ sealed class Smoke
             }
 
             string dest = await Special(imap, ImapSpecialUse.Trash) ?? throw new InvalidOperationException("no Trash folder");
-            long uid = (await imap.SearchAsync(ImapSearch.Header("X-OneMail-Smoke", _run).And(ImapSearch.Header("Message-ID", "append")), uid: true)).Numbers is { Count: > 0 } n2 ? n2[0] : 0;
+            long uid = (await imap.SearchAsync(ImapSearch.Header("Message-ID", $"<{_run}.append@smoke.onemail.invalid>"), uid: true)).Numbers is { Count: > 0 } n2 ? n2[0] : 0;
             if (uid == 0)
             {
                 throw new InvalidOperationException("appended message not found");

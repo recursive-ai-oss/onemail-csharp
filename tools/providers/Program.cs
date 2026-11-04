@@ -6,7 +6,7 @@ using OneMail.Tools.Providers;
 //
 // Environment (from the secrets env file, ONEMAIL_PROVIDERS_ENV, default: the secrets directory's providers.env):
 //   GMAIL_ADDRESS, GOOGLE_CLIENT_ID, [GOOGLE_CLIENT_SECRET]      MS_ADDRESS, MS_CLIENT_ID, [MS_TENANT=consumers]
-// Refresh tokens live in ONEMAIL_PROVIDERS_TOKENS (default: tokens.env beside the env file), mode 600.
+// Refresh tokens live in the env file (or ONEMAIL_PROVIDERS_TOKENS), mode 600.
 // Without the credentials `smoke` exits 77 (skipped) so a CI run is a no-op.
 if (args.Length < 2)
 {
@@ -24,8 +24,8 @@ foreach (string k in new[] { "GMAIL_ADDRESS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT
     }
 }
 
-string tokenFile = Environment.GetEnvironmentVariable("ONEMAIL_PROVIDERS_TOKENS")
-    ?? (envPath.Length > 0 ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(envPath))!, "tokens.env") : "tokens.env");
+// Refresh tokens are written to the env file itself unless ONEMAIL_PROVIDERS_TOKENS names another file.
+string tokenFile = Environment.GetEnvironmentVariable("ONEMAIL_PROVIDERS_TOKENS") ?? (envPath.Length > 0 ? envPath : "tokens.env");
 string provider = args[1].ToLowerInvariant();
 bool gmail = provider == "gmail";
 if (!gmail && provider != "outlook")

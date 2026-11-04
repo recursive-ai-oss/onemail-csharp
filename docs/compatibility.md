@@ -363,6 +363,41 @@ SMTP server, DKIM/ARC with generated keys, S/MIME with a test anchor, sanitiser 
 
 The `android` job in CI builds the Android app on every push (build only).
 
+## Provider smoke (`tools/providers`, `providers.md`)
+
+Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all mail to the account itself, cleaned up afterwards. 26 pass, 2 not-offered, 0 FAIL. Outlook.com: not run (no OAuth client). Yahoo, iCloud: not run (no accounts).
+
+| Protocol | Feature | Result | Detail |
+|---|---|---|---|
+| smtp | attachment+non-ASCII subject (encoded-word) | pass | 55447 bytes |
+| smtp | SMTPUTF8 raw UTF-8 subject | pass | 432 bytes |
+| smtp | 5 MB message | pass | 5337486 bytes |
+| smtp | 587 starttls XOAUTH2 auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 587 starttls OAUTHBEARER auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 465 implicit XOAUTH2 auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 465 implicit OAUTHBEARER auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| imap | XOAUTH2 login | pass | capabilities: IMAP4rev1 UNSELECT IDLE NAMESPACE QUOTA ID XLIST CHILDREN X-GM-EXT-1 UIDPLUS COMPRESS=DEFLATE ENABLE MOVE CONDSTORE ESEARCH UTF8=ACCEPT LIST-EXTENDED LIST-STATUS LITERAL- SPECIAL-USE APPENDLIMIT=35651584 |
+| imap | OAUTHBEARER login | pass | capabilities: IMAP4rev1 UNSELECT IDLE NAMESPACE QUOTA ID XLIST CHILDREN X-GM-EXT-1 UIDPLUS COMPRESS=DEFLATE ENABLE MOVE CONDSTORE ESEARCH UTF8=ACCEPT LIST-EXTENDED LIST-STATUS LITERAL- SPECIAL-USE APPENDLIMIT=35651584 |
+| imap | list + SPECIAL-USE | pass | 9 folders; special-use: All,Drafts,Important,Sent,Junk,Flagged,Trash |
+| imap | select INBOX | pass | 13 messages |
+| imap | fetch+compare XOAUTH2s | pass | BODY[] body equal (70 bytes), 9 sent headers intact, 2 added; size 763, sent 408 |
+| imap | fetch+compare unicode-attach | pass | BODY[] body equal (55070 bytes), 8 sent headers intact, 2 added; size 55802, sent 55447 |
+| imap | fetch+compare utf8-subject | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 790, sent 432 |
+| imap | fetch+compare big | pass | BODY[] body equal (5337163 bytes), 8 sent headers intact, 2 added; size 5337841, sent 5337486 |
+| imap | fetch+compare OAUTHBEARERs | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 779, sent 424 |
+| imap | fetch+compare XOAUTH2i | pass | BODY[] body equal (70 bytes), 9 sent headers intact, 2 added; size 764, sent 408 |
+| imap | fetch+compare OAUTHBEARERi | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 780, sent 424 |
+| imap | search | pass | 7 hits for run header (sent 7) |
+| imap | flags store | pass | flags: $OneMailSmoke \Flagged |
+| imap | CONDSTORE select+modseq | pass | HIGHESTMODSEQ 3304 |
+| imap | QRESYNC reselect | not-offered | not-offered |
+| imap | APPEND + fetch | pass | APPENDUID; BODY[] body equal (70 bytes), 9 sent headers intact, 0 added |
+| imap | MOVE to Trash/All | pass | moved to uid 12 |
+| imap | IDLE sees new message | pass | EXISTS pushed |
+| imap | COMPRESS=DEFLATE | pass | compressed session, INBOX 14 |
+| pop3 | XOAUTH2 + UIDL + RETR | not-offered | POP access is switched off in the account settings |
+| imap | cleanup | pass | 17 moved/removed |
+
 ## Speed
 
 MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio
