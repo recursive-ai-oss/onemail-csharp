@@ -319,6 +319,7 @@ public sealed class NdbEditorTests
     }
 
     [Fact]
+    [Trait("Platform", "native"), Trait("Reason", "the browser file system has no file locking")]
     public void AnOpenEditorHoldsTheFileExclusively()
     {
         string path = Build(5);

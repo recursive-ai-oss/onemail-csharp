@@ -341,6 +341,7 @@ public class SharedViewTests
     }
 
     [Fact]
+    [Trait("Platform", "native"), Trait("Reason", "allocation counts are for the optimising JIT; the browser runtime interprets")]
     public void EnumeratingAnMboxAllocatesLittlePerMessage()
     {
 #if DEBUG
