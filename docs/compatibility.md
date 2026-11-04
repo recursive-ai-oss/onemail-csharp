@@ -365,7 +365,7 @@ The `android` job in CI builds the Android app on every push (build only).
 
 ## Provider smoke (`tools/providers`, `providers.md`)
 
-Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all mail to the account itself, cleaned up afterwards. 26 pass, 2 not-offered, 0 FAIL. Outlook.com: not run (no OAuth client). Yahoo, iCloud: not run (no accounts).
+Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all mail to the account itself, cleaned up afterwards. 27 pass, 1 not-offered (QRESYNC is not advertised), 0 FAIL (POP3 rerun after POP was enabled in the account). Outlook.com: not run (no OAuth client). Yahoo, iCloud: not run (no accounts).
 
 | Protocol | Feature | Result | Detail |
 |---|---|---|---|
@@ -395,7 +395,7 @@ Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all
 | imap | MOVE to Trash/All | pass | moved to uid 12 |
 | imap | IDLE sees new message | pass | EXISTS pushed |
 | imap | COMPRESS=DEFLATE | pass | compressed session, INBOX 14 |
-| pop3 | XOAUTH2 + UIDL + RETR | not-offered | POP access is switched off in the account settings |
+| pop3 | XOAUTH2 + UIDL + RETR | pass | 7 messages, UIDL present; test message retrieved |
 | imap | cleanup | pass | 17 moved/removed |
 
 ## Speed

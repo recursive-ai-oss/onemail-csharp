@@ -51,7 +51,7 @@ Gmail (observed 2026-11-04):
 - `SEARCH HEADER Message-ID <text>` matches whole words, not substrings: search for the complete id.
 - Gmail's folders are labels: moving to Trash and deleting there removes a message. `[Gmail]/All Mail`, Starred and Important show the same messages and are skipped by cleanup.
 - Gmail adds two headers on the way in; every other header and the body come back byte-for-byte. `RFC822.SIZE` is larger than what we sent by those headers.
-- POP3 is off by default: `-ERR Your account is not enabled for POP access`. Turn it on in Gmail settings (Forwarding and POP/IMAP); the runner reports `not-offered` until then.
+- POP3 is off by default: `-ERR Your account is not enabled for POP access`. Turn it on in Gmail settings (Forwarding and POP/IMAP); the runner reports `not-offered` until then. With POP on, XOAUTH2, UIDL and RETR of a fresh message pass; a new message can take a few seconds to show, so the runner reconnects until it appears (90 s limit).
 
 Outlook.com:
 
@@ -62,6 +62,6 @@ Outlook.com:
 
 | Provider | Result |
 |---|---|
-| Gmail | 28 rows: 26 pass, 2 not-offered (QRESYNC: not advertised; POP3: switched off in the account), 0 FAIL. Table in `compatibility.md`. |
+| Gmail | 28 rows: 27 pass, 1 not-offered (QRESYNC: not advertised), 0 FAIL. Table in `compatibility.md`. |
 | Outlook.com | not run (no OAuth client) |
 | Yahoo, iCloud | not run (no accounts) |

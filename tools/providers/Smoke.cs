@@ -478,15 +478,29 @@ sealed class Smoke
 
     async Task PopRows(List<(string Tag, byte[] Bytes)> sent)
     {
-        foreach (string mech in new[] { "XOAUTH2" })
+        await Step("pop3", "XOAUTH2 + UIDL + RETR", async () =>
         {
-            await Step("pop3", mech + " + UIDL + RETR", async () =>
+            // A pop-only run sends its own message first.
+            string tag = sent.Count > 0 ? sent[0].Tag : "pop";
+            if (sent.Count == 0)
             {
+                var offered = new List<string>();
+                await using SmtpClient sc = await SmtpConnect("XOAUTH2", false, offered);
+                byte[] b = Build("smoke pop", 0, tag);
+                await sc.SendAsync(Msg(b));
+                sent.Add((tag, b));
+                await sc.QuitAsync();
+            }
+
+            string target = $"<{_run}.{tag}@smoke.onemail.invalid>";
+            DateTime end = DateTime.UtcNow.AddSeconds(90);
+            while (true)
+            {
+                // Gmail shows a new message to POP only on a fresh session, so each look reconnects.
                 string token = await _token();
                 await using Pop3Client c = await Pop3Client.ConnectAsync(_p.PopHost, 995, new Pop3ClientOptions { Connection = new ProtocolConnectionOptions { ImplicitTls = true, Trace = Trace() } });
-                await c.AuthenticateAsync(Mech(mech, token));
+                await c.AuthenticateAsync(Mech("XOAUTH2", token));
                 IReadOnlyList<Pop3MessageInfo> uids = await c.UidlAsync();
-                string target = $"<{_run}.XOAUTH2s@smoke.onemail.invalid>";
                 foreach (Pop3MessageInfo m in uids.AsEnumerable().Reverse())
                 {
                     var ms = new MemoryStream();
@@ -494,13 +508,19 @@ sealed class Smoke
                     if (Encoding.UTF8.GetString(ms.ToArray()).Contains(target, StringComparison.Ordinal))
                     {
                         await c.QuitAsync();
-                        return $"{uids.Count} messages; test message retrieved, {ms.Length} bytes";
+                        return $"{uids.Count} messages, UIDL {(m.Uid is { Length: > 0 } ? "present" : "missing")}; test message retrieved, {ms.Length} bytes";
                     }
                 }
 
-                throw new InvalidOperationException("test message not in POP3 listing (" + uids.Count + " messages); providers may hide mail from POP by setting");
-            });
-        }
+                await c.QuitAsync();
+                if (DateTime.UtcNow > end)
+                {
+                    throw new InvalidOperationException("test message not in POP3 listing (" + uids.Count + " messages)");
+                }
+
+                await Task.Delay(5000);
+            }
+        });
     }
 
     /// <summary>Removes every message carrying our marker (any run) from the special-use folders, ending in Trash, where it is deleted and expunged.</summary>
