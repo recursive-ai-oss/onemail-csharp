@@ -13,6 +13,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Samples for every happy-path task (`samples/ParseMessage`, `OpenStore`, `Convert`, `Sending`, `Imap`, `Display`, `ReplyAndSend`, plus `Reading`), `docs/migrating-from-mimekit.md` (a map from MimeKit and MailKit calls to OneMail's, and the behavioural differences) and a README quick start.
+- `DisplayOptions.WithStatusBanner(...)`: a copy of the options with the status banner replaced; `PgpDisplay` and `SmimeDisplay` use it instead of copying every field.
 - S/MIME in Thunderbird: `tools/thunderbird/smime.py` imports the test CA and the user's PKCS #12 file into the headless Thunderbird 159.0's certificate store and opens our signed, encrypted and signed+encrypted messages (RSA-2048, RSA-3072, ECDSA P-256; 15/15, and an untrusted-CA control 3/3), and has Thunderbird write signed, encrypted and combined messages that OneMail verifies and decrypts (9/9). `SmimeInterop thunderbird` writes the vectors; both sets are committed in `testdata/smime/vectors` and read back by `SmimeInteropVectors`.
 - `SmimeDisplay.ToDisplayHtml(SmimeResult)` and `SmimeDisplay.StatusHtml`: a display with a status block (signer, chain, sender match, encryption, parts outside the signature, weak algorithms) through `DisplayOptions.StatusBanner`, never showing unsigned wrapper parts as signed.
 - Thunderbird interoperability for OpenPGP mail: `tools/thunderbird` runs the pinned Thunderbird 159.0 release headless, opens our PGP/MIME messages (signed, encrypted, combined, sign-then-encrypt) and has it write signed, encrypted and combined messages that `PgpInteropVectors` reads back from `testdata/openpgp/vectors/thunderbird`.
