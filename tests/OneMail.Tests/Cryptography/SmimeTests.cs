@@ -576,7 +576,9 @@ public sealed class SmimeTests : IDisposable
         Assert.Contains("compressed text", r.InnerItem!.TextBody!.ReadText());
 
         byte[] bomb = CompressedData.Create(new byte[20_000_000]).Encoded.ToArray();
-        SmimeResult b = SmimeTestOptions.Open(MimeEntity.Parse(SmimeContent(bomb, "compressed-data").ToArray()));
+        // OneCrypto 0.4 allows the full DEFLATE ratio (1032), which a 20 MB run of zeros stays under, so the absolute bound is what stops this one.
+        var small = new SmimeOpenOptions { Limits = new CmsLimits { MaxContentBytes = 256L << 20, MaxDecompressedBytes = 10_000_000 } };
+        SmimeResult b = SmimeTestOptions.Open(MimeEntity.Parse(SmimeContent(bomb, "compressed-data").ToArray()), small);
         Assert.Equal(SmimeStatus.LimitExceeded, b.Layers[0].Status);
         Assert.Null(b.InnerItem);
     }

@@ -6,10 +6,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Changed
 
+- `RecursiveAI.OneCrypto` 0.4.0-preview.1 (was 0.1.0-preview.1), plus `RecursiveAI.OneCrypto.OpenPgp`, for `.Cryptography`.
 - Protocol clients allocate far less: IMAP `FetchAsync` decodes plain FETCH lines in place (about 1 KB per message for UID, FLAGS, INTERNALDATE and ENVELOPE against about 7 KB), downloads allocate a constant amount whatever the number of reads, SMTP sending and POP3 listings drop their per-message temporaries (about 10 KB per 4 KB message sent, from about 30 KB). Read and write time limits are checked by one coarse timer per direction, so a stall fails after 1 to 1.25 times the limit.
 
 ### Added
 
+- OpenPGP mail in `RecursiveAI.OneMail.Cryptography.OpenPgp` (`docs/openpgp.md`): PGP/MIME signing, encrypting (encrypt-only, combined, sign-then-encrypt) and opening (`PgpMimeSigner`, `PgpMimeEncryptor`, `PgpMimeProcessor`, structured `PgpResult`), inline cleartext-signed and armored bodies with typed repair issues, protected headers, `PgpAutocrypt`, `IPgpKeySource`; built on OneCrypto 0.4.0-preview.1. Interop vectors with GnuPG and Sequoia in `testdata/openpgp` (`tools/openpgp`), fuzz target `pgp-mime`, AOT smoke check.
 - `bench/ProtocolRows` and `bench/run-protocol-rows.sh`: the IMAP fetch and SMTP send rows against MailKit 4.18.2 on local Dovecot and Postfix (`docs/benchmarks.md`, Protocol rows); fuzz target `imap-fetch`.
 - Android and iOS smoke apps (`smoke/Android`, `smoke/iOS`; `smoke/Mobile.props` is what they share) with `run-emulator.sh` and `run-simulator.sh`: build trimmed in Release with warnings as errors, run the NativeAOT smoke app's checks on an emulator or simulator and exit 0 only on `mobile smoke: ok`. CI builds the Android app. `smoke/Aot` gained `Program.Run()` so the three apps share one set of checks.
 - `OutgoingMessage.Utf8Headers` and `CompositionOptions.Utf8Headers`: write display names, the subject and file names as raw UTF-8 (RFC 6532) for an SMTPUTF8 transport; the default stays ASCII. `PstEditException` with `PstEditFailure` (`FolderNotFound`, `ItemNotFound`, `InvalidFolderOperation`, `NidSpaceExhausted`): the typed refusal of an edit to an open PST, thrown before anything is written.

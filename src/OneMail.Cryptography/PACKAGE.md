@@ -1,8 +1,30 @@
 # OneMail.Cryptography
 
-S/MIME, DKIM and ARC for .NET. S/MIME (RFC 8551) signs, verifies, encrypts and decrypts messages on the Cryptographic Message Syntax of [OneCrypto](https://github.com/recursive-ai-oss/onecrypto-csharp); DKIM and ARC sign and verify mail authentication signatures with RSA (the .NET base class library) and Ed25519 (OneCrypto), with a small DNS TXT client for key records. It is part of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp).
+S/MIME, OpenPGP mail, DKIM and ARC for .NET. S/MIME (RFC 8551) signs, verifies, encrypts and decrypts messages on the Cryptographic Message Syntax of [OneCrypto](https://github.com/recursive-ai-oss/onecrypto-csharp); DKIM and ARC sign and verify mail authentication signatures with RSA (the .NET base class library) and Ed25519 (OneCrypto), with a small DNS TXT client for key records. It is part of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp).
 
 **Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet, and the package has not had an independent security review.
+
+## OpenPGP mail
+
+```csharp
+using RecursiveAI.OneCrypto.OpenPgp;
+using RecursiveAI.OneMail.Cryptography.OpenPgp;
+
+// Sign (PGP/MIME, RFC 3156), then encrypt the signed entity; or put Signers on the encrypt options for the combined form.
+MimeMultipart signed = PgpMimeSigner.SignDetached(body, new PgpMimeSignOptions { Now = now, Signers = [PgpSecretKey.Unlock(aliceKey.FindSigningKey(now)!)] });
+MimeMultipart secret = PgpMimeEncryptor.Encrypt(signed, new PgpMimeEncryptOptions { Now = now, Recipients = [bobPublicCertificate] });
+
+// Open PGP/MIME and inline PGP; every layer reports its status, signers and issues.
+PgpResult result = PgpMimeProcessor.Open(File.ReadAllBytes("message.eml"), new PgpOpenOptions { Now = now, Certificates = [alicePublicCertificate], SecretKeys = [bobKey] });
+Console.WriteLine($"{result.Succeeded} authenticated={result.IsAuthenticated} headers protected={result.HeadersProtected}");
+```
+
+- Keys are OneCrypto's `PgpCertificate` and `PgpSecretKey`; OneMail keeps none and reads no clock. Lookup by address runs over a source you supply (`IPgpKeySource`).
+- A result says who signed (fingerprint, user ID, whether the key was valid when the signature was made), the hash and policy verdict, the exact bytes covered, what is outside the protection, and whether headers were protected. An encrypted message with no signature is never reported as authenticated.
+- New signatures and encryption refuse SHA-1, MD5 and short RSA; reading accepts and flags them. A wrong `micalg`, a stripped or swapped signature, or a changed byte fails with the reason.
+- Inline cleartext-signed and armored bodies are read, with each repair of quoted-printable, quoting or charset damage a typed issue. `PgpAutocrypt` reads Autocrypt headers.
+
+Details and interop results: <https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/openpgp.md>.
 
 ## S/MIME
 

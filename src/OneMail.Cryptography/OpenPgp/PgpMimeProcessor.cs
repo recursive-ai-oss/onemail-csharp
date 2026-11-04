@@ -608,7 +608,6 @@ public static class PgpMimeProcessor
                 continue;
             }
 
-            var tryLayer = new PgpLayer(layer.Kind);
             var output = new CappedStream(options.MaxPlaintextBytes);
             try
             {
@@ -644,7 +643,6 @@ public static class PgpMimeProcessor
                 break;
             }
 
-            _ = tryLayer;
             text = output.ToArray();
             issues.AddRange(attemptIssues);
             if (cleartext && !report.HasValidSignature && report.Signatures.Any(static s => s.Status == PgpSignatureStatus.Invalid))
@@ -668,7 +666,6 @@ public static class PgpMimeProcessor
             return layer;
         }
 
-        // A repaired reading that still fails is reported with the first (unrepaired) failure's issues dropped; the final report is the last one tried.
         if (cleartext)
         {
             layer.Protection = PgpProtection.NotEncrypted;

@@ -77,7 +77,6 @@ public class PgpInteropVectors
         {
             PgpCertificate key = PgpCertificate.Parse(File.ReadAllBytes(Path.Combine(dir, "key.sec.asc")));
             string expected = File.ReadAllText(Path.Combine(dir, "expected.txt"), Encoding.UTF8);
-            string origin = Path.GetFileName(Path.GetDirectoryName(dir)!);
             foreach (string eml in Directory.GetFiles(dir, "*.eml"))
             {
                 string kind = Path.GetFileNameWithoutExtension(eml);
@@ -98,7 +97,6 @@ public class PgpInteropVectors
 
                 string keyType = Path.GetFileName(dir);
                 string tool = Path.GetFileName(Path.GetDirectoryName(dir)!) + ":" + File.ReadAllLines(Path.Combine(dir, "info.txt"))[0];
-                _ = origin;
                 string label = tool + " / " + keyType;
                 counts[label] = counts.GetValueOrDefault(label) + 1;
             }
