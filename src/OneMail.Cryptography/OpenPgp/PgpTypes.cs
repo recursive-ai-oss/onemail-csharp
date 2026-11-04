@@ -153,10 +153,10 @@ public sealed class PgpSignerResult
     /// <summary>The user IDs of the signer's certificate (text of the User ID packets). The signature does not choose one; compare with <see cref="UserIdMatchesSender"/>.</summary>
     public IReadOnlyList<string> UserIds { get; internal set; } = [];
 
-    /// <summary>The first user ID that names the message's sender address, or the certificate's first user ID when none does; null when the key is unknown.</summary>
+    /// <summary>The first certified user ID that names an address of the message's sender, else the first certified one, else the first user ID of any kind; null when the key is unknown.</summary>
     public string? UserId { get; internal set; }
 
-    /// <summary>True when a user ID of the certificate names the address in the message's <c>From</c>. False when it does not or there is no <c>From</c> to compare. Only meaningful for a signature that is valid.</summary>
+    /// <summary>True when the certificate's certified user IDs name every address in the message's <c>From</c> headers (an uncertified or revoked user ID does not count; see <see cref="PgpUserIds.HasSelfSignature"/>). False when one does not, or there is no <c>From</c> to compare. Only meaningful for a signature that is valid.</summary>
     public bool UserIdMatchesSender { get; internal set; }
 
     /// <summary>The signature creation time, or null when the signature carries none.</summary>
@@ -287,6 +287,13 @@ public sealed class PgpResult
 
     /// <summary>True when the message was authenticated: at least one signature is valid and every layer succeeded. An encrypted message with no signature is never authenticated.</summary>
     public bool IsAuthenticated => Succeeded && Signers.Any(static s => s.IsValid);
+
+    /// <summary>
+    /// True when the message is authenticated and a signature that is valid for a key that was usable at signing time comes from a certificate whose certified User IDs
+    /// name every address in the message's <c>From</c>. This is the question a reader asks, "did the person shown as the sender sign this": <see cref="IsAuthenticated"/> alone says only that
+    /// some key the caller supplied signed. The <c>From</c> header itself is not covered by a PGP/MIME signature unless <see cref="HeadersProtected"/>.
+    /// </summary>
+    public bool IsSenderAuthenticated => IsAuthenticated && Signers.Any(static s => s.IsValid && s.UserIdMatchesSender && s.KeyValidAtSigning == true);
 
     /// <summary>True when the headers listed in <see cref="PgpOutside.ProtectedHeaders"/> were authenticated: the result is authenticated and the protected content repeats headers.</summary>
     public bool HeadersProtected => IsAuthenticated && Outside is { ProtectedHeaders.Count: > 0 };

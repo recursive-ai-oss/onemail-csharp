@@ -147,7 +147,9 @@ public static class PgpMimeProcessor
         result.Issues = resultIssues;
         if (layers.Count > 0)
         {
-            List<string> protectedHeaders = ProtectedHeaderNames(result.Content, layers);
+            // Headers repeated inside the protection are trusted only when the message is authenticated: an encrypted message with no
+            // signature can be made by anyone who holds the recipient's public key, so its inner headers prove nothing.
+            List<string> protectedHeaders = result.IsAuthenticated ? ProtectedHeaderNames(result.Content, layers) : [];
             result.Outside = new PgpOutside(
                 message.Headers.Where(static h => !IsContentHeader(h.Name)).Select(static h => h.Name).ToList(),
                 unprotectedParts,
@@ -350,7 +352,7 @@ public static class PgpMimeProcessor
             }
         }
 
-        layer.Signers = MakeSigners(report, senderSource);
+        layer.Signers = MakeSigners(report, senderSource, options.Now);
         foreach (PgpSignerResult s in layer.Signers)
         {
             if (s.WeakAlgorithms.Count > 0 && !issues.Contains(PgpIssue.WeakAlgorithms))
@@ -484,7 +486,7 @@ public static class PgpMimeProcessor
         }
 
         next = MimeEntity.Parse(plain);
-        return Finish(layer, report!, issues, senderSource);
+        return Finish(layer, report!, issues, senderSource, options.Now);
     }
 
     /// <summary>Runs OneCrypto's reader and maps its failures to a layer status; null (with the layer filled in) on failure.</summary>
@@ -529,10 +531,10 @@ public static class PgpMimeProcessor
     }
 
     /// <summary>Common ending of an encrypted layer: signatures found inside, protection, issues.</summary>
-    private static PgpLayer Finish(PgpLayer layer, PgpReadResult report, List<PgpIssue> issues, MimeEntity senderSource)
+    private static PgpLayer Finish(PgpLayer layer, PgpReadResult report, List<PgpIssue> issues, MimeEntity senderSource, DateTimeOffset now)
     {
         layer.Protection = report.Protection;
-        layer.Signers = MakeSigners(report, senderSource);
+        layer.Signers = MakeSigners(report, senderSource, now);
         if (report.Protection == PgpProtection.None)
         {
             issues.Add(PgpIssue.UnauthenticatedEncryption);
@@ -669,7 +671,7 @@ public static class PgpMimeProcessor
         if (cleartext)
         {
             layer.Protection = PgpProtection.NotEncrypted;
-            layer.Signers = MakeSigners(report, senderSource);
+            layer.Signers = MakeSigners(report, senderSource, options.Now);
             PgpStatus status = Judge(layer.Signers);
             layer.Status = status;
             layer.Succeeded = status == PgpStatus.Valid;
@@ -683,7 +685,7 @@ public static class PgpMimeProcessor
         }
         else
         {
-            layer = Finish(layer, report, issues, senderSource);
+            layer = Finish(layer, report, issues, senderSource, options.Now);
         }
 
         next = TextPart(text, charset);
@@ -828,7 +830,7 @@ public static class PgpMimeProcessor
         Limits = o.Limits,
     };
 
-    private static List<PgpSignerResult> MakeSigners(PgpReadResult report, MimeEntity senderSource)
+    private static List<PgpSignerResult> MakeSigners(PgpReadResult report, MimeEntity senderSource, DateTimeOffset now)
     {
         List<string> senders = Senders(senderSource);
         var list = new List<PgpSignerResult>();
@@ -839,10 +841,15 @@ public static class PgpMimeProcessor
             {
                 List<string> uids = key.Certificate.UserIds.ToList();
                 s.UserIds = uids;
-                string? match = uids.FirstOrDefault(u => senders.Any(a => UserIdAddress(u).Equals(a, StringComparison.OrdinalIgnoreCase)));
-                s.UserIdMatchesSender = match is not null;
-                s.UserId = match ?? uids.FirstOrDefault();
-                s.KeyValidAtSigning = r.CreatedAt is { } at ? key.StateAt(at).IsValid : null;
+                // A User ID counts only when the key itself certified it (RFC 9580 §5.2.1.3) and had not revoked it by the time of signing:
+                // anyone can add an uncertified User ID packet to a public certificate, and a key server or a copy in transit will carry it.
+                DateTimeOffset at = r.CreatedAt ?? now;
+                List<string> bound = uids.Where(u => PgpUserIds.HasSelfSignature(key.Certificate, u, at)).ToList();
+                bool Names(string address) => bound.Any(u => UserIdAddress(u).Equals(address, StringComparison.OrdinalIgnoreCase));
+                // Every address shown as the sender must be named: a second mailbox or a second From header is another way to show a different sender.
+                s.UserIdMatchesSender = senders.Count > 0 && senders.All(Names);
+                s.UserId = bound.FirstOrDefault(u => senders.Any(a => UserIdAddress(u).Equals(a, StringComparison.OrdinalIgnoreCase))) ?? bound.FirstOrDefault() ?? uids.FirstOrDefault();
+                s.KeyValidAtSigning = r.CreatedAt is { } created ? key.StateAt(created).IsValid : null;
             }
 
             if (r.Policy is { Verdict: PolicyVerdict.Flagged } d)
@@ -979,28 +986,56 @@ public static class PgpMimeProcessor
     {
         try
         {
-            if (protectedHeaders.Count == 0 || content is MimeMessagePart)
+            MimeEntity target = content is MimeMessagePart { Message: { } m } ? m : content;
+            if (protectedHeaders.Count > 0 && content is not MimeMessagePart)
             {
-                MimeEntity target = content is MimeMessagePart { Message: { } m } ? m : content;
+                // The protected headers win over the outer, unprotected ones; the outer headers they do not replace stay (From, To, Date, Message-ID …).
+                MimeEntity merged = MimeEntity.Parse(content.ToArray());
+                foreach (MimeHeader h in outer.Headers.ToArray())
+                {
+                    if (!IsContentHeader(h.Name) && !protectedHeaders.Contains(h.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        merged.Headers.Add(h.Name, h.Value);
+                    }
+                }
+
+                if (merged.Headers.GetFirst("MIME-Version") is null)
+                {
+                    merged.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+                }
+
+                return MimeMailItem.Parse(merged.ToArray());
+            }
+
+            if (protectedHeaders.Count > 0)
+            {
                 return MimeMailItem.Parse(target.ToArray());
             }
 
-            // The protected headers win over the outer, unprotected ones; the outer headers they do not replace stay (From, To, Date, Message-ID …).
-            MimeEntity merged = MimeEntity.Parse(content.ToArray());
-            foreach (MimeHeader h in outer.Headers.ToArray())
+            // Nothing inside is vouched for, so the message headers are the outer ones: whatever the content says about From or Subject is not shown as the message's.
+            MimeEntity plain = MimeEntity.Parse(target.ToArray());
+            foreach (MimeHeader h in plain.Headers.ToArray())
             {
-                if (!IsContentHeader(h.Name) && !protectedHeaders.Contains(h.Name, StringComparer.OrdinalIgnoreCase))
+                if (!IsContentHeader(h.Name))
                 {
-                    merged.Headers.Add(h.Name, h.Value);
+                    plain.Headers.Remove(h);
                 }
             }
 
-            if (merged.Headers.GetFirst("MIME-Version") is null)
+            foreach (MimeHeader h in outer.Headers.ToArray())
             {
-                merged.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+                if (!IsContentHeader(h.Name))
+                {
+                    plain.Headers.Add(h.Name, h.Value);
+                }
             }
 
-            return MimeMailItem.Parse(merged.ToArray());
+            if (plain.Headers.GetFirst("MIME-Version") is null)
+            {
+                plain.Headers.Insert(0, new MimeHeader("MIME-Version", "1.0"));
+            }
+
+            return MimeMailItem.Parse(plain.ToArray());
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
