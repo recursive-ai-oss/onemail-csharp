@@ -348,6 +348,19 @@ RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: 
 | PDF structure | the 76 kept PDFs | poppler `pdfinfo` reads all 76 without a message, every one tagged, title = subject | `qpdf --check` and veraPDF were not run (no prebuilt copy on the worker) |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; renders one message to PDF and to PNG (`render: ok`); `.Render` is not referenced by the browser smoke | |
 
+## Browser (WebAssembly)
+
+The format core (`RecursiveAI.OneMail` and `.Calendar`) runs in the browser's .NET runtime (`browser-wasm`, the interpreter, no threads). Two checks:
+
+- `smoke/Wasm/run-headless.sh` publishes a small app with fixed checks (MIME, stores, calendar, the Outlook formats, conversions) and runs it in headless Chromium.
+- `tests/Wasm/run.sh` compiles the format-core test sources of `tests/OneMail.Tests` into a `browser-wasm` app with a small runner (xUnit's own runner needs threads), serves it on localhost and runs it in headless Chrome. The data files the tests read are copied into the runtime's file system at the paths the tests expect. Protocols, cryptography, rendering and the command-line tool are not in the browser build, so their tests are not compiled in.
+
+| Check | Result | Exclusions |
+|---|---|---|
+| Format-core suite in headless Chrome (Chrome from the distribution package, .NET 10.0.14 runtime, interpreter) | 1,658 tests: 1,648 passed, 0 failed, 8 skipped (corpora not fetched, as natively), 2 excluded | `Platform=native`: 1 needs file locking (`NdbEditorTests.AnOpenEditorHoldsTheFileExclusively`, the browser file system has none), 1 counts allocations per message against the optimising JIT (`SharedViewTests.EnumeratingAnMboxAllocatesLittlePerMessage`). Not compiled: `PackageLayoutTests` (looks at all five packages). |
+
+Browser limits that touch the library: no threads (an API must not block on a task another thread would run), no file locking, no memory-mapped files (file sources use ordinary reads), and the interpreter makes the heaviest tests slow (the whole run is about 4 minutes). The `wasm` job in CI builds the smoke app and runs this suite.
+
 ## Android and iOS
 
 The mobile smoke apps (`smoke/Android`, `smoke/iOS`) reference the core, Calendar, Client, Cryptography and Render projects, build in Release
