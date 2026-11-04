@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUT=${OUT:-${TMPDIR:-/tmp}/pgp-vectors}
 rm -rf "$OUT"; mkdir -p "$OUT"
-ONEMAIL_PGP_VECTORS_OUT=$OUT dotnet test tests/OneMail.Tests --filter 'FullyQualifiedName~WriteOurVectorsWhenAsked' -v quiet
+ONEMAIL_PGP_VECTORS_OUT=$OUT dotnet test --project tests/OneMail.Tests --filter-method '*WriteOurVectorsWhenAsked'
 TOOLS=()
 [ -n "${GPG24:-}" ] && TOOLS+=("gpg:$GPG24")
 [ -n "${GPG25:-}" ] && TOOLS+=("gpg:$GPG25")
