@@ -667,7 +667,7 @@ public class LtpBuilderTests
             using NdbDataTree t = f.OpenDataTree(sub.Data)!;
             Assert.Equal((rows + perBlock - 1) / perBlock, t.LeafCount);
             for (int i = 0; i < t.LeafCount - 1; i++) { Assert.Equal(NdbBlockBuilder.MaxBlockData, t.GetLeafSize(i)); }   // full blocks: the rows and then zeros
-            Assert.Equal(rows % perBlock == 0 ? NdbBlockBuilder.MaxBlockData : (rows % perBlock) * tcb.RowSize, t.GetLeafSize(t.LeafCount - 1));   // a last block that filled exactly was written full
+            Assert.Equal((rows % perBlock == 0 ? perBlock : rows % perBlock) * tcb.RowSize, t.GetLeafSize(t.LeafCount - 1));   // the last block ends at its last row even when it holds a full block's rows
             Assert.Empty(tc.Defects);
         }
     }

@@ -254,4 +254,28 @@ public sealed class PstBuilderTests
 
         File.Delete(path);
     }
+
+    [Fact]
+    public void ARecipientWithoutATypeIsWrittenAsToAndReported()
+    {
+        MapiMessage m = Message("typeless", recipients: 0);
+        var r = new MapiRecipient(m);
+        r.Properties.Add(Str(0x3001, "Someone"));
+        m.AddRecipient(r);
+        int added = 0;
+        (PstStore store, string path) = Write(b =>
+        {
+            b.IpmSubtree.CreateFolder("Inbox").AddMessage(m);
+            added = b.Defects.Count(d => d.Kind == PstWriteDefectKind.PropertyAdded && d.Location.Contains("recipient", StringComparison.Ordinal));
+        });
+        using (store)
+        {
+            Assert.Equal(1, added);
+            PstMessage read = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(1, read.Recipients.Single().RecipientTypeValue);
+            Assert.Equal("Someone", read.Recipients.Single().DisplayName);
+        }
+
+        File.Delete(path);
+    }
 }

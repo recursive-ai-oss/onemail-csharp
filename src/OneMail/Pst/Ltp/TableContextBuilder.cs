@@ -425,18 +425,20 @@ public sealed class TableContextBuilder
         BinaryPrimitives.WriteUInt32LittleEndian(_indexScratch, checked((uint)_rowCount));
         _rowIndex.Add(rowId, _indexScratch);
 
-        _row.CopyTo(_matrix.AsSpan(_rowsInBlock * RowSize));
-        _rowsInBlock++;
-        _rowCount++;
         if (_rowsInBlock == _rowsPerBlock)
         {
             // MS-PST 2.3.4.4: every block but the last holds the same number of whole rows and is a full 8,192 bytes, so it is written as
             // 8,176 bytes of data with the zero "dead space" after the last row that readers must ignore. A full block is always more than
-            // 3,580 bytes, so the matrix is a subnode from here on.
+            // 3,580 bytes, so the matrix is a subnode from here on. A full block is written only when another row follows: the last block
+            // ends at its last row even when it is full, which is how Outlook writes it and what its repair tool checks.
             _tree ??= _blocks.BeginDataTree();
             _tree.AddBlock(_matrix);
             _rowsInBlock = 0;
         }
+
+        _row.CopyTo(_matrix.AsSpan(_rowsInBlock * RowSize));
+        _rowsInBlock++;
+        _rowCount++;
     }
 
     /// <summary>Adds a whole row.</summary>

@@ -92,6 +92,102 @@ internal static class Variants
             b.Complete();
         }
 
+        // Nested embedded messages: an embedded message that itself carries an embedded message.
+        foreach ((string name, bool r1, bool r2, bool a2) in new[] { ("nest0", false, false, false), ("nest-r1", true, false, false), ("nest-r2", false, true, false), ("nest-a2", false, false, true) })
+        {
+            string path = Path.Combine(dir, name + ".pst");
+            File.Delete(path);
+            using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero) });
+            var outer = new MapiMessage();
+            Str(outer, 0x001A, "IPM.Note");
+            Str(outer, 0x0037, "outer");
+            var mid = new MapiMessage();
+            Str(mid, 0x001A, "IPM.Note");
+            Str(mid, 0x0037, "mid");
+            var inner = new MapiMessage();
+            Str(inner, 0x001A, "IPM.Note");
+            Str(inner, 0x0037, "inner");
+            if (r1)
+            {
+                Rcpt(mid, true);
+            }
+
+            if (r2)
+            {
+                Rcpt(inner, true);
+            }
+
+            if (a2)
+            {
+                Attach(inner);
+            }
+
+            var h2 = new MapiAttachment(mid);
+            h2.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(5)));
+            h2.SetEmbeddedMessage(inner);
+            mid.AddAttachment(h2);
+            var h1 = new MapiAttachment(outer);
+            h1.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(5)));
+            h1.SetEmbeddedMessage(mid);
+            outer.AddAttachment(h1);
+            b.IpmSubtree.CreateFolder("Folder").AddMessage(outer);
+            b.Complete();
+        }
+
+        // The shape of a conversation fixture's embedded message, taken apart one feature at a time.
+        foreach ((string name, bool extras, bool e1Rcpt, bool e2, bool e1Mask) in new[]
+        {
+            ("re-all", true, true, true, true), ("re-noextras", false, true, true, true), ("re-norcpt", true, false, true, true),
+            ("re-noe2", true, true, false, true), ("re-nomask", true, true, true, false), ("re-typed", true, true, false, true),
+        })
+        {
+            string path = Path.Combine(dir, name + ".pst");
+            File.Delete(path);
+            using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero) });
+            var outer = new MapiMessage();
+            Str(outer, 0x001A, "IPM.Note");
+            Str(outer, 0x0037, "outer");
+            if (extras)
+            {
+                Str(outer, 0x1000, "Hello\r\nworld");
+                Rcpt(outer, true);
+                Rcpt(outer, true);
+                Attach(outer);
+            }
+
+            var e1 = new MapiMessage();
+            Str(e1, 0x001A, "IPM.Note");
+            Str(e1, 0x0037, "The embedded message");
+            if (e1Mask)
+            {
+                e1.Properties.Add(MapiProperty.Create(new MapiTag(0x340D, MapiType.Integer32), BitConverter.GetBytes(0x40000)));
+            }
+
+            if (e1Rcpt)
+            {
+                Rcpt(e1, name == "re-typed");
+            }
+
+            if (e2)
+            {
+                var e2m = new MapiMessage();
+                Str(e2m, 0x001A, "IPM.Note");
+                Str(e2m, 0x0037, "Embedded twice");
+                var h2 = new MapiAttachment(e1);
+                h2.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(5)));
+                h2.SetEmbeddedMessage(e2m);
+                e1.AddAttachment(h2);
+            }
+
+            var h1 = new MapiAttachment(outer);
+            h1.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(5)));
+            h1.Properties.Add(MapiProperty.Create(new MapiTag(0x3001, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Forwarded")));
+            h1.SetEmbeddedMessage(e1);
+            outer.AddAttachment(h1);
+            b.IpmSubtree.CreateFolder("Folder").AddMessage(outer);
+            b.Complete();
+        }
+
         // A small realistic store: two folders, five messages with recipients and bodies, one with an attachment.
         {
             string path = Path.Combine(dir, "full.pst");

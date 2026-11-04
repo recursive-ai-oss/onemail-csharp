@@ -784,6 +784,9 @@ internal sealed class PstItemWriter
         for (int i = 0; i < count; i++)
         {
             List<Prop> props = Collect(recipients[i], location + " recipient " + i, skipObject: true);
+            // MS-OXCMSG makes PidTagRecipientType a required recipient property. Outlook's repair tool treats a recipient table whose rows
+            // lack it as unusable (it leaves the table out when it measures an embedded message), so a recipient without one is written as "To" (the property is reported as added).
+            Ensure(props, 0x0C15, 3, [1, 0, 0, 0], location + " recipient " + i);
             rows.Add(props);
             foreach (Prop p in props)
             {
