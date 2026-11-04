@@ -1,4 +1,3 @@
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -90,46 +89,59 @@ static class Tokens
 
     static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    /// <summary>Prints the consent URL, waits for the loopback redirect and stores the refresh token under <c>GOOGLE_REFRESH_TOKEN</c>.</summary>
-    public static async Task MintGoogle(Dictionary<string, string> env, string tokenFile, CancellationToken ct)
+    const int LoopbackPort = 53682;
+    static string Redirect => $"http://127.0.0.1:{LoopbackPort}/";
+
+    /// <summary>Step 1: prints the consent URL and saves the PKCE verifier and state beside the token file (mode 600). The browser that approves may be on another
+    /// machine, so nothing listens: after approval the browser lands on an unreachable 127.0.0.1 page and its address bar holds the code.</summary>
+    public static void StartGoogle(Dictionary<string, string> env, string tokenFile)
     {
         string clientId = Need(env, "GOOGLE_CLIENT_ID");
         string verifier = B64Url(RandomNumberGenerator.GetBytes(48));
         string challenge = B64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         string state = B64Url(RandomNumberGenerator.GetBytes(16));
-
-        using var listener = new HttpListener();
-        int port = FreePort();
-        string redirect = $"http://127.0.0.1:{port}/";
-        listener.Prefixes.Add(redirect);
-        listener.Start();
-
+        EnvFile.Set(tokenFile, "GOOGLE_PENDING_VERIFIER", verifier);
+        EnvFile.Set(tokenFile, "GOOGLE_PENDING_STATE", state);
         string url = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code"
             + "&client_id=" + Uri.EscapeDataString(clientId)
-            + "&redirect_uri=" + Uri.EscapeDataString(redirect)
+            + "&redirect_uri=" + Uri.EscapeDataString(Redirect)
             + "&scope=" + Uri.EscapeDataString(GoogleScope)
             + "&code_challenge=" + challenge + "&code_challenge_method=S256"
             + "&state=" + state + "&access_type=offline&prompt=consent"
             + (env.GetValueOrDefault("GMAIL_ADDRESS") is { Length: > 0 } hint ? "&login_hint=" + Uri.EscapeDataString(hint) : "");
-        Console.WriteLine("Open this URL in a browser signed in to the test mailbox and approve (the redirect lands on this machine, 127.0.0.1:" + port + "):");
         Console.WriteLine(url);
+    }
 
-        HttpListenerContext ctx = await listener.GetContextAsync().WaitAsync(TimeSpan.FromMinutes(10), ct);
-        string? code = ctx.Request.QueryString["code"];
-        string? err = ctx.Request.QueryString["error"];
-        bool stateOk = ctx.Request.QueryString["state"] == state;
-        byte[] page = Encoding.UTF8.GetBytes(code is not null && stateOk ? "Done. You can close this tab." : "Authorization failed.");
-        ctx.Response.OutputStream.Write(page);
-        ctx.Response.Close();
-        if (code is null || !stateOk)
+    /// <summary>Step 2: takes the full redirected URL (state is checked) or a bare code and stores <c>GOOGLE_REFRESH_TOKEN</c>.</summary>
+    public static async Task CompleteGoogle(Dictionary<string, string> env, string tokenFile, string input, CancellationToken ct)
+    {
+        Dictionary<string, string> t = EnvFile.Read(tokenFile);
+        string verifier = Need(t, "GOOGLE_PENDING_VERIFIER"), state = Need(t, "GOOGLE_PENDING_STATE");
+        input = input.Trim();
+        string code = input;
+        if (input.Contains('?', StringComparison.Ordinal) || input.Contains("code=", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("authorization failed" + (err is null ? "" : ": " + err));
+            string query = input.Contains('?', StringComparison.Ordinal) ? input[(input.IndexOf('?', StringComparison.Ordinal) + 1)..] : input;
+            query = query.Split('#')[0];
+            var q = System.Web.HttpUtility.ParseQueryString(query);
+            if (q["error"] is { } err)
+            {
+                throw new InvalidOperationException("authorization failed: " + err);
+            }
+
+            // A full URL must carry our state; that is the point of the parameter.
+            if (q["state"] != state)
+            {
+                throw new InvalidOperationException("state mismatch: the URL is not from this authorization request");
+            }
+
+            code = q["code"] ?? throw new InvalidOperationException("no code in the URL");
         }
 
         var form = new Dictionary<string, string>
         {
-            ["grant_type"] = "authorization_code", ["code"] = code, ["client_id"] = clientId,
-            ["redirect_uri"] = redirect, ["code_verifier"] = verifier,
+            ["grant_type"] = "authorization_code", ["code"] = code, ["client_id"] = Need(env, "GOOGLE_CLIENT_ID"),
+            ["redirect_uri"] = Redirect, ["code_verifier"] = verifier,
         };
         // Google's Desktop clients still have a client secret that the token endpoint expects.
         if (env.GetValueOrDefault("GOOGLE_CLIENT_SECRET") is { Length: > 0 } secret)
@@ -140,6 +152,8 @@ static class Tokens
         JsonElement j = await PostForm("https://oauth2.googleapis.com/token", form, ct);
         string refresh = j.TryGetProperty("refresh_token", out JsonElement rt) ? rt.GetString()! : throw new InvalidOperationException("no refresh_token returned (revoke the app's earlier grant and retry)");
         EnvFile.Set(tokenFile, "GOOGLE_REFRESH_TOKEN", refresh);
+        EnvFile.Set(tokenFile, "GOOGLE_PENDING_VERIFIER", "");
+        EnvFile.Set(tokenFile, "GOOGLE_PENDING_STATE", "");
         Console.WriteLine("stored GOOGLE_REFRESH_TOKEN");
     }
 
@@ -210,14 +224,5 @@ static class Tokens
         }
 
         return j.GetProperty("access_token").GetString()!;
-    }
-
-    static int FreePort()
-    {
-        var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        l.Start();
-        int p = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
-        return p;
     }
 }

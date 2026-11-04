@@ -1,6 +1,7 @@
 using OneMail.Tools.Providers;
 
-// providers token  <gmail|outlook>          mint a refresh token (consent URL / device code printed)
+// providers token  gmail [--complete <url|code|@file|->]   two steps: print the consent URL; then finish from what the browser landed on
+// providers token  outlook                 device-code flow
 // providers smoke  <gmail|outlook> [--protocols imap,smtp,pop] [--trace] [--out file.md]
 //
 // Environment (from the secrets env file, ONEMAIL_PROVIDERS_ENV, default: the secrets directory's providers.env):
@@ -38,7 +39,22 @@ try
 {
     if (args[0] == "token")
     {
-        await (gmail ? Tokens.MintGoogle(env, tokenFile, cts.Token) : Tokens.MintMicrosoft(env, tokenFile, cts.Token));
+        if (!gmail)
+        {
+            await Tokens.MintMicrosoft(env, tokenFile, cts.Token);
+            return 0;
+        }
+
+        int ci = Array.IndexOf(args, "--complete");
+        if (ci < 0)
+        {
+            Tokens.StartGoogle(env, tokenFile);
+            return 0;
+        }
+
+        string arg = ci + 1 < args.Length ? args[ci + 1] : "-";
+        string input = arg == "-" ? Console.In.ReadToEnd() : arg.StartsWith('@') ? File.ReadAllText(arg[1..]) : arg;
+        await Tokens.CompleteGoogle(env, tokenFile, input, cts.Token);
         return 0;
     }
 
