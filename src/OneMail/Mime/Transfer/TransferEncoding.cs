@@ -500,21 +500,32 @@ public static class TransferEncoder
 
         int lines = (data.Length + 56) / 57;
         int encodedLength = (data.Length + 2) / 3 * 4;
-        byte[] result = new byte[encodedLength + (lines * newline.Length)];
-        int o = 0;
-        for (int i = 0; i < data.Length; i += 57)
+        int breaks = lines == 0 ? 0 : lines - 1 + (trailingNewline ? 1 : 0);
+        byte[] result = new byte[encodedLength + (breaks * newline.Length)];
+        if (lines == 0)
         {
-            ReadOnlySpan<byte> chunk = data.Slice(i, Math.Min(57, data.Length - i));
-            _ = System.Buffers.Text.Base64.EncodeToUtf8(chunk, result.AsSpan(o), out _, out int written);
-            o += written;
-            if (i + 57 < data.Length || trailingNewline)
+            return result;
+        }
+
+        // Encode once, unbroken, into the tail of the result, then spread the 76-character lines forward with their line ends.
+        // Every line's destination starts at or before its source and ends before the next line's source, so no byte is overwritten
+        // before it is moved.
+        int tail = result.Length - encodedLength;
+        _ = System.Buffers.Text.Base64.EncodeToUtf8(data, result.AsSpan(tail), out _, out _);
+        int o = 0;
+        for (int k = 0; k < lines; k++)
+        {
+            int length = Math.Min(76, encodedLength - (k * 76));
+            result.AsSpan(tail + (k * 76), length).CopyTo(result.AsSpan(o));
+            o += length;
+            if (k + 1 < lines || trailingNewline)
             {
                 newline.CopyTo(result.AsSpan(o));
                 o += newline.Length;
             }
         }
 
-        return result.AsSpan(0, o).ToArray();
+        return result;
     }
 
     /// <summary>

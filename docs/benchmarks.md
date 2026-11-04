@@ -38,34 +38,76 @@ Things that make the rows differ in kind, not only speed:
 - Peak memory is measured by running one row's work in a loop for four seconds in its own process. The working-set figure is
   dominated by the runtime's allocation budget on a machine with a large cache, so read the allocation columns for memory behaviour.
 
-## Results (first run, no tuning needed)
+## Results, 2026-11-04 (publishable)
 
-Medians in ns per operation (per message for mbox); B/op is bytes allocated per operation.
+Medians in ns per operation (per message for mbox); B/op is bytes allocated per operation. Ratio is OneMail / MimeKit. Two filtered
+bench-class groups per machine: parse, headers and bodies; then write, build and mbox. Peak working set (x64, one process per side,
+`peak.tsv`, KiB) is in the last column as ours / MimeKit.
 
-| Row | Input | OneMail x64 | MimeKit x64 | ratio x64 | ratio arm64 | OneMail B/op | MimeKit B/op |
-|---|---|---:|---:|---:|---:|---:|---:|
-| parse | enron-2k | 1,020 | 13,451 | 0.076 | 0.106 | 5,280 | 19,448 |
-| parse | enron-20k | 865 | 21,389 | 0.040 | 0.052 | 4,360 | 39,360 |
-| parse | dovecot-multipart | 4,830 | 68,927 | 0.070 | 0.110 | 9,920 | 171,802 |
-| parse | generated 6 MB | 96,646 | 1,924,495 | 0.050 | 0.072 | 5,344 | 6,318,608 |
-| headers | enron-2k | 2,797 | 16,699 | 0.167 | 0.205 | 10,328 | 22,344 |
-| headers | enron-20k | 2,267 | 22,356 | 0.101 | 0.110 | 8,328 | 41,400 |
-| headers | dovecot-multipart | 6,588 | 76,763 | 0.086 | 0.128 | 15,088 | 174,570 |
-| headers | generated 6 MB | 156,043 | 1,877,793 | 0.083 | 0.073 | 10,688 | 6,321,655 |
-| bodies | enron-2k | 1,393 | 13,371 | 0.104 | 0.125 | 8,160 | 20,904 |
-| bodies | enron-20k | 3,723 | 21,579 | 0.173 | 0.128 | 49,496 | 101,208 |
-| bodies | dovecot-multipart | 154,182 | 321,836 | 0.479 | 0.351 | 503,617 | 556,690 |
-| bodies | generated 6 MB | 6,057,218 | 13,025,692 | 0.465 | 0.331 | 16,778,003 | 18,583,957 |
-| write | enron-2k | 63 | 1,598 | 0.039 | 0.033 | 184 | 1,752 |
-| write | enron-20k | 352 | 14,862 | 0.024 | 0.018 | 184 | 4,696 |
-| write | dovecot-multipart | 1,965 | 88,760 | 0.022 | 0.020 | 184 | 6,912 |
-| write | generated 6 MB | 94,852 | 3,611,187 | 0.026 | 0.022 | 184 | 5,912 |
-| build | text + 1 MB attachment | 530,959 | 908,433 | 0.584 | 0.331 | 4,112,652 | 36,782 |
-| mbox | dovecot, per message | 2,792 | 23,410 | 0.119 | 0.184 | 8,475 | 28,393 |
+| Row | Input | OneMail x64 | MimeKit x64 | ratio x64 | ratio arm64 | B/op ours | B/op MimeKit | peak ours / MimeKit |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| parse | enron-2k | 1,074 | 13,692 | 0.078 | 0.107 | 5,280 | 19,448 | 89 / 128 MiB |
+| parse | enron-20k | 928 | 22,273 | 0.042 | 0.053 | 4,360 | 39,360 | 89 / 136 MiB |
+| parse | dovecot-multipart | 4,993 | 71,883 | 0.069 | 0.110 | 9,920 | 171,802 | 89 / 145 MiB |
+| parse | generated 6 MB | 98,988 | 1,974,279 | 0.050 | 0.073 | 5,344 | 6,318,608 | 134 / 221 MiB |
+| headers | enron-2k | 2,901 | 17,307 | 0.168 | 0.207 | 10,328 | 22,344 | 100 / 127 MiB |
+| headers | enron-20k | 2,332 | 24,425 | 0.095 | 0.109 | 8,328 | 41,400 | 100 / 134 MiB |
+| headers | dovecot-multipart | 6,840 | 79,482 | 0.086 | 0.129 | 15,088 | 174,570 | 100 / 148 MiB |
+| headers | generated 6 MB | 157,446 | 1,929,998 | 0.082 | 0.073 | 10,688 | 6,321,655 | 141 / 220 MiB |
+| bodies | enron-2k | 1,460 | 13,914 | 0.105 | 0.127 | 8,160 | 20,904 | 90 / 124 MiB |
+| bodies | enron-20k | 3,861 | 22,355 | 0.173 | 0.127 | 49,496 | 101,208 | 93 / 112 MiB |
+| bodies | dovecot-multipart | 166,053 | 352,097 | 0.472 | 0.352 | 503,617 | 556,690 | 44 / 55 MiB |
+| bodies | generated 6 MB | 7,008,343 | 13,375,963 | 0.524 | 0.330 | 16,778,003 | 18,583,957 | 144 / 201 MiB |
+| write | enron-2k | 65 | 1,640 | 0.039 | 0.032 | 184 | 1,752 | 89 / 90 MiB |
+| write | enron-20k | 364 | 15,057 | 0.024 | 0.018 | 184 | 4,696 | 89 / 90 MiB |
+| write | dovecot-multipart | 1,773 | 105,210 | 0.017 | 0.020 | 184 | 6,912 | 89 / 94 MiB |
+| write | generated 6 MB | 99,975 | 3,678,831 | 0.027 | 0.026 | 184 | 5,912 | 94 / 101 MiB |
+| build | text + 1 MB attachment | 371,640 | 933,535 | 0.398 | 0.223 | 2,744,100 | 36,782 | 58 / 118 MiB |
+| mbox | dovecot, per message | 2,905 | 24,404 | 0.119 | 0.187 | 8,475 | 28,393 | 101 / 143 MiB |
 
-Geometric mean 0.091 (x64, AMD Ryzen 9 7950X3D, 32 logical cores) and 0.093 (arm64, Apple M2, 8 cores); worst row 0.584 and 0.351.
-The one row where OneMail allocates more is `build`: it base64-encodes the attachment when the content is set, where MimeKit
-encodes while writing.
+Geometric mean 0.089 (x64) and 0.092 (arm64); worst row 0.524 (bodies of the 6 MB message) and 0.352. The bar holds on both.
+Arm64 peak working set is not measured: the memory helper reads Linux's `/proc`, so the Mac column is zero in `peak.tsv`; its B/op
+are the same as x64's. OneMail allocates more than MimeKit only in `build`, which base64-encodes the attachment when the content is set
+(MimeKit encodes while writing).
+
+**Tuning (before / after, same machine and job type, x64, indicative heavy-class runs with 4 cores):** `TransferEncoder.Base64` encoded
+per 57-byte line and copied the result; it now encodes once and spreads the 76-character lines in place. `build`: 750,527 ns and
+4,112,670 B before (ratio 0.777), 444,552 ns and 2,744,093 B after (0.447). The bench-class row above is 371,640 ns.
+
+**Native reference (not gating, target <= 1.5x), x64.** Rust `mail-parser` 1.0.1 and `mail-builder` 2.0.1 from crates.io (released
+crates, built with cargo, documented API only; `bench/native/mimeparse`), same four inputs, median of seven timed batches in one
+process. Ratio is OneMail's bench-class median / native median (the two were not measured at the same instant):
+
+| Row | enron-2k | enron-20k | dovecot-multipart | generated 6 MB |
+|---|---:|---:|---:|---:|
+| parse, native ns | 763 | 583 | 3,736 | 52,515 |
+| parse, ours / native | 1.41 | 1.59 | 1.34 | 1.88 |
+| headers, native ns | 867 | 681 | 3,850 | 52,391 |
+| headers, ours / native | 3.35 | 3.42 | 1.78 | 3.01 |
+| bodies, native ns | 773 | 609 | 9,092 | 297,139 |
+| bodies, ours / native | 1.89 | 6.34 | 18.3 | 23.6 |
+
+`build` (text part plus a 1 MB attachment, written to memory): native 49,085 to 50,075 ns, ours 371,640 ns (7.4x). Parse is near the
+target; decoded headers, the base64 body decode (the 6 MB input decodes 4.5 MB in 7.0 ms and allocates 16.8 MB, about 3.7x the output)
+and the build row are the gaps to native. None gates. GMime has no distribution package on either machine, so it isn't measured.
+
+## Machines and runs, 2026-11-04
+
+| | x64 | arm64 |
+|---|---|---|
+| CPU | AMD Ryzen 9 7950X3D, 32 logical cores, AVX-512 | Apple M2, 8 cores |
+| Runtime, SDK | .NET 10.0.14, SDK 10.0.403 | .NET 10.0.14, SDK 10.0.403 |
+| Commit | 3b51281 (rows) and 4b962c1 (servers script) | the same |
+| Jobs, `wq` class bench | 003583 (MIME parse/headers/bodies, 20:57 to 21:12 UTC), 003584 (MIME write/build/mbox and native, 21:13 to 21:21), 003585 (vCard parse and write, 21:21 to 21:26), 003588 (IMAP and SMTP, 21:26 to 21:31) | 000599 (20:49 to 21:03), 000600 (21:03 to 21:10), 000601 (vCard, 21:10 to 21:16) |
+| Bench-class run time | 14.8 + 8.0 + 4.9 + 4.7 = 32 min | 14.0 + 7.1 + 5.1 = 26 min |
+| Load before, 1/5/15 min | 3.76 / 7.84 / 9.65 (M1); 3.25 / 2.96 / 5.04 (M2); 1.60 / 2.02 / 3.71 (vCard); 2.57 / 2.37 / 3.39 (P) | 1.70 / 2.64 / 2.63 (M1); 2.06 / 2.19 / 2.40; 2.12 / 2.39 / 2.49 |
+| Load during (1 min, every 2 min) | 1.7 to 3.0, most of it the job | 1.9 to 3.0 |
+| Load after | 2.62 / 2.71 / 5.16 (M1); 1.71 / 2.05 / 3.75; 1.05 / 1.75 / 2.87 (P) | 2.06 / 2.19 / 2.40 (M1); 2.13 / 2.39 / 2.50; 2.00 / 2.43 / 2.54 |
+| Non-timing stages (peak, equal work, B/op) | heavy job 003551, 4 cores | heavy job 000598, 6 cores |
+
+BenchmarkDotNet 0.15.8, MimeKit 4.18.2. Raw `report.tsv`, `peak.tsv`, `native.tsv` and `machine.txt` per group are in the job directories on each machine and were pulled to the
+build's results directory. Rows other than these (PST/OST, MSG, TNEF, ICS, recurrence, the forms, vCard edit) have no code change in these
+areas since their last publishable run and keep the dated rows below; they are re-run in the 1.0 matrix after the code freeze.
 
 # Benchmarks: Outlook-format rows (PST/OST, MSG, TNEF)
 
@@ -141,6 +183,8 @@ Things that make the rows differ in kind or in work:
   rows (MSG, TNEF) sit on the runtime's baseline and say nothing; the PST rows and the curves are the memory evidence.
 
 ## Results
+
+_Rows of the 0.4 bench-class run (2026-11-01, commit 9ec14a0, .NET 10.0.402/10.0.400). No code in these areas has changed since; re-run in the 1.0 matrix after the code freeze._
 
 Medians; B/msg is bytes allocated per message (for `msg-corpus`, per file). Ratios are OneMail / comparator.
 
@@ -238,7 +282,7 @@ Inputs: a generated invite (1 event, 833 B), the largest Thunderbird holiday cal
 file (32.8 MB), a generated card (430 B) and a 10k-card address book (4.5 MB); recurrence cases daily UTC, weekly floating, monthly
 last-Friday in New York, yearly second Sunday of March in Berlin and daily in New York over 50 years.
 
-## Results, x64 (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, BenchmarkDotNet 0.15.8, load about 2.6 before, during and after)
+## Results, x64, 2026-11-01 (0.4 run, commit 9ec14a0; kept for 1.0 re-run; the vCard parse rows are superseded below) (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, BenchmarkDotNet 0.15.8, load about 2.6 before, during and after)
 
 | Area | Input | OneMail ns | comparator ns | ratio | OneMail B/item | comparator B/item |
 |---|---|---:|---:|---:|---:|---:|
@@ -268,7 +312,7 @@ Native reference (libical 3.0.17 from the distribution package, parse only): inv
 | Recurrence yearly Berlin | 1.284 | 0.470 | a yearly rule with `BYMONTH` scans the selected months, not 365 days |
 | ICS parse (all) | 0.133 geomean | 0.087 | same parse changes |
 
-## Results, arm64 (Apple M2, 8 cores, .NET 10.0.400, load 1.7-2.1 before, 3.0-4.3 shortly after start, 1.9-2.4 at the end of each group)
+## Results, arm64, 2026-11-01 (kept for 1.0 re-run; the vCard parse rows are superseded below) (Apple M2, 8 cores, .NET 10.0.400, load 1.7-2.1 before, 3.0-4.3 shortly after start, 1.9-2.4 at the end of each group)
 
 Three filtered groups, each its own queued bench job of at most 20 minutes (ICS parse and edit; ICS build and vCard; recurrence and
 jCal), run after the tuning above. The first column is before tuning (one 43-minute matrix), the second after.
@@ -286,11 +330,22 @@ jCal), run after the tuning above. The first column is before tuning (one 43-min
 vCard parse, 10k cards: 79.4 ms against 67.2 ms, 5,500 B per card against 7,770. The M2 runs the comparator's parser relatively
 faster than the x64 machine does (x64 ratio 1.046 on the same rows); a further cut needs fewer objects per property in the tree.
 
-**Follow-up tuning (indicative, not a bench-class row).** Splitting the vCard parse row into stages on the same M2 (heavy-class job, load about 1.8, 4 cores, Release,
-BenchmarkDotNet short job, 10,000 cards) showed the parse itself at 34 ms (26.9 MB) and the typed pass for the row's e-mail, phone and address counts at 29 ms (20 MB more):
-`Emails`, `Phones` and `Addresses` built every item (text, types, preference, a record) just to be counted. The typed lists now count when asked and build an item the first
-time it is read. The whole row went from 79.7 ms / 53.7 MB to 55.8 ms / 40.0 MB against the comparator's 67.2 ms / 75.9 MB (ratio 0.83; 1 card: 1.866 µs against 2.116 µs, 0.88,
-before 1.016). The bench-class rerun for the published table belongs to the next benchmark pass.
+## Results, vCard parse and write, 2026-11-04 (publishable, both machines)
+
+One bench-class job per machine (x64 `wq` 003585, 21:21 to 21:26 UTC, 4.9 min; arm64 `wq` 000601, 21:10 to 21:16 UTC, 5.1 min), commit 3b51281,
+after the typed lists were made lazy. Load before / after (1/5/15): x64 1.60 / 2.02 / 3.71 and 1.05 / 1.75 / 2.87 (through the next job); arm64 2.12 / 2.39 / 2.49 and 2.00 / 2.43 / 2.54.
+This replaces the arm64 vCard rows above (parse 1.093, worst 1.181), which missed the bar before the change.
+
+| Row | Input | x64 ours ns | x64 FolkerKinzel ns | x64 ratio | arm64 ratio | B/card ours | B/card comparator |
+|---|---|---:|---:|---:|---:|---:|---:|
+| parse | 1 card | 1,837 | 2,511 | 0.732 | 0.864 | 4,872 | 8,856 |
+| parse | 10,000 cards | 41,404,072 | 60,614,280 | 0.683 | 0.827 | 4,101 | 7,770 |
+| build-write | 1 card | 2,040 | 5,159 | 0.395 | 0.461 | 7,736 | 20,800 |
+| build-write | 10,000 cards | 75,567,889 | 126,408,232 | 0.598 | 0.608 | 7,466 | 12,171 |
+
+Geometric mean, parse: 0.707 (x64), 0.846 (arm64); worst 0.732 and 0.864. Build-write: 0.486 and 0.530; worst 0.598 and 0.608. The bar holds on both.
+Peak working set, x64 (heavy-class job 003551, `peak.tsv`): parse 10k cards 252 / 183 MiB (ours / comparator), write 10k 213 / 262 MiB; the
+Mac's helper doesn't report peak working set. vCard edit-write and every other calendar row keep the dated rows above (0.4 run); they are re-run in the 1.0 matrix after the code freeze.
 
 # Benchmarks: PST building (memory)
 
@@ -391,23 +446,27 @@ and no row above 1.25.
 - The Postfix guest relays every accepted message to a sink on the host; the harness waits (outside the timed region) until the
   sink has everything and clears it between repetitions, so a long row cannot fill the guest's disk.
 
-## Results (x64)
+## Results, x64, 2026-11-04 (publishable)
 
-| Row | Ours | MailKit (gate: `mailkit-nodelay` for SMTP) | Ratio | Alloc/msg ours | Alloc/msg MailKit | Peak ours / MailKit |
+One bench-class job (`wq` 003588, 21:26 to 21:31 UTC, 4.7 min of running; the sides listed below, three repetitions each after a warm-up).
+The gate side for SMTP is `mailkit-nodelay` (MailKit with Nagle off, which is its fastest). MailKit as it ships (Nagle on) was left out of this
+run to stay inside the time budget; its last measurement (2026-11-01) was 42 s for smtp-small and 2.9 s for smtp-big.
+
+| Row | Ours | MailKit | Ratio | Alloc/msg ours | Alloc/msg MailKit | Peak ours / MailKit |
 |---|---|---|---|---|---|---|
-| imap-summary, 5,000 messages | 144.4 ms | 248.0 ms | **0.58** | 2,494 B | 16,922 B | 68 / 130 MiB |
-| imap-full, 1,000 messages | 187.9 ms | 190.1 ms | **0.99** | 11,296 B | 12,482 B | 64 / 70 MiB |
-| smtp-small, 1,000 x 4 KB | 1,050 ms | 1,555 ms | **0.68** | 9,874 B | 30,889 B | 104 / 119 MiB |
-| smtp-big, 100 x 1 MB | 684 ms | 1,038 ms | **0.66** | 12,590 B | 212,814 B | 298 / 194 MiB |
+| imap-summary, 5,000 messages | 144.1 ms | 148.0 ms | **0.97** | 2,494 B | 17,100 B | 77 / 143 MiB |
+| imap-full, 1,000 messages | 179.2 ms | 184.7 ms | **0.97** | 11,325 B | 12,704 B | 71 / 79 MiB |
+| smtp-small, 1,000 x 4 KB | 986.1 ms | 960.8 ms | **1.03** | 9,847 B | 30,889 B | 105 / 120 MiB |
+| smtp-big, 100 x 1 MB | 591.2 ms | 794.3 ms | **0.74** | 12,779 B | 212,814 B | 299 / 193 MiB |
 
-Geometric mean 0.71, worst row 0.99: the bar is met. MailKit as it ships (Nagle on): smtp-small 42,427 ms (ours 0.025x), smtp-big
-2,931 ms (0.23x). `ours-data`: 911 ms and 697 ms. Ours holds more at the 1 MB peak because the prepared messages are held as an
-entity tree plus the converted SMTP message. `imap-full` is dominated by the server and the copy of each body, so the two sides land together.
+Geometric mean 0.92, worst row 1.03 (smtp-small): the bar holds. `ours-data` (the same send through the lower-level `DATA` path):
+smtp-small 835.0 ms (0.87), smtp-big 646.0 ms (0.81). smtp-small is at parity with MailKit's fastest configuration: the 2026-11-01 ratio
+of 0.68 compared against a `mailkit-nodelay` that ran at 1,555 ms; it ran at 961 ms this time on a quieter machine (same Postfix guest
+and harness), so the SMTP comparator numbers moved more than ours. Ours holds more at the 1 MB peak because the prepared messages are
+held as an entity tree plus the converted SMTP message. `imap-full` is dominated by the server and the copy of each body, so the two sides land together.
 
-**Re-run of the IMAP rows** (same code and harness, a second exclusive bench job, load 2.5-4.0 before, during and after): imap-summary
-144.6 ms vs 148.9 ms (**0.97**), imap-full 177.5 ms vs 186.2 ms (**0.95**); allocations and peaks as above (MailKit summary peak 137 MiB).
-MailKit's summary median moved from 248 ms to 149 ms between the two runs (its first repetition was 301 ms in both), so treat
-imap-summary as roughly at parity rather than 0.58. With the re-run IMAP rows the geometric mean is 0.80 and the worst row 0.97: the bar still holds.
+**arm64: protocol rows are gated on x64 only.** The servers run in a private network namespace on the worker, the Mac has no container
+or VM runtime, and client-only rows against the worker over the LAN would measure the network. The protocol code has no architecture-specific paths.
 
 ### Allocation per message in enumeration and download
 
@@ -436,13 +495,13 @@ plain FETCH lines decoded in place, SMTP scan buffers pooled, `CopyToAsync` on t
 | | x64 |
 |---|---|
 | CPU | AMD Ryzen 9 7950X3D, 32 logical cores |
-| SDK | .NET 10.0.402, Release build |
+| SDK | .NET 10.0.403, Release build |
 | Servers | Dovecot `docker.io/dovecot/dovecot@sha256:1b3041c0...db4c6`; Postfix 3.7 in the Debian 12 guest (`tools/servers/guest-*.sh`) |
-| Jobs | `wq` bench 001941 (IMAP rows, 17:29 to 17:30 UTC) and 001960 (SMTP rows, 18:45 to 18:51 UTC), 2026-11-01 |
-| Load before (1/5/15 min) | IMAP 8.93 / 8.00 / 8.99 (the previous job's tail); SMTP 2.05 / 3.67 / 6.89 |
-| Load during | IMAP: the job ran 50 s, no sample; SMTP 1.9 to 2.9 (every minute) |
-| Load after | IMAP 6.86 / 7.68 / 8.83; SMTP 3.30 / 2.97 / 5.43 |
+| Job | `wq` bench 003588, 2026-11-04 21:26 to 21:31 UTC, commit 4b962c1 |
+| Load before (1/5/15 min) | 2.57 / 2.37 / 3.39 |
+| Load during (every minute) | 1.05 to 2.57 |
+| Load after | 1.05 / 1.75 / 2.87 |
 
-MailKit 4.18.2. The first SMTP attempt (job 001942) ran out of the guest's disk in the fourth side and was discarded; the sink
-drain above came from it. arm64: no host here runs the servers (the Mac has no container or VM runtime), so there are no arm64
-protocol rows yet; the client side alone could run from the Mac against these servers over the LAN, and would be indicative only.
+MailKit 4.18.2. The harness's per-container session keyring is off (`tools/servers/setup-podman.sh`, `keyring=false`) and `userns.sh` stops
+podman's pause helper after each run: before, every run left one holding kernel session keys, and the per-user quota of 200 ran out
+(`crun: join keyctl: Quota exceeded`, Dovecot did not start). After, over repeated servers runs the user's key count stayed at 188 to 193 (other sessions of that user move it by one), and no pause helper was left behind. Measured on the worker before the change: 192 keys with 8 stale helpers present, quota 200.

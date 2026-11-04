@@ -19,6 +19,18 @@ internal static class Program
             return Peak(args[1], args[2], args[3]);
         }
 
+        if (args.Length == 2 && args[0] == "inputs")
+        {
+            // Writes the four MIME inputs as files, for the native reference programs in bench/native.
+            Directory.CreateDirectory(args[1]);
+            foreach (string name in Inputs.Names)
+            {
+                File.WriteAllBytes(Path.Combine(args[1], name + ".eml"), Inputs.Get(name));
+            }
+
+            return 0;
+        }
+
         if (args.Length >= 2 && args[0] == "report")
         {
             return Report(args[1], args.Length > 2 ? args[2] : null);

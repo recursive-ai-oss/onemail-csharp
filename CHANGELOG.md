@@ -10,6 +10,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Changed
 
+- `TransferEncoder.Base64` encodes once and spreads the 76-character lines in place instead of calling the encoder per line and copying the result: building a message with a 1 MB attachment, 750 us to 445 us and 4.1 MB to 2.7 MB allocated (x64, indicative).
+- The test servers script turns off podman's per-container session keyring and stops podman's pause helper after each run, so repeated runs can no longer use up the user's kernel key quota.
 - `VCardView.Emails`, `Phones`, `Urls`, `Addresses` and the other typed lists count their properties when asked and build an item the first time it is read, so counting costs a scan of the card: vCard parse with a typed pass over 10,000 cards, 79.7 ms to 55.8 ms (comparator 67.2 ms), 5,500 to 4,000 bytes per card (Apple M2, indicative).
 - In-place PST writing changes a big folder's contents, associated-contents and hierarchy tables row by row at commit instead of writing them whole: with 100,000 rows a one-item add commits in about 0.15 s instead of 2.5 s and writes 0.2 MiB instead of 33 MiB; with 600,000 rows 0.45 s instead of 10.7 s (`docs/benchmarks.md`, `docs/pst-writing.md`). `DeleteMessage` and `MoveMessage` no longer read the folder's table again for every call. Small tables, tables of other layouts and large change sets are still written whole, with the same results.
 - `RecursiveAI.OneCrypto` 0.4.0-preview.1 (was 0.1.0-preview.1), plus `RecursiveAI.OneCrypto.OpenPgp`, for `.Cryptography`.
