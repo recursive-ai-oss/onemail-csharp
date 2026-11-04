@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="../OneMail/OneMail.csproj" />
     <PackageReference Include="RecursiveAI.OneCrypto" />
+    <PackageReference Include="RecursiveAI.OneCrypto.OpenPgp" />
   </ItemGroup>
 
 </Project>

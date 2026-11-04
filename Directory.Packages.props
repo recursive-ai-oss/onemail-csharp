@@ -10,7 +10,8 @@
     <PackageVersion Include="RecursiveAI.OneRender.Image" Version="1.3.2" />
   </ItemGroup>
   <ItemGroup Label="Family libraries: .Cryptography only">
-    <PackageVersion Include="RecursiveAI.OneCrypto" Version="0.1.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OneCrypto" Version="0.4.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OneCrypto.OpenPgp" Version="0.4.0-preview.1" />
   </ItemGroup>
   <ItemGroup Label="Render tool only: optional OneRender font packages">
     <PackageVersion Include="RecursiveAI.OneRender.Fonts.Cjk" Version="1.3.2" />
