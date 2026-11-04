@@ -1,0 +1,32 @@
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+To: vector-v4-ed25519-cv25519@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_3a99061d5ee45df06209206c"
+
+--=_3a99061d5ee45df06209206c
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_3a99061d5ee45df06209206c
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wV4D0bBN7D9zhsUSAQdANBdCDeWr8R4Wj3wOw7OL8avuanzBFJGaK5YxjfT1LFYw
+Tpy7JUMg5/AMq2921bW8wqgXKe6p+qqsxpnQos713wcQ+A8LEhe1pgcPAJyslIHJ
+0sBLASh0s7Ru9vQjzV0fcjgs8IpPgCIRKFkeLXNYv9A+EfSjCVqOgiUtqGjCFFxV
+DOQeoHUDvqDKBrqiyjQ9V1jxFUZxnmaSMXnGXd/tYlkhh/jhGjz2eisbcaUg1bcL
+pBMLUNtDR7ptXEHtQcgwITjh7neIaqosM1CkWDIwsZhwVEkTr1P0KGadZ9L6vPrf
+nvhGEDNdUc/bZa29J9YYmB+K1GUlFRAmlB/adHx6RbznoDeGPIYoIq096Ok8xqBM
+VXgyG+RWHDArNN8zqbv7cmYZ9LpEyAj6Am7o+ghhnVsBM9v3WORqathPYavGffjr
+sJnOqUBRTXbGj1qrJR8aN7D3V4DITltsntea/KW6
+=esMg
+-----END PGP MESSAGE-----
+
+--=_3a99061d5ee45df06209206c--

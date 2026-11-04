@@ -1,0 +1,27 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pgp-signature"; micalg=pgp-sha256; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Interop test caf=C3=A9.
+A line that is quite long enough to need some wrapping when it is encoded, =
+as long lines are.  =20
+From the other side.
+
+--vector-bnd
+Content-Type: application/pgp-signature; name="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iJEEABYIADkWIQT/RcCmpxPD95Bs5Qhw2Io8vGo2NwUCautbaBsUgAAAAAAEAA5t
+YW51MiwyLjUrMS4xMiwyLDIACgkQcNiKPLxqNjfhRwEAlpY0/flnYb5gAG67ChhY
+allUtY0fmxEvVcx7TcAKbPkBAMhgtTBT4jsCCcCij014N6u6exTMMOb2xK2UxCzT
+a/kC
+=VEOa
+-----END PGP SIGNATURE-----
+--vector-bnd--

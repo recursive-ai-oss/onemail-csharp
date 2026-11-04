@@ -1,0 +1,27 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--vector-bnd
+Content-Type: application/octet-stream; name="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hF4Dav8RfGo/kYwSAQdAH2qn1+zYREFbF8VYt0yZH/8IXKpAb0O/MHm33pthhCMw
+PltDa4r5PSoWhm7zmd31h04GPASaokj1WnL2nZZ2pl4/jgGM0eZ661CZEZmeSm6q
+1MA9AQkCEA4sBgV8Cwt2XvPq0n40qokrX9JkeUa7Fgjz2AxqfqJNvdyLpj7xm5EL
+DeKx+TyPwuFybUtjy1j7oVGjnMWEJWtYr+LrTyjr54DWp5/Fy6DRyFjY2d+QiIMf
+8ktgSz9he2kr/uyDpQw0m/B/c+q2bhTuIz+SJjbhYy3gvILK3iTbaDpaFfQWlWxQ
+S7FJqYdJg9yoJLjJh8qKOcr0M+P4930CBZC4QVCnqj28GFyj91Y/ECxBi6ikrTxO
+NW3+D3qYGEEmh486PpCmfnsAkHcEp5QLt68tmAx6+uu7T5twC+Cf62LYCXcBCwy2
+2RR3/xRTzWO3aByhBO2LUA==
+=iJs3
+-----END PGP MESSAGE-----
+--vector-bnd--

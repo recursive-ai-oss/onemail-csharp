@@ -1,0 +1,46 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--vector-bnd
+Content-Type: application/octet-stream; name="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQGMAxNxNnxZgD8vAQv+NwV9N9mdd8H2aygwc6Rn4ctoLYcyOY+svcl2CQ3pK6lQ
+oblJgRw9WKIKWbyAF0hlDCrfOW0Rtxwv/3nK2WHygqBq9OruWJowGB0pvMbhh/ng
+yG4JlXPVDSMJlcOa12KrQngepqrFMUiuxgwf41c2GP86hZeVfMv2GAlxBfc2oi5r
+De1z7j3ze8jsNGVA6Kx+ezUOI/bajm7mvCzlnqqzFOj6ADNs5ZKBZeCcbzHCS6pH
+iVT7Ibz0DJ6Mq5N5asBFTZxDho+RuxC/hx7PB1vYsYEOTuWL1R/VZgPHy9TEuzdm
+BuXql6dsK+upXXJfSwkWESoW9zis8o2NAczY+q4EDAc4+MHFKPXGLR4549sK+Rw+
+EbpfB+udsZEh05ExjQloxftDjGBfIzc5maApTMxHmbKRAHlbhxRJEvhZGoYM6NDx
+AbJRlUGI99uMhDVz/8jgps+qUm+nJx1AV3k9oyZmD2F2XYk35bufqoaFHwrfGvWg
+yRplRBuQsr4F6mrD/Ucz1OkBCQIQUHn3k368KeCKrP6+PMBsyWwBsfISxwdTY7uW
+bT7+A2Vl48UWYoXaWGnQ5W1kMJQPfo5N3uR2tibdNOerZah2y/9XNlp2pQYtKFC8
+4vxdAAvLVZ0E/KIXUqZOLG4GhCXGQ2Xijyjq+J+m92hT43eVscdgk42PQtuhauxV
+2rXBJ/Al9/NGjxozOf4cvCg1EgaugEvF0Hf/CcBbIyScFlAjueSIKnxLFmFPlRUN
+/bVmCp9kQkZeofwvhgG/llV+m6ZRC+p8mj6rUl/+wSVbydB+H8fX9sfr65rhahu5
+2Vi9STtSAs5x3jP29vTWKt3IIe8i6Ki+MrKLXG5VVExBihYj5K0udbXl5j7gCL/D
+IJjvpnOpSrdwwg7j742+5K1QxrjtbajcYJ6iSzC5q384t8PUl7Qrm8VXsF0DEdv/
+kp0Vkg+m6tEynf9Y0I1BYRuBwqMMIkYP/jIOtE0t+YtqDTw7gUEP5RC5pWhjD5g1
+XshIlecvf+8lues7VQRL8WI7g3DzhU39vgDi45ySyoM0R3+8B9IpV6YfRsP17R9G
+QtvTwHZ751xCJEOMHt8ghgw8z0x5Qlle3cILEk/4H72ypjnG85GI0gKgYlg2EpCc
+w5r457VBmYtKurN0Njcpg/E6UlrNz/5EiXPHBKl1V3MfO07GWMrhYS7ogy2GEpzh
+XsCzKUhZbmxJ2rIOUnn8i7/IL/XqLXGAp7Jrk234atmWD5cPsvFeSI+nwrv1F676
+KMl5kk/SfVA5gs7nSo0+E+i4w9ifeSR2pnupTEwI07E4Yd0AoZJDxVy2MEeJ6v6E
+yiKWsnJazjwb3T7faB+hZ+yPpAAu7QH75yrkL1ujTr2EdIsMyC6pxhOtKlsiqqMW
+ioR9mKfkdu/L2lu12/nU9YBEv+EO0PnDzJ8Mwkzh3dS3spvNpjhKCvypcRQkKnSI
+PyB5dVIRiBZJgRB8pJ86/fgFXh8ehco3riC1ZAkIFXdUgq40Ib/QVjp5ppVItIHE
+zoGpmr9JEd43vd561PKXPpfNT4TbXrcaUPhzk3UyTczpOwF6Bpu4FfRHyuGgkxFm
+zEUGZa0kukByGJlr8syVnfZqdxkkHobs95VXPkij3Nu2rcj0XlUnq4RWupKVbvan
+nuJ1xlqAZe3VXtYQ0Zmj7425/HjcyXb3gPRTq29BT70dmIXpMCo=
+=yRlu
+-----END PGP MESSAGE-----
+--vector-bnd--

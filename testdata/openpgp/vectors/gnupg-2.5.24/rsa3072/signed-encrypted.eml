@@ -1,0 +1,44 @@
+From: Vector <vector@example.org>
+To: vector@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="vector-bnd"
+
+--vector-bnd
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--vector-bnd
+Content-Type: application/octet-stream; name="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQGMA93llUekPzbjAQwAqi8P9w2dSzIZakooTQR8pVNoSBM8VZXLssH88z+dre1O
+4//T3ax2aDuaDYNiTMQz2O5hqV0wtIUhmNYNS38ArI4xZalQ1kCAttlXRYNpn1f6
+/tLlTSpq1j4SzMP5M8zpMDdC5Fg5wQhrq1Gd3XGxzS+5DCsZQXlchiQkZvHIjFFe
+iDk1nXfYp/EOfPGdGDo7GuFQm5TaU9R/1h8cOcMoWfEFCVcamt5g0BwrBvMuzzML
+OpCrGXGWsZvZH3SVQNhpKMvLtE4X4/9ypg/ft9Hkza1ikRNQBj0nqqBcQ3f9CzhV
+PqzkaJbu0vKBGPBCmmCMxfzSY6RyAHAq1J1Crxd6qhjZTFoa0zxELTWwNxNdOYYR
+DpT5acZ9HnasqpTXa37TKMomIPQMr8gOhFtkN1APWhuLAXMIXG4N3ipzIJ4unq9U
+gJ2W/Yr4eYhPYLFE9FWhZRYluSMGRGubXz+yEmOzwlF8/u0QfRFoVA6qyb0Lu9np
+OEjMS7BQFUre/bfiYKs+1OkBCQIQ7T0bgYdU22ESrUlsxU6toYTodLMF6FUhw+My
+oHhW0AAuQ6LVYKPm9YXKQsrRgpnDKyMSnA05blpYQlhgVUbC1sh+6x8epQQcKPV6
+kysgs5xsHLBO+COA5kWi6qh0CqJsBl9C+WkQsZxehRGHVZFM9JL2SAfmZq93GnDG
+3YmpCoOKnLUORHZtF3qdT/JWTVN1dvWhHnPumcCNV91Z7mpvwQ0SMLIREO8fJONP
+Gh1doeSthG1cLklPPIxtQ7hyRAepVejAztPqhwOS0uYP1tFq7bNzc6iMgGuAphMp
+BiAlyQcoZTJwBvXbp5nMbmqah5Vg8mMpTittkfFc0bcMLNfoKg0GQCQjFXPlwAsw
+tR8ofmrMLO1LzcU9NDoFxGtDGk0fQ+nIQHMVYaMxfzWDpN+ANC8svKlbzpABrqPK
+28QcGW2/UDrEw4LLZ0wD9RuVGI/OBYHNLpkLRcerSKzmyM1MIU0t4gM3uE6zwqYd
+dIQErgnAitDAAI+se3sUUhe2FdwsqIpPo3R/vIX0AZA4PTS6e1beNLDH1Rz9C5RT
+g1Brd4vpmEADzpW5m+I23HayMlaPR84//BR4CJQ1uahTUfgpHJQhDpXCxr1G9Dhc
+ipxxXizsGQE1RXP4LQj+TtcLRtnROKH2nhhBGwAxhKgj9bakLZplAThp1e+JWrrT
+GcBKMSKhS1yOmAETUdonGJ9MhKGBrtqXRKmAR07RvGa/kYl7YVedWXwk87x2vgrr
+1f7isjjZd9aRZjrr1KVPUM4ijMeEfRUsvrvyAqF2E4OnxeTDxJ6QK30ytVyEZdlr
+WgtVbrHTB5YMZx9WVsNDBDELY2J6QCjyRCVnpY+HR6IIxicxxkNkDST2W+uala8s
+YedWJFu58YwKI4mjx3rKD6KwV9dMLN3drl8iwjEo8IFp2HKRQNlGGO8Ov1ZjgISB
+aeWVH9XGLKOIC1VH7p1WfAhYFOKdYewsdUq9u5q9ub0qN8YpOIEzZQN6AWm9w/rx
+lklSgWMiVoR67/gsrsW0r+pFKHLdZv+p50+a1EQ=
+=luIE
+-----END PGP MESSAGE-----
+--vector-bnd--

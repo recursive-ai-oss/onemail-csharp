@@ -1,0 +1,46 @@
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+To: vector-v4-ed25519-cv25519@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="=_3cbe90709049ee979a03abc5"
+
+--=_3cbe90709049ee979a03abc5
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--=_3cbe90709049ee979a03abc5
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wV4D0bBN7D9zhsUSAQdA+ml391KCbyQR9hXfyhjfmLI5sa6z4sBnafh+Ax+oamMw
+XlRsm6z9aJNUpZjNisxJzSqRqyUw2VrqqeR1lpbN/Awq6j3rYGyqmMVtM3yWNrsD
+0sL7ATo1iekKu5GmrSUeM0HOawi8aZlmd6+Xfy6owCRf/Cn2iLey1jCdJpFoXgNd
+yLjDR1UppMYrGcqPfPmktxUDfavm5YthXUPKYdBbPKeGQntKABMugUmPdUCBaLDm
+KnQaFJSDpficlgw5kjjYl+c7O58cB1otAUHG3vYKb1sqZ0MQLF9rAYotk2/r+I8o
+dyCuztnqWx2Zlfw2kTW/BC5DTGzI+SakJnVV4E/xBLTzrsv54RbF2TIeAuumwolu
+vaybXr1AAjA0mqhNJA3DUMhrzq8n2T/upIOnQ7uDnuWEgy/2NMt9rfKB1cwnO/QG
+YQYXUlP3RQiOC/1/OrqUhKmuiXdzCpUhr3BhT9g4JghRbrXMxoFW+pPkoVDcrunm
+YVaBV7CTnTS+WhbPzXS6Bd/gDzRqvBd+FiNKrigt2FUWZX3/sHhXK6jBoxX8j7C2
+7MxAiY5VoQ2vwFh2JNMyyhxDNgSWrE0tSWZPe2TkqpujaA+eL8MMKQZpXpbDKR1G
+BkJm4K6OTtMIFfxEQeA6sqCYI0A8nFNrV3GoBke2a3mdFAfDo8rmzyMSR05T2yxg
+L/z0SJAXzX6oC3d8uV6FAbWCeooAfx6FaLFZnIApyJBvV1c3npOsuIIORaupSJ76
+KFHSsK3534tOY4RS9C6hqBjQuCt0cJfgLPlf8SAwxQd546WR0P9FMuxQ8tEi371y
+dS2Hy7r+MUh9vhsOg/94iprsoiC8+sEdRAlKob8egTCmRCdTa7AU93WRRpKvx3fr
+dzjYw5DiYzoKtPYdG1eaZb0bID4NwMhhfrEgGhc0WMS+8sZ5xTiMDhqr2X3qcxDw
+CJjOl51o3VZR9T7twVyOPFkBxaRFWBOK8Zaug9c1vB1yOwgBIKHEf12FdQI84ucu
+lD2QDS3iZok2BJCvGZ1PyBJ7MOQI7JL+2ZSbtcvj6FrTcJhOLoCn2EozGcg1TLSl
+AR/kuSrht2aPd4WzRcwXPIiBgYXSoFzL3/zYMPWuHmCfhvX0TRe6ZNErPe+02dg4
+BDS/Ci/iWBoPsEqhwHrDFvIqou0L8wPjJiHwK+EGsTj5nLzQEYUjvSsZRFYEe6Ir
+uJugxoDq5t9kcNWh/hqMnXpoJstLlBQT6BTSevg6b6soF1V07zanSq3cBC5EkapV
++k87qpMxnTrZS6ebl+fp7kg0qquK2nsfZ0RcTJPyom08pFED2lWR9dCpN0oB6sEN
+uLPKlAT80Vcp/7I5B82nJ0AXgRq6qd59+Q0VS7z1zvMJqApub1UTP5FCx1akGQ==
+=lFYJ
+-----END PGP MESSAGE-----
+
+--=_3cbe90709049ee979a03abc5--
