@@ -89,6 +89,39 @@ public sealed class PstBuilderTests
     }
 
     [Fact]
+    public void AMessageClassTheWriterAddsIsAlsoInTheFoldersRow()
+    {
+        // An item with no properties at all gets PidTagMessageClass added; Outlook stopped working on such an item when its row in the folder's contents table had no class.
+        var m = new MapiMessage();
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(m));
+        using (store)
+        {
+            Assert.Equal("IPM.Note", store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single().MessageClass);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void AMessageWithAttachmentsAlwaysCarriesTheHasAttachFlag()
+    {
+        // Outlook shows no attachments for a message whose PidTagMessageFlags lacks MSGFLAG_HASATTACH, so the builder sets the flag.
+        MapiMessage m = Message("with file", recipients: 0, attachments: 1);
+        m.Properties.Add(Int(0x0E07, 1));   // read, no HASATTACH
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(m));
+        using (store)
+        {
+            PstMessage written = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(0x11, written.GetInt32(0x0E07));
+            Assert.Single(written.Attachments);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
     public void String8TextTakesItsCodePageFromTheItemAndTheNameMapIsNeverEmpty()
     {
         var m = new MapiMessage();

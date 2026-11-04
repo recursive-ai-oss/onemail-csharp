@@ -13,6 +13,26 @@ if (args is ["pstdamage", var dIn, var dOut, var dKind, ..])
     return RecursiveAI.OneMail.PstOracle.RecoveryCommands.Damage(dIn, dOut, dKind, args.Length > 4 ? double.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture) : 0, args.Length > 5 ? int.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 1);
 }
 
+if (args is ["outlookview", var ovPath, ..])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.Run(ovPath, args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 100000);
+}
+
+if (args is ["tcinfo", var tcPath, ..])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.TcInfo(tcPath, args.Length > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 1);
+}
+
+if (args is ["hninfo", var hnPath, var hnNid])
+{
+    return RecursiveAI.OneMail.PstOracle.OutlookView.HnInfo(hnPath, hnNid);
+}
+
+if (args is ["mkvariants", var mvDir])
+{
+    return RecursiveAI.OneMail.PstOracle.Variants.Run(mvDir);
+}
+
 if (args is ["pstrecover", var rIn, var rOut, ..])
 {
     return RecursiveAI.OneMail.PstOracle.RecoveryCommands.Recover(rIn, rOut, args.Length > 3 && !args[3].StartsWith("--", StringComparison.Ordinal) ? args[3] : null, args.Contains("--forensic"));

@@ -288,7 +288,9 @@ public sealed class HeapNodeBuilder
         }
 
         BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * n))..], (ushort)b.Used);
-        return b.Data.AsMemory(0, mapAt + PageMapSize(n));
+        // Every block but the last is a full 8,176 bytes, the page map followed by zero slack: Outlook's own heaps are laid out so, and it does not
+        // read cells in the later blocks of a heap whose earlier blocks end at their page map.
+        return i < _blockCount - 1 ? b.Data.AsMemory(0, BlockCapacity) : b.Data.AsMemory(0, mapAt + PageMapSize(n));
     }
 
     private static void SetLevel(Span<byte> levels, int index, int level)

@@ -504,7 +504,7 @@ internal sealed class PstItemWriter
 
     // ---- messages ------------------------------------------------------------------------------------------------------------------------------
 
-    private sealed record WrittenObject(Bid Data, Bid Sub, long Size, int Flags, int EffectiveStatus, byte[] LastModified);
+    private sealed record WrittenObject(Bid Data, Bid Sub, long Size, int Flags, int EffectiveStatus, byte[] LastModified, Dictionary<ushort, byte[]> Added);
 
     /// <summary>Writes a top-level message node and returns the rows its folder keeps.</summary>
     public PstWrittenMessage WriteMessage(MapiMessage message, Nid nid, Nid folder, bool associated, string location)
@@ -520,6 +520,12 @@ internal sealed class PstItemWriter
             [0x0E17] = I32(o.EffectiveStatus),
             [0x3008] = o.LastModified,
         };
+        // A property the writer added (the message class of an item that had none) is in the folder's row too: a row without the class made Outlook stop working.
+        foreach ((ushort id, byte[] value) in o.Added)
+        {
+            eff.TryAdd(id, value);
+        }
+
         return new PstWrittenMessage
         {
             Flags = o.Flags,
@@ -613,6 +619,16 @@ internal sealed class PstItemWriter
             flags = attachments.Count > 0 ? 0x10 : 0;   // MSGFLAG_HASATTACH
         }
 
+        // MS-OXCMSG 2.2.1.6: MSGFLAG_HASATTACH says the message has attachments. Outlook shows none for a message whose flags lack it, so a message
+        // that has attachments gets the flag.
+        if (attachments.Count > 0 && (flags & 0x10) == 0 && Find(props, 0x0E07) is { } flagProp)
+        {
+            flags |= 0x10;
+            flagProp.Source = null;
+            flagProp.Bytes = I32(flags);
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageFlags lacked MSGFLAG_HASATTACH on a message with attachments; set");
+        }
+
         foreach (Prop p in props)
         {
             size += ValueLength(p);
@@ -620,6 +636,7 @@ internal sealed class PstItemWriter
 
         byte[] lastModified = FileTime(_timestamp);
         int status = 0;
+        int declared = props.Count;
         if (_options.AddRequiredProperties)
         {
             // MS-PST 2.4.5.1.1: the properties every message property context must have.
@@ -661,7 +678,16 @@ internal sealed class PstItemWriter
         LtpNodeResult r = pc.Build();
         Bid sub = r.WriteSubnodes(blocks, extra);
         _string8Seen = outerString8;
-        return new WrittenObject(r.Data, sub, size, flags, status, lastModified);
+        var added = new Dictionary<ushort, byte[]>();
+        for (int i = declared; i < props.Count; i++)
+        {
+            if (props[i].Bytes is { } b)
+            {
+                added[props[i].Id] = b;
+            }
+        }
+
+        return new WrittenObject(r.Data, sub, size, flags, status, lastModified, added);
     }
 
     private static byte[] SearchKey(uint key, List<Prop> props)

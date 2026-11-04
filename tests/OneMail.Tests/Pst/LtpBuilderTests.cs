@@ -43,6 +43,8 @@ public class LtpBuilderTests
         IReadOnlyList<ReadOnlyMemory<byte>> blocks = heap.Finish();
         Assert.Equal(heap.BlockCount, blocks.Count);
         Assert.All(blocks, b => Assert.True(b.Length <= NdbBlockBuilder.MaxBlockData));
+        // Outlook does not read cells in the later blocks of a heap unless every block but the last is the full 8,176 bytes (page map, then zero slack).
+        Assert.All(blocks.Take(blocks.Count - 1), b => Assert.Equal(NdbBlockBuilder.MaxBlockData, b.Length));
 
         var store = new BuilderStore();
         var tree = store.Blocks.BeginDataTree();

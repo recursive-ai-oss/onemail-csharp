@@ -379,6 +379,17 @@ internal sealed class HeapEditor : IDisposable
     /// <returns>The new root and length of the heap node's data; the root carries the reference the node will hold.</returns>
     public DataTreeResult Finish()
     {
+        // Every block but the last is a full 8,176 bytes, as Outlook lays a heap out and needs (it does not read cells in the later blocks of a
+        // heap whose earlier blocks are short). A block that used to be the last and is not any more, or a short one a different writer left, is
+        // rewritten at full size.
+        for (int k = 0; k < _pageCount - 1; k++)
+        {
+            if (k < _tree.LeafCount && _tree.GetLeafSize(k) < Capacity && Get(k) is { } short1)
+            {
+                short1.Dirty = true;
+            }
+        }
+
         // Fill levels live in the first block (blocks 0 to 7) and in the bitmap blocks at 8, 136, ... (the block and the 127 after it).
         var changed = new List<int>();
         foreach (KeyValuePair<int, Page> e in _pages)
@@ -413,7 +424,7 @@ internal sealed class HeapEditor : IDisposable
         dirty.Sort();
         foreach (int k in dirty)
         {
-            byte[] image = Render(_pages[k]);
+            byte[] image = Render(_pages[k], k < _pageCount - 1);
             if (k < _tree.LeafCount)
             {
                 editor.Replace(k, image);
@@ -433,11 +444,11 @@ internal sealed class HeapEditor : IDisposable
     }
 
     // The block as stored: header, allocations, then the page map at a 2-byte boundary (MS-PST 2.3.1.5).
-    private static byte[] Render(Page p)
+    private static byte[] Render(Page p, bool full)
     {
         int mapAt = (p.Used + 1) & ~1;
         int n = p.Starts.Count;
-        byte[] image = new byte[mapAt + 4 + (2 * (n + 1))];
+        byte[] image = new byte[full ? Capacity : mapAt + 4 + (2 * (n + 1))];
         p.Data.AsSpan(0, p.Used).CopyTo(image);
         BinaryPrimitives.WriteUInt16LittleEndian(image, (ushort)mapAt);
         BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(mapAt), (ushort)n);

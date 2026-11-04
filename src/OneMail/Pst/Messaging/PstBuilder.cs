@@ -33,6 +33,9 @@ public enum PstWriteDefectKind
 
     /// <summary>An item has more recipients or attachments than a table can describe. The rest were left out.</summary>
     TooManyChildren,
+
+    /// <summary>A property the item carried disagreed with the rest of the item, so the builder changed its value: <c>PidTagMessageFlags</c> without MSGFLAG_HASATTACH on a message that has attachments (Outlook shows no attachments then).</summary>
+    PropertyAdjusted,
 }
 
 /// <summary>One thing the builder changed or left out while writing an item.</summary>
