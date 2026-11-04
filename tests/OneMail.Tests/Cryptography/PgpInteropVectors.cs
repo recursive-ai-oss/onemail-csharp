@@ -67,6 +67,23 @@ public class PgpInteropVectors
         }
     }
 
+    private static MimeEntity FirstTextLeaf(MimeEntity e)
+    {
+        if (e is MimeMultipart m)
+        {
+            foreach (MimeEntity child in m.Children)
+            {
+                MimeEntity leaf = FirstTextLeaf(child);
+                if (leaf is MimePart && leaf.MediaType == "text/plain")
+                {
+                    return leaf;
+                }
+            }
+        }
+
+        return e;
+    }
+
     [Fact]
     public void EveryCommittedVectorOpens()
     {
@@ -87,7 +104,8 @@ public class PgpInteropVectors
                 bool wantsSignature = kind != "encrypted";
                 Assert.True(r.Succeeded, dir + "/" + kind + ": " + string.Join("; ", r.Layers.Select(static l => l.Status + " " + l.Detail)));
                 Assert.Equal(wantsSignature, r.IsAuthenticated);
-                MimePart leaf = Assert.IsType<MimePart>(r.Content);
+                // Thunderbird protects the Subject, so its decrypted entity is a multipart/mixed holding the header block and the text.
+                MimePart leaf = Assert.IsType<MimePart>(FirstTextLeaf(r.Content!));
                 string actual = Encoding.UTF8.GetString(leaf.GetDecodedContent());
                 Assert.Equal(expected.TrimEnd(), actual.TrimEnd());
                 if (kind == "sign-then-encrypt")

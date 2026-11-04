@@ -12,6 +12,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Thunderbird interoperability for OpenPGP mail: `tools/thunderbird` runs the pinned Thunderbird 159.0 release headless, opens our PGP/MIME messages (signed, encrypted, combined, sign-then-encrypt) and has it write signed, encrypted and combined messages that `PgpInteropVectors` reads back from `testdata/openpgp/vectors/thunderbird`.
 - `DkimSignatureResult.CheckAlignment` (signing domain against the From domain: `DkimAlignment.Exact`, `ParentOrChild`, `None`; no policy), `CachingTxtResolver` with `TxtLookupResult.Ttl` (filled by `DnsTxtClient` from the answer's TTLs) for DKIM key lookups, and `DbxRecoveryDefect.NotOnDeletedList` (freed DBX segments the deleted-message list does not reach are now found by the scan and tagged `FreeSpace`). `ArcSealer.SealAsync` refuses a passed chain status that cannot fit the message (`none` over a chain, or a verdict with no chain); a passed status is otherwise the caller's assertion and is documented as trusted.
 - `tools/fuzz/fetch.sh` fetches libfuzzer-dotnet and SharpFuzz.CommandLine by pinned version and hash; `tools/oracles/light.sh` builds the oracle drivers on a fresh workspace; the libpff comparison pairs items with equal times, size and flags by subject too.
 - `TableContextEditor` and `TableEditUnsupportedException` (`RecursiveAI.OneMail.Pst.Ltp`): add, replace and remove rows of an existing table context node inside an `NdbEditor` transaction without writing the rest of the table (`docs/pst-ltp.md`).
