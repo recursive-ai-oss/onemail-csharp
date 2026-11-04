@@ -48,7 +48,7 @@ for side in ours theirs; do dotnet "$dll" peak mbox $side dovecot | grep '^PEAK'
 fi
 
 # Native reference (not a gate): the released Rust mail-parser and mail-builder crates over the same four inputs.
-if [ "$full" = 1 ] && stage native && command -v cargo >/dev/null 2>&1; then
+if stage native && command -v cargo >/dev/null 2>&1; then
   dotnet "$dll" inputs "$out/inputs"
   ( cd "$here/native/mimeparse" && CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$out/cargo-target}" cargo build --release -q )
   : > "$out/native.tsv"

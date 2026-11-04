@@ -9,6 +9,20 @@ if [ "${1:-}" = "-n" ]; then net=--unshare-net; export NETNS=1; shift; fi
 mkdir -p "$HOME/onemail/containers/run/tmp" "$HOME/onemail/containers/run/crun"
 # In the private network namespace the capability to configure it is kept just long enough to bring loopback up and let any
 # process bind low ports (25, 143, 993, ...), then dropped by the exec of a non-root process.
-exec bwrap --unshare-user --uid "$(id -u)" --gid "$(id -g)" $net ${NETNS:+--cap-add CAP_NET_ADMIN} --bind / / --dev-bind /dev /dev --proc /proc \
+bwrap --unshare-user --uid "$(id -u)" --gid "$(id -g)" $net ${NETNS:+--cap-add CAP_NET_ADMIN} --bind / / --dev-bind /dev /dev --proc /proc \
   --ro-bind /dev/null /etc/subuid --ro-bind /dev/null /etc/subgid \
   bash -c '[ -n "$NETNS" ] && { ip link set lo up; echo 0 > /proc/sys/net/ipv4/ip_unprivileged_port_start; } 2>/dev/null; exec "$@"' bash "$@"
+status=$?
+
+# Podman's rootless "pause" helper starts in its own user namespace, and the last one is started by the container-cleanup command that
+# conmon runs after the container exits, so nothing inside the namespace can reap it. Left alone, each run leaves one holding kernel
+# session keys, and the per-user quota (200) runs out after a few runs. From out here, stop the ones this run started: a process named
+# podman with no arguments, parent init, no older than the run.
+sleep 1
+for p in $(pgrep -u "$(id -u)" -x -f podman 2>/dev/null); do
+  [ "$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" = "podman " ] || continue
+  [ "$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')" = 1 ] || continue
+  age=$(ps -o etimes= -p "$p" 2>/dev/null | tr -d ' ')
+  [ -n "$age" ] && [ "$age" -le "$((SECONDS + 2))" ] && kill "$p" 2>/dev/null
+done
+exit $status
