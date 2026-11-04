@@ -43,10 +43,13 @@ public sealed class PstIncrementalTablesTests
             foreach (NidType type in new[] { NidType.ContentsTable, NidType.AssocContentsTable, NidType.HierarchyTable })
             {
                 using OldTable t = OldTable.Open(store.Database, PstWritableStore.TableNid(f.Nid, type), []);
-                map[$"{f.Nid}/{type}/columns"] = string.Join(",", t.Columns.Select(static c => $"{c.Id:x4}.{c.Type:x4}"));
+                var cols = t.Columns;
+                map[$"{f.Nid}/{type}/columns"] = string.Join(",", cols.Select(static c => $"{c.Id:x4}.{c.Type:x4}").Order(StringComparer.Ordinal));
                 foreach ((uint id, byte[]?[] cells) in t.Rows())
                 {
-                    map[$"{f.Nid}/{type}/{id:x8}"] = string.Join("|", cells.Select(static c => c is null ? "-" : Convert.ToHexString(c)));
+                    // Outlook's tables carry other columns than ours: compare the values by column, not by position.
+                    map[$"{f.Nid}/{type}/{id:x8}"] = string.Join("|", Enumerable.Range(0, cols.Length).Where(k => cells[k] is not null)
+                        .Select(k => $"{cols[k].Id:x4}.{cols[k].Type:x4}={Convert.ToHexString(cells[k]!)}").Order(StringComparer.Ordinal));
                 }
             }
         }
@@ -110,14 +113,17 @@ public sealed class PstIncrementalTablesTests
         return ids;
     }
 
-    private static void SameStore(string expected, string actual, bool wiped = true)
+    private static void SameStore(string expected, string actual, bool wiped = true, bool sameProblemsAs = false)
     {
         NdbEditorTests.AssertClean(actual);
         Assert.True(PstStore.TryOpen(actual, out PstStore? s, out _));
         using (PstStore store = s!)
         {
             Assert.Empty(store.Defects);
-            Assert.Equal([], StoreChecks.Consistency(store));
+            if (!sameProblemsAs)
+            {
+                Assert.Equal([], StoreChecks.Consistency(store));
+            }
         }
 
         if (wiped)
@@ -140,8 +146,16 @@ public sealed class PstIncrementalTablesTests
         Assert.True(PstStore.TryOpen(actual, out PstStore? g, out _));
         using PstStore got = g!;
         Assert.Equal(StoreChecks.Snapshot(want), StoreChecks.Snapshot(got));
+        if (sameProblemsAs)
+        {
+            // An Outlook file may disagree with itself before any edit; the edit must not change that.
+            Assert.Equal(StoreChecks.Consistency(want), StoreChecks.Consistency(got));
+        }
+
         want.Dispose();
         got.Dispose();
+        var tw = Tables(expected);
+        var tg = Tables(actual);
         Assert.Equal(Tables(expected), Tables(actual));
     }
 
@@ -236,7 +250,7 @@ public sealed class PstIncrementalTablesTests
                 w.Commit();
             }
 
-            SameStore(whole, rows, wiped: false);
+            SameStore(whole, rows, wiped: false, sameProblemsAs: true);
         }
         finally
         {

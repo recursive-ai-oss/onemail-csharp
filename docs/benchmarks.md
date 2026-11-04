@@ -327,9 +327,27 @@ our read of that item is unchanged by the edits (the corpus test compares every 
 **Freed space.** The soak checks every free range after each commit and the unit tests do after every operation: 0 non-zero bytes with the default, and the bytes are left in place with `ZeroFreedSpace = false`.
 
 **Memory** (`Durability memory`): a store of 100,000 items in 100 folders built by `PstBuilder` (96 MiB file; 2.2 s, peak working set 116 MiB), then 1,000 in-place operations (adds, with every third followed by a delete, committed every 50 operations): 20.1 s, **peak working set 123 MiB**.
-Edits hold state only for the changes since the last commit, the touched tables' rows and the page cache; a folder with a very large contents table is rewritten row by row at a commit (cost is proportional to its rows, memory is not).
+Edits hold state only for the changes since the last commit, the touched tables' rows and the page cache. A big folder table changes row by row at a commit (see the next block); cost is proportional to the rows changed plus the table's block count, memory does not grow with the rows.
 
-**Suite.** Checked build, full suite 3,294 passed, 10 skipped by design (server tests), 0 failed; fuzz targets build; NativeAOT publish with warnings as errors runs all smoke checks including `pst-edit`; browser WebAssembly smoke (headless Chromium) passes with the in-memory writable store; all packages pack with package validation.
+**Big folder tables, row by row** (`tools/pst/tables-bench.sh`, `Durability tables`; indicative, one run each, `wq` heavy 4 cores, not a bar row). A store with one folder of N items; one commit adds, deletes or moves 1, 100 or 1,000 items; `rewrite` writes the folder's table whole at commit, `incremental` changes it row by row. Commit time (ms) / bytes written by the commit (MiB) / peak working set (MiB, x64 only):
+
+| rows | change | rewrite 1 / 100 / 1,000 | incremental 1 / 100 / 1,000 |
+|---|---|---|---|
+| 1,000 | add | 73 / 68 / 77 ms; 0.3-0.7 MiB | 27 / 33 / 42 ms; 0.06-0.44 MiB |
+| 1,000 | delete | 94 / 102 / 77 ms | 44 / 58 / 89 ms (1,000 falls back to the whole table) |
+| 100,000 | add | 2,853 / 2,590 / 2,519 ms; 32.8-33.2 MiB; peak 102-105 | 163 / 166 / 129 ms; 0.18 / 0.29 / 0.63 MiB; peak 68-95 |
+| 100,000 | delete | 2,386 / 2,459 / 2,698 ms; 32.8-36.3 MiB | 120 / 164 / 311 ms; 0.26 / 5.4 / 28.7 MiB |
+| 100,000 | move | 2,541 / 2,532 / 2,467 ms; 32.8-34.1 MiB | 126 / 166 / 300 ms; 0.26 / 5.0 / 26.5 MiB |
+| 600,000 | add | 10,719 / 12,756 / 10,217 ms; 199 MiB; peak 118-120 | 436 / 528 / 452 ms; 0.19 / 0.23 / 1.5 MiB; peak 105-112 |
+| 600,000 | delete | 10,586 / 10,198 / 9,996 ms; 199-204 MiB | 459 / 500 / 743 ms; 0.67 / 6.8 / 47.6 MiB; peak up to 160 |
+| 600,000 | move | 10,054 / 10,181 / 10,080 ms; 199-201 MiB | 428 / 490 / 696 ms; 0.66 / 6.3 / 44.4 MiB; peak up to 159 |
+
+The whole-table commit scales with the rows (100k to 600k rows: about 2.5 s to 10-13 s, 33 to 199 MiB written); the row-by-row commit with the rows changed (1 change: 120-160 ms at 100k, 430-460 ms at 600k, under 1 MiB written; the growth is the number of blocks in the table's trees). Deleting or moving many rows touches many blocks: 1,000 changes at 600k rows write 45-48 MiB, about a quarter of the whole table, and commit in 0.7-0.8 s.
+The edit phase (`DeleteMessage`/`MoveMessage` calls before the commit) takes 0.2-0.4 s at 600k rows in both modes; before the folder's table was cached per transaction it was linear in the table for each call (100,000 rows, 1,000 deletes: 36 s; now 0.2 s).
+The same run on the arm64 Mac mini (Apple, 10.0.400): 100k rows rewrite 2.9-3.1 s against incremental 99-350 ms; 600k rows rewrite 13.0-13.9 s against incremental 431-826 ms (same bytes written; peak working set not recorded there).
+Machine for the x64 rows: AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.402, load 16 at the start of the run (other jobs beside it).
+
+**Suite.** Checked build, full suite 3,450 passed, 63 skipped by design (server tests, absent corpora), 0 failed, with the Outlook-written PSTs present; fuzz targets build; NativeAOT publish with warnings as errors runs all smoke checks including `pst-edit`; browser WebAssembly smoke (headless Chromium) passes with the in-memory writable store; all packages pack with package validation.
 
 
 # Benchmarks: protocol rows (IMAP fetch, SMTP send)
