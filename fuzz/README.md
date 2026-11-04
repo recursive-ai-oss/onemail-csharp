@@ -13,7 +13,7 @@ Only the library's typed results may come out of a target. Any other exception, 
 
 `run.sh` builds the harness in `Checked` configuration into `$ONEMAIL_FUZZ_WORK/bin`, instruments `RecursiveAI.OneMail.dll` and runs libFuzzer. Findings land in `$ONEMAIL_FUZZ_WORK/findings/<target>/`.
 
-The tools:
+The tools (fetched by pinned version and hash with `tools/fuzz/fetch.sh [dir]`, which also prints the variables to export):
 
 * `libfuzzer-dotnet`: the C++ host from the SharpFuzz project, compiled with `clang++ -fsanitize=fuzzer`.
 * `sharpfuzz`: `dotnet tool install SharpFuzz.CommandLine --tool-path <dir>/sharpfuzz`.

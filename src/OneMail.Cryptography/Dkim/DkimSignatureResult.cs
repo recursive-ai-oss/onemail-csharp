@@ -4,7 +4,7 @@ namespace RecursiveAI.OneMail.Cryptography.Dkim;
 /// The outcome of checking one <c>DKIM-Signature</c> (or ARC) header: a status with its reason, and everything a caller needs to judge it —
 /// who signed, with what, over which bytes, and whether the clock and the key's strength are acceptable. Never a bare bool.
 /// </summary>
-public sealed class DkimSignatureResult
+public sealed partial class DkimSignatureResult
 {
     /// <summary>The header's position among the message's headers of that name, counted from the top, starting at 0.</summary>
     public int Index { get; internal set; }

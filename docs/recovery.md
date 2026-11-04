@@ -134,14 +134,15 @@ four bytes of each segment and minus the length of its last segment.
    body length 0x200, text length 1 to 0x200, that no live chain, record or list reaches. Chains follow the next pointers and run to a pointer of 0.
    `Orphaned` chains whose bytes equal a live message are dropped (`DuplicateOfLive` when `IncludeDuplicatesOfLive` is set).
 
+*Freed segments the list does not reach* (its root cleared, or the list cut by a bad pointer): the scan also matches the freed header (own offset, 0x1fc, 0x210), adds the segment to the free set and tags the message `FreeSpace` with `NotOnDeletedList`.
+
 **Partial.** A chain whose next pointer leads into a live segment, another chain, or outside the file ends there: `ChainContinuesIntoOtherObject`,
 `ChainLoopOrShared`, `ChainEndsAtBadPointer`. A chain found only as the left-over of a cycle starts at its lowest offset (`StartNotConfirmed`).
 `StartNotConfirmed` is also the honest caveat for any chain whose first segment nothing points to: if its predecessor was overwritten by a later
 message, the start is missing and cannot be told from a real start.
 
 **What is not recovered.** Freed indexed-info records: the free header overwrites the length, object length, field count and one index entry, so
-the record is not trusted; the message's own headers carry subject, sender and dates. Freed segments that are not on the list and are not
-live-shaped (a list root zeroed and the headers rewritten). Deleted tree nodes. The `SoftDeleted` tag is never produced.
+the record is not trusted; the message's own headers carry subject, sender and dates. Freed segments that are not on the list and no longer carry a freed header (the headers rewritten). Deleted tree nodes. The `SoftDeleted` tag is never produced.
 
 **Generating deleted stores.** `DbxBuild.Deleted` (test builder, `tests/.../DbxTestBuilder.cs`, used by `tools/dbx/DbxTool gen-deleted`) applies
 the table above: tree entry out, segments freed in chain order each pushed to the front of the list, record freed on its size list.

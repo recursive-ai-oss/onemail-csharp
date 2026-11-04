@@ -32,6 +32,9 @@ public enum DbxRecoveryDefect
 
     /// <summary>The recovered bytes equal a live message. Only reported when <see cref="DbxRecoveryOptions.IncludeDuplicatesOfLive"/> is set; otherwise the copy is left out.</summary>
     DuplicateOfLive,
+
+    /// <summary>A segment of the message carries a freed segment's header but the deleted-message list does not reach it (the list's root was cleared, or the list is cut before it). It was found by the scan.</summary>
+    NotOnDeletedList,
 }
 
 /// <summary>Switches of <see cref="DbxReader.RecoverDeleted"/>.</summary>
@@ -103,7 +106,7 @@ public sealed partial class DbxReader
     /// <para>Two sources, both checked against the live set so that nothing the ordinary reader lists is returned:</para>
     /// <list type="bullet">
     /// <item><description><b>The deleted-message list</b> (file header 0x48): freed segments whose old next pointers are followed to rebuild chains. Tag <see cref="RecoveryStatus.FreeSpace"/>.</description></item>
-    /// <item><description><b>A scan for segments</b> (marker equal to own offset, 0x200 body, text length 1 to 0x200) that no live chain, record or free list reaches: chains whose index entry is gone. Tag <see cref="RecoveryStatus.Orphaned"/>.</description></item>
+    /// <item><description><b>A scan for segments</b>: freed-shaped ones the list does not reach join the first source (<see cref="DbxRecoveryDefect.NotOnDeletedList"/>); live-shaped ones (marker equal to own offset, 0x200 body, text length 1 to 0x200) that no live chain, record or free list reaches: chains whose index entry is gone. Tag <see cref="RecoveryStatus.Orphaned"/>.</description></item>
     /// </list>
     /// <para>A chain that stops at an object that is not part of it is tagged <see cref="RecoveryStatus.Partial"/>. DBX has no soft-delete state, so
     /// <see cref="RecoveryStatus.SoftDeleted"/> is not produced. Metadata records of deleted messages are not read: the freed record loses its header
@@ -120,6 +123,7 @@ public sealed partial class DbxReader
             yield break;
         }
 
+        _offList.Clear();
         HashSet<long> live = CollectLiveObjects();
 
         // The deleted-message list, then the scan for intact orphans.
@@ -259,6 +263,7 @@ public sealed partial class DbxReader
     }
 
     private bool _freeListBroken;
+    private readonly HashSet<long> _offList = new();   // freed segments found by the scan that the deleted-message list does not reach
 
     // A scan at 4-byte steps (every pointer in the format is 4-aligned; checked on the Hacking Case files) for segments shaped like live ones.
     // Bounds: each window read stays inside the file; a candidate needs 16 bytes at p.
@@ -277,7 +282,26 @@ public sealed partial class DbxReader
             {
                 long p = pos + i;
                 ReadOnlySpan<byte> s = buf.AsSpan(i, SegmentHeaderSize);
-                if (BinaryPrimitives.ReadUInt32LittleEndian(s) != p || BinaryPrimitives.ReadUInt32LittleEndian(s[4..]) != SegmentBody)
+                if (BinaryPrimitives.ReadUInt32LittleEndian(s) != p)
+                {
+                    continue;
+                }
+
+                // OE_Dbx_Deleted: a freed segment reads 0x1fc / 0x210 after its own offset and keeps its next pointer. One the list does not reach
+                // (list root cleared, or the list cut) is still free space, so it joins the free set and is flagged.
+                uint bodyLength = BinaryPrimitives.ReadUInt32LittleEndian(s[4..]);
+                if (bodyLength == DeletedBody && BinaryPrimitives.ReadUInt32LittleEndian(s[8..]) == SegmentSize)
+                {
+                    if (p + SegmentSize <= length && !live.Contains(p) && !free.ContainsKey(p))
+                    {
+                        free[p] = BinaryPrimitives.ReadUInt32LittleEndian(s[12..]);
+                        _offList.Add(p);
+                    }
+
+                    continue;
+                }
+
+                if (bodyLength != SegmentBody)
                 {
                     continue;
                 }
@@ -410,6 +434,11 @@ public sealed partial class DbxReader
         if (_freeListBroken && deleted)
         {
             defects.Add(DbxRecoveryDefect.FreeListBroken);
+        }
+
+        if (deleted && Array.Exists(segs, _offList.Contains))
+        {
+            defects.Add(DbxRecoveryDefect.NotOnDeletedList);
         }
 
         var ranges = new List<ByteRange>();

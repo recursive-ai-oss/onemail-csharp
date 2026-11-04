@@ -294,6 +294,7 @@ public class DnsTests
         TxtLookupResult r = await stub.Client().LookupTxtAsync("sel._domainkey.example.com", TestContext.Current.CancellationToken);
         Assert.Equal(TxtLookupStatus.Success, r.Status);
         Assert.Equal(["v=DKIM1; k=rsa; p=ABCD", "second"], r.Records);
+        Assert.Equal(TimeSpan.FromSeconds(60), r.Ttl);
     }
 
     [Fact]

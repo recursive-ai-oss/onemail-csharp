@@ -98,10 +98,10 @@ public sealed class ArcSealer
     /// What this hop concluded, as the value of an <c>Authentication-Results</c> header (RFC 8601): <c>authserv-id; method=result ...</c>. It becomes
     /// the payload of the ARC-Authentication-Results header after <c>i=N;</c>. <see cref="AuthenticationResultsFormatter"/> can build it from verification results.
     /// </param>
-    /// <param name="chainStatus">The validation status of the incoming chain, if the caller already has it. Null validates the chain with <see cref="ArcSealerOptions.Verification"/>.</param>
+    /// <param name="chainStatus">The validation status of the incoming chain, if the caller already has it. Null validates the chain with <see cref="ArcSealerOptions.Verification"/>. A passed status is trusted: it is the caller's conclusion about the chain as it arrived (before this hop modified the message), and it is written into the seal as given. Only its fit to the message is checked: none exactly when the message has no ARC headers, and a non-fail chain must be complete. Pass null to have the sealer validate the chain itself.</param>
     /// <param name="cancellationToken">Cancels pending DNS lookups.</param>
     /// <returns>The new headers and the sealed message.</returns>
-    /// <exception cref="ArgumentException">The message has ARC headers and neither <paramref name="chainStatus"/> nor <see cref="ArcSealerOptions.Verification"/> was given, the results text has a line break, or the message has no From.</exception>
+    /// <exception cref="ArgumentException">The passed status contradicts the message (none over an existing chain, or a verdict with no chain); the message has ARC headers and neither <paramref name="chainStatus"/> nor <see cref="ArcSealerOptions.Verification"/> was given, the results text has a line break, or the message has no From.</exception>
     public async Task<ArcSealResult> SealAsync(ReadOnlyMemory<byte> message, string authenticationResults, ArcChainStatus? chainStatus = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(authenticationResults);
@@ -121,6 +121,20 @@ public sealed class ArcSealer
         ArcChainStatus cv;
         if (chainStatus is { } given)
         {
+            // A caller-supplied status is the caller's conclusion about the chain as it arrived (RFC 8617 §5.1: a hop validates on receipt, then may
+            // modify the message, so the signatures on the message being sealed need not verify now). It cannot be checked here. Two claims are
+            // impossible whatever the signatures say, and are refused: "none" over a chain that exists, and a verdict on a chain that is not there
+            // (RFC 8617 §5.1.2: the first set carries cv=none).
+            if (given == ArcChainStatus.None && chain.HeaderCount > 0)
+            {
+                throw new ArgumentException("The message has ARC headers, so the chain status cannot be none.", nameof(chainStatus));
+            }
+
+            if (given != ArcChainStatus.None && chain.HeaderCount == 0)
+            {
+                throw new ArgumentException("The message has no ARC headers, so the chain status can only be none.", nameof(chainStatus));
+            }
+
             cv = given;
         }
         else if (chain.HeaderCount == 0)

@@ -30,6 +30,9 @@ internal sealed class DnsReply
     public int ResponseCode;
     public string? Detail;
     public List<string> Records = [];
+
+    /// <summary>The smallest time to live, in seconds, among the TXT and CNAME records of the answer; null if none was read.</summary>
+    public uint? MinTtl;
 }
 
 /// <summary>RFC 1035 message building and parsing for the one question we ask: TXT, class IN. Every length is checked before use.</summary>
@@ -177,6 +180,13 @@ internal static class DnsWire
             int type = (m[pos] << 8) | m[pos + 1];
             int cls = (m[pos + 2] << 8) | m[pos + 3];
             int rdlen = (m[pos + 8] << 8) | m[pos + 9];
+            // RFC 1035 §3.2.1: the TTL is the unsigned 32-bit field after the class. The answer is good for as long as its shortest-lived record.
+            uint ttl = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(m.Slice(pos + 4, 4));
+            if (cls == ClassIn && type is TypeCname or TypeTxt)
+            {
+                reply.MinTtl = reply.MinTtl is { } soFar ? Math.Min(soFar, ttl) : ttl;
+            }
+
             pos += 10;
             if (pos + rdlen > m.Length)
             {

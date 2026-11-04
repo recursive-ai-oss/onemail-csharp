@@ -126,7 +126,7 @@ public sealed class PstFileWriter : IBidAllocator, INdbBlockSink, INdbNodeSink, 
     /// <summary>Makes the blocks of the file: data blocks, data trees and subnode trees. Every block it makes is placed in the file as it is made.</summary>
     public NdbBlockBuilder Blocks { get; }
 
-    /// <summary>rgnid: the next nidIndex to allocate for each of the 32 NID types, written to the header. All start at 0x400; the layer that hands out NIDs sets them.</summary>
+    /// <summary>rgnid (MS-PST 2.2.2.6): the last nidIndex allocated for each of the 32 NID types, written to the header as given. All start at 0x400; the layer that hands out NIDs sets them.</summary>
     public uint[] NodeCounters { get; } = new uint[32];
 
     /// <summary>The blocks placed so far.</summary>
