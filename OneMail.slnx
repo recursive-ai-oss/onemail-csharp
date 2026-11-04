@@ -22,6 +22,12 @@
   <Folder Name="/samples/">
     <Project Path="samples/Reading/Reading.csproj" />
     <Project Path="samples/Sending/Sending.csproj" />
+    <Project Path="samples/ParseMessage/ParseMessage.csproj" />
+    <Project Path="samples/OpenStore/OpenStore.csproj" />
+    <Project Path="samples/Convert/Convert.csproj" />
+    <Project Path="samples/Imap/Imap.csproj" />
+    <Project Path="samples/Display/Display.csproj" />
+    <Project Path="samples/ReplyAndSend/ReplyAndSend.csproj" />
   </Folder>
   <Folder Name="/smoke/">
     <Project Path="smoke/Aot/Aot.csproj" />

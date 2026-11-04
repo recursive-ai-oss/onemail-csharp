@@ -78,7 +78,7 @@ folders, items, recipients and attachments, 548 compared fields, 0 differences; 
 allocation map. On the PSTs we write, `pffexport` finds every item (5,032 of 5,032 Enron; 3,241 against 3,237 dovecot messages, the extra four being embedded
 messages it counts) and shows only its known reading limits ([`pst-writing.md`](pst-writing.md)): the narrow-string code page (it ignores
 `PidTagMessageCodepage`), `Attachment.txt` for an unnamed attachment (48 cases), a `_` in front of a numeric attachment name (11), and one POI MSG whose
-subject it reads as `Importance:` plus tabs (not yet explained; listed in the gaps).
+subject it reads as `Importance:` plus tabs (explained: `blank.msg` has an empty subject, and pffexport then writes `Subject:` with no line end, so the next label lands on the same line of `OutlookHeaders.txt`; ours is right).
 
 **Working set**, indicative runs on a loaded machine (release build). The largest real store in the corpora is a 16 MiB OST, so the large stores are generated.
 

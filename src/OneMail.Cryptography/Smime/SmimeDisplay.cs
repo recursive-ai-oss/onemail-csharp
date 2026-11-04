@@ -24,19 +24,7 @@ public static class SmimeDisplay
         options ??= DisplayOptions.Default;
         MimeMailItem item = ItemToShow(result);
         string status = StatusHtml(result);
-        var effective = new DisplayOptions
-        {
-            Sanitizer = options.Sanitizer,
-            IncludeHeader = options.IncludeHeader,
-            IncludeAttachmentList = options.IncludeAttachmentList,
-            PreferText = options.PreferText,
-            ReferenceForm = options.ReferenceForm,
-            AttachmentUrl = options.AttachmentUrl,
-            MaxInlineImageBytes = options.MaxInlineImageBytes,
-            MaxInlineTotalBytes = options.MaxInlineTotalBytes,
-            CalendarCard = options.CalendarCard,
-            StatusBanner = status.Length == 0 ? null : _ => status,
-        };
+        DisplayOptions effective = options.WithStatusBanner(status.Length == 0 ? null : _ => status);
         return item.ToDisplayHtml(effective);
     }
 
