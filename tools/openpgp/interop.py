@@ -50,7 +50,8 @@ def text_of(entity_bytes):
 
 def qp_part():
     lines = BODY.encode("utf-8").split(b"\r\n")[:-1]
-    enc = b"\r\n".join(quopri.encodestring(l) .rstrip(b"\n") for l in lines) + b"\r\n"
+    # quopri breaks long lines with a bare LF ("=\n"); a signed text has CRLF line ends only (RFC 3156 section 5), so the soft breaks get CRLF too.
+    enc = b"\r\n".join(quopri.encodestring(l).rstrip(b"\n").replace(b"=\n", b"=\r\n") for l in lines) + b"\r\n"
     return b"Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n" + enc
 
 

@@ -1,0 +1,19 @@
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data;
+ name="smime.p7m"
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Transfer-Encoding: base64
+MIME-Version: 1.0
+From: Vector <vector-ecdsa-p256@example.org>
+To: Vector <vector-ecdsa-p256@example.org>
+Subject: Interop vector
+Date: Mon, 02 Nov 2026 10:00:00 +0000
+Message-ID: <encrypted@vector.example.org>
+
+MIIBwgYJKoZIhvcNAQcDoIIBszCCAa8CAQIxgdmhgdYCAQOgW6FZMBMGByqGSM49AgEGCCqGSM49
+AwEHA0IABFv3e2K28AVlkIkrg85O/rAX7VkjdWfWokKTRZnAL1tohOA5dgAfb0HHenPyXqOJ453O
+0FBZybGtxQ1NTvVPlNMwFQYGK4EEAQsBMAsGCWCGSAFlAwQBLTBdMFswLzAbMRkwFwYDVQQDDBBW
+ZWN0b3IgVGVzdCBSb290AhAaDmrbD3Iu+MRPQa9d2tBJBCiOljNSSdXHNoIZ8v8I/0/RY5SKls3G
+tMkMvWc2N+bQ1xme0/EuUeSrMIHNBgkqhkiG9w0BBwEwHQYJYIZIAWUDBAEqBBA54pvNNbk4+270
+fdPZ0RbugIGgSoo72+4cCe1fgk45owwmGDNW18eZVBtl26027qmnl01i07JJgegzSUUh6XiE48wX
+JrPX9vStIyRtFO+wMuiFBuVqHx4N0B3J4t8BlB3p5kUpiVN+cnq+9uGMGhbrV33sh1TlfD8ptCHd
+OuwmCf9ElXgzofN3Oo/9hYdxtscEWHu2YTUJn+Qbw5BrwKsC6E5q0ZO1s6CiuV5Xh7wy6CVJ3Q==

@@ -122,15 +122,10 @@ def ours(vectors, out):
                 enc_ok = (r["enc"] == 1) if want_enc else r["enc"] == 0
                 body_ok = r["body"].replace("\r\n", "\n").strip().startswith(expected.split("\n")[0])
                 ok = sig_ok and enc_ok and body_ok
-                # The GnuPG and Sequoia vectors were cut by a script that left one bare LF (a quoted-printable soft break) inside
-                # the signed text. Thunderbird makes line endings CRLF before it verifies, so it reports those signatures invalid;
-                # the whitespace probe shows the same for any bare LF. Counted apart, not as a failure.
-                bare_lf = kind == "sign-then-encrypt" or re.search(rb"(?<!\r)\n", emls[kinds.index(kind)]) is not None
-                explained = (not ok) and origin != "ours" and bare_lf and r["sig"] == 7 and enc_ok and body_ok
                 # Sequoia's messages for these keys use version 6 public-key encrypted session keys and version 2 encrypted data
                 # (RFC 9580; GnuPG lists them as "unknown version"). Thunderbird 159 cannot decrypt them and shows an empty body.
                 rfc9580_message = origin.startswith("sequoia") and kind != "signed" and r["enc"] == 0
-                explained = explained or rfc9580_message
+                explained = (not ok) and rfc9580_message
                 n += 1
                 if explained:
                     explained_n += 1
@@ -138,7 +133,7 @@ def ours(vectors, out):
                     fails += 0 if ok else 1
                 print("RESULT ours %s %s %s %s sig=%s enc=%s body=%s%s" % (origin, key, kind, "ok" if ok else ("EXPLAINED" if explained else "FAIL"),
                       SIG.get(r["sig"]), ENC.get(r["enc"]), "ok" if body_ok else "WRONG", "" if ok else " sigText=%s" % r["sigText"]), flush=True)
-    print("TOTAL ours %d messages read, %d failures, %d explained (bare LF in the signed text; RFC 9580 encrypted packets), %d on keys Thunderbird refuses" % (n, fails, explained_n, unsupported))
+    print("TOTAL ours %d messages read, %d failures, %d explained (RFC 9580 encrypted packets), %d on keys Thunderbird refuses" % (n, fails, explained_n, unsupported))
     return fails
 
 

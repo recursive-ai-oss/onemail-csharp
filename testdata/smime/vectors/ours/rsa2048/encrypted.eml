@@ -1,0 +1,22 @@
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data;
+ name="smime.p7m"
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Transfer-Encoding: base64
+MIME-Version: 1.0
+From: Vector <vector-rsa2048@example.org>
+To: Vector <vector-rsa2048@example.org>
+Subject: Interop vector
+Date: Mon, 02 Nov 2026 10:00:00 +0000
+Message-ID: <encrypted@vector.example.org>
+
+MIICZAYJKoZIhvcNAQcDoIICVTCCAlECAQAxggF6MIIBdgIBADAvMBsxGTAXBgNVBAMMEFZlY3Rv
+ciBUZXN0IFJvb3QCEHgxOfWRkvFtD4sZvviSlmUwPAYJKoZIhvcNAQEHMC+gDzANBglghkgBZQME
+AgEFAKEcMBoGCSqGSIb3DQEBCDANBglghkgBZQMEAgEFAASCAQApmUtBEWxH5l4j4zbKh18d+tKR
+ERQD9Oh6Ctf5HXYKH0venAOnQj5/HGef0ClRGOG6AsRySBOALVR8Ip2ZrS2gbqj5irEWjgJn/gpA
+Gpm5jlpkdszC+LcsOTLvGosLmHBXe7r4S+RwdKMOc/fU9cMC7Qh3sWz+bC3mwJb8AMaOLPn5xho+
+5GjFCDZpBfaoWP1Bz4sNXyYt6XmJia/wKf9dwW0jHRJowR62jPX4qq1CEv9MEEadjLYcpVKtOxYE
+LYL9QY58m3NYaltgxlgcBLsdAYju/N6xh9J468UbjqkJKTKLIKxkPZFBBcMnMYK90VTx6ooBO4Mg
+hvt5Y0dOqZs7MIHNBgkqhkiG9w0BBwEwHQYJYIZIAWUDBAEqBBCMfNVJad3N5V10wN8Qdhy6gIGg
+LSI+C/f+9x0On2Vb63XzSPNgQWQD3x5K9gpgb4Ijzp9Fxt72kPTIgV0c0ppZxItcVaJ0AVlWadAR
+L6FZErxWH1QILVjA+w1GTpuoI1dx/KdUuYo7pm4oU/CzfSHfokH3M4ihIjlC7dK+SBo+b1gMxLtd
+DMmu2ChzZwy9uHWh8fdCQIB4Os/M+E1y+dhNzwrF/HNMOubkS9412UanDxF+CQ==
