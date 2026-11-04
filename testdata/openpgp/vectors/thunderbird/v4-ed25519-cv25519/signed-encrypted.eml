@@ -1,0 +1,72 @@
+Message-ID: <64b7478b-a596-42e2-920e-64599ba18558@example.org>
+Date: Wed, 4 Nov 2026 11:11:59 -0600
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+To: vector-v4-ed25519-cv25519@example.org
+Content-Language: en-US
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+Autocrypt: addr=vector-v4-ed25519-cv25519@example.org; keydata=
+ xjMEafU+gBYJKwYBBAHaRw8BAQdAvjQxdpIs0x3IAwG0k693MJN0gOoWm/hnxhzCuhj5r0LN
+ QVZlY3RvciB2NC1lZDI1NTE5LWN2MjU1MTkgPHZlY3Rvci12NC1lZDI1NTE5LWN2MjU1MTlA
+ ZXhhbXBsZS5vcmc+wo0EExYKADUFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbAwQL
+ CQgHBBUKCAkEFgIBAAIeAQIZAQAKCRABbXFwwnA1OFywAP47+KKTCqLbMbhi/GnUtpGEyQ1g
+ 2b4S+bhJnmJg+vvaBgD/XE/OnnbIwz79kR0FI65b2x+crC2pvtnz5LuKHctaMAHOOARp9T6A
+ EgorBgEEAZdVAQUBAQdASCFl6vMzEYwfz1NcVLTTddiZnomQDvO86EHMIHnzqT4DAQgHwngE
+ GBYKACAFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbDAAKCRABbXFwwnA1OOxrAQDh
+ ZSY5Ox664NoOoXkab89ms0qN8YKpVN+s4h+Nh5B07wEAlLvVhmob0U6uFKRE7hzoQluXwm2f
+ fFeCdNJs77Udawg=
+Subject: ...
+Content-Type: multipart/encrypted;
+ protocol="application/pgp-encrypted";
+ boundary="------------PdN8vzteXjcCu250jUGoFa9H"
+
+This is an OpenPGP/MIME encrypted message (RFC 4880 and 3156)
+--------------PdN8vzteXjcCu250jUGoFa9H
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--------------PdN8vzteXjcCu250jUGoFa9H
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+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
+1OZMkupuGXbDjaiVADNrNnly1TA7fbrUHQ==
+=PZyX
+-----END PGP MESSAGE-----
+
+--------------PdN8vzteXjcCu250jUGoFa9H--

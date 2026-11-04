@@ -90,14 +90,25 @@ New signatures and encryption go through OneCrypto's standard policy: SHA-1, MD5
 
 * **Unit tests** (`PgpMimeTests`, `PgpInlineTests`, `PgpHostileInputTests`): v4 EdDSA/ECDH, native v4, v6 and RSA-3072 keys, sign, encrypt, combined and nested forms; tampered byte, swapped signature, stripped signature, empty signature part, wrong and missing `micalg`, unknown signer, LF copy; QP, charset, surrounding text and quote prefix for inline; protected headers; hostile input (12 nested layers, 5 MB of armor, truncated cleartext, 3,000 parts, 3,000 nested multiparts, a decrypted size over the limit).
 * **Interop**, run as released programs (`tools/openpgp/interop.sh`; the MIME parts are cut out of the messages by a splitter in the script, not by OneMail): GnuPG 2.4.4 (distribution package), GnuPG 2.5.24 (OneCrypto's pinned build), Sequoia `sqop` 0.38.0. Results are in `compatibility.md`; the messages are `testdata/openpgp/vectors/`, read back by `PgpInteropVectors` without any outside program.
+* **Thunderbird 159.0**, the Mozilla release tarball run headless (`tools/thunderbird/run.sh`): it opens our messages and we open the ones it writes. Method, results and the differences are in the *Thunderbird* section below.
 * **Fuzz** `pgp-mime`: see `compatibility.md`.
 
 ## Not done
 
-* Thunderbird (and other mail clients) have not opened these messages: no released Thunderbird could be run headless here to open a PGP/MIME file. It needs a Thunderbird release build, a display or `xvfb`, a profile with the test key imported through its OpenPGP settings, and a driver (Marionette or a mail-folder fixture plus screenshots).
+* Other mail clients than Thunderbird have not opened these messages; Thunderbird's S/MIME has not been run (it needs a certificate imported into its certificate store and trusted, which `tools/thunderbird` does not do yet).
+* Thunderbird 159 does not import native-Ed25519 v4 keys or version 6 keys, and does not decrypt RFC 9580 version 6 session-key and version 2 data packets; the vectors using them are written but not opened there.
 * GnuPG 2.5.24 reads our v4 EdDSA/Cv25519 messages for verification but did not decrypt to the Cv25519 subkey after importing a OneCrypto-generated secret key (the subkey is listed as not available); GnuPG 2.4.4 and Sequoia do. Reported to OneCrypto.
 * GnuPG does not read RFC 9580 version 6 keys or the native Ed25519/X25519 algorithms; those cells run against Sequoia only.
 * Not built: HTML bodies, `.pgp` attachments, writing protected headers, WKD lookups (OneCrypto's online package does them; wire one to `IPgpKeySource`), inline signing and encrypting (write with OneCrypto's `PgpMessageWriter`).
+
+## Thunderbird
+
+`tools/thunderbird/run.sh` unpacks the pinned release (sha256-checked, no install), starts it with `MOZ_HEADLESS` (no display needed) and drives it through Marionette in the privileged context. A throwaway profile has one POP-type account whose Inbox is a maildir store, so the bytes a message has on disk are the bytes under test; mail goes out through a local SMTP sink. Keys go in through the key manager's own import and are accepted as personal keys; the status read back is the one the message header pane shows (signature and encryption state, the decrypted body, and a screenshot per message in `$OUT/shots`).
+
+* **Ours in Thunderbird.** Each message of the vector set is dropped into the Inbox and opened. Our v4 EdDSA/Cv25519 and RSA-3072 messages all show a valid signature where signed and decrypt where encrypted, with the right body (8/8). A signature from a key the user has not accepted for that address shows as uncertain ("key not accepted"), and as valid-unverified once accepted; that is Thunderbird's trust model, not a defect (checked with the public key alone, 4/4).
+* **Thunderbird in ours.** Thunderbird composes plain text (flowed off) to the key's own address in three modes. Its messages are multipart/signed with a quoted-printable part, and multipart/encrypted whose plaintext is a multipart/mixed holding a protected-header block (the Subject) and the text. All six open in `PgpMimeProcessor.Open` as authenticated where signed, with `ProtectedHeadersPresent`, and the text decodes to what was typed, including trailing spaces and a line starting `From `. They are committed in `testdata/openpgp/vectors/thunderbird` and read back by `PgpInteropVectors`.
+* **Not accepted by Thunderbird:** the native-Ed25519 v4 key and the version 6 key (key import throws), so no message with them was opened; Sequoia's messages for its v4 key use RFC 9580 packets (public-key encrypted session key v6, encrypted data v2), which Thunderbird 159 shows as an empty body.
+* **Bare LF.** The GnuPG and Sequoia vectors' detached-signature messages contain one bare LF in the signed entity (a soft line break written by the vector script). Thunderbird makes the line endings CRLF before it verifies and reports the signature invalid. A probe signed by GnuPG over eight text shapes (plain, trailing spaces, a `From ` line, both, in 7bit and quoted-printable) is valid in every one, and a bare LF makes it invalid in both encodings. So the failure is the vector bytes, not a Thunderbird quirk about whitespace; our writer emits CRLF throughout.
 
 ## Review
 

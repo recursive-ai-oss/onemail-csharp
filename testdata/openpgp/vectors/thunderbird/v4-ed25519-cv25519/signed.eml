@@ -1,0 +1,70 @@
+Message-ID: <4831100a-cef5-4238-a85a-39142a8f3ce5@example.org>
+Date: Wed, 4 Nov 2026 11:11:49 -0600
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+To: vector-v4-ed25519-cv25519@example.org
+Subject: Interop vector
+Content-Language: en-US
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+Autocrypt: addr=vector-v4-ed25519-cv25519@example.org; keydata=
+ xjMEafU+gBYJKwYBBAHaRw8BAQdAvjQxdpIs0x3IAwG0k693MJN0gOoWm/hnxhzCuhj5r0LN
+ QVZlY3RvciB2NC1lZDI1NTE5LWN2MjU1MTkgPHZlY3Rvci12NC1lZDI1NTE5LWN2MjU1MTlA
+ ZXhhbXBsZS5vcmc+wo0EExYKADUFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbAwQL
+ CQgHBBUKCAkEFgIBAAIeAQIZAQAKCRABbXFwwnA1OFywAP47+KKTCqLbMbhi/GnUtpGEyQ1g
+ 2b4S+bhJnmJg+vvaBgD/XE/OnnbIwz79kR0FI65b2x+crC2pvtnz5LuKHctaMAHOOARp9T6A
+ EgorBgEEAZdVAQUBAQdASCFl6vMzEYwfz1NcVLTTddiZnomQDvO86EHMIHnzqT4DAQgHwngE
+ GBYKACAFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbDAAKCRABbXFwwnA1OOxrAQDh
+ ZSY5Ox664NoOoXkab89ms0qN8YKpVN+s4h+Nh5B07wEAlLvVhmob0U6uFKRE7hzoQluXwm2f
+ fFeCdNJs77Udawg=
+Content-Type: multipart/signed; micalg=pgp-sha256;
+ protocol="application/pgp-signature";
+ boundary="------------0Gz5pnCexm1EGzcXNzRhInqK"
+
+This is an OpenPGP/MIME signed message (RFC 4880 and 3156)
+--------------0Gz5pnCexm1EGzcXNzRhInqK
+Content-Type: multipart/mixed; boundary="------------iY0Tm07P19nC87khhVLH1rLJ";
+ protected-headers="v1"; hp="clear"
+Message-ID: <4831100a-cef5-4238-a85a-39142a8f3ce5@example.org>
+Date: Wed, 4 Nov 2026 11:11:49 -0600
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+To: vector-v4-ed25519-cv25519@example.org
+Subject: Interop vector
+Content-Language: en-US
+From: Vector <vector-v4-ed25519-cv25519@example.org>
+Autocrypt: addr=vector-v4-ed25519-cv25519@example.org; keydata=
+ xjMEafU+gBYJKwYBBAHaRw8BAQdAvjQxdpIs0x3IAwG0k693MJN0gOoWm/hnxhzCuhj5r0LN
+ QVZlY3RvciB2NC1lZDI1NTE5LWN2MjU1MTkgPHZlY3Rvci12NC1lZDI1NTE5LWN2MjU1MTlA
+ ZXhhbXBsZS5vcmc+wo0EExYKADUFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbAwQL
+ CQgHBBUKCAkEFgIBAAIeAQIZAQAKCRABbXFwwnA1OFywAP47+KKTCqLbMbhi/GnUtpGEyQ1g
+ 2b4S+bhJnmJg+vvaBgD/XE/OnnbIwz79kR0FI65b2x+crC2pvtnz5LuKHctaMAHOOARp9T6A
+ EgorBgEEAZdVAQUBAQdASCFl6vMzEYwfz1NcVLTTddiZnomQDvO86EHMIHnzqT4DAQgHwngE
+ GBYKACAFAmn1PoAWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAIbDAAKCRABbXFwwnA1OOxrAQDh
+ ZSY5Ox664NoOoXkab89ms0qN8YKpVN+s4h+Nh5B07wEAlLvVhmob0U6uFKRE7hzoQluXwm2f
+ fFeCdNJs77Udawg=
+
+--------------iY0Tm07P19nC87khhVLH1rLJ
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+Interop test caf=C3=A9.
+A line that is quite long enough to need some wrapping when it is encoded=
+, as long lines are.  =20
+=46rom the other side.
+
+--------------iY0Tm07P19nC87khhVLH1rLJ--
+
+--------------0Gz5pnCexm1EGzcXNzRhInqK
+Content-Type: application/pgp-signature; name="OpenPGP_signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="OpenPGP_signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+wnsEABYIACMWIQT/xzWUWbOLNMGO2fMBbXFwwnA1OAUCautnVQUDAAAAAAAKCRABbXFwwnA1OOOn
+AQCEbmCXMFVq5KIk3Ycj7tneZNeMlhvrbeJ8uyGNuWtNgQD+PSGaNFpMU/hZSV2rT/Iikk1mySi+
+QJsNMFnVQ6qziwk=
+=viCx
+-----END PGP SIGNATURE-----
+
+--------------0Gz5pnCexm1EGzcXNzRhInqK--
