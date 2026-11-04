@@ -76,6 +76,7 @@ case "$target" in
   dkim-key) maxlen=9000 ;;
   dns-reply) maxlen=2048 ;;
   smime-structure) maxlen=8192 ;;
+  pgp-mime) maxlen=16384 ;;
   imap-response) maxlen=16384 ;;
   imap-fetch) maxlen=2048 ;;
   smtp-reply|pop3-response|pop3-listings|sasl-challenge) maxlen=4096 ;;

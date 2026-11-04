@@ -54,6 +54,7 @@ internal static class Program
             ["dkim-key"] = DkimTargets.KeyRecord,
             ["dns-reply"] = DkimTargets.DnsReply,
             ["smime-structure"] = SmimeTargets.Run,
+            ["pgp-mime"] = PgpMimeTarget.Run,
             ["imap-response"] = ClientTargets.Imap,
             ["imap-fetch"] = ClientTargets.ImapFetch,
             ["smtp-reply"] = ClientTargets.Smtp,
