@@ -11,6 +11,7 @@
     <ProjectReference Include="../OneMail/OneMail.csproj" />
     <PackageReference Include="RecursiveAI.OneCrypto" />
     <PackageReference Include="RecursiveAI.OneCrypto.OpenPgp" />
+    <PackageReference Include="RecursiveAI.OneCrypto.Online" />
   </ItemGroup>
 
 </Project>

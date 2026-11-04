@@ -122,6 +122,25 @@ public enum PgpIssue
 
     /// <summary>The decrypted entity carries <c>protected-headers</c> (draft-autocrypt-lamps-protected-headers); its headers are authenticated only when the layer was signed or the encryption is authenticated.</summary>
     ProtectedHeadersPresent,
+
+    /// <summary>
+    /// The protected <c>To</c> and <c>Cc</c> of an authenticated, encrypted message name none of the addresses the message was opened for
+    /// (<see cref="PgpOpenOptions.RecipientAddresses"/>, or the certified User IDs of <see cref="PgpOpenOptions.SecretKeys"/>). A recipient can re-encrypt a
+    /// signed message to someone else and it still verifies as the author's (surreptitious forwarding); this is the sign that it happened. Result-level.
+    /// </summary>
+    ProtectedRecipientMismatch,
+
+    /// <summary>
+    /// The message is authenticated and encrypted and has protected headers, but they hold no <c>To</c> or <c>Cc</c>, so the recipient cannot be checked against the signature.
+    /// Only raised when there were addresses to check. Result-level.
+    /// </summary>
+    ProtectedRecipientsMissing,
+
+    /// <summary>An inline OpenPGP block was read from a <c>text/html</c> part: the armor, and the text it signs or hides, are the part's raw markup, so the decrypted or signed content is typed <c>text/html</c>.</summary>
+    InlineHtmlPart,
+
+    /// <summary>A key attachment or encrypted attachment was left unread because the message holds more than the limit allows, or the part was larger than the limit.</summary>
+    AttachmentLimitReached,
 }
 
 /// <summary>Everything about one signature on a layer: who, with which key, when, and why it was or was not accepted.</summary>
@@ -272,6 +291,15 @@ public sealed class PgpResult
 
     /// <summary>Result-level defects (those that belong to no single layer).</summary>
     public IReadOnlyList<PgpIssue> Issues { get; internal set; } = [];
+
+    /// <summary>
+    /// Public keys attached to the message as <c>application/pgp-keys</c> parts (or <c>.asc</c> parts holding a public key block), found in the outer message and in the
+    /// protected content. Surfaced only: nothing is imported or stored, and a key is not trusted because a message carried it. Secret keys are never read.
+    /// </summary>
+    public IReadOnlyList<PgpAttachedKey> AttachedKeys { get; internal set; } = [];
+
+    /// <summary>Attachments that hold OpenPGP data (<c>.pgp</c>, <c>.gpg</c>, <c>.asc</c> or <c>application/pgp-encrypted</c> outside the PGP/MIME structure); open one with <see cref="PgpMimeProcessor.OpenAttachment"/>.</summary>
+    public IReadOnlyList<PgpAttachmentRef> OpenPgpAttachments { get; internal set; } = [];
 
     /// <summary>True when OpenPGP protection was found.</summary>
     public bool IsPgp => Layers.Count > 0;

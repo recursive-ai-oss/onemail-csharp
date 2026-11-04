@@ -25,6 +25,25 @@ internal static class DisplayHtmlBuilder
 
         StringBuilder sb = new();
         sb.Append("<div class=\"omx-display\"><style>").Append(Chrome).Append("</style>");
+        if (o.StatusBanner is { } banner)
+        {
+            string? status = null;
+            try
+            {
+                status = banner(item);
+            }
+#pragma warning disable CA1031 // A failing hook must not hide the message.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+            }
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                sb.Append("<div class=\"omx-status\" role=\"status\">").Append(status).Append("</div>");
+            }
+        }
+
         if (o.IncludeHeader)
         {
             Header(item, sb);
