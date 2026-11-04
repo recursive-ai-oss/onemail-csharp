@@ -1,0 +1,38 @@
+From: Vector <vector-v4-rsa3072@example.org>
+To: vector-v4-rsa3072@example.org
+Subject: Interop vector
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pgp-signature";
+ micalg=pgp-sha512; boundary="=_85f3d88d3c04b93db5d25be1"
+
+--=_85f3d88d3c04b93db5d25be1
+From: Vector <vector-v4-rsa3072@example.org>
+To: vector-v4-rsa3072@example.org
+Subject: Interop vector
+Content-Type: text/plain; charset=utf-8; protected-headers="v1"
+Content-Transfer-Encoding: base64
+
+SW50ZXJvcCB0ZXN0IGNhZsOpLg0KQSBsaW5lIHRoYXQgaXMgcXVpdGUgbG9uZyBlbm91Z2ggdG8g
+bmVlZCBzb21lIHdyYXBwaW5nIHdoZW4gaXQgaXMgZW5jb2RlZCwgYXMgbG9uZyBsaW5lcyBhcmUu
+ICAgDQpGcm9tIHRoZSBvdGhlciBzaWRlLg0K
+--=_85f3d88d3c04b93db5d25be1
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+wsDzBAABCgAdBQJqHMuAFiEEnVgt0omMAsT942a/dErQmIyDA2kACgkQdErQmIyD
+A2lLQgwAmouGX8ntf8aP42CxB0+jI57Xtl7EWNnM3dHPqRrD0AalkEjvuoMQaFzM
+eSpCtLWqvB9ahDgzDAoRx9yghbne7SJMaeleUO4auDGXBGFGpzuDfCphfbdHQynC
+9PUR3IPBpzEhs3aY9E/AikYZ70O/QClMy16kvDID6Z/uFv+Tph9DCwPjrbrcozPQ
+lUEYQ64SInhAEVF+yAfKI+6TSArm9SMZAJ2GrGBx5OKiKc2lo2npkQFWixrC68x9
+XoAl0o6/pZ+4d0VGznZ7J+D5BFZoi2DhdtohV4E3rOEm+ZmagGeh1+0QfPib16Y1
+wgil1TmC87wYvB6zzEYSFHcPWVrdpJ8ijMpUTD9MhCOLrc9u4QIgvpNFUPJ1GHJf
+kFXLapCen5puhjYAtauupi11ajQyM9ApenY8hjWkohPWdH8ssigYfCKAnXvRXulW
+rEViYbB8SPbG2fEa5GKq5+b2wAtYSUpBGiCi6kBA4Ttk91JnL3/l0dzABAwiiCHq
+2ORopsXf
+=4eRL
+-----END PGP SIGNATURE-----
+
+--=_85f3d88d3c04b93db5d25be1--
