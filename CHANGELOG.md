@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `tools/providers`: OAuth token minting (Google loopback with PKCE, Microsoft device code) and a provider smoke runner for Gmail and Outlook.com over SMTP, IMAP and POP3; setup and endpoints in `docs/providers.md`.
+
 ### Changed
 
 - In-place PST writing changes a big folder's contents, associated-contents and hierarchy tables row by row at commit instead of writing them whole: with 100,000 rows a one-item add commits in about 0.15 s instead of 2.5 s and writes 0.2 MiB instead of 33 MiB; with 600,000 rows 0.45 s instead of 10.7 s (`docs/benchmarks.md`, `docs/pst-writing.md`). `DeleteMessage` and `MoveMessage` no longer read the folder's table again for every call. Small tables, tables of other layouts and large change sets are still written whole, with the same results.
