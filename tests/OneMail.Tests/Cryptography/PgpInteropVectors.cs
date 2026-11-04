@@ -64,6 +64,13 @@ public class PgpInteropVectors
             // Sign-then-encrypt: a multipart/signed inside the encrypted message.
             MimeMultipart inner = PgpMimeSigner.SignDetached(Content(), new PgpMimeSignOptions { Now = PgpFixtures.Now, Signers = [Signer()] });
             File.WriteAllBytes(Path.Combine(dir, "sign-then-encrypt.eml"), Wrap(PgpMimeEncryptor.Encrypt(inner, new PgpMimeEncryptOptions { Now = PgpFixtures.Now, Recipients = [key.ToPublicCertificate()] })).ToArray());
+
+            // The same three with protected headers: From, To and Subject inside the signed or encrypted entity, the outer Subject obscured when encrypting.
+            PgpProtectedHeaders Headers(bool obscure) => new([new MimeHeader("From", "Vector <" + email + ">"), new MimeHeader("To", email), new MimeHeader("Subject", "Interop vector")]) { ObscureSubject = obscure };
+            File.WriteAllBytes(Path.Combine(dir, "protected-signed.eml"), PgpMimeSigner.SignDetached(Content(), new PgpMimeSignOptions { Now = PgpFixtures.Now, Signers = [Signer()], ProtectedHeaders = Headers(false) }).ToArray());
+            File.WriteAllBytes(Path.Combine(dir, "protected-signed-encrypted.eml"), PgpMimeEncryptor.Encrypt(Content(), new PgpMimeEncryptOptions { Now = PgpFixtures.Now, Recipients = [key.ToPublicCertificate()], Signers = [Signer()], ProtectedHeaders = Headers(true) }).ToArray());
+            MimeMultipart protectedInner = PgpMimeSigner.SignDetached(Content(), new PgpMimeSignOptions { Now = PgpFixtures.Now, Signers = [Signer()], ProtectedHeaders = Headers(false) });
+            File.WriteAllBytes(Path.Combine(dir, "protected-sign-then-encrypt.eml"), PgpMimeEncryptor.Encrypt(protectedInner, new PgpMimeEncryptOptions { Now = PgpFixtures.Now, Recipients = [key.ToPublicCertificate()], ProtectedHeaders = Headers(true) }).ToArray());
         }
     }
 
@@ -85,14 +92,21 @@ public class PgpInteropVectors
                 PgpResult r = PgpMimeProcessor.Open(File.ReadAllBytes(eml), options);
 
                 bool wantsSignature = kind != "encrypted";
+                bool protectedHeaders = kind.StartsWith("protected-", StringComparison.Ordinal);
                 Assert.True(r.Succeeded, dir + "/" + kind + ": " + string.Join("; ", r.Layers.Select(static l => l.Status + " " + l.Detail)));
                 Assert.Equal(wantsSignature, r.IsAuthenticated);
                 MimePart leaf = Assert.IsType<MimePart>(r.Content);
                 string actual = Encoding.UTF8.GetString(leaf.GetDecodedContent());
                 Assert.Equal(expected.TrimEnd(), actual.TrimEnd());
-                if (kind == "sign-then-encrypt")
+                if (kind.EndsWith("sign-then-encrypt", StringComparison.Ordinal))
                 {
                     Assert.Equal(2, r.Layers.Count);
+                }
+
+                if (protectedHeaders)
+                {
+                    Assert.True(r.HeadersProtected, kind);
+                    Assert.Equal("Interop vector", r.InnerItem!.Subject);
                 }
 
                 string keyType = Path.GetFileName(dir);
