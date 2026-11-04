@@ -240,6 +240,8 @@ public static class DateParser
     {
         date = default;
         weekdayMismatch = false;
+        // The value starts right after the colon, so it usually begins with a space.
+        v = v.Trim(" \t"u8);
         int p = 0;
         int weekday = -1;
         bool hasWeekday = v.Length > 5 && v[3] == (byte)',' && v[4] == (byte)' ';

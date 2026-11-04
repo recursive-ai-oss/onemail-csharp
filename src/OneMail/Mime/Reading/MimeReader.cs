@@ -167,9 +167,9 @@ public sealed class MimeReader : IDisposable
     private readonly int _bufferSize;
     private readonly int _bufferCap;
 
-    private Frame[] _frames = new Frame[8];
+    private Frame[] _frames = new Frame[4];
     private int _n;
-    private byte[] _bnd = new byte[512];
+    private byte[] _bnd = [];
     private int _bndLen;
     private MimeDefect[] _dq = new MimeDefect[8];
     private int _dqHead;

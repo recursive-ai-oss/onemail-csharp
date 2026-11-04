@@ -5,7 +5,7 @@ using RecursiveAI.OneMail.Mime.Reading;
 namespace RecursiveAI.OneMail.Tests.Mime;
 
 /// <summary>
-/// Dates in the common written form are read by a short path. A trailing tab keeps a value off that path without changing what
+/// Dates in the common written form are read by a short path. An extra empty comment at the end keeps a value off that path without changing what
 /// the general path makes of it, so the two must agree on every value, damaged ones included.
 /// </summary>
 public class DateParserFastPathTests
@@ -35,8 +35,9 @@ public class DateParserFastPathTests
             string year = rnd.Next(10) == 0 ? rnd.Next(0, 100).ToString("D2") : (1990 + rnd.Next(0, 60)).ToString();
             string time = $"{rnd.Next(0, 26):D2}:{rnd.Next(0, 62):D2}:{rnd.Next(0, 62):D2}";
             string text = $"{weekday}{day} {Pick(Months)} {year} {time} {Pick(Zones)}{Pick(Comments)}";
-            var a = Parse(text);
-            var b = Parse(text + "\t");
+            string lead = rnd.Next(3) == 0 ? "" : rnd.Next(2) == 0 ? " " : " \t";
+            var a = Parse(lead + text + (rnd.Next(4) == 0 ? " " : ""));
+            var b = Parse(lead + text + " ()");
             Assert.Equal(b.Ok, a.Ok);
             Assert.Equal(b.Date, a.Date);
             Assert.Equal(b.Defects, a.Defects);
