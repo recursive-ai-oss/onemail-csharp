@@ -13,6 +13,7 @@ param(
     [string]$Dir = "$env:USERPROFILE\onemail"
 )
 $ErrorActionPreference = "Stop"
+trap { Write-Output ("failed at line " + $_.InvocationInfo.ScriptLineNumber + ": " + $_.InvocationInfo.Line.Trim() + " :: " + $_.Exception.Message); exit 1 }
 Import-Module "$PSScriptRoot\Oracle.psm1" -Force
 $dialogLog = "$Dir\work\dialogs.log"
 New-Item -ItemType Directory -Force (Split-Path $Out), "$Dir\work" | Out-Null
@@ -65,15 +66,15 @@ else {
     $msgPath = Join-Path $tmp "inner.msg"; $inner.SaveAs($msgPath, 3)
     $outer = Add-Mail $inbox "outer message" "has an embedded message" @()
     $null = $outer.Attachments.Add($msgPath, 1); $outer.Save()
-    $cal = $root.Folders.Add("Calendar items", 1)   # olFolderAppointment-type container
+    $cal = $root.Folders.Add("Calendar items", 9)   # olFolderAppointment-type container
     $ap = $cal.Items.Add(1); $ap.Subject = "meeting"; $ap.Start = [datetime]"2026-11-10 10:00"; $ap.End = [datetime]"2026-11-10 11:00"; $ap.Location = "room 1"; $ap.Body = "agenda"; $ap.Save()
     $rec = $cal.Items.Add(1); $rec.Subject = "weekly"; $rec.Start = [datetime]"2026-11-02 09:00"; $rec.End = [datetime]"2026-11-02 09:30"
     $pat = $rec.GetRecurrencePattern(); $pat.RecurrenceType = 1; $pat.Interval = 1; $pat.PatternStartDate = [datetime]"2026-11-02"; $pat.Occurrences = 8; $rec.Save()
-    $con = $root.Folders.Add("People", 2)
+    $con = $root.Folders.Add("People", 10)
     $c1 = $con.Items.Add(2); $c1.FullName = "Ada Lovelace"; $c1.Email1Address = "ada@example.com"; $c1.CompanyName = "Analytical"; $c1.BusinessTelephoneNumber = "+1 555 0100"; $c1.Save()
-    $tasks = $root.Folders.Add("Todo", 3)
+    $tasks = $root.Folders.Add("Todo", 13)
     $t1 = $tasks.Items.Add(3); $t1.Subject = "task"; $t1.DueDate = [datetime]"2026-12-01"; $t1.Save()
-    $notes = $root.Folders.Add("Notes here", 5)
+    $notes = $root.Folders.Add("Notes here", 12)
     $n1 = $notes.Items.Add(5); $n1.Body = "a note"; $n1.Save()
     $del = $root.Folders.Add("Deleted from")
     $x1 = Add-Mail $del "to delete one" "x"; $x2 = Add-Mail $del "to delete two" "y"; $x3 = Add-Mail $del "kept" "z"

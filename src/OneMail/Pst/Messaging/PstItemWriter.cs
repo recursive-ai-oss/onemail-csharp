@@ -697,8 +697,19 @@ internal sealed class PstItemWriter
             // PidTagMessageSize is the bytes in the data trees of the message node and all its subnodes, attachments and embedded messages included
             // (what Outlook writes, and what its repair tool checks the folder's row against). It depends on the size of the context it is in, so it is
             // filled in when that context is built.
-            sizeAdded = Find(props, 0x0E08) is null;
-            Ensure(props, 0x0E08, 3, I32(0), location);
+            // MS-OXCMSG calls it read-only and computed by the store, so a value the item arrives with (it described the layout of the store it came
+            // from) is replaced rather than kept; Outlook's repair tool rejects a folder row whose size is far from the node's.
+            sizeAdded = true;
+            if (Find(props, 0x0E08) is { } existingSize)
+            {
+                existingSize.Type = 3;
+                existingSize.Bytes = I32(0);
+                existingSize.Source = null;
+            }
+            else
+            {
+                Ensure(props, 0x0E08, 3, I32(0), location);
+            }
             Ensure(props, 0x0E17, 3, I32(0), location);
             byte[] created = Find(props, 0x3008) is { } lm && lm.Type == 0x40 && ValueLength(lm) == 8 ? (lm.Bytes ?? lm.Source!.GetBytes(0).ToArray())
                 : Find(props, 0x0039) is { } cs && cs.Type == 0x40 && ValueLength(cs) == 8 ? (cs.Bytes ?? cs.Source!.GetBytes(0).ToArray()) : lastModified;

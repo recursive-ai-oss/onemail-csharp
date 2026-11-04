@@ -48,6 +48,16 @@ if (args is ["msginfo", var miPath])
     return RecursiveAI.OneMail.PstOracle.OutlookView.MsgInfo(miPath);
 }
 
+if (args is ["msgvariants", var mvPath, var mvSubject, var mvOut])
+{
+    return RecursiveAI.OneMail.PstOracle.MessageVariants.Run(mvPath, mvSubject, mvOut);
+}
+
+if (args is ["foldervariants", var fvPath, var fvName, var fvOut])
+{
+    return RecursiveAI.OneMail.PstOracle.MessageVariants.Folder(fvPath, fvName, fvOut);
+}
+
 if (args is ["mkvariants", var mvDir])
 {
     return RecursiveAI.OneMail.PstOracle.Variants.Run(mvDir);
