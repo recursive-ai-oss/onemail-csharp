@@ -14,9 +14,12 @@ the oracles' split), Apache James Mime4j test messages (80), our generated probe
 
 ## Correctness sweep, 2026-11-04
 
-One pass of every correctness check over the tree after the OpenPGP, Thunderbird and in-place table work (`Checked` build, x64, AMD Ryzen 9 7950X3D, 32
-cores, shared with other jobs; the same oracle versions as above). The sweep changed no code: it found no crash, no unexplained difference and no
-non-identical round trip. The Outlook and `scanpst.exe` rows and the provider smoke rows are in progress and not part of these numbers.
+One pass of every correctness check (`Checked` build, x64, AMD Ryzen 9 7950X3D, 32 cores, shared with other jobs; the same oracle versions as above).
+The sweep changed no code: it found no crash, no unexplained difference and no non-identical round trip. It ran first on the tree before the OpenPGP
+follow-ups, the lazy vCard typed lists and the PST checker's table-NID rule; everything those touch was run again on the tree that includes them (the
+suite, the AOT smoke app, the ICS and vCard round trip, the PST write check, and the fuzz targets `pgp-mime`, `vcard-view`, `calcard`, `jcal-jcard`,
+`sanitizer-display`, `htmltext`, `mail-open`, whose rows below are the later run). The MIME, differential, MSG, TNEF and source-store libpff rows ran on
+the earlier tree; none of the later changes is in code they reach. The Outlook and `scanpst.exe` rows and the provider smoke rows are in progress and not part of these numbers.
 
 **Fuzzing:** every one of the 52 targets ran 600 s under libFuzzer (SharpFuzz-instrumented, `Checked`), one process each, nine at a time:
 0 findings (no crash, hang or out-of-memory input). Executions in millions, then the `ft` feature count libFuzzer reported at the end (the host reports a
@@ -25,20 +28,20 @@ constant `cov: 3` for .NET targets, so only features are comparable):
 | Target | Exec (M) | ft | Target | Exec (M) | ft | Target | Exec (M) | ft |
 |---|---|---|---|---|---|---|---|---|
 | authres | 10.3 | 3,581 | imap-fetch | 5.9 | 6,703 | rtf-decompress | 21.8 | 104 |
-| calcard | 5.7 | 10,949 | imap-response | 8.1 | 4,204 | rtf-deencap | 20.3 | 1,401 |
-| calendar | 7.7 | 4,057 | jcal-jcard | 8.3 | 9,339 | rtf-html | 6.2 | 5,467 |
+| calcard | 9.3 | 10,895 | imap-response | 8.1 | 4,204 | rtf-deencap | 20.3 | 1,401 |
+| calendar | 7.7 | 4,057 | jcal-jcard | 9.6 | 9,299 | rtf-html | 6.2 | 5,467 |
 | composition | 2.3 | 22,148 | ltp | 3.6 | 8,381 | sanitizer | 2.7 | 2,910 |
-| contentlines | 16.0 | 2,609 | mail-open | 5.6 | 9,705 | sanitizer-display | 2.9 | 9,359 |
+| contentlines | 16.0 | 2,609 | mail-open | 4.8 | 9,330 | sanitizer-display | 3.0 | 9,242 |
 | dbx | 5.9 | 2,915 | mbox | 18.3 | 831 | sanitizer-reparse | 3.4 | 2,902 |
 | dbx-recovery | 2.3 | 2,486 | mhtml-uri | 19.0 | 1,269 | sasl-challenge | 24.3 | 357 |
 | dkim-key | 23.9 | 766 | mime-reader | 14.0 | 1,516 | smime-structure | 3.3 | 10,458 |
 | dkim-tags | 19.9 | 994 | mime-tree | 9.7 | 10,241 | smtp-reply | 7.7 | 2,300 |
 | dns-reply | 27.4 | 246 | msg | 5.3 | 4,166 | span-cfb | 27.1 | 70 |
 | emlx | 15.7 | 589 | msg-write | 1.2 | 7,573 | span-mime | 15.5 | 2,055 |
-| htmltext | 8.7 | 9,542 | ndb | 2.5 | 5,193 | span-ndb | 25.7 | 358 |
+| htmltext | 9.8 | 9,535 | ndb | 2.5 | 5,193 | span-ndb | 25.7 | 358 |
 | oxcmail | 1.8 | 30,481 | olm | 12.5 | 304 | text | 14.4 | 11,070 |
 | oxocal | 0.9 | 17,203 | olm-recovery | 5.2 | 2,612 | tnef | 6.7 | 8,193 |
-| pgp-mime | 4.2 | 13,031 | pop3-listings | 7.7 | 4,358 | vcard-view | 9.6 | 6,865 |
+| pgp-mime | 3.6 | 15,779 | pop3-listings | 7.7 | 4,358 | vcard-view | 9.6 | 6,911 |
 | pst-messaging | 1.0 | 17,014 | pop3-response | 14.8 | 1,225 | xcal-xcard | 14.1 | 230 |
 | pst-recovery | 0.3 | 18,796 | recurrence | 1.6 | 5,407 | render | 0.04 | 2,380 |
 | render-datauri | 28.6 | 7 | reports | 5.2 | 2,788 | | | |
@@ -87,6 +90,8 @@ subject it reads as `Importance:` plus tabs (not yet explained; listed in the ga
 | CMU Enron maildir to mbox (`onemail convert`) | 517,401 messages, 1.45 GB | 133 MiB |
 
 All four are flat from 1x to 10x or 16x the size.
+
+The suite on the merged tree: 3,606 tests, 0 failed, 63 skipped; the AOT smoke app publishes with 0 warnings and every check in it passes.
 
 Gap found and left: one POI MSG (`0x2001a4` in the written PST) whose subject `pffexport` reads from the header-like line after it while ours reads an empty
 subject; not yet checked against the file's own properties.
