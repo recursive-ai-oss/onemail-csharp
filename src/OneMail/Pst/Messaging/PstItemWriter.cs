@@ -102,8 +102,16 @@ internal sealed class PstItemWriter
         public Nid NextAttachment() => new((Attach++ << 5) | (uint)NidType.Attachment);
     }
 
-    public PstItemWriter(INdbNodeSink file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects)
+    // Where the file's NID counters come from: an embedded message takes the next NID of a top-level message, as in files Outlook wrote, and the highest
+    // attachment index used is noted so the header's counter for attachments reaches it (the repair tool of Outlook checks both).
+    private readonly Func<Nid>? _nextEmbeddedMessage;
+    private readonly Action<uint>? _noteAttachmentIndex;
+
+    public PstItemWriter(INdbNodeSink file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects,
+        Func<Nid>? nextEmbeddedMessage = null, Action<uint>? noteAttachmentIndex = null)
     {
+        _nextEmbeddedMessage = nextEmbeddedMessage;
+        _noteAttachmentIndex = noteAttachmentIndex;
         _file = file;
         _options = options;
         _timestamp = timestamp;
@@ -547,6 +555,10 @@ internal sealed class PstItemWriter
         var ctx = new Ctx();
         WrittenObject o = WriteMessageObject(message, nid.Value, ctx, 0, location);
         _file.AddNode(new NodeEntry(nid, o.Data, o.Sub, folder));
+        if (ctx.Attach > 0x400)
+        {
+            _noteAttachmentIndex?.Invoke(ctx.Attach - 1);
+        }
 
         var eff = new Dictionary<ushort, byte[]>
         {
@@ -621,6 +633,15 @@ internal sealed class PstItemWriter
         bool outerString8 = _string8Seen;
         _string8Seen = false;
         List<Prop> props = Collect(m, location, skipObject: false);
+        if (_options.AddRequiredProperties && Find(props, 0x001A) is { Type: 0x1E, Source: { } classSource } narrowClass)
+        {
+            // The repair tool of Outlook looks for PidTagMessageClass as a Unicode string and reports a message whose class is a PtypString8 as having none.
+            narrowClass.Type = 0x1F;
+            narrowClass.Bytes = Encoding.Unicode.GetBytes(classSource.AsString(m.String8Encoding) ?? string.Empty);
+            narrowClass.Source = null;
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageClass was a PtypString8 and was written as PtypString");
+        }
+
         long size = 0;
         var extra = new List<SubnodeEntry>();
 
@@ -828,7 +849,7 @@ internal sealed class PstItemWriter
                 }
                 else
                 {
-                    Nid embNid = ctx.NextLtp();
+                    Nid embNid = _nextEmbeddedMessage?.Invoke() ?? ctx.NextLtp();
                     WrittenObject eo = WriteMessageObject(embedded, embNid.Value, ctx, depth + 1, loc + " embedded");
                     extra.Add(new SubnodeEntry(embNid, eo.Data, eo.Sub));
                     embeddedSize = eo.Size;
@@ -854,15 +875,30 @@ internal sealed class PstItemWriter
                 Ensure(props, 0x370B, 3, I32(-1), loc);   // PidTagRenderingPosition: not inline
                 // Outlook's PidTagAttachSize is the sum of the sizes of the attachment's property values, the embedded message counted whole in place of
                 // the object property's eight bytes (0x0E20 itself, four bytes, included), and its repair tool reports any other value as invalid.
-                if (Find(props, 0x0E20) is null)
+                // It is recomputed even when the item carries one: the sizes of what it describes change when the item is written again, and the tool
+                // reports a size that disagrees with the attachment as invalid.
+                long sum = 4;
+                foreach (Prop p in props)
                 {
-                    long sum = 4;
-                    foreach (Prop p in props)
+                    if (p.Id != 0x0E20)
                     {
                         sum += p.Type == 0x000D ? embeddedSize : ValueLength(p);
                     }
+                }
 
-                    Ensure(props, 0x0E20, 3, I32((int)Math.Min(int.MaxValue, sum)), loc);
+                byte[] sizeBytes = I32((int)Math.Min(int.MaxValue, sum));
+                if (Find(props, 0x0E20) is { Type: 3 } existing)
+                {
+                    if (ValueLength(existing) != 4 || !(existing.Bytes ?? existing.Source!.GetBytes(0).ToArray()).AsSpan().SequenceEqual(sizeBytes))
+                    {
+                        existing.Source = null;
+                        existing.Bytes = sizeBytes;
+                        Report(PstWriteDefectKind.PropertyAdjusted, loc, "PidTagAttachSize disagreed with the attachment as written and was recomputed");
+                    }
+                }
+                else
+                {
+                    Ensure(props, 0x0E20, 3, sizeBytes, loc);
                 }
             }
 

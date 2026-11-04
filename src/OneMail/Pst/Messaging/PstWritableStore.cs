@@ -101,7 +101,9 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
 
         _view = view;
         _items = new PstItemWriter(_ed, new PstBuilderOptions { AddRequiredProperties = _options.AddRequiredProperties, MaxEmbeddingDepth = _options.MaxEmbeddingDepth },
-            _options.Timestamp ?? DateTimeOffset.UtcNow, _defects);
+            _options.Timestamp ?? DateTimeOffset.UtcNow, _defects,
+            nextEmbeddedMessage: () => _ed.AllocateNid(NidType.NormalMessage),
+            noteAttachmentIndex: index => _ed.RaiseNidCounter(NidType.Attachment, index));
         _items.SeedNames(_view.Context.Names.Entries);
         _seededNames = _items.NameCount;
         ReleaseFolders();
@@ -234,6 +236,10 @@ public sealed partial class PstWritableStore : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(name);
         FolderState p = FolderOrThrow(parent);
         Nid nid = _ed.AllocateNid(NidType.NormalFolder);
+        // The folder's three tables take its index, and the repair tool of Outlook wants their counters to reach it.
+        _ed.RaiseNidCounter(NidType.HierarchyTable, nid.Index);
+        _ed.RaiseNidCounter(NidType.ContentsTable, nid.Index);
+        _ed.RaiseNidCounter(NidType.AssocContentsTable, nid.Index);
         var f = new FolderState(this, nid, parent, isNew: true) { Name = name, ContainerClass = containerClass };
         _folders[nid.Value] = f;
         p.AddedChildren[nid.Value] = default;

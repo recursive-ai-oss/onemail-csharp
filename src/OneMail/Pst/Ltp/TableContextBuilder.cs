@@ -114,7 +114,9 @@ public sealed class TableContextBuilder
             throw new ArgumentException($"a table has at most 255 columns, not {list.Count}", nameof(columns));
         }
 
-        list.Sort(static (a, b) => ((a.Id << 16) | a.Type).CompareTo((b.Id << 16) | b.Type));
+        // As unsigned numbers: a named property's ID (0x8000 and up) would be negative as an int and sort before every other column, which the repair
+        // tool of Outlook rejects ("tags not all increasing") and then reports the other columns as missing.
+        list.Sort(static (a, b) => (((uint)a.Id << 16) | a.Type).CompareTo(((uint)b.Id << 16) | b.Type));
         _columns = Layout(list, out _ends);
         RowSize = _ends[3];
         if (RowSize > NdbBlockBuilder.MaxBlockData)

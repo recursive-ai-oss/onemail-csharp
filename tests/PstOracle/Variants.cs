@@ -62,6 +62,36 @@ internal static class Variants
             b.Complete();
         }
 
+        // Embedded messages: the size the object property holds is checked by the repair tool.
+        foreach ((string name, bool rcpt, bool att) in new[] { ("emb0", false, false), ("emb-r", true, false), ("emb-a", false, true), ("emb-ra", true, true) })
+        {
+            string path = Path.Combine(dir, name + ".pst");
+            File.Delete(path);
+            using PstBuilder b = PstBuilder.Create(path, new PstBuilderOptions { Timestamp = new DateTimeOffset(2024, 5, 6, 7, 8, 9, TimeSpan.Zero) });
+            var outer = new MapiMessage();
+            Str(outer, 0x001A, "IPM.Note");
+            Str(outer, 0x0037, "outer");
+            var inner = new MapiMessage();
+            Str(inner, 0x001A, "IPM.Note");
+            Str(inner, 0x0037, "inner");
+            if (rcpt)
+            {
+                Rcpt(inner, true);
+            }
+
+            if (att)
+            {
+                Attach(inner);
+            }
+
+            var holder = new MapiAttachment(outer);
+            holder.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(5)));
+            holder.SetEmbeddedMessage(inner);
+            outer.AddAttachment(holder);
+            b.IpmSubtree.CreateFolder("Folder").AddMessage(outer);
+            b.Complete();
+        }
+
         // A small realistic store: two folders, five messages with recipients and bodies, one with an attachment.
         {
             string path = Path.Combine(dir, "full.pst");

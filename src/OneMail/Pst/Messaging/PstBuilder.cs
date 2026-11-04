@@ -131,6 +131,7 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
     private uint _nextFolderIndex = 0x404;
     private uint _nextMessageIndex = 0x10000;
     private uint _nextAssocIndex = 0x8000;
+    private uint _maxAttachmentIndex;
     private bool _completed;
     private bool _disposed;
 
@@ -141,7 +142,9 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
         _storeId = options.StoreId ?? Guid.NewGuid();
         _timestamp = options.Timestamp ?? DateTimeOffset.UtcNow;
         _spool = new PstRowSpool(options.CreateSpool);
-        _items = new PstItemWriter(_file, options, _timestamp, Defects);
+        _items = new PstItemWriter(_file, options, _timestamp, Defects,
+            nextEmbeddedMessage: () => new Nid((_nextMessageIndex++ << 5) | (uint)NidType.NormalMessage),
+            noteAttachmentIndex: index => _maxAttachmentIndex = Math.Max(_maxAttachmentIndex, index));
         Root = new PstFolderWriter(this, null, NidRootFolder, string.Empty, null, isSearch: false);
         _folders.Add(Root);
         IpmSubtree = AddFixedFolder(Root, NidIpmSubtree, "Top of Personal Folders", null);
@@ -261,6 +264,7 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
         n[(int)NidType.NormalFolder] = _nextFolderIndex - 1;
         n[(int)NidType.NormalMessage] = _nextMessageIndex - 1;
         n[(int)NidType.AssocMessage] = _nextAssocIndex - 1;
+        n[(int)NidType.Attachment] = Math.Max(n[(int)NidType.Attachment], _maxAttachmentIndex);
         n[(int)NidType.SearchFolder] = Math.Max(n[(int)NidType.SearchFolder], 0x112);
         // A folder's hierarchy, contents and associated-contents tables take its index, and the repair tool of Outlook checks that these three counters
         // reach the highest index in use (files it wrote have them equal to the folder counter).
