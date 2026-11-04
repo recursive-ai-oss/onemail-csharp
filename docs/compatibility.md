@@ -12,6 +12,90 @@ normalisation of the comparison; "unexplained" counts the rest.
 the oracles' split), Apache James Mime4j test messages (80), our generated probes, and the calendar data files listed in
 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md). None of these is committed; `tools/corpus/` fetches them by pinned URL and hash.
 
+## Correctness sweep, 2026-11-04
+
+One pass of every correctness check (`Checked` build, x64, AMD Ryzen 9 7950X3D, 32 cores, shared with other jobs; the same oracle versions as above).
+The sweep changed no code: it found no crash, no unexplained difference and no non-identical round trip. It ran first on the tree before the OpenPGP
+follow-ups, the lazy vCard typed lists and the PST checker's table-NID rule; everything those touch was run again on the tree that includes them (the
+suite, the AOT smoke app, the ICS and vCard round trip, the PST write check, and the fuzz targets `pgp-mime`, `vcard-view`, `calcard`, `jcal-jcard`,
+`sanitizer-display`, `htmltext`, `mail-open`, whose rows below are the later run). The MIME, differential, MSG, TNEF and source-store libpff rows ran on
+the earlier tree; none of the later changes is in code they reach. The Outlook and `scanpst.exe` rows and the provider smoke rows are in progress and not part of these numbers.
+
+**Fuzzing:** every one of the 52 targets ran 600 s under libFuzzer (SharpFuzz-instrumented, `Checked`), one process each, nine at a time:
+0 findings (no crash, hang or out-of-memory input). Executions in millions, then the `ft` feature count libFuzzer reported at the end (the host reports a
+constant `cov: 3` for .NET targets, so only features are comparable):
+
+| Target | Exec (M) | ft | Target | Exec (M) | ft | Target | Exec (M) | ft |
+|---|---|---|---|---|---|---|---|---|
+| authres | 10.3 | 3,581 | imap-fetch | 5.9 | 6,703 | rtf-decompress | 21.8 | 104 |
+| calcard | 9.3 | 10,895 | imap-response | 8.1 | 4,204 | rtf-deencap | 20.3 | 1,401 |
+| calendar | 7.7 | 4,057 | jcal-jcard | 9.6 | 9,299 | rtf-html | 6.2 | 5,467 |
+| composition | 2.3 | 22,148 | ltp | 3.6 | 8,381 | sanitizer | 2.7 | 2,910 |
+| contentlines | 16.0 | 2,609 | mail-open | 4.8 | 9,330 | sanitizer-display | 3.0 | 9,242 |
+| dbx | 5.9 | 2,915 | mbox | 18.3 | 831 | sanitizer-reparse | 3.4 | 2,902 |
+| dbx-recovery | 2.3 | 2,486 | mhtml-uri | 19.0 | 1,269 | sasl-challenge | 24.3 | 357 |
+| dkim-key | 23.9 | 766 | mime-reader | 14.0 | 1,516 | smime-structure | 3.3 | 10,458 |
+| dkim-tags | 19.9 | 994 | mime-tree | 9.7 | 10,241 | smtp-reply | 7.7 | 2,300 |
+| dns-reply | 27.4 | 246 | msg | 5.3 | 4,166 | span-cfb | 27.1 | 70 |
+| emlx | 15.7 | 589 | msg-write | 1.2 | 7,573 | span-mime | 15.5 | 2,055 |
+| htmltext | 9.8 | 9,535 | ndb | 2.5 | 5,193 | span-ndb | 25.7 | 358 |
+| oxcmail | 1.8 | 30,481 | olm | 12.5 | 304 | text | 14.4 | 11,070 |
+| oxocal | 0.9 | 17,203 | olm-recovery | 5.2 | 2,612 | tnef | 6.7 | 8,193 |
+| pgp-mime | 3.6 | 15,779 | pop3-listings | 7.7 | 4,358 | vcard-view | 9.6 | 6,911 |
+| pst-messaging | 1.0 | 17,014 | pop3-response | 14.8 | 1,225 | xcal-xcard | 14.1 | 230 |
+| pst-recovery | 0.3 | 18,796 | recurrence | 1.6 | 5,407 | render | 0.04 | 2,380 |
+| render-datauri | 28.6 | 7 | reports | 5.2 | 2,788 | | | |
+
+`rtf-decompress`, `render-datauri`, `xcal-xcard` and `span-cfb` saturate early (a handful of new features after the first seconds); `render` is slow
+because each input renders to PDF.
+
+**MIME differential**, OneMail against each oracle (MimeKit 4.18.2, Python 3.13.17 `email`, Go 1.26.8), per corpus: messages identical / differing.
+Every difference maps to an entry in [`ambiguities.md`](ambiguities.md) or to a documented oracle limit (`LIMIT-*`); unexplained is 0 in all 12 runs.
+
+| Corpus | Messages | Go | MimeKit | Python | Unexplained |
+|---|---|---|---|---|---|
+| CMU Enron maildir | 517,401 | 467,377 / 50,024 | 469,819 / 47,582 | 517,075 / 326 | 0 |
+| Dovecot `dovecot-crlf` | 2,859 | 2,692 / 167 | 2,847 / 12 | 2,821 / 38 | 0 |
+| Mime4j test messages | 80 | 36 / 44 | 65 / 15 | 59 / 21 | 0 |
+| `testdata/differential` probes | 224 | 151 / 73 | 183 / 41 | 174 / 50 | 0 |
+
+The counts equal the 0.1.0-preview.1 full run cell for cell. What the differences are, for Enron: against Go, 47,198 address lists Go's `net/mail` rejects
+(`LIMIT-go-address-list`) plus H10 (1,693), E7 (971), D10 (271), address quoting (72) and H5 (29); against MimeKit A15 (47,171), N15 (409), H5 (82), A16 (3),
+E2 (2); against Python A10 (221), A16 (66), A12 (27), H10 (9), H4 (3), E1 and N11 (1 each). The other corpora spread over the same entries.
+
+**Round trips** (untouched input written back):
+
+| Format | Input | Result |
+|---|---|---|
+| MIME, entity tree parsed and written; reader events cover the input | Enron 517,401 (1.42 GB), dovecot messages 2,859, the dovecot mbox split into 2,859, Mime4j 80, probes 225 | byte-identical 523,424 / 523,424 |
+| ICS, vCard (content-line tree) | `testdata/calendar` 586 files and the fetched calendar corpora 813 files (libical 640, Thunderbird 86, ical.js 51, ez-vcard 18, biweekly 15, sabre 3) | byte-identical 1,399 / 1,399 |
+| MSG property and value streams re-encoded | 53 corpus + 7 generated | identical 60 / 60; the 2 fuzz-minimised corpus files are refused in strict mode by design (typed defect; they open with `Recovery`) |
+| TNEF attribute layer and MAPI properties | 7 files (Tika, POI) | identical and property-exact 7 / 7 |
+| PST written by `PstBuilder` from each source, then compared property by property | 8,922 messages from the Tika PSTs, the CFReDS OST, 53 MSG, 7 TNEF, 78 Mime4j, 5,032 Enron and 3,237 dovecot messages (the 490 OLM items are checked by `propexact` and libpff only) | 0 unmatched, 0 property differences, 0 defects; `pffinfo` opens every file |
+
+**libpff agreement** (`pffexport` 20180714, distribution package) on the source stores, Tika `testPST.pst`, `testPST_variousBodyTypes.pst` and the CFReDS OST:
+folders, items, recipients and attachments, 548 compared fields, 0 differences; lists-tables-properties layer 0 defects; no unreadable block, no invalid
+allocation map. On the PSTs we write, `pffexport` finds every item (5,032 of 5,032 Enron; 3,241 against 3,237 dovecot messages, the extra four being embedded
+messages it counts) and shows only its known reading limits ([`pst-writing.md`](pst-writing.md)): the narrow-string code page (it ignores
+`PidTagMessageCodepage`), `Attachment.txt` for an unnamed attachment (48 cases), a `_` in front of a numeric attachment name (11), and one POI MSG whose
+subject it reads as `Importance:` plus tabs (not yet explained; listed in the gaps).
+
+**Working set**, indicative runs on a loaded machine (release build). The largest real store in the corpora is a 16 MiB OST, so the large stores are generated.
+
+| Workload | Size | Peak working set |
+|---|---|---|
+| Enumerate an mbox (`OneMailRanges scan`) | 1, 4, 16 GiB (15,741 / 63,114 / 252,421 messages) | 46.7, 46.2, 46.6 MiB; 40 bytes allocated in total |
+| Build a PST (`PstBuilder`) | 100,000 and 1,000,000 messages (370 MiB and 3.7 GiB file) | 112 and 115 MiB |
+| Read every message of a generated PST, write an mbox (`onemail convert`) | 100,000 and 1,000,000 messages | 109 and 114 MiB |
+| CMU Enron maildir to mbox (`onemail convert`) | 517,401 messages, 1.45 GB | 133 MiB |
+
+All four are flat from 1x to 10x or 16x the size.
+
+The suite on the merged tree: 3,606 tests, 0 failed, 63 skipped; the AOT smoke app publishes with 0 warnings and every check in it passes.
+
+Gap found and left: one POI MSG (`0x2001a4` in the written PST) whose subject `pffexport` reads from the header-like line after it while ours reads an empty
+subject; not yet checked against the file's own properties.
+
 ## Calendar card
 
 `CalendarCard` ([`calendar-card.md`](calendar-card.md)), checked on the calendar corpora (libical, ical.js, biweekly, sabre/vobject, Thunderbird holidays, the
