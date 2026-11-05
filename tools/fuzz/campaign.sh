@@ -4,17 +4,18 @@
 #
 #   tools/fuzz/campaign.sh <seconds> <target>...
 #
-# Same environment as fuzz/run.sh (ONEMAIL_FUZZ_WORK, ONEMAIL_FUZZ_TOOLS, DOTNET). Logs go to $ONEMAIL_FUZZ_WORK/logs/<target>.log.
+# Same environment as fuzz/run.sh (ONEMAIL_FUZZ_WORK, ONEMAIL_FUZZ_TOOLS or LIBFUZZER_DOTNET and SHARPFUZZ, DOTNET). Logs go to $ONEMAIL_FUZZ_WORK/logs/<target>.log.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 seconds="${1:?seconds}"; shift
 work="${ONEMAIL_FUZZ_WORK:?set ONEMAIL_FUZZ_WORK}"
-tools="${ONEMAIL_FUZZ_TOOLS:?set ONEMAIL_FUZZ_TOOLS}"
+tools="${ONEMAIL_FUZZ_TOOLS:-}"
+instrument="${SHARPFUZZ:-$tools/sharpfuzz/sharpfuzz}"
 dotnet_bin="${DOTNET:-dotnet}"
 bin="$work/bin"; rm -rf "$bin"; mkdir -p "$bin" "$work/logs"
 "$dotnet_bin" build "$root/fuzz/OneMail.Fuzz/OneMail.Fuzz.csproj" -c Checked -v quiet -clp:NoSummary -o "$bin"
 for asm in RecursiveAI.OneMail RecursiveAI.OneMail.Calendar RecursiveAI.OneMail.Render RecursiveAI.OneMail.Cryptography RecursiveAI.OneMail.Client; do
-  "$tools/sharpfuzz/sharpfuzz" "$bin/$asm.dll" >/dev/null
+  "$instrument" "$bin/$asm.dll" >/dev/null
 done
 export FUZZ_PREBUILT="$bin"
 for t in "$@"; do
