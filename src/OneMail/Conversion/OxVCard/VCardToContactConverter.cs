@@ -322,54 +322,58 @@ public sealed class VCardToContactConverter : IItemConversion<Component, MapiMes
 
         private enum ContactSlot { Home, Business, Other }
 
+        // How Outlook 16 places ADR properties (observed by opening vCards in it; MS-OXVCARD 2.1.3.3.1 only gives the table): an address whose TYPE names
+        // a slot takes it if it is free (work first, then home, then postal, which is the only one of the "other" types that names Other), and an address
+        // that names none, or whose slot is taken, goes to the first free slot in the order Business, Home, Other. A fourth address has no slot.
         private void ImportAddresses()
         {
             ContactSlot? mailing = null;
+            var overflow = new List<VCardAddress>();
+            var placedBy = new Dictionary<VCardAddress, ContactSlot>(ReferenceEqualityComparer.Instance);
             foreach (VCardAddress a in _v.Addresses)
             {
                 _used.Add(a.Property);
                 List<string> types = a.Types.Select(t => t.ToLowerInvariant()).ToList();
-                List<ContactSlot> slots = [];
-                ContactSlot? firstListed = null;
-                foreach (string t in types)
+                ContactSlot? wanted = types.Contains("work") ? ContactSlot.Business : types.Contains("home") ? ContactSlot.Home : types.Contains("postal") ? ContactSlot.Other : null;
+                if (wanted is { } w && _addressTaken.TryAdd(w, true))
                 {
-                    ContactSlot? s = t == "work" ? ContactSlot.Business : t == "home" ? ContactSlot.Home : OxVCardTables.IsOtherAddressType(t) ? ContactSlot.Other : null;
-                    if (s is { } slot)
+                    SetAddress(w, a);
+                    placedBy[a] = w;
+                }
+                else
+                {
+                    overflow.Add(a);
+                }
+            }
+
+            foreach (VCardAddress a in overflow)
+            {
+                ContactSlot? free = null;
+                foreach (ContactSlot candidate in new[] { ContactSlot.Business, ContactSlot.Home, ContactSlot.Other })
+                {
+                    if (_addressTaken.TryAdd(candidate, true))
                     {
-                        firstListed ??= slot;
-                        if (!slots.Contains(slot))
-                        {
-                            slots.Add(slot);
-                        }
+                        free = candidate;
+                        break;
                     }
                 }
 
-                if (slots.Count == 0)
+                if (free is { } f)
                 {
-                    // 2.1.3.3.1: the default TYPE is "intl, postal, parcel, work".
-                    slots = [ContactSlot.Business, ContactSlot.Other];
-                    firstListed = ContactSlot.Business;
+                    SetAddress(f, a);
+                    placedBy[a] = f;
                 }
-
-                List<ContactSlot> filled = [];
-                foreach (ContactSlot slot in slots)
-                {
-                    if (_addressTaken.TryAdd(slot, true))
-                    {
-                        SetAddress(slot, a);
-                        filled.Add(slot);
-                    }
-                }
-
-                if (filled.Count == 0)
+                else
                 {
                     Drop(a.Property, "AdditionalValueNotMapped", "The contact has one home, one business and one other address; they were already filled.");
                 }
-                else if (types.Contains("pref") && mailing is null)
+            }
+
+            foreach (VCardAddress a in _v.Addresses)
+            {
+                if (mailing is null && placedBy.TryGetValue(a, out ContactSlot placed) && a.Types.Any(t => t.Equals("pref", StringComparison.OrdinalIgnoreCase)))
                 {
-                    // The first type the card lists names the address; if that one was already filled by an earlier ADR, the first one this ADR filled.
-                    ContactSlot wanted = firstListed ?? slots[0];
-                    mailing = filled.Contains(wanted) ? wanted : filled[0];
+                    mailing = placed;
                 }
             }
 
@@ -382,6 +386,19 @@ public sealed class VCardToContactConverter : IItemConversion<Component, MapiMes
             }
 
             MarkUsed("X-MS-OL-DEFAULT-POSTAL-ADDRESS");
+            // With nothing chosen Outlook makes the business address the mailing address, else the home address, else the other one.
+            if (mailing is null)
+            {
+                foreach (ContactSlot candidate in new[] { ContactSlot.Business, ContactSlot.Home, ContactSlot.Other })
+                {
+                    if (_addressTaken.ContainsKey(candidate))
+                    {
+                        mailing = candidate;
+                        break;
+                    }
+                }
+            }
+
             if (mailing is { } sel && _addressTaken.ContainsKey(sel))
             {
                 // 2.2.1.3.9: PidLidPostalAddressId selects the mailing address, and the mailing address properties repeat it.
@@ -536,7 +553,7 @@ public sealed class VCardToContactConverter : IItemConversion<Component, MapiMes
                     placed = true;
                 }
 
-                bool voice = types.Overlaps(["msg", "voice", "video", "bbs", "modem"]) || !placed;
+                bool voice = types.Overlaps(["msg", "voice", "video", "bbs", "modem"]);
                 if (voice)
                 {
                     if (!otherDone)
@@ -548,6 +565,11 @@ public sealed class VCardToContactConverter : IItemConversion<Component, MapiMes
                     {
                         Drop(p, "AdditionalValueNotMapped", "MS-OXVCARD 2.1.3.4.1 imports the first voice number only.");
                     }
+                }
+                else if (!placed)
+                {
+                    // Outlook 16 imports a number with no TYPE (or none it knows) nowhere.
+                    report.Add(OxVCardTables.Family, "TEL", LossKind.Dropped, "NoContactMapping", "Outlook imports a telephone number with no known TYPE nowhere.");
                 }
             }
 

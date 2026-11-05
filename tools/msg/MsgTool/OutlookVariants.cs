@@ -61,7 +61,7 @@ internal static class OutlookVariants
 
                 MapiMessage m = Base("p" + p.Tag.ToHex());
                 m.Properties.Add(p);
-                MsgWriter.Write(m, Path.Combine(dir, "p-" + p.Tag.ToHex() + ".msg"));
+                MsgWriter.Write(m, Path.Combine(dir, "p-" + p.Tag.ToHex() + ".msg"), new MsgWriterOptions { Strings = Environment.GetEnvironmentVariable("PROPS_ASGIVEN") == "1" ? MsgStringMode.AsGiven : MsgStringMode.Unicode });
             }
         }
 
@@ -276,6 +276,33 @@ internal static class OutlookVariants
                     Console.WriteLine($"{Path.GetFileName(f)}: {l.Code} {l.Name} {l.Reason}");
                 }
             }
+        }
+
+        return 0;
+    }
+
+    /// <summary>A message mixing a Unicode subject with an 8-bit string value, written as given, with the store support mask and code page varied.</summary>
+    public static int Mixed(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        (string, int?, int?, bool)[] sets = [("m1-mask-unicode", 0x00040000, null, false), ("m2-mask-unicode-cp", 0x00040000, 1252, false), ("m3-mask0-cp", 0, 1252, false), ("m4-mask0-nocp", 0, null, false), ("m5-all-narrow-mask0-cp", 0, 1252, true)];
+        foreach ((string name, int? mask, int? cp, bool classNarrow) in sets)
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(classNarrow ? MapiProperty.Create(new MapiTag(0x001A, MapiType.String8), Encoding.ASCII.GetBytes("IPM.Note")) : Str(0x001A, "IPM.Note"));
+            m.Properties.Add(classNarrow ? MapiProperty.Create(new MapiTag(0x0037, MapiType.String8), Encoding.ASCII.GetBytes("subject")) : Str(0x0037, "subject"));
+            m.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+            if (mask is { } mk)
+            {
+                m.Properties.Add(Int(0x340D, mk));
+            }
+
+            if (cp is { } c)
+            {
+                m.Properties.Add(Int(0x3FFD, c));
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { Strings = MsgStringMode.AsGiven, AddRequiredProperties = false });
         }
 
         return 0;

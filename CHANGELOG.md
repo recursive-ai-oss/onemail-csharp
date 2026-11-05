@@ -4,6 +4,22 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- MSG writing (`MsgWriterOptions.AddRequiredProperties`, on by default) repairs what Outlook 16 refuses or cannot save a copy of, each reported as `PropertyAdjusted`: a missing message class (`IPM.Note`), a missing store
+  support mask on a top-level or embedded message, error-typed properties (left out), a recipient with no type (To), and a model that mixes Unicode and 8-bit strings written as given (the 8-bit strings become Unicode). Details and the evidence in `docs/msg.md`.
+- `MsgWriterOptions.Template` gives the root storage the class ID Outlook gives templates (`0006F046-...`).
+- PST builder: 8-bit values of columns the template tables declare as Unicode (subject, recipient names) are written as Unicode, `PidTagDisplayTo/Cc/Bcc` are derived from the recipients when absent, and an OLE or raw attachment storage is kept
+  as a compound file in a file attachment instead of being dropped (`ObjectStorageDropped` is no longer raised). The store converted from message files scans clean in Outlook's repair tool. The conversion report lists the adjustments as `PstPropertyAdjusted` (they were reported as dropped children before).
+- Replies and forwards: a forward of an Outlook item (or of a message with a conversation index) carries `In-Reply-To` and `References` like a reply, and a thread with no index starts with the 22-byte header alone, stamped with the current time (what Outlook 16 does).
+- vCard import to a contact follows Outlook 16: an `ADR` fills one slot (a named, free slot first, then Business, Home, Other in order), the mailing address defaults to Business, then Home, then Other, and a `TEL` with no known type is dropped (`NoContactMapping`).
+
+### Added
+
+- `tools/outlook`: `Probe-Items.ps1` (reply/forward threading, flags and vCard import as Outlook does them), `Probe-Smime.ps1` (S/MIME items opened in Outlook with throw-away keys imported and removed), `Copy-Folder.ps1` (a large folder copied inside Outlook, the
+  control for the repair tool's 65,535-row limit), `Save-Templates.ps1`; `tools/msg/MsgTool` variant generators (`props`, `prune`, `embedded`, `required`, `mixed`, `modes`, `noindex`, `vcards`); `SmimeInterop outlook-items`.
+- `docs/smime.md`, `docs/composition.md`, `docs/pst-writing.md`, `docs/compatibility.md`: what Outlook 16.0.20527 does (S/MIME decryption of RSA recipients; ECDH recipients fail; the repair tool's row limit holds for an Outlook-written 70,000-item folder; conversation indexes).
+
 ## [0.8.0-preview.1]
 
 ### Added

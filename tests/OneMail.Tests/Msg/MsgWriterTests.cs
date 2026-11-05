@@ -411,4 +411,24 @@ public class MsgWriterTests
             Assert.Equal(new Guid("00020D0B-0000-0000-C000-000000000046"), r.Root.ClassId);
         }
     }
+
+    [Fact]
+    public void AModelWithBothKindsOfStringIsWrittenAsUnicodeForOutlook()
+    {
+        // Found with Outlook 16: "Cannot read the item" for a file that mixes Unicode and 8-bit strings.
+        var m = Simple();
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+        var options = new MsgWriterOptions { Strings = MsgStringMode.AsGiven };
+        MsgWriteResult written = MsgWriter.Write(m, new MemoryStream(), options);
+        Assert.Contains(written.Defects, d => d.Kind == MsgWriteDefectKind.PropertyAdjusted && d.Detail.Contains("8-bit strings were written as Unicode", StringComparison.Ordinal));
+        Assert.Equal(MapiType.UnicodeString, Read(MsgWriter.ToArray(m, options)).Properties.Get(0x600D)!.Tag.PropertyType);
+
+        // All 8-bit stays as it is, with the code page and a store support mask.
+        var narrowOnly = new MapiMessage();
+        narrowOnly.Properties.Add(MapiProperty.Create(new MapiTag(0x001A, MapiType.String8), Encoding.ASCII.GetBytes("IPM.Note")));
+        narrowOnly.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+        MapiMessage back = Read(MsgWriter.ToArray(narrowOnly, options));
+        Assert.Equal(MapiType.String8, back.Properties.Get(0x600D)!.Tag.PropertyType);
+        Assert.Equal(0, back.GetInt32(0x340D));
+    }
 }

@@ -287,7 +287,8 @@ public class ContactTests
         Assert.Equal("Dan Fennell", c.DisplayName);
         Assert.Equal("Contoso, Ltd.", c.CompanyName);
         Assert.Equal("7890 Elm Street", c.Address(ContactAddressKind.Business).Street);
-        Assert.Equal("7890 Elm Street", c.Address(ContactAddressKind.Other).Street);
+        // The specification's example puts the address in the Other slot too; Outlook 16 gives an address one slot (observed), and so does this.
+        Assert.Null(c.Address(ContactAddressKind.Other).Street);
         Assert.Equal("+1-206-555-0102", c.Phone(ContactPhoneKind.Business));
         Assert.Equal("+1-206-555-0102", c.Phone(ContactPhoneKind.Other));
         Assert.Equal("+1-206-555-0162", c.Phone(ContactPhoneKind.BusinessFax));
@@ -309,7 +310,35 @@ public class ContactTests
         Assert.Contains(report, e => e.Name == "EMAIL" && e.Code == "AdditionalValueNotMapped");
         Assert.Contains(report, e => e.Name == "X-MS-TEXT" && e.Code == "AdditionalValueNotMapped");
         Assert.Contains(report, e => e.Name == "PHOTO" && e.Code == "PhotoNotInline");
-        Assert.Contains(report, e => e.Name == "TEL" && e.Code == "AdditionalValueNotMapped");
+        Assert.Contains(report, e => e.Name == "TEL" && e.Code == "NoContactMapping");
+    }
+
+    [Fact]
+    public void AddressesFillSlotsTheWayOutlookDoes()
+    {
+        // Observed in Outlook 16: a TYPE names a slot if it is free (work, home, postal for Other); the rest take the first free slot in the order
+        // Business, Home, Other; one address fills one slot; the mailing address is Business, else Home, else Other.
+        static string Adr(string type, string street) => "ADR" + (type.Length > 0 ? ";TYPE=" + type : string.Empty) + ":;;" + street + ";Town;ST;12345;US\r\n";
+        MapiContact Import(params string[] adrs) => new(new VCardToContactConverter().Convert(Doc("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\n" + string.Concat(adrs) + "END:VCARD\r\n").Components.First()).Value);
+
+        MapiContact c = Import(Adr("postal", "P1"), Adr("dom", "D1"), Adr("intl", "I1"), Adr("parcel", "L1"));
+        Assert.Equal("P1", c.Address(ContactAddressKind.Other).Street);
+        Assert.Equal("D1", c.Address(ContactAddressKind.Business).Street);
+        Assert.Equal("I1", c.Address(ContactAddressKind.Home).Street);
+
+        c = Import(Adr("", "A1"), Adr("", "A2"), Adr("", "A3"));
+        Assert.Equal(["A1", "A2", "A3"], new[] { ContactAddressKind.Business, ContactAddressKind.Home, ContactAddressKind.Other }.Select(k => c.Address(k).Street));
+
+        c = Import(Adr("work", "W1"), Adr("work", "W2"), Adr("home", "H1"));
+        Assert.Equal(["W1", "H1", "W2"], new[] { ContactAddressKind.Business, ContactAddressKind.Home, ContactAddressKind.Other }.Select(k => c.Address(k).Street));
+
+        c = Import(Adr("work,home", "B1"));
+        Assert.Equal("B1", c.Address(ContactAddressKind.Business).Street);
+        Assert.Null(c.Address(ContactAddressKind.Home).Street);
+
+        // A number with no TYPE is dropped; the first voice number is kept.
+        LossReport report = new VCardToContactConverter().Convert(Doc("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nTEL:1\r\nTEL;TYPE=VOICE:2\r\nEND:VCARD\r\n").Components.First()).Report;
+        Assert.Contains(report, e => e.Name == "TEL" && e.Code == "NoContactMapping");
     }
 
     // ---- distribution lists ------------------------------------------------------------------------------------------------

@@ -24,8 +24,9 @@ MAPI: the MS-OXCMAIL import splits the subject (MS-OXCMAIL 2.2.3.2.6.1), so `Pid
 
 ## Threading headers (RFC 5322 §3.6.4)
 
-Replies only. A forward starts no reply thread: it has no `In-Reply-To` or `References` (agent default; clients differ), but keeps the
-conversation topic and index.
+Replies, and forwards of Outlook originals. A forward of a message from another client starts no reply thread: it has no `In-Reply-To` or `References`
+(agent default; clients differ), but keeps the conversation topic and gets an index level. A forward of an Outlook item (or of a message with a conversation index) has them as a reply does,
+because Outlook 16 writes them (see *Conversation topic and index*).
 
 - `In-Reply-To`: the original's `Message-ID`.
 - `References`: the original's `References`, or its `In-Reply-To` when it has none, then its `Message-ID` (not repeated when it is already
@@ -46,11 +47,21 @@ or already has an index, or when `ConversationIndexMode.Always` is set; MIME mes
   delta from the header's time, then a random byte. The delta is `TimeDiff >> 18` when the high 32 bits of the difference AND
   `0x00FE0000` are zero (under about 1.7 years), else `TimeDiff >> 23` with the delta code set. A clock before the header's time gives
   delta 0 (`ConversationIndexTimeClamped`).
-- No index, or one that is not in the form (`ConversationIndexInvalid`), starts a new thread: a header block with the original's delivery or
-  sent time (never later than now) and a new GUID, then the level.
+- No index, or one that is not in the form (`ConversationIndexInvalid`), starts a new thread: the header alone, stamped with the time now, and a
+  new GUID: 22 bytes, no level. This is what Outlook 16 writes for a reply, reply-all or forward of a message with no index.
 - An index that has reached 255 bytes is kept as it is (`ConversationIndexFull`).
 
 `ConversationIndex.TryParse`, `CreateHeader` and `AppendLevel` are public and decode and extend indexes by themselves.
+
+**A forward has the threading of a reply, for an Outlook original.** Outlook 16 gives a forward the original's Message-ID as `In-Reply-To` and the same `References`
+as a reply, and a conversation-index level of its own. So a forward of an Outlook item, or of a message that has a conversation index (the cases where `Thread-Index` is written at all),
+gets `In-Reply-To` and `References` like a reply; a forward of a message from another client gets neither, as before.
+
+**Checked against Outlook 16.0.20527** (`tools/outlook/Probe-Items.ps1`: Reply, ReplyAll and Forward of 10 received messages, 7 of them with an index, saved as .msg and read with our reader).
+With an index: the new index is the original's plus one five-byte level in all three (time delta in the top 31 bits with the delta-code bit set, since the originals were years old, then one byte
+that differs between calls); the topic is the original's; `In-Reply-To` is the original's Message-ID, `References` its `References` plus that ID, for forward as well as reply. Without an index
+(three messages with theirs removed): 22 bytes, the first six the current FILETIME from byte 0, then a new GUID, for all three verbs; this settles the layout question above for current Outlook
+(older Exchange-made items in the corpora have a reserved 0x01 first, as MS-OXOMSG draws it).
 
 **Observed against the spec.** MS-OXOMSG draws the header as a reserved byte 0x01 followed by a 40-bit time (the high 32 bits of the FILETIME and
 the top 8 bits of its low half). Indexes in real Outlook items (45 MSG files and the CFReDS OST) carry the time from the first byte on: `01 CD 50

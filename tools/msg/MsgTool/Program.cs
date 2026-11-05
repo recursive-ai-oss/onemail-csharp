@@ -114,6 +114,11 @@ internal static class Program
             return OutlookVariants.VCards(args[1], args[2]);
         }
 
+        if (args[0] == "mixed")
+        {
+            return OutlookVariants.Mixed(args[1]);
+        }
+
         if (args[0] == "cfb")
         {
             return CfbDump.Run(args[1]);

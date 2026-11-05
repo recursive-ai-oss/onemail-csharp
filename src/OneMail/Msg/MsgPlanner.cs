@@ -73,10 +73,14 @@ internal sealed class MsgPlanner
     private long _allProps;
     private int _objects;
 
+    // The string mode in force: the option, except that a model written as given with both kinds of string becomes Unicode (see Plan).
+    private MsgStringMode _mode;
+
     public MsgPlanner(MsgWriterOptions options)
     {
         _o = options;
-        if (_o.Strings == MsgStringMode.Ansi)
+        _mode = options.Strings;
+        if (_mode == MsgStringMode.Ansi)
         {
             _ansi = MailEncoding.ForCodePage(_o.AnsiCodePage);
             if (_ansi is null || !_ansi.CanEncode || _ansi.CodePage == 0)
@@ -115,10 +119,50 @@ internal sealed class MsgPlanner
     public MsgWritePlan Plan(MapiMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
+        // Outlook cannot read a message file that holds both Unicode and 8-bit strings ("Cannot read the item"; found with Outlook 16, MS-OXMSG
+        // 2.1.3.1 asks for one kind), so a model written as given that mixes them has its 8-bit strings written as Unicode.
+        if (_o.AddRequiredProperties && _mode == MsgStringMode.AsGiven)
+        {
+            bool narrow = false, wide = false;
+            ScanStrings(message, ref narrow, ref wide, 0);
+            if (narrow && wide)
+            {
+                _mode = MsgStringMode.Unicode;
+                Warn(MsgWriteDefectKind.PropertyAdjusted, string.Empty, "the message holds Unicode and 8-bit strings, which Outlook cannot read together; the 8-bit strings were written as Unicode");
+            }
+        }
+
         PlanMessage(message, string.Empty, depth: 0);
         WriteNameMap();
         _plan.NamedProperties = _names.Count;
         return _plan;
+    }
+
+    private static void ScanStrings(MapiObject o, ref bool narrow, ref bool wide, int depth)
+    {
+        foreach (MapiProperty p in o.Properties)
+        {
+            ushort t = MapiTypes.ElementType(p.Tag.Type);
+            narrow |= t == (ushort)MapiType.String8;
+            wide |= t == (ushort)MapiType.UnicodeString;
+        }
+
+        if (o is MapiMessage m && depth < 64)
+        {
+            foreach (MapiRecipient r in m.Recipients)
+            {
+                ScanStrings(r, ref narrow, ref wide, depth + 1);
+            }
+
+            foreach (MapiAttachment a in m.Attachments)
+            {
+                ScanStrings(a, ref narrow, ref wide, depth + 1);
+                if (a.EmbeddedMessage is { } e)
+                {
+                    ScanStrings(e, ref narrow, ref wide, depth + 1);
+                }
+            }
+        }
     }
 
     private void Warn(MsgWriteDefectKind kind, string where, string detail) => _plan.Defects.Add(new MsgWriteDefect(kind, where, detail));
@@ -391,7 +435,7 @@ internal sealed class MsgPlanner
             // Outlook cannot open a message file with no message class ("Cannot read the item"); IPM.Note is what it treats an unclassed item as.
             if (!list.Exists(static p => p.Tag.Id == 0x001A))
             {
-                list.Add(new Prep { Tag = new MapiTag(0x001A, (ushort)(_o.Strings == MsgStringMode.Ansi ? MapiType.String8 : MapiType.UnicodeString)), Values = [_o.Strings == MsgStringMode.Ansi ? Encoding.ASCII.GetBytes("IPM.Note") : Encoding.Unicode.GetBytes("IPM.Note")] });
+                list.Add(new Prep { Tag = new MapiTag(0x001A, (ushort)(_mode == MsgStringMode.Ansi ? MapiType.String8 : MapiType.UnicodeString)), Values = [_mode == MsgStringMode.Ansi ? Encoding.ASCII.GetBytes("IPM.Note") : Encoding.Unicode.GetBytes("IPM.Note")] });
                 Warn(MsgWriteDefectKind.PropertyAdjusted, dir, "PidTagMessageClass was missing; set to IPM.Note");
             }
         }
@@ -553,8 +597,8 @@ internal sealed class MsgPlanner
 
     private Prep? ConvertString(MapiProperty p, MapiTag tag, string where, MailEncoding objectEncoding, ushort elem, bool multi, int count)
     {
-        bool toUnicode = _o.Strings == MsgStringMode.Unicode && elem == (ushort)MapiType.String8;
-        bool toAnsi = _o.Strings == MsgStringMode.Ansi && (elem == (ushort)MapiType.UnicodeString || _ansi!.CodePage != objectEncoding.CodePage);
+        bool toUnicode = _mode == MsgStringMode.Unicode && elem == (ushort)MapiType.String8;
+        bool toAnsi = _mode == MsgStringMode.Ansi && (elem == (ushort)MapiType.UnicodeString || _ansi!.CodePage != objectEncoding.CodePage);
         bool unicodeOut = toUnicode || (elem == (ushort)MapiType.UnicodeString && !toAnsi);
         ushort outElem = unicodeOut ? (ushort)MapiType.UnicodeString : (ushort)MapiType.String8;
         var outTag = new MapiTag(tag.Id, multi ? (ushort)(outElem | MapiTypes.MultiValuedFlag) : outElem);
@@ -623,7 +667,7 @@ internal sealed class MsgPlanner
 
             if (multi)
             {
-                if (_o.Strings != MsgStringMode.AsGiven)
+                if (_mode != MsgStringMode.AsGiven)
                 {
                     value = WithTerminator(value, unicodeOut);
                 }
@@ -676,8 +720,8 @@ internal sealed class MsgPlanner
     private void Adjust(List<Prep> list, Dictionary<uint, int> byTag, string dir, Kind kind, MapiObject obj)
     {
         bool isMessage = kind is Kind.Message or Kind.Embedded;
-        bool ansi = _o.Strings == MsgStringMode.Ansi;
-        bool unicode = _o.Strings == MsgStringMode.Unicode;
+        bool ansi = _mode == MsgStringMode.Ansi;
+        bool unicode = _mode == MsgStringMode.Unicode;
         if (isMessage)
         {
             if (unicode || ansi)
@@ -700,10 +744,19 @@ internal sealed class MsgPlanner
 
             // Outlook cannot open a message file whose top-level message lacks PidTagStoreSupportMask, nor save a copy when an embedded message lacks it:
             // found with Outlook 16, not in MS-OXMSG. A message written as given gets the Unicode bit when none of its strings is 8-bit.
-            if (_o.AddRequiredProperties && !byTag.ContainsKey(StoreSupportMaskTag))
+            if (_o.AddRequiredProperties)
             {
                 bool eightBit = list.Exists(static p => p.Tag.PropertyType is MapiType.String8 or MapiType.MultipleString8);
-                SetInt(list, byTag, StoreSupportMaskTag, ansi || eightBit ? 0 : StoreUnicodeOk, dir, "PidTagStoreSupportMask was missing; added");
+                if (!byTag.ContainsKey(StoreSupportMaskTag))
+                {
+                    SetInt(list, byTag, StoreSupportMaskTag, ansi || eightBit ? 0 : StoreUnicodeOk, dir, "PidTagStoreSupportMask was missing; added");
+                }
+
+                // Outlook cannot read a message whose 8-bit strings have no PidTagMessageCodepage to say how to decode them.
+                if (eightBit && !ansi && !byTag.ContainsKey(MessageCodepageTag) && obj.String8Encoding.CodePage > 0)
+                {
+                    SetInt(list, byTag, MessageCodepageTag, obj.String8Encoding.CodePage, dir, $"PidTagMessageCodepage was missing for 8-bit strings; set to {obj.String8Encoding.CodePage}");
+                }
             }
 
             if (_o.Template && kind == Kind.Message && ((IntOf(list, byTag, MessageFlagsTag) ?? 0) & MsgFlagUnsent) == 0)
