@@ -416,14 +416,19 @@ public sealed class RecurrenceSet
                 yield return overrideOccurrences[overrideIndex++];
             }
 
-            if (Excluded(inst, exStreams, exCurrent, exHas))
+            // Every instance that is looked at and not yielded counts against MaxInstancesScanned, wherever it falls: before the window,
+            // excluded, replaced by an override, or outside the window because its own length puts it there (a DTEND before DTSTART).
+            if (Excluded(inst, exStreams, exCurrent, exHas)
+                || _overrides.ContainsKey(key) // replaced; the override is yielded from its own list
+                || (_overridesByDay.Count > 0 && _overridesByDay.ContainsKey(inst.Wall.Ticks / TimeSpan.TicksPerDay)))
             {
-                continue;
-            }
+                if (++scanned > _options.MaxInstancesScanned)
+                {
+                    _report.Add(RecurrenceDefectKind.ScanLimit, _master.Uid);
+                    break;
+                }
 
-            if (_overrides.ContainsKey(key) || (_overridesByDay.Count > 0 && _overridesByDay.ContainsKey(inst.Wall.Ticks / TimeSpan.TicksPerDay)))
-            {
-                continue; // replaced; the override is yielded from its own list
+                continue;
             }
 
             Occurrence occ;
@@ -450,7 +455,7 @@ public sealed class RecurrenceSet
 
                 yield return occ;
             }
-            else if (Key(occ) < ws && ++scanned > _options.MaxInstancesScanned)
+            else if (++scanned > _options.MaxInstancesScanned)
             {
                 _report.Add(RecurrenceDefectKind.ScanLimit, _master.Uid);
                 break;

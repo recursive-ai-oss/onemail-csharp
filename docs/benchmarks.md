@@ -1,3 +1,137 @@
+# 1.0 bar table
+
+Gate: geometric mean at most 1.0 against the fastest .NET library per area, no row worse than 1.25. Ratio is OneMail / comparator, so lower is faster.
+Rows re-run for 1.0 are on commit be1a504 (the frozen tree); rows marked **reused** have no code change in their area since the dated run and keep it.
+
+| Area | Comparator | x64 geomean / worst | arm64 geomean / worst | Date, commit | Status |
+|---|---|---|---|---|---|
+| MIME parse, headers, bodies (12 rows) | MimeKit 4.18.2 | 0.067 / 0.148 | 0.085 / 0.117 | 2026-11-05, be1a504 | pass |
+| MIME write, build, mbox (6 rows) | MimeKit 4.18.2 | 0.044 / 0.149 | 0.046 / 0.183 | 2026-11-05, be1a504 | pass |
+| MIME, all 18 rows | MimeKit 4.18.2 | 0.058 / 0.149 | 0.069 / 0.183 | 2026-11-05, be1a504 | pass |
+| PST / OST enumerate + extract | XstReader.Api 1.0.6 | 0.198 / 0.453 (6 rows) | 0.320 / 0.475 (5 rows) | 2026-11-05, be1a504 | pass |
+| MSG read | MsgReader 6.2.0 | 0.098 / 0.465 | 0.103 / 0.581 | 2026-11-05, be1a504 | pass |
+| TNEF read | MimeKit 4.18.2 | 0.353 / 0.553 | 0.284 / 0.372 | 2026-11-05, be1a504 | pass |
+| vCard parse | FolkerKinzel.VCards 8.2.0 | 0.707 / 0.732 | 0.846 / 0.864 | **reused** 2026-11-04, 3b51281 | pass |
+| vCard build-write | FolkerKinzel.VCards 8.2.0 | 0.486 / 0.598 | 0.530 / 0.608 | **reused** 2026-11-04, 3b51281 | pass |
+| vCard edit-write | FolkerKinzel.VCards 8.2.0 | 0.104 / 0.143 | 0.111 / 0.146 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS parse | Ical.Net 5.2.3 | 0.087 / 0.101 | 0.104 / 0.151 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS build-write | Ical.Net 5.2.3 | 0.123 / 0.163 | 0.153 / 0.248 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS edit-write | Ical.Net 5.2.3 | 0.040 / 0.058 | 0.040 / 0.074 | **reused** 2026-11-01, 9ec14a0 | pass |
+| Recurrence expansion | Ical.Net 5.2.3 | 0.274 / 0.470 | 0.334 / 0.589 | **reused** 2026-11-01, 9ec14a0 | pass |
+| IMAP fetch, SMTP send | MailKit 4.18.2 | 0.92 / 1.03 (smtp-small) | not gated (servers run on the worker only) | **reused** 2026-11-04, 3b51281; `git log 6ebb90f..be1a504 -- src/OneMail.Client` is empty | pass |
+| PST builder, in-place writing | none | reported only | reported only | 2026-11-05, be1a504 | n/a |
+
+No re-run row is over 1.25 and no geomean is over 1.0. Two non-gating notes: the PST row `PstRow cfreds-ost` has no arm64 value (the Mac has no copy of that
+corpus file), and the MIME build row allocates about 1 MB per message against MimeKit's 37 KB while running 6.7x faster (allocations per message are reported, not gated).
+On the MIME rows most of the peak-working-set columns is the runtime's own allocation budget.
+
+**Recurrence and ICS parse after the scan-limit fix (indicative, `wq` heavy, 4 cores, load 3-8).** The reused recurrence and ICS parse rows were re-measured on the tree before the fix and after it, each side twice (base, new, then new, base), medians in ns: ICS parse invite 4,119 / 4,024 (before / after), holidays 967,274 / 979,681; recurrence daily UTC 527,418 / 529,347, weekly floating 243,820 / 236,640, monthly New York 172,643 / 171,139, yearly Berlin 42,455 / 42,268, daily New York 10.11 M / 10.11 M. The largest change is +1.3% (holidays), the geometric mean of the after/before ratios 0.993: within noise, so the dated rows above stand. The 50k-event ICS row was not re-run.
+
+## 1.0 re-run, 2026-11-05, commit be1a504
+
+Medians in ns per operation (per message for mbox); B/op is bytes allocated per operation. Peak working set is x64 only: one process per side (`peak.tsv`), MiB, ours / comparator.
+The Mac's helper does not report peak working set (the column reads zero or negative there), so arm64 has times and allocations only.
+BenchmarkDotNet 0.15.8, one run of each group.
+
+### MIME (OneMail vs MimeKit 4.18.2)
+
+| Row | Input | x64 ours ns | x64 MimeKit ns | x64 ratio | arm64 ratio | B/op ours | B/op MimeKit | peak x64 MiB ours / MimeKit |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| parse | dovecot-multipart | 5,008 | 75,508 | 0.066 | 0.110 | 8,272 | 171,802 | 88 / 145 |
+| parse | enron-20k | 864 | 22,705 | 0.038 | 0.049 | 3,120 | 39,360 | 88 / 137 |
+| parse | enron-2k | 999 | 14,701 | 0.068 | 0.096 | 3,720 | 19,448 | 89 / 128 |
+| parse | generated-attachment-6m | 99,969 | 2,046,652 | 0.049 | 0.073 | 4,568 | 6,318,608 | 134 / 217 |
+| headers | dovecot-multipart | 5,847 | 81,469 | 0.072 | 0.114 | 9,584 | 174,570 | 98 / 150 |
+| headers | enron-20k | 1,415 | 25,062 | 0.056 | 0.064 | 4,128 | 41,400 | 98 / 138 |
+| headers | enron-2k | 1,666 | 18,112 | 0.092 | 0.117 | 5,048 | 22,344 | 98 / 126 |
+| headers | generated-attachment-6m | 101,216 | 2,009,292 | 0.050 | 0.073 | 5,896 | 6,321,671 | 140 / 220 |
+| bodies | dovecot-multipart | 53,838 | 363,788 | 0.148 | 0.100 | 123,551 | 556,690 | 45 / 52 |
+| bodies | enron-20k | 2,060 | 23,494 | 0.088 | 0.076 | 25,424 | 101,208 | 90 / 112 |
+| bodies | enron-2k | 1,152 | 14,668 | 0.079 | 0.104 | 4,864 | 20,904 | 89 / 124 |
+| bodies | generated-attachment-6m | 674,960 | 13,146,141 | 0.051 | 0.077 | 4,521,641 | 18,583,946 | 94 / 201 |
+| write | dovecot-multipart | 1,936 | 105,852 | 0.018 | 0.020 | 184 | 6,912 | 89 / 94 |
+| write | enron-20k | 371 | 15,610 | 0.024 | 0.018 | 184 | 4,696 | 89 / 90 |
+| write | enron-2k | 60 | 1,675 | 0.036 | 0.032 | 184 | 1,752 | 89 / 90 |
+| write | generated-attachment-6m | 99,899 | 3,734,405 | 0.027 | 0.026 | 184 | 5,912 | 93 / 100 |
+| build | - | 141,029 | 949,477 | 0.149 | 0.177 | 1,007,259 | 36,782 | 57 / 115 |
+| mbox | - | 2,860 | 25,940 | 0.110 | 0.183 | 6,545 | 28,393 | 101 / 139 |
+
+Native reference, not gated (Rust `mail-parser` and `mail-builder`, x64, same inputs, `native.tsv`): ours / native for parse 1.31 (enron-2k), 1.49 (enron-20k), 1.31 (dovecot-multipart), 1.91 (generated 6 MB);
+headers 1.90, 2.06, 1.54, 1.93; bodies 1.50, 3.40, 5.81, 2.28; build 2.86. Parse is within the non-gating 1.5x target on three of four inputs; the other rows are not
+(headers 1.5-2.1x, bodies 1.5-5.8x, build 2.9x), as at the last run.
+
+### PST / OST, MSG, TNEF (OneMail vs XstReader.Api 1.0.6, MsgReader 6.2.0, MimeKit 4.18.2)
+
+| Row | Input | x64 ours ns | x64 comparator ns | x64 ratio | arm64 ratio | B/op ours | B/op comparator | peak x64 MiB ours / comparator |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| Msg | msg-corpus | 22,747,010 | 497,011,674 | 0.046 | 0.043 | 36,411,748 | 102,058,904 | 140 / 143 |
+| Msg | msg-largest | 12,133,302 | 452,451,990 | 0.027 | 0.025 | 18,751,804 | 53,247,584 | 140 / 143 |
+| Msg | msg-median | 144,214 | 899,631 | 0.160 | 0.178 | 300,897 | 1,268,177 | 143 / 137 |
+| Msg | msg-smallest | 22,203 | 47,799 | 0.465 | 0.581 | 108,098 | 80,673 | 139 / 138 |
+| PstFourKiB | gen-k4-10k | 1,232,614,756 | (comparator cannot read) | - | - | 197,781,224 | - | 102 / n/a |
+| PstFourKiB | gen-k4-1k | 94,639,510 | (comparator cannot read) | - | - | 19,903,947 | - | 102 / n/a |
+| PstLarge | gen-u10k | 741,689,542 | 1,858,936,855 | 0.399 | 0.409 | 198,442,304 | 2,196,617,608 | 101 / 125 |
+| PstLarge | gen-u50k | 4,290,655,879 | 9,476,125,109 | 0.453 | 0.475 | 992,101,320 | 11,008,953,416 | 101 / 150 |
+| Pst | cfreds-ost | 3,809,207 | 205,841,217 | 0.019 | n/a | 1,345,695 | 8,478,539 | 98 / 113 |
+| Pst | gen-u1k | 73,551,976 | 182,283,635 | 0.404 | 0.402 | 19,963,456 | 220,845,216 | 102 / 116 |
+| Pst | tika-bodytypes | 505,966 | 3,083,346 | 0.164 | 0.170 | 340,634 | 3,069,832 | 103 / 115 |
+| Pst | tika-pst | 615,078 | 2,287,137 | 0.269 | 0.255 | 595,403 | 3,058,058 | 100 / 115 |
+| Tnef | poi-attachments | 148,043 | 267,625 | 0.553 | 0.268 | 124,158 | 1,203,653 | 55 / 148 |
+| Tnef | poi-bug63955 | 151,396 | 407,076 | 0.372 | 0.212 | 173,089 | 1,879,447 | 55 / 134 |
+| Tnef | poi-quick | 76,110 | 238,488 | 0.319 | 0.371 | 181,977 | 276,926 | 103 / 135 |
+| Tnef | poi-sample1 | 36,746 | 94,471 | 0.389 | 0.272 | 119,750 | 427,849 | 57 / 77 |
+| Tnef | poi-simple | 9,627 | 40,975 | 0.235 | 0.249 | 110,069 | 62,446 | 99 / 183 |
+| Tnef | tika-testwinmail | 76,524 | 238,619 | 0.321 | 0.372 | 181,977 | 276,926 | 100 / 139 |
+
+XstReader.Api cannot read the 4 KiB layout (the two `PstFourKiB` rows are ours only). The equal-work check (`verify.tsv`) matched on every PST, MSG and TNEF input except
+`msg-corpus`: 53 messages on both sides, but MsgReader reports 40 attachments to our 41 and 6,147 fewer attachment bytes (the same difference as at the last run).
+Over the large stores the working set stays flat (`curve.tsv`, x64): reading all 50,000 messages (490 MB of attachments) peaks at 101 MiB for OneMail in 5.5 s, and at 148 MiB for XstReader in 13.3 s;
+XstReader with its documented cache release (`ClearContents`) peaks at 181 MiB and takes 246.6 s. For 10,000 messages: 96 MiB / 1.3 s, 122 MiB / 3.6 s and 81 MiB / 18.3 s.
+Native reference (libpff `pffexport`, items mode, which also writes every item to disk; x64, three runs each): cfreds-ost 0.02-0.03 s (ours 3.8 ms to enumerate and extract in memory), gen-u1k 0.25 s, gen-u10k 2.86-2.89 s, gen-u50k 21.0-21.3 s;
+peak resident set 4-9 MiB for the small files, 47 MiB (10k) and 206 MiB (50k).
+
+### PST builder and in-place writing (reported only)
+
+`PstOracle pstgen` through `PstBuilder` (messages of about 2.5 KB with two recipients), x64, one process per size, in the exclusive bench job. Peak resident set, elapsed:
+
+| Messages | Folders | File | Peak RSS | Elapsed, bench job | Elapsed, same run in the 4-core heavy job |
+|---|---|---|---|---|---|
+| 10,000 | 10 | 37 MiB | 105 MiB | 0.83 s | 1.07 s |
+| 100,000 | 10 | 377 MiB | 114 MiB | 2.80 s | 3.69 s |
+| 1,000,000 | 10 | 3,766 MiB | 121 MiB | 17.4 s | 24.9 s |
+| 600,000 | 1 | 2,260 MiB | 129 MiB | 11.4 s | 15.1 s |
+
+The resident set stops growing at about 110-120 MiB from 40,000 messages on: the working set is constant in the store size (the heavy job's peaks, 105 to 127 MiB, agree).
+
+In-place commit of a big folder's table (`tools/pst/tables-bench.sh`, one run each; indicative: a `wq` heavy 4-core job beside other work, load 14-18, because the bench-class attempt waited behind the queue for over 2.5 hours and was cancelled). Commit ms / MiB written, `rewrite` against `incremental`:
+
+| Rows | Change | rewrite | incremental |
+|---|---|---|---|
+| 1,000 | add 1 / 100 | 91 ms, 0.35 MiB / 106 ms, 0.39 MiB | 37 ms, 0.05 MiB / 32 ms, 0.11 MiB |
+| 1,000 | delete 1 / 100 | 104 ms, 0.35 MiB / 123 ms, 0.55 MiB | 57 ms, 0.08 MiB / 47 ms, 0.56 MiB |
+| 100,000 | add 1 / 100 | 2,813 ms, 34.1 MiB / 2,893 ms, 34.2 MiB | 163 ms, 0.19 MiB / 152 ms, 0.30 MiB |
+| 100,000 | delete 1 / 100 | 2,975 ms, 34.1 MiB / 3,005 ms, 34.7 MiB | 184 ms, 0.27 MiB / 228 ms, 5.6 MiB |
+
+These agree with the earlier row-by-row run in the PST in-place section below (100k rows: 2.4-2.9 s against 120-310 ms); the peak working set at 100,000 rows is 97-103 MiB for rewrite and 67-79 MiB for incremental.
+
+### Machines and runs, 2026-11-05
+
+| | x64 | arm64 |
+|---|---|---|
+| CPU | AMD Ryzen 9 7950X3D, 32 logical cores, AVX-512 | Apple M2, 8 cores |
+| Runtime, SDK | .NET 10.0.14, SDK 10.0.403 | .NET 10.0.14, SDK 10.0.403 |
+| Commit | be1a504 | be1a504 |
+| Jobs, `wq` class bench | g1 004130 (MIME parse/headers/bodies, 08:45 to 09:00 UTC), g2 004131 (MIME write/build/mbox + Rust native, 09:03 to 09:11), g3 004132 (PST/OST, 09:12 to 09:23), g4 004133 (MSG/TNEF + pffexport, 09:23 to 09:37), g5 004134 (PST builder, about 09:40) | g1 (05:34 to 05:48 UTC, remote job 60xqxa23), g2 (05:48 to 05:56, job hai0uejt), g3 (05:56 to 06:05, job 2ien9n3s), g4 (06:05 to 06:17, job fjd5gts6) |
+| Bench-class run time | 15 + 8 + 11 + 14 + 1 = 49 min | 14.4 + 7.3 + 9.0 + 11.9 = 42.6 min |
+| Load before, 1/5/15 min | 3.32 / 3.68 / 6.60; 2.05 / 2.64 / 4.05; 2.33 / 2.91 / 3.72; 2.30 / 2.80 / 3.35; 1.87 / 2.93 / 3.32 | 2.13 / 2.34 / 2.55; 2.02 / 2.19 / 2.39; 2.20 / 2.22 / 2.34; 2.14 / 2.33 / 2.39 |
+| Load during (1 min, every 2 min) | 2.4 to 4.0 | 1.9 to 3.0 |
+| Load after | 3.19 / 3.13 / 4.49; 2.78 / 3.12 / 3.84; 2.54 / 2.86 / 3.38; 3.50 / 3.31 / 3.44 (g4 timed rows) | 2.02 / 2.19 / 2.39; 2.20 / 2.22 / 2.34; 2.14 / 2.33 / 2.39; 2.29 / 2.38 / 2.48 |
+| Non-timing stages (peak, curve, equal work, allocation columns) | heavy `wq` 004087, 4 cores | heavy `wq` 000659, 4 cores |
+
+The worker's baseline load of 2 to 4 is the machine's background (other users' sessions); the queue starts a bench-class job only when no heavy or bench job runs, and its settle check
+read 5% CPU busy before g5. No group overlapped other queued work, so none was re-run. MimeKit 4.18.2, MsgReader 6.2.0, XstReader.Api 1.0.6, BenchmarkDotNet 0.15.8. Raw `report.tsv`,
+`peak.tsv`, `curve.tsv`, `verify.tsv`, `native.tsv`, `pffexport.tsv` and `machine.txt` per group are in the job directories on each machine and in the build's results directory.
+
 # Benchmarks: MIME rows
 
 `bench/OneMail.Benchmarks` compares OneMail with MimeKit 4.18.2 (a released NuGet package, referenced only from `bench/`) on

@@ -38,7 +38,7 @@ public sealed record ExpansionOptions
     /// </summary>
     public int MaxIterationsWithoutHit { get; init; } = 1_000_000;
 
-    /// <summary>The most instances one rule may generate before the window starts (only rules with COUNT must generate them). Default 5,000,000.</summary>
+    /// <summary>The most instances one expansion may look at without yielding them: before the window starts (only rules with COUNT must generate those), excluded, replaced by an override, or outside the window. Default 5,000,000.</summary>
     public long MaxInstancesScanned { get; init; } = 5_000_000;
 
     /// <summary>Local times in a DST gap. Default <see cref="SkippedTimePolicy.Shift"/>.</summary>

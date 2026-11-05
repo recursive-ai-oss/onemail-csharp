@@ -21,30 +21,45 @@ suite, the AOT smoke app, the ICS and vCard round trip, the PST write check, and
 `sanitizer-display`, `htmltext`, `mail-open`, whose rows below are the later run). The MIME, differential, MSG, TNEF and source-store libpff rows ran on
 the earlier tree; none of the later changes is in code they reach. The Outlook and `scanpst.exe` rows are in the next section; the provider smoke rows are not part of these numbers.
 
-**Fuzzing:** every one of the 52 targets ran 600 s under libFuzzer (SharpFuzz-instrumented, `Checked`), one process each, nine at a time:
-0 findings (no crash, hang or out-of-memory input). Executions in millions, then the `ft` feature count libFuzzer reported at the end (the host reports a
-constant `cov: 3` for .NET targets, so only features are comparable):
+**Fuzzing, 1.0 pass (2026-11-05, commit be1a504 plus the fuzz-harness commits):** all 53 targets of `fuzz/OneMail.Fuzz` (the 2026-11-04 pass said 52; its table
+already listed these 53 names and no target has been added since) ran 600 s under libFuzzer (SharpFuzz-instrumented, `Checked`), nine side by side per
+queued job (`tools/fuzz/campaign.sh`; worker `wq` heavy jobs, six batches of 8-9 targets). 556.9 M executions in all. Executions in millions, then the `ft` feature
+count libFuzzer reported at the end (the host reports a constant `cov: 3` for .NET targets, so only features are comparable):
 
 | Target | Exec (M) | ft | Target | Exec (M) | ft | Target | Exec (M) | ft |
 |---|---|---|---|---|---|---|---|---|
-| authres | 10.3 | 3,581 | imap-fetch | 5.9 | 6,703 | rtf-decompress | 21.8 | 104 |
-| calcard | 9.3 | 10,895 | imap-response | 8.1 | 4,204 | rtf-deencap | 20.3 | 1,401 |
-| calendar | 7.7 | 4,057 | jcal-jcard | 9.6 | 9,299 | rtf-html | 6.2 | 5,467 |
-| composition | 2.3 | 22,148 | ltp | 3.6 | 8,381 | sanitizer | 2.7 | 2,910 |
-| contentlines | 16.0 | 2,609 | mail-open | 4.8 | 9,330 | sanitizer-display | 3.0 | 9,242 |
-| dbx | 5.9 | 2,915 | mbox | 18.3 | 831 | sanitizer-reparse | 3.4 | 2,902 |
-| dbx-recovery | 2.3 | 2,486 | mhtml-uri | 19.0 | 1,269 | sasl-challenge | 24.3 | 357 |
-| dkim-key | 23.9 | 766 | mime-reader | 14.0 | 1,516 | smime-structure | 3.3 | 10,458 |
-| dkim-tags | 19.9 | 994 | mime-tree | 9.7 | 10,241 | smtp-reply | 7.7 | 2,300 |
-| dns-reply | 27.4 | 246 | msg | 5.3 | 4,166 | span-cfb | 27.1 | 70 |
-| emlx | 15.7 | 589 | msg-write | 1.2 | 7,573 | span-mime | 15.5 | 2,055 |
-| htmltext | 9.8 | 9,535 | ndb | 2.5 | 5,193 | span-ndb | 25.7 | 358 |
-| oxcmail | 1.8 | 30,481 | olm | 12.5 | 304 | text | 14.4 | 11,070 |
-| oxocal | 0.9 | 17,203 | olm-recovery | 5.2 | 2,612 | tnef | 6.7 | 8,193 |
-| pgp-mime | 3.6 | 15,779 | pop3-listings | 7.7 | 4,358 | vcard-view | 9.6 | 6,911 |
-| pst-messaging | 1.0 | 17,014 | pop3-response | 14.8 | 1,225 | xcal-xcard | 14.1 | 230 |
-| pst-recovery | 0.3 | 18,796 | recurrence | 1.6 | 5,407 | render | 0.04 | 2,380 |
-| render-datauri | 28.6 | 7 | reports | 5.2 | 2,788 | | | |
+| authres | 11.5 | 3,661 | mhtml-uri | 21.2 | 1,269 | reports | 4.3 | 2,803 |
+| calcard | 7.9 | 11,014 | mime-reader | 16.1 | 1,498 | rtf-decompress | 21.2 | 104 |
+| calendar | 8.3 | 4,051 | mime-tree | 10.0 | 11,473 | rtf-deencap | 20.4 | 1,401 |
+| composition | 2.5 | 24,184 | msg | 6.3 | 4,056 | rtf-html | 8.2 | 5,623 |
+| contentlines | 16.3 | 2,617 | msg-write | 1.5 | 8,378 | sanitizer | 3.7 | 2,832 |
+| dbx | 6.3 | 3,256 | ndb | 3.2 | 5,512 | sanitizer-display | 3.4 | 9,390 |
+| dbx-recovery | 2.6 | 2,520 | olm | 12.0 | 357 | sanitizer-reparse | 2.9 | 2,868 |
+| dkim-key | 24.9 | 765 | olm-recovery | 5.2 | 2,658 | sasl-challenge | 23.0 | 358 |
+| dkim-tags | 19.1 | 994 | oxcmail | 2.2 | 35,654 | smime-structure | 2.8 | 11,672 |
+| dns-reply | 28.3 | 246 | oxocal | 1.1 | 17,319 | smtp-reply | 9.6 | 2,307 |
+| emlx | 17.4 | 589 | pgp-mime | 3.8 | 16,877 | span-cfb | 31.2 | 70 |
+| htmltext | 9.4 | 9,718 | pop3-listings | 10.4 | 4,656 | span-mime | 14.4 | 2,133 |
+| imap-fetch | 5.8 | 6,969 | pop3-response | 15.4 | 1,258 | span-ndb | 25.9 | 356 |
+| imap-response | 8.4 | 4,138 | pst-messaging | 1.1 | 17,685 | text | 13.8 | 11,103 |
+| jcal-jcard | 9.7 | 9,291 | pst-recovery | 0.3 | 19,795 | tnef | 6.3 | 8,163 |
+| ltp | 3.8 | 7,684 | recurrence | 1.7 | 5,409 | vcard-view | 9.4 | 6,889 |
+| mail-open | 5.9 | 10,851 | render | 0.1 | 2,223 | xcal-xcard | 16.1 | 230 |
+| mbox | 13.3 | 980 | render-datauri | 32.4 | 7 |  | |  |
+
+**Findings: 2, both closed.**
+
+* `msg-write` (first run: crash after 13 executions): the target compared the written file with the model and the writer now adds the properties Outlook needs
+  on recipients and attachments (`PidTagRowid`, `PidTagRecipientType`, `PidTagAttachNumber`), reporting each as a `PropertyAdjusted` defect. The checker flagged
+  that as a difference. A stale checker, not a library fault: the target now ignores those three tags (repro `testdata/fuzz/msg-write-required-defaults.bin`),
+  and the rerun passed 600 s, 1.5 M executions, 0 findings.
+* `calcard` (timeout, 46-byte input, `testdata/fuzz/calcard-recurrence-numeric-freq-slow.bin`): two faults met in one input. `RecurrenceRule.TryParse` took `FREQ=2` as
+  MINUTELY because it parsed the value as an enum (digits included); it now accepts only the seven RFC 5545 names, in any case, and rejects the rest like any invalid rule.
+  And the scan limit (`ExpansionOptions.MaxInstancesScanned`) counted only instances that fell before the window, so an event whose DTEND is a thousand years before its DTSTART
+  (no instance ever overlaps any window) walked to year 9999 at 26 s on the card path, and over two minutes for SECONDLY. Every instance the expansion looks at and does not yield
+  (before the window, excluded, replaced by an override, outside the window) now counts, so each expansion stops at the same limit and reports `ScanLimit` (the card: `ExpansionLimited`).
+  Re-run after the fix: `calcard` 7.9 M executions in 600 s, 0 findings; with it `calendar` 13.3 M, `recurrence` 2.1 M, `oxocal` 1.4 M, `oxcmail` 2.6 M, `jcal-jcard` 12.4 M and
+  `composition` 3.0 M (the targets that reach recurrence parsing or expansion), all 600 s, 0 findings.
 
 `rtf-decompress`, `render-datauri`, `xcal-xcard` and `span-cfb` saturate early (a handful of new features after the first seconds); `render` is slow
 because each input renders to PDF.

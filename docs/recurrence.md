@@ -75,7 +75,7 @@ generate the instances before the window.
 |---|---|---|
 | `MaxOccurrences` | 100,000 | enumeration ends, `OccurrenceLimit` |
 | `MaxIterationsWithoutHit` | 1,000,000 | that rule ends, `IterationLimit` (rules that never match, like `BYMONTH=2;BYMONTHDAY=30`, end here or at year 9999) |
-| `MaxInstancesScanned` | 5,000,000 | that rule ends, `ScanLimit` (instances generated before the window, for rules with COUNT) |
+| `MaxInstancesScanned` | 5,000,000 | enumeration ends, `ScanLimit` (instances looked at without yielding one: before the window, which only rules with COUNT must generate, excluded, replaced by an override, or outside the window because the occurrence ends before it starts) |
 
 A rule that can never match still yields DTSTART (R3) and then ends at a limit.
 

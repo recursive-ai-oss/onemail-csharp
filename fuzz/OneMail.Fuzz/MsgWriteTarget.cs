@@ -60,7 +60,9 @@ internal static class MsgWriteTarget
                 throw new InvalidOperationException("the written file reads with defects: " + f.Defects[0]);
             }
 
-            List<string> diffs = MsgModelComparer.Differences(model, f.Message, ignore: k => k is "340D0003" or "3FFD0003" or "3FDE0003");
+            List<string> diffs = MsgModelComparer.Differences(model, f.Message, ignore: k => k is "340D0003" or "3FFD0003" or "3FDE0003"
+                    // The writer fills in what Outlook requires of recipients and attachments (row id, recipient type, attachment number) and says so as a defect.
+                    or "30000003" or "0C150003" or "0E210003");
             if (diffs.Count != 0)
             {
                 throw new InvalidOperationException("read-back differs: " + diffs[0]);
