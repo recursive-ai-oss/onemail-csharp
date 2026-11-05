@@ -14,6 +14,8 @@
 #   DOTNET               the dotnet executable (default: dotnet from PATH)
 #   FUZZ_TIMEOUT         per-input timeout in seconds (default 10)
 #   FUZZ_RSS_MB          memory limit in MB (default 1024)
+#   FUZZ_PREBUILT        a directory already holding the Checked build with the library assemblies instrumented (see tools/fuzz/campaign.sh);
+#                        run.sh then neither builds nor instruments, so several targets can run side by side
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -83,12 +85,13 @@ case "$target" in
   *) echo "unknown target '$target'" >&2; exit 2 ;;
 esac
 
-bin="$work/bin"
-rm -rf "$bin"
-mkdir -p "$bin"
-
-# Build once per run: release, then instrument only the library assembly (the harness itself needs no coverage).
-"$dotnet_bin" build "$root/fuzz/OneMail.Fuzz/OneMail.Fuzz.csproj" -c Checked -v quiet -clp:NoSummary -o "$bin"
+bin="${FUZZ_PREBUILT:-$work/bin}"
+if [[ -z "${FUZZ_PREBUILT:-}" ]]; then
+  rm -rf "$bin"
+  mkdir -p "$bin"
+  # Build once per run: release, then instrument only the library assembly (the harness itself needs no coverage).
+  "$dotnet_bin" build "$root/fuzz/OneMail.Fuzz/OneMail.Fuzz.csproj" -c Checked -v quiet -clp:NoSummary -o "$bin"
+fi
 
 if [[ "$mode" == replay ]]; then
   ONEMAIL_FUZZ_WORK="$work" "$dotnet_bin" "$bin/RecursiveAI.OneMail.Fuzz.dll" replay "$target" "$@"
@@ -113,11 +116,11 @@ mkdir -p "$corpus" "$findings"
 # A target may add seeds to "$corpus"; with none, libFuzzer starts from one empty input.
 [[ -n "$(ls -A "$corpus")" ]] || printf '\x00' >"$corpus/seed-empty"
 
-"$instrument" "$bin/RecursiveAI.OneMail.dll" >/dev/null
-"$instrument" "$bin/RecursiveAI.OneMail.Calendar.dll" >/dev/null
-"$instrument" "$bin/RecursiveAI.OneMail.Render.dll" >/dev/null
-"$instrument" "$bin/RecursiveAI.OneMail.Cryptography.dll" >/dev/null
-"$instrument" "$bin/RecursiveAI.OneMail.Client.dll" >/dev/null
+if [[ -z "${FUZZ_PREBUILT:-}" ]]; then
+  for asm in RecursiveAI.OneMail RecursiveAI.OneMail.Calendar RecursiveAI.OneMail.Render RecursiveAI.OneMail.Cryptography RecursiveAI.OneMail.Client; do
+    "$instrument" "$bin/$asm.dll" >/dev/null
+  done
+fi
 
 # An extra seed directory is read-only for libFuzzer: new finds go to $corpus.
 dirs=("$corpus")
