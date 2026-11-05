@@ -138,6 +138,12 @@ and the output stays empty (a path is not created). Defaults: 2,048 recipients a
 embedding (a message that contains itself is caught the same way), 64 Ki properties per object, 1 GiB per value and 1 GiB in total, 0x7FFF
 named properties. `KeepEmptyStrings` writes an empty string as a zero-length stream; by default it is left out (MS-OXMSG 2.4.2.2).
 
+`AddRequiredProperties` (default true) adds what Outlook needs and a model may lack, found by opening written files in Outlook 16.0.20527: `PidTagRowid` on a
+recipient (Outlook cannot save a message without it), `PidTagAttachNumber` on an attachment (Outlook cannot open a message file without it), and, for a message
+that came from a PST and still has the U+0001 prefix marker in its subject, the split into `PidTagSubject`, `PidTagSubjectPrefix` and
+`PidTagNormalizedSubject`. Each is reported as `PropertyAdjusted` with the property named in the detail. With it off the model is written as it is
+(the property-exact checks below run that way).
+
 ## Findings that do not stop the write (`MsgWriteDefectKind`)
 
 `NamedPropertyUnmapped` (a named property with no name is left out), `DuplicateProperty` (the later value is kept), `EmptyStringDropped`,
@@ -151,4 +157,10 @@ them to the `Msg*` loss codes in `conversion.md`.
   `docs/compatibility.md`); extract-msg 0.55.0 reads every written file with no unexplained difference (`tools/msg/check-write.sh`).
 - Fuzz target `msg-write`: a random model (every fixed and multi-valued type, named properties, recipients, attachments, embedded messages) is written
   and read back and must be exact; refusals must be typed.
-- Not yet verified: that Outlook opens the files, and that it accepts the entry flags and the Unicode-only store support mask written here.
+- Outlook 16.0.20527 (`tools/outlook/Check-Msgs.ps1`: open each file the way a double-click does, an OFT through `CreateItemFromTemplate`, then save a copy). On 36 files
+  written from the generated fixtures, the Outlook items of a PST Outlook made (the "mixed" store: mail, appointments, a contact, a task, a note, a nested message) and the Tika PST's mail,
+  **29 open and 26 open and save**; the same check on 24 message files Outlook wrote itself opens and saves all 24. Outlook accepts the entry flags and the Unicode-only store
+  support mask written here (no dialog on any file). Open failures: `all-types.msg` and `empty.msg` ("Cannot read the item"; `empty.msg` has no message class), `recipients-attachments.msg` and
+  `recipients-embedded.msg` ("Value does not fall within the expected range"; both have an OLE or nested-message attachment). Open, but saving a copy fails: `ansi-cp1251.msg`, and the two
+  messages with an embedded message ("outer-message" from the mixed store, and a forwarded Tika message): "The messaging interfaces have returned an unknown error". OFT: 4 of 7 open through
+  `CreateItemFromTemplate`; `all-types`, `recipients-attachments` and `recipients-embedded` fail. The causes of these failures are not found yet, and the OFT class ID and flags have not been compared with an Outlook-written template.

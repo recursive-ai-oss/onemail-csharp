@@ -37,6 +37,7 @@ stream), and `ReadValue(ref)` for a whole value as an array (null beyond `LtpOpt
   (its bit in the cell-existence bitmap is clear) gives no reference; the slot's bytes are not interpreted (2.3.4.4.3).
 - **Rows** (2.3.4.4): the row matrix is one heap allocation (small tables) or the data of a subnode. In a subnode, rows never
   straddle a block, so row *N* is in block *N / rowsPerBlock* at *(N % rowsPerBlock) × rowSize*.
+- **Row index** (2.3.4.3): the BTH that maps a row ID to a row number has 4-byte keys and 4-byte values in a Unicode file and 4-byte keys and **2-byte** values in an ANSI one (`dwRowIndex`); the reader accepts both and reports `TcRowIndexShape` for any other shape. The 2-byte form was found on a store Outlook wrote in the ANSI format; the editor and the builders handle only the 4/4 form (ANSI is read-only).
 - **Multi-valued** (2.3.3.4): fixed-size elements are stored back to back; String8, String and Binary elements are a 4-byte
   count, one 4-byte offset per element from the start of the value, then the data.
 

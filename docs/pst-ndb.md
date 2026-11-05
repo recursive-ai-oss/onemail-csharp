@@ -56,7 +56,7 @@ A block whose trailer checks fail is still returned (the defect says why), so a 
 
 - **Page size of wVer 37** (and any version above 36): decided by which trailer position repeats `ptype` on the NBT root page; if neither or both do, 512 with `AmbiguousPageSize`.
 - **Compressed and encoded block together:** MS-PST does not say which comes first. The reader inflates, then decodes, and reports `AmbiguousCompressedEncodedBlock`. No real file has both.
-- **ANSI allocation page CRC:** computed over the 496 map bytes (after 4 bytes of padding) by some writers and over the whole page body by others; both are accepted. Not yet observed on a real ANSI file.
+- **ANSI allocation page CRC:** computed over the 496 map bytes (after 4 bytes of padding) by some writers and over the whole page body by others; both are accepted. The store Outlook wrote in this format (`testdata/pst/outlook-ansi.pst`) opens with no defect, so its allocation pages pass the reader; which of the two rules it follows is not recorded.
 
 ## Resource limits (defaults, `NdbOptions`)
 
