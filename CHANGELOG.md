@@ -6,12 +6,18 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `PgpMimeEncryptOptions.HiddenRecipients` writes the encrypted session key packets without naming their recipients (all-zero key ID), for blind copies.
+- `tools/outlook/Make-EcdhWindows.ps1` (Windows' own CMS encoder writing ECDH messages), `Probe-SigUi.ps1` (the signature line of Outlook's reading window through UI Automation), `tools/smime/SmimeInterop` `encrypt-to` and `decrypt-ec`, sender properties on the S/MIME items `outlook-items` writes, and `testdata/smime/outlook-ecdh` with `WindowsEcdhTests` (skipped until the CMS reader accepts NULL parameters on an EC originator key).
+- `docs/smime.md`, `docs/compatibility.md`: why Outlook rejected our ECDH messages: Windows decrypts an EC key-agreement message only when the key-wrap algorithm identifier carries NULL parameters, and it writes NULL parameters on the originator key, which the CMS reader did not accept. Both fixes were OneCrypto's and are in 0.4.0-preview.2.
 - Borrowing body APIs on `MimePart`: `TryGetRawContentMemory`, `TryGetDecodedContentMemory` (a view of the caller's buffer when no decoding is needed), `GetMaxDecodedContentLength` with `CopyDecodedContentTo(Span<byte>)` and `CopyDecodedContentTo(IBufferWriter<byte>)` (decode into caller memory), and `SetDecodedContentBorrowed` (keeps the caller's memory until the part is written). The existing copying APIs are unchanged. Benchmark rows `BodiesBorrowedRow` and `BuildBorrowedRow` measure them separately.
 - `tools/outlook`: `Probe-Items.ps1` (reply/forward threading, flags and vCard import as Outlook does them), `Probe-Smime.ps1` (S/MIME items opened in Outlook with throw-away keys imported and removed), `Copy-Folder.ps1` (a large folder copied inside Outlook, the
   control for the repair tool's 65,535-row limit), `Save-Templates.ps1`; `tools/msg/MsgTool` variant generators (`props`, `prune`, `embedded`, `required`, `mixed`, `modes`, `noindex`, `vcards`); `SmimeInterop outlook-items`.
 - `docs/smime.md`, `docs/composition.md`, `docs/pst-writing.md`, `docs/compatibility.md`: what Outlook 16.0.20527 does (S/MIME decryption of RSA recipients; ECDH recipients fail; the repair tool's row limit holds for an Outlook-written 70,000-item folder; conversation indexes).
 
 ### Changed
+
+- `.Cryptography` is built on OneCrypto 0.4.0-preview.2. ECDH S/MIME now interoperates with Windows and Outlook in both directions: messages we write carry the NULL key-wrap parameters Windows requires (Outlook 16.0.20527 opens P-256, P-384 and signature + key agreement items), and Windows-written messages, whose originator key has NULL parameters, decrypt (4 of 4, `WindowsEcdhTests` is no longer skipped).
+- `docs/openpgp.md`, `docs/compatibility.md`: GnuPG 2.5.24 failing to use an imported Cv25519 secret key is a known external GnuPG issue (keygrip mismatch on import; 2.4.4 20/20, Sequoia 20/20, 2.5.24 0/20), not a defect here; 2.5.24 stays informational.
 
 - Parsed headers of an entity share one array instead of one array each, and the general address parser reuses its token lists across the elements of a list; parse results, defects and written bytes are unchanged.
 - MSG writing (`MsgWriterOptions.AddRequiredProperties`, on by default) repairs what Outlook 16 refuses or cannot save a copy of, each reported as `PropertyAdjusted`: a missing message class (`IPM.Note`), a missing store

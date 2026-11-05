@@ -112,7 +112,7 @@ New signatures and encryption go through OneCrypto's standard policy: SHA-1, MD5
 
 * Other mail clients than Thunderbird have not opened these messages. (Thunderbird's S/MIME is in `smime.md`.)
 * Thunderbird 159 does not import native-Ed25519 v4 keys or version 6 keys, and does not decrypt RFC 9580 version 6 session-key and version 2 data packets; the vectors using them are written but not opened there.
-* GnuPG 2.5.24 reads our v4 EdDSA/Cv25519 messages for verification but did not decrypt to the Cv25519 subkey after importing a OneCrypto-generated secret key (the subkey is listed as not available); GnuPG 2.4.4 and Sequoia do. Reported to OneCrypto.
+* **Known external issue (GnuPG 2.5.24):** it reads our v4 EdDSA/Cv25519 messages for verification but does not decrypt to the Cv25519 subkey after importing a OneCrypto-generated secret key (the subkey is listed as not available). The cause is in GnuPG 2.5.24's import, which stores the Cv25519 secret key under a key grip that disagrees with the public subkey; GnuPG 2.4.4 imports 20 of 20 generated keys and Sequoia `sqop` 20 of 20, 2.5.24 0 of 20, so the keys are valid and this is not a defect here. GnuPG 2.5.24 stays an informational oracle: its rows do not gate.
 * GnuPG does not read RFC 9580 version 6 keys or the native Ed25519/X25519 algorithms; those cells run against Sequoia only.
 * Not built: inline signing and encrypting (write with OneCrypto's `PgpMessageWriter`); signed-only or cleartext `.asc` attachments (a detached `application/pgp-signature` attachment is not matched to the file it signs); importing or storing attached keys.
 
