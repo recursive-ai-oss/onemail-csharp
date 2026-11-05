@@ -104,6 +104,16 @@ internal static class Program
             return OutlookVariants.Ansi(args[1]);
         }
 
+        if (args[0] == "noindex")
+        {
+            return OutlookVariants.NoIndex(args[1], args[2]);
+        }
+
+        if (args[0] == "vcards")
+        {
+            return OutlookVariants.VCards(args[1], args[2]);
+        }
+
         if (args[0] == "cfb")
         {
             return CfbDump.Run(args[1]);

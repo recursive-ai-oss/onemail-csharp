@@ -1,4 +1,6 @@
 using System.Text;
+using RecursiveAI.OneMail.Calendar;
+using RecursiveAI.OneMail.Conversion.OxVCard;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Msg;
 
@@ -224,6 +226,56 @@ internal static class OutlookVariants
             }
 
             MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { Strings = MsgStringMode.Ansi, AnsiCodePage = 1251 });
+        }
+
+        return 0;
+    }
+
+    /// <summary>Copies of messages without their conversation index (and topic), for asking Outlook how it starts a thread: <c>MsgTool noindex &lt;in dir&gt; &lt;out dir&gt;</c>.</summary>
+    public static int NoIndex(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.EnumerateFiles(source, "*.msg"))
+        {
+            if (!MsgFile.TryOpen(f, out MsgFile? mf, out _) || mf is null)
+            {
+                continue;
+            }
+
+            using (mf)
+            {
+                var m = new MapiMessage();
+                foreach (MapiProperty p in mf.Message.Properties)
+                {
+                    if (p.Tag.Id is not (0x0071 or 0x0070 or 0x3013) && p.Tag.Id < 0x8000)
+                    {
+                        m.Properties.Add(p);
+                    }
+                }
+
+                MsgWriter.Write(m, Path.Combine(dir, "noidx-" + Path.GetFileName(f)), new MsgWriterOptions { AddRequiredProperties = true });
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>Each vCard file of a directory converted to a contact and written as a message file, to set beside what Outlook makes of the same card.</summary>
+    public static int VCards(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.EnumerateFiles(source, "*.vcf"))
+        {
+            ContentDocument doc = ContentDocument.Parse(File.ReadAllBytes(f));
+            foreach (var card in doc.Components)
+            {
+                var r = new VCardToContactConverter().Convert(card);
+                MsgWriter.Write(r.Value, Path.Combine(dir, Path.GetFileNameWithoutExtension(f) + ".ours.msg"));
+                foreach (var l in r.Report)
+                {
+                    Console.WriteLine($"{Path.GetFileName(f)}: {l.Code} {l.Name} {l.Reason}");
+                }
+            }
         }
 
         return 0;

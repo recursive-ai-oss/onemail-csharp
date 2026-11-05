@@ -108,7 +108,9 @@ public static class MessageComposer
                 headers.Add(("Message-ID", "<" + mid + ">"));
             }
 
-            if (reply)
+            // Outlook gives a forward the same In-Reply-To and References as a reply (observed in Outlook 16: both carry the original's Message-ID);
+            // other clients give a forward none, so an original that did not come from Outlook keeps the plain forward.
+            if (reply || WantsOutlookThreading())
             {
                 Threading(headers);
             }
@@ -402,12 +404,16 @@ public static class MessageComposer
             }
         }
 
+        private bool WantsConversationIndex() =>
+            options.ConversationIndex == ConversationIndexMode.Always
+            || options.ConversationIndex == ConversationIndexMode.Auto && (parent is MapiMailItem || parent.ConversationIndex.Length > 0);
+
+        private bool WantsOutlookThreading() => intent == Intent.Forward && WantsConversationIndex();
+
         private void ConversationHeaders(List<(string, string)> headers)
         {
             ReadOnlySpan<byte> index = parent.ConversationIndex.Span;
-            bool want = options.ConversationIndex == ConversationIndexMode.Always
-                || options.ConversationIndex == ConversationIndexMode.Auto && (parent is MapiMailItem || index.Length > 0);
-            if (!want)
+            if (!WantsConversationIndex())
             {
                 return;
             }
@@ -434,16 +440,11 @@ public static class MessageComposer
                     _defects.Add(new CompositionDefect(CompositionDefectKind.ConversationIndexInvalid, string.Empty));
                 }
 
-                // A fresh thread starts at the original's own time, so the new level's delta says how long the reply took.
-                DateTimeOffset t = parent.TryGetDate(MailDateSource.Delivery, out MailDate d) ? d.Value : parent.Sent?.Value ?? _now;
-                if (t > _now)
-                {
-                    t = _now;
-                }
-
+                // A fresh thread is the header alone, stamped with the time now: Outlook 16 replies to and forwards of a message with no index carry
+                // 22 bytes (six bytes of the current FILETIME and a new GUID) and no level.
                 Span<byte> g = new byte[16];
                 Random(g);
-                next = ConversationIndex.AppendLevel(ConversationIndex.CreateHeader(t, new Guid(g)), _now, random, out clamped)!;
+                next = ConversationIndex.CreateHeader(_now, new Guid(g));
             }
 
             if (clamped)
