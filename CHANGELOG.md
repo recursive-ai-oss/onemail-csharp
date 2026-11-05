@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.8.0-preview.1]
+
 ### Added
 
 - `MsgWriterOptions.AddRequiredProperties` (above).
