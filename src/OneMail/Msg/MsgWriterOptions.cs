@@ -33,7 +33,8 @@ public sealed class MsgWriterOptions
 
     /// <summary>
     /// Whether the file is a template (<c>.oft</c>): MSGFLAG_UNSENT (0x8) is set in PidTagMessageFlags of the top-level message, which is what makes
-    /// Outlook treat a message file as a template to start from. The container is otherwise the same as for <c>.msg</c>. Default false.
+    /// Outlook treat a message file as a template to start from. The root storage gets the class ID Outlook gives templates
+    /// (0006F046-0000-0000-C000-000000000046) instead of the message class ID; the container is otherwise the same as for <c>.msg</c>. Default false.
     /// </summary>
     public bool Template { get; init; }
 

@@ -117,14 +117,16 @@ Outlook 16.0.20527 (Microsoft 365, Windows 11) and its repair tool `scanpst.exe`
 
 | Check | Files | Outlook opens, no dialog; items, folders, counts agree with our reader | `scanpst.exe` (no repair) |
 |---|---|---|---|
-| PST builder output (mail, items, MSG, Tika conversions, 3,000 generated, 5,032 Enron) | 8 | 8 / 8 open; 7 agree, 1 pairing difference (below) | 7 minor only, 1 with 2 findings |
+| PST builder output (mail, items, MSG, Tika conversions, 3,000 generated, 5,032 Enron) | 8 | 8 / 8 open; 7 agree, 1 pairing difference (below) | 7 minor only, 1 with 2 findings (`from-msg.pst`, fixed: now minor only, Outlook shows all 7 items and their attachments) |
 | Outlook-written stores and the durability bases | 5 | 5 / 5 | 5 / 5 minor only |
 | In-place edits, row by row / tables whole | 21 + 21 | 42 / 42 | 42 / 42 minor only |
 | Compaction through the builder | 3 | 3 / 3 | 3 / 3 minor only |
-| One folder of 100,000 items, before and after 200 added / deleted / moved / rewritten | 5 | 5 / 5 (100,010 items and the edited counts) | not completed: the tool miscounts a table over 65,535 rows (60,000: clean; 66,000: errors) |
+| One folder of 100,000 items, before and after 200 added / deleted / moved / rewritten | 5 | 5 / 5 (100,010 items and the edited counts) | not completed: the tool miscounts a table over 65,535 rows (60,000: clean; 66,000: errors; an Outlook-written 70,000-item folder: the same errors) |
 | Repair into a new PST from Outlook-made damaged stores (mixed, 770-item), 11 damages each | 22 | 22 / 22 | 22 / 22 minor only |
 | Same from an Outlook-made ANSI store | 11 | not recorded | 11 / 11 minor only |
-| MSG / OFT written from fixtures, mixed-store items and Tika mail | 36 | 29 open, 26 open and save a copy | n/a |
+| MSG / OFT written from fixtures, mixed-store items and Tika mail (29 messages, each as .msg and as .oft; after the Outlook-required repairs of `msg.md`) | 58 | 58 / 58 open (OFT through `CreateItemFromTemplate`) and save a copy | n/a |
+| The same messages written in 8-bit string mode and as given | 28 | 28 / 28 open and save a copy | n/a |
+| One folder of 70,000 items **written by Outlook** (copied inside Outlook from a store of ours) | 1 | opens | the same miscount as ours: `bad row count (cRow=70000, cRowBTH=4464)`; the 65,535-row limit is the tool's |
 | MSG files Outlook wrote (controls) | 24 | 24 open and save | n/a |
 
 "Minor only" is what the tool also says about the stores Outlook wrote (Tika `testPST` files and the two bases made from them). Forensic recovery on an Outlook-made store with 6 items deleted for good: `Live` 23, `Orphaned` 6, the 6 subjects exactly, 0 false `Live` ([`recovery.md`](recovery.md)). The repair tool's own repair recovers fewer items than ours in all 12 damaged stores compared. Open failures and findings are listed in [`pst-writing.md`](pst-writing.md) and [`msg.md`](msg.md); not checked: S/MIME items, our appointments and contacts against Outlook's own, the conversation index and forward threading.

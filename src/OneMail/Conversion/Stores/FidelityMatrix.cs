@@ -270,13 +270,13 @@ public static class FidelityMatrix
         l.Add(new FidelityCell("card-file", ConvertFormat.Msg, Fidelity.Lost, Fidelity.None, Fidelity.None, Fidelity.Lost, [], "NotMail", "A card file is not a message; it is skipped and counted."));
 
         // PST: the same item conversions as MSG; the file is a store, so folders carry over and each item keeps its properties, named-property names, recipients, attachments and embedded messages.
-        string[] pstCodes = ["PstNamedPropertyUnmapped", "PstNamedPropertyLimit", "PstDuplicatePropertyDropped", "PstUnsupportedType", "PstObjectStorageDropped", "PstPropertyAdded", "PstEmbeddingTooDeep", "PstTooManyChildren"];
+        string[] pstCodes = ["PstNamedPropertyUnmapped", "PstNamedPropertyLimit", "PstDuplicatePropertyDropped", "PstUnsupportedType", "PstObjectStorageDropped", "PstPropertyAdded", "PstPropertyAdjusted", "PstEmbeddingTooDeep", "PstTooManyChildren"];
         l.Add(new FidelityCell("mime", ConvertFormat.Pst, Fidelity.Approximated, Fidelity.None, Fidelity.Lost, Fidelity.Lost, [.. MimeToOutlook, .. pstCodes, .. notKept], string.Empty,
             "The message is converted to an Outlook item (MS-OXCMAIL) and written into the folder it came from. A PST holds flags as properties; a MIME message's flags and keywords are reported."));
         foreach (string family in new[] { "outlook-mail", "outlook-calendar", "outlook-contact" })
         {
             l.Add(new FidelityCell(family, ConvertFormat.Pst, Fidelity.Exact, Fidelity.Exact, Fidelity.Exact, Fidelity.Exact, pstCodes, string.Empty,
-                "Every property is written as it is, with its named-property name, recipients, attachments and embedded messages, into the same folder. Properties a PST item must have and the item lacks are added and listed (PstPropertyAdded)."));
+                "Every property is written as it is, with its named-property name, recipients, attachments and embedded messages, into the same folder. Properties a PST item must have and the item lacks are added and listed (PstPropertyAdded), and a value stored in a form the repair tool of Outlook rejects is rewritten and listed (PstPropertyAdjusted)."));
         }
 
         l.Add(new FidelityCell("olm-mail", ConvertFormat.Pst, Fidelity.Approximated, Fidelity.Lost, Fidelity.Lost, Fidelity.Lost, [.. OlmToMime, .. MimeToOutlook, .. pstCodes, .. notKept], string.Empty,

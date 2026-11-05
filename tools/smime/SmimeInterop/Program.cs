@@ -41,6 +41,11 @@ internal static partial class Program
             return Scan(args.Skip(1));
         }
 
+        if (args.Length > 2 && args[0] == "outlook-items")
+        {
+            return OutlookItems.Run(args[1], args[2]);
+        }
+
         if (args.Length > 1 && args[0] == "thunderbird")
         {
             return ThunderbirdVectors(args[1]);

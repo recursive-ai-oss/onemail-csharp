@@ -355,4 +355,80 @@ public class MsgWriterTests
         Assert.Null(plain.Attachments[0].GetInt32(0x0E21));
         Assert.Equal("\u0001\u0005Re: Feature", plain.GetString(0x0037));
     }
+
+    [Fact]
+    public void WhatOutlookRefusesIsRepairedAndReported()
+    {
+        // Each found with Outlook 16: no message class or no store support mask on a message file ("Cannot read the item"), an error-typed property
+        // (same), a recipient with no type (saving a copy fails), an embedded message with no store support mask (saving a copy fails).
+        var m = new MapiMessage();
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x6007, MapiType.ErrorCode), BitConverter.GetBytes(0x8004010F)));
+        var r = new MapiRecipient(m);
+        r.Properties.Add(MapiProperty.Create(new MapiTag(0x3001, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Ann")));
+        m.AddRecipient(r);
+        var a = new MapiAttachment(m);
+        var inner = new MapiMessage();
+        inner.Properties.Add(MapiProperty.Create(new MapiTag(0x001A, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+        a.SetEmbeddedMessage(inner);
+        m.AddAttachment(a);
+
+        foreach (MsgStringMode mode in new[] { MsgStringMode.Unicode, MsgStringMode.AsGiven })
+        {
+            MsgWriteResult written = MsgWriter.Write(m, new MemoryStream(), new MsgWriterOptions { Strings = mode });
+            foreach (string what in new[] { "PidTagMessageClass", "PidTagRecipientType", "PidTagStoreSupportMask", "error type" })
+            {
+                Assert.Contains(written.Defects, d => d.Kind == MsgWriteDefectKind.PropertyAdjusted && d.Detail.Contains(what, StringComparison.Ordinal));
+            }
+
+            MapiMessage back = Read(MsgWriter.ToArray(m, new MsgWriterOptions { Strings = mode }));
+            Assert.Equal("IPM.Note", back.MessageClass);
+            Assert.Equal(0x00040000, back.GetInt32(0x340D));
+            Assert.Null(back.Properties.Get(0x6007));
+            Assert.Equal(1, back.Recipients[0].GetInt32(0x0C15));
+            Assert.Equal(0x00040000, back.Attachments[0].EmbeddedMessage!.GetInt32(0x340D));
+        }
+
+        // Off, none of it is touched.
+        MapiMessage plain = Read(MsgWriter.ToArray(m, new MsgWriterOptions { AddRequiredProperties = false, Strings = MsgStringMode.AsGiven }));
+        Assert.Null(plain.MessageClass);
+        Assert.Null(plain.Recipients[0].GetInt32(0x0C15));
+        Assert.NotNull(plain.Properties.Get(0x6007));
+    }
+
+    [Fact]
+    public void ATemplateGetsTheClassIdOutlookGivesTemplates()
+    {
+        // Found by saving mail, appointments, contacts, tasks and notes as templates in Outlook 16: all have 0006F046, a message file has 00020D0B.
+        byte[] file = MsgWriter.ToArray(Simple());
+        byte[] template = MsgWriter.ToArray(Simple(), new MsgWriterOptions { Template = true });
+        using (var r = new RecursiveAI.OneArchive.Cfb.CompoundFileReader(new MemoryStream(template), null, leaveOpen: false))
+        {
+            Assert.Equal(new Guid("0006F046-0000-0000-C000-000000000046"), r.Root.ClassId);
+        }
+
+        using (var r = new RecursiveAI.OneArchive.Cfb.CompoundFileReader(new MemoryStream(file), null, leaveOpen: false))
+        {
+            Assert.Equal(new Guid("00020D0B-0000-0000-C000-000000000046"), r.Root.ClassId);
+        }
+    }
+
+    [Fact]
+    public void AModelWithBothKindsOfStringIsWrittenAsUnicodeForOutlook()
+    {
+        // Found with Outlook 16: "Cannot read the item" for a file that mixes Unicode and 8-bit strings.
+        var m = Simple();
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+        var options = new MsgWriterOptions { Strings = MsgStringMode.AsGiven };
+        MsgWriteResult written = MsgWriter.Write(m, new MemoryStream(), options);
+        Assert.Contains(written.Defects, d => d.Kind == MsgWriteDefectKind.PropertyAdjusted && d.Detail.Contains("8-bit strings were written as Unicode", StringComparison.Ordinal));
+        Assert.Equal(MapiType.UnicodeString, Read(MsgWriter.ToArray(m, options)).Properties.Get(0x600D)!.Tag.PropertyType);
+
+        // All 8-bit stays as it is, with the code page and a store support mask.
+        var narrowOnly = new MapiMessage();
+        narrowOnly.Properties.Add(MapiProperty.Create(new MapiTag(0x001A, MapiType.String8), Encoding.ASCII.GetBytes("IPM.Note")));
+        narrowOnly.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+        MapiMessage back = Read(MsgWriter.ToArray(narrowOnly, options));
+        Assert.Equal(MapiType.String8, back.Properties.Get(0x600D)!.Tag.PropertyType);
+        Assert.Equal(0, back.GetInt32(0x340D));
+    }
 }

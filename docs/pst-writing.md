@@ -71,7 +71,7 @@ layout (counts and offsets for strings and binaries). These differences are list
 - *Renumbered*: a named property gets the next ID from 0x8000 in this file; its name travels in the name-to-ID map. Property-exact is by name.
 - *Left out*: a named property whose name is unknown (`NamedPropertyUnmapped`); more than 32,767 names (`NamedPropertyLimit`); a repeated property ID, first kept
   (`DuplicateProperty`); types a property context cannot hold, such as null, unspecified, server ID and restriction (`UnsupportedType`), or a value whose size does not fit its type;
-  an OLE or raw attachment storage (`ObjectStorageDropped`); embedded messages nested deeper than `MaxEmbeddingDepth` (32); more than 65,535 recipients or attachments in one message.
+  an OLE or raw attachment storage kept as a compound file in a file attachment (`PropertyAdjusted`; `ObjectStorageDropped` is no longer raised); embedded messages nested deeper than `MaxEmbeddingDepth` (32); more than 65,535 recipients or attachments in one message.
 - *Not stored*: the table bookkeeping columns `PidTagLtpRowId` and `PidTagLtpRowVer` (they belong to the table).
 
 **Name-to-ID map** (MS-PST 2.4.7): GUID stream (property sets other than the two well-known ones), entry stream (one NAMEID per name: numeric ID or string-stream offset,
@@ -162,12 +162,21 @@ Still open after the Outlook runs:
 - The bucket a string name takes in the name-to-ID map (CRC or offset, above): Outlook opens stores with named properties and the repair tool says nothing about the map, which does not show which choice it makes.
 - The `cRef` of blocks shared by several nodes (none are shared here).
 - Item kinds with Outlook-only settings: whether the search folders' contents are rebuilt silently when Outlook opens a store that had items added to a folder a search covers; Outlook's behaviour on `fAMapValid` = 0 files.
-- The two findings just above.
+- The one finding just above (folders over 65,535 rows): a repair-tool limit, checked against an Outlook-written folder.
 
-**Two findings that are not clean passes**
+**One finding that is not a clean pass: folders over 65,535 rows.** Outlook opens such a folder and shows every item, but `scanpst.exe` does not accept the table. A folder of
+60,000 builder-written items scans with only minor findings (60,010 items found, about a minute); the same builder with 66,000 items reports `Row matrix ... bad row count
+(cRow=66000, cRowBTH=464)`, a computed content count of 0 against 66,000, and each message "added back to the database". 464 is 66,000 modulo 65,536, so the tool counts the row
+index in 16 bits. **The same happens to a folder Outlook wrote:** `tools/outlook/Copy-Folder.ps1` opens a store of ours with 70,000 items in Outlook, adds a new PST and copies the folder
+inside Outlook (`Folder.CopyTo`, 69 s for 70,000 items, where creating the items one by one made 30,000 in 22 minutes). `scanpst.exe` over that Outlook-written file: "Errors were found",
+`Row matrix (...) bad row count (cRow=70000, cRowBTH=4464)` (4,464 is 70,000 modulo 65,536), `Invalid PR_CONTENT_COUNT (computed=0, actual=70000)` and 70,000 "Adding message back to the
+database". So the repair tool's limit is 65,535 rows per folder, whoever wrote the file; folders over it are checked by Outlook opening them and by our reader.
 
-1. *Stores over 65,535 rows in one folder.* Outlook opens them and shows every item, but `scanpst.exe` does not accept the table. A folder of 60,000 builder-written items scans with only minor findings (60,010 items found, about a minute); the same builder with 66,000 items reports `Row matrix ... bad row count (cRow=66000, cRowBTH=464)`, a computed content count of 0 against 66,000, and each message "added back to the database", and takes 13 minutes; the 100,000-item stores (the base and one edited one) were still running after 15 minutes with the same findings. 464 is 66,000 modulo 65,536, so the tool counts the row index in 16 bits. We could not tell whether it does the same to a folder Outlook itself wrote: Outlook made only 30,065 items in 22 minutes (that store scans with only minor findings), so there is no control above 65,535 rows. Until there is, a folder this size is checked by Outlook opening it and by our own reader, not by the repair tool. Folders over 65,535 items are an Outlook-visible case the format allows (the row matrix is a subnode; the row index is a BTH with 4-byte row numbers).
-2. *Stores built from MSG files that carry 8-bit strings.* `from-msg.pst` scans with two findings, "Contents Table ... row doesn't match sub-object" for the two messages read from the ANSI-string MSG fixtures (`ansi-cp1251.msg`, `ansi-terminator-in-stream.msg`). Their subjects are `PtypString8`; the contents row holds the subject as a Unicode string and the property context keeps the narrow one. This is the likely cause and has not been tried; no store read from Outlook items has `PtypString8` subjects, and the other 7 builder stores are clean. The same store shows a difference in Outlook's view: the message built from `recipients-attachments.msg` (3 attachments in our reader) shows 2 in Outlook, the same file Outlook cannot open as an MSG (see `msg.md`).
+**Builder rules found by the 8-bit-string stores** (`from-msg.pst`, now clean): a `PtypString8` value of a column the template tables declare as `PtypString` (subject, class,
+display names, recipient names) is written as `PtypString` (`PropertyAdjusted`), because the 8-bit value goes to an extra column and the standard one stays empty, which the tool
+reports as "row doesn't match sub-object"; `PidTagDisplayTo/Cc/Bcc` are derived from the recipients when the item has none (the tool derives them too); an attachment that is an OLE object or
+a raw storage keeps its storage as the bytes of a compound file in an ordinary file attachment (`PropertyAdjusted`), because Outlook hides an OLE attachment that has no object (it showed 2 of 3
+attachments), and the way Outlook stores the object itself in a PST is not documented well enough to write it.
 
 ## In place
 

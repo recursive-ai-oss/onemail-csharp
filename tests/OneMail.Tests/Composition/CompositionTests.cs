@@ -242,7 +242,28 @@ public class CompositionTests
         // Without an index there is none, unless asked for.
         Assert.Null(Reparse(Eml("From: a@x.example\n", "x\n").CreateReply(Options())).Headers.GetFirst("Thread-Index"));
         byte[] fresh = Convert.FromBase64String(Reparse(Eml("From: a@x.example\nSubject: s\nDate: Mon, 4 Mar 2024 09:00:00 +0000\n", "x\n").CreateReply(new CompositionOptions { TimeProvider = new FixedClock(), ConversationIndex = ConversationIndexMode.Always })).Headers.GetFirst("Thread-Index")!.Value);
-        Assert.Equal(27, fresh.Length);
+        // Outlook 16 starts a thread with the header alone, stamped with the time now.
+        Assert.Equal(22, fresh.Length);
+        Assert.True(ConversationIndex.TryParse(fresh, out ConversationIndexInfo? info));
+        Assert.Empty(info!.Levels);
+    }
+
+    [Fact]
+    public void AForwardOfAnOutlookItemCarriesTheThreadingOfAReply()
+    {
+        // Observed in Outlook 16: a forward has In-Reply-To and References like a reply, and a level of its own in the conversation index.
+        byte[] header = ConversationIndex.CreateHeader(Now.AddMinutes(-5), Guid.NewGuid());
+        const string h = "From: Ann <a@x.example>\r\nTo: me@me.example\r\nSubject: Plans\r\nMessage-ID: <m9@x>\r\nReferences: <m1@x>\r\nThread-Topic: Plans\r\n";
+        var src = new MapiMailItem(new MimeToMapiConverter().Convert(MimeEntity.Parse(Encoding.UTF8.GetBytes(h + "Thread-Index: " + Convert.ToBase64String(header) + "\r\n\r\nbody\r\n"))).Value, default);
+        var view = new MapiMailItem(src.CreateForward(Options()).Mapi!, default);
+        Assert.Equal(["m9@x"], view.InReplyTo);
+        Assert.Equal(["m1@x", "m9@x"], view.References);
+        Assert.Equal(27, view.ConversationIndex.Length);
+
+        // A message from another client is forwarded without them.
+        MimeEntity plain = Reparse(Eml("From: a@x.example\nMessage-ID: <p1@x>\nSubject: s\n", "x\n").CreateForward(Options()));
+        Assert.Null(plain.Headers.GetFirst("In-Reply-To"));
+        Assert.Null(plain.Headers.GetFirst("References"));
     }
 
     [Fact]

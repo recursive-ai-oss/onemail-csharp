@@ -74,6 +74,51 @@ internal static class Program
             return OutlookVariants.Run(args[1]);
         }
 
+        if (args[0] == "props")
+        {
+            return OutlookVariants.Props(args[1], args[2]);
+        }
+
+        if (args[0] == "prune")
+        {
+            return OutlookVariants.Prune(args[1], args[2]);
+        }
+
+        if (args[0] == "embedded")
+        {
+            return OutlookVariants.Embedded(args[1]);
+        }
+
+        if (args[0] == "modes")
+        {
+            return OutlookVariants.Modes(args[1], args[2]);
+        }
+
+        if (args[0] == "required")
+        {
+            return OutlookVariants.Required(args[1]);
+        }
+
+        if (args[0] == "ansi")
+        {
+            return OutlookVariants.Ansi(args[1]);
+        }
+
+        if (args[0] == "noindex")
+        {
+            return OutlookVariants.NoIndex(args[1], args[2]);
+        }
+
+        if (args[0] == "vcards")
+        {
+            return OutlookVariants.VCards(args[1], args[2]);
+        }
+
+        if (args[0] == "mixed")
+        {
+            return OutlookVariants.Mixed(args[1]);
+        }
+
         if (args[0] == "cfb")
         {
             return CfbDump.Run(args[1]);

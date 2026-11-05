@@ -107,8 +107,20 @@ An independent review of S/MIME signing, opening and the Outlook items: the code
 4. **Hostile input.** Garbage, truncated and mutated CMS, a thousand-part `multipart/signed`, 3,000 nested multiparts, 20 nested signed layers (depth limit 8) and zip-bomb compressed data end as statuses; the MIME reader's depth limit (64) bounds the recursion. Decompressed and decrypted output was bounded at 1 GiB; the default is now 256 MiB. Messages are processed in memory.
 5. **Not S/MIME-specific:** ARC and DKIM are in the *DKIM and ARC* notes.
 
-Not verified: Outlook S/MIME interop (needs the Outlook VM), revocation against live responders, Ed25519 S/MIME against OpenSSL (the pinned 3.0.13 cannot sign or verify CMS with Ed25519; a newer OpenSSL is needed), and OpenPGP (not built).
+Not verified: Outlook signature status (the object model does not show it), Outlook-made S/MIME items (a signed or encrypted item cannot be saved as .msg through the object model), ECDH recipients in Outlook (see below), revocation against live responders, Ed25519 S/MIME against OpenSSL (the pinned 3.0.13 cannot sign or verify CMS with Ed25519; a newer OpenSSL is needed), and OpenPGP (not built).
 
 Follow-ups, not blockers: streaming for very large messages; lower `MaxDepth` for display paths.
 
 Runs after the fixes: full Checked suite 3,348 of 3,348; interop: ours to OpenSSL 3.0.13 14/16 and OpenSSL to ours 14/16 (the four misses are Ed25519, which that OpenSSL cannot do), ours to MimeKit 4.18.2 8/8 and MimeKit to ours 11/11, RFC 9216 examples 16/16, 412 S/MIME messages and one Outlook S/MIME item in the corpora read without exceptions; `smime-structure` fuzz 7.7 M executions in 600 s, no findings, peak RSS 33 MB; native AOT run `smime: ok`.
+
+## Outlook 16.0.20527 (checked 2026-11-04)
+
+`tools/smime/SmimeInterop outlook-items` turns the vector messages (test CA, RSA-2048 and ECDSA P-256 users) into Outlook S/MIME items (MS-OXOSMIME 2.1.3: `IPM.Note.SMIME.MultipartSigned` with the `multipart/signed` entity
+as its one attachment, `IPM.Note.SMIME` with the CMS and the `Content-Type` named property); `tools/outlook/Probe-Smime.ps1` imports the test keys into the current user's certificate store, opens each item in Outlook, records what Outlook shows and removes
+the keys again (the root is not made trusted). `OpenSharedItem` takes only message files, so `.eml` files cannot be opened this way; `outlook.exe /eml` did not open an inspector from the scheduled task.
+
+- **Signed, clear and opaque**, RSA and ECDSA: Outlook opens the item, reads the signed body ("S/MIME interop vector ...") and shows it as `IPM.Note`. The signature's validity is not exposed through the object model, so only the structure is checked.
+  A signed message inside an unsigned wrapper shows both parts (`smime.p7s` and the text) as attachments.
+- **Encrypted** to the RSA-2048 key: Outlook decrypts all of RSA-OAEP with SHA-256 (the default here), RSA-OAEP with SHA-1 and RSA PKCS #1 v1.5 (AES-256-CBC), and the signed-then-encrypted message, and shows the body.
+- **Encrypted to the ECDSA P-256 key (ECDH):** Outlook fails with "Your Digital ID name cannot be found by the underlying security system", with the key in the store (`certutil` encryption test passed, Microsoft Software Key Storage Provider, key usage Key Agreement).
+  Not settled whether the fault is our ephemeral-static key agreement encoding, the way the PKCS #12 key is imported (an ECDSA key where ECDH is needed), or Outlook not supporting it; an OneCrypto question if it matters.

@@ -1,4 +1,6 @@
 using System.Text;
+using RecursiveAI.OneMail.Calendar;
+using RecursiveAI.OneMail.Conversion.OxVCard;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Msg;
 
@@ -35,6 +37,303 @@ internal static class OutlookVariants
         m.Properties.Add(Str(0x0037, subject));
         m.Properties.Add(Str(0x1000, "body"));
         return m;
+    }
+
+    /// <summary>One file per root property of <paramref name="source"/>: the plain base message plus that property (named properties are skipped),
+    /// so that Outlook's verdict on each file points at the property it dislikes.</summary>
+    public static int Props(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        if (!MsgFile.TryOpen(source, out MsgFile? mf, out _) || mf is null)
+        {
+            return 1;
+        }
+
+        using (mf)
+        {
+            MapiMessage src = mf.Message;
+            foreach (MapiProperty p in src.Properties)
+            {
+                if (p.Tag.Id >= 0x8000 || p.Tag.Id is 0x001A or 0x0037 or 0x1000)
+                {
+                    continue;
+                }
+
+                MapiMessage m = Base("p" + p.Tag.ToHex());
+                m.Properties.Add(p);
+                MsgWriter.Write(m, Path.Combine(dir, "p-" + p.Tag.ToHex() + ".msg"), new MsgWriterOptions { Strings = Environment.GetEnvironmentVariable("PROPS_ASGIVEN") == "1" ? MsgStringMode.AsGiven : MsgStringMode.Unicode });
+            }
+        }
+
+        return 0;
+    }
+
+    // A copy of a message with parts left out: recipients, attachments, or properties other than the class, subject, body and (for recipients and
+    // attachments) a short list of the ones every object has.
+    private static MapiMessage Clone(MapiMessage src, bool recipients, bool attachments, bool rootProps, bool minimalObjects, bool plainEmbedded)
+    {
+        var m = new MapiMessage();
+        foreach (MapiProperty p in src.Properties)
+        {
+            if (rootProps ? p.Tag.Id < 0x8000 : p.Tag.Id is 0x001A or 0x0037 or 0x1000)
+            {
+                m.Properties.Add(p);
+            }
+        }
+
+        if (recipients)
+        {
+            foreach (MapiRecipient r in src.Recipients)
+            {
+                var c = new MapiRecipient(m);
+                foreach (MapiProperty p in r.Properties)
+                {
+                    if (!minimalObjects || p.Tag.Id is 0x0C15 or 0x3001 or 0x3002 or 0x3003)
+                    {
+                        c.Properties.Add(p);
+                    }
+                }
+
+                m.AddRecipient(c);
+            }
+        }
+
+        if (attachments)
+        {
+            foreach (MapiAttachment a in src.Attachments)
+            {
+                var c = new MapiAttachment(m);
+                foreach (MapiProperty p in a.Properties)
+                {
+                    if (!minimalObjects || p.Tag.Id is 0x3705 or 0x3707 or 0x3701 or 0x3712 or 0x3704 or 0x3703)
+                    {
+                        c.Properties.Add(p);
+                    }
+                }
+
+                if (a.EmbeddedMessage is { } e)
+                {
+                    c.SetEmbeddedMessage(plainEmbedded ? Base("inner") : Clone(e, recipients, attachments, rootProps, minimalObjects, plainEmbedded));
+                }
+
+                m.AddAttachment(c);
+            }
+        }
+
+        return m;
+    }
+
+    /// <summary>Embedded-message attachments with growing property sets, to find what Outlook needs to save a copy.</summary>
+    public static int Embedded(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        (string, Action<MapiMessage>)[] sets =
+        [
+            ("n0-base", i => { }),
+            ("n1-mask", i => i.Properties.Add(Int(0x340D, 0x00040E79))),
+            ("n2-codepage", i => i.Properties.Add(Int(0x3FDE, 65001))),
+            ("n3-locale", i => i.Properties.Add(Int(0x3FF1, 0x0409))),
+            ("n4-mask-unicode", i => i.Properties.Add(Int(0x340D, 0x00040000))),
+            ("n5-all", i => { i.Properties.Add(Int(0x340D, 0x00040E79)); i.Properties.Add(Int(0x3FDE, 1200)); i.Properties.Add(Int(0x3FF1, 0x0409)); }),
+        ];
+        foreach ((string name, Action<MapiMessage> fill) in sets)
+        {
+            MapiMessage m = Base(name);
+            var a = new MapiAttachment(m);
+            a.Properties.Add(Int(0x3705, 5));
+            MapiMessage inner = Base("inner");
+            fill(inner);
+            a.SetEmbeddedMessage(inner);
+            m.AddAttachment(a);
+            Write2(dir, name, m);
+        }
+
+        return 0;
+    }
+
+    /// <summary>Each message file in a directory written in the 8-bit string mode and as given (the default mode is what the other checks use).</summary>
+    public static int Modes(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.EnumerateFiles(source, "*.msg"))
+        {
+            if (!MsgFile.TryOpen(f, out MsgFile? mf, out _) || mf is null)
+            {
+                continue;
+            }
+
+            using (mf)
+            {
+                string n = Path.GetFileNameWithoutExtension(f);
+                MsgWriter.Write(mf.Message, Path.Combine(dir, n + ".ansi.msg"), new MsgWriterOptions { Strings = MsgStringMode.Ansi });
+                MsgWriter.Write(mf.Message, Path.Combine(dir, n + ".asgiven.msg"), new MsgWriterOptions { Strings = MsgStringMode.AsGiven });
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>Messages with and without a class and a store support mask, written exactly as given.</summary>
+    public static int Required(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach ((string name, int[] ids) in new[] { ("y1-class-only", Array.Empty<int>()), ("y2-class-subject", new[] { 0x0037 }), ("y3-class-body", new[] { 0x1000 }), ("y4-class-mask", new[] { 0x340D }) })
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(Str(0x001A, "IPM.Note"));
+            foreach (int id in ids)
+            {
+                m.Properties.Add(id == 0x340D ? Int(0x340D, 0x00040000) : Str((ushort)id, "text"));
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { AddRequiredProperties = false });
+        }
+
+        (string, bool, int?)[] sets = [("x1-nomask-class", true, null), ("x2-mask-noclass", false, 0x00040000), ("x3-mask0-class", true, 0), ("x4-mask-class", true, 0x00040000), ("x5-neither", false, null), ("x6-ansimask-class", true, 0x00000E79)];
+        foreach ((string name, bool cls, int? mask) in sets)
+        {
+            var m = new MapiMessage();
+            if (cls)
+            {
+                m.Properties.Add(Str(0x001A, "IPM.Note"));
+            }
+
+            m.Properties.Add(Str(0x0037, name));
+            m.Properties.Add(Str(0x1000, "body"));
+            if (mask is { } v)
+            {
+                m.Properties.Add(Int(0x340D, v));
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { AddRequiredProperties = false });
+        }
+
+        return 0;
+    }
+
+    /// <summary>Messages with 8-bit strings in a Windows code page, differing in where the non-ASCII text is (subject, recipient name).</summary>
+    public static int Ansi(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach ((string name, string subject, string? recipient) in new[] { ("a1-ascii-subject-cyr-recipient", "plain", "тема"), ("a2-cyr-subject-no-recipient", "Привет", null), ("a3-cyr-subject-ascii-recipient", "Привет", "Ann"), ("a4-all-ascii", "plain", "Ann") })
+        {
+            MapiMessage m = Base(subject);
+            if (recipient is not null)
+            {
+                var r = new MapiRecipient(m);
+                r.Properties.Add(Str(0x3001, recipient));
+                m.AddRecipient(r);
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { Strings = MsgStringMode.Ansi, AnsiCodePage = 1251 });
+        }
+
+        return 0;
+    }
+
+    /// <summary>Copies of messages without their conversation index (and topic), for asking Outlook how it starts a thread: <c>MsgTool noindex &lt;in dir&gt; &lt;out dir&gt;</c>.</summary>
+    public static int NoIndex(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.EnumerateFiles(source, "*.msg"))
+        {
+            if (!MsgFile.TryOpen(f, out MsgFile? mf, out _) || mf is null)
+            {
+                continue;
+            }
+
+            using (mf)
+            {
+                var m = new MapiMessage();
+                foreach (MapiProperty p in mf.Message.Properties)
+                {
+                    if (p.Tag.Id is not (0x0071 or 0x0070 or 0x3013) && p.Tag.Id < 0x8000)
+                    {
+                        m.Properties.Add(p);
+                    }
+                }
+
+                MsgWriter.Write(m, Path.Combine(dir, "noidx-" + Path.GetFileName(f)), new MsgWriterOptions { AddRequiredProperties = true });
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>Each vCard file of a directory converted to a contact and written as a message file, to set beside what Outlook makes of the same card.</summary>
+    public static int VCards(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach (string f in Directory.EnumerateFiles(source, "*.vcf"))
+        {
+            ContentDocument doc = ContentDocument.Parse(File.ReadAllBytes(f));
+            foreach (var card in doc.Components)
+            {
+                var r = new VCardToContactConverter().Convert(card);
+                MsgWriter.Write(r.Value, Path.Combine(dir, Path.GetFileNameWithoutExtension(f) + ".ours.msg"));
+                foreach (var l in r.Report)
+                {
+                    Console.WriteLine($"{Path.GetFileName(f)}: {l.Code} {l.Name} {l.Reason}");
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>A message mixing a Unicode subject with an 8-bit string value, written as given, with the store support mask and code page varied.</summary>
+    public static int Mixed(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        (string, int?, int?, bool)[] sets = [("m1-mask-unicode", 0x00040000, null, false), ("m2-mask-unicode-cp", 0x00040000, 1252, false), ("m3-mask0-cp", 0, 1252, false), ("m4-mask0-nocp", 0, null, false), ("m5-all-narrow-mask0-cp", 0, 1252, true)];
+        foreach ((string name, int? mask, int? cp, bool classNarrow) in sets)
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(classNarrow ? MapiProperty.Create(new MapiTag(0x001A, MapiType.String8), Encoding.ASCII.GetBytes("IPM.Note")) : Str(0x001A, "IPM.Note"));
+            m.Properties.Add(classNarrow ? MapiProperty.Create(new MapiTag(0x0037, MapiType.String8), Encoding.ASCII.GetBytes("subject")) : Str(0x0037, "subject"));
+            m.Properties.Add(MapiProperty.Create(new MapiTag(0x600D, MapiType.String8), Encoding.ASCII.GetBytes("narrow")));
+            if (mask is { } mk)
+            {
+                m.Properties.Add(Int(0x340D, mk));
+            }
+
+            if (cp is { } c)
+            {
+                m.Properties.Add(Int(0x3FFD, c));
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { Strings = MsgStringMode.AsGiven, AddRequiredProperties = false });
+        }
+
+        return 0;
+    }
+
+    private static void Write2(string dir, string name, MapiMessage m) => MsgWriter.Write(m, Path.Combine(dir, name + ".msg"));
+
+    /// <summary>Variants of a message with parts left out, to find which part Outlook dislikes.</summary>
+    public static int Prune(string source, string dir)
+    {
+        Directory.CreateDirectory(dir);
+        if (!MsgFile.TryOpen(source, out MsgFile? mf, out _) || mf is null)
+        {
+            return 1;
+        }
+
+        using (mf)
+        {
+            MapiMessage s = mf.Message;
+            void Write(string name, MapiMessage m) => MsgWriter.Write(m, Path.Combine(dir, name + ".msg"));
+            Write("v0-full", Clone(s, true, true, true, false, false));
+            Write("v1-norecips", Clone(s, false, true, true, false, false));
+            Write("v2-noattach", Clone(s, true, false, true, false, false));
+            Write("v3-rootmin", Clone(s, true, true, false, false, false));
+            Write("v4-objmin", Clone(s, true, true, true, true, false));
+            Write("v5-plainembedded", Clone(s, true, true, true, false, true));
+            Write("v6-allmin", Clone(s, true, true, false, true, true));
+            Write("v7-onlyroot", Clone(s, false, false, false, false, false));
+        }
+
+        return 0;
     }
 
     public static int Run(string dir)

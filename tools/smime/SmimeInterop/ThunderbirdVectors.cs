@@ -49,6 +49,9 @@ internal static partial class Program
             TbWrite(dir, "signed", SmimeSigner.SignDetached(TbContent(), so), email);
             TbWrite(dir, "signed-opaque", SmimeSigner.SignOpaque(TbContent(), so), email);
             TbWrite(dir, "encrypted", SmimeEncryptor.Encrypt(TbContent(), eo), email);
+            // Variants for clients that take only some key transport schemes (Outlook's reading of them is checked in tools/outlook).
+            TbWrite(dir, "encrypted-oaep-sha1", SmimeEncryptor.Encrypt(TbContent(), new SmimeEncryptOptions { Recipients = [cert], KeyTransport = KeyTransportScheme.OaepSha1, AllowLegacy = true }), email);
+            TbWrite(dir, "encrypted-pkcs1", SmimeEncryptor.Encrypt(TbContent(), new SmimeEncryptOptions { Recipients = [cert], KeyTransport = KeyTransportScheme.Pkcs1V15, AllowLegacy = true }), email);
             TbWrite(dir, "signed-encrypted", SmimeEncryptor.Encrypt(SmimeSigner.SignDetached(TbContent(), so), eo), email);
             // A signed part beside an unsigned one inside a wrapper: only the signed part is signed.
             var wrapper = new OneMime.MimeMultipart("mixed");

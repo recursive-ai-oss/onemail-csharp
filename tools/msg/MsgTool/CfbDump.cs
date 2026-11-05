@@ -10,6 +10,7 @@ internal static class CfbDump
     public static int Run(string path)
     {
         using var reader = new CompoundFileReader(File.OpenRead(path), null, leaveOpen: false);
+        Console.WriteLine("root clsid " + reader.Root.ClassId);
         Walk(reader, reader.Root, "", true);
         return 0;
     }
@@ -42,7 +43,7 @@ internal static class CfbDump
             }
             else
             {
-                Console.WriteLine($"{name}/\t{e.ObjectType}");
+                Console.WriteLine($"{name}/\t{e.ObjectType} {(e.ClassId == Guid.Empty ? "" : e.ClassId.ToString())}");
                 Walk(r, e, name, false);
             }
         }
