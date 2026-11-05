@@ -747,7 +747,8 @@ public static class TransferEncoder
 public sealed class TransferDecodingStream : Stream
 {
     private const int DefaultChunkSize = 8192;
-    private const int LargeChunkSize = 65536;
+    // 60 KiB in and a little more out stay inside the 64 KiB pool bucket.
+    private const int LargeChunkSize = 61440;
 
     private readonly Stream _inner;
     private readonly bool _leaveOpen;
@@ -755,8 +756,10 @@ public sealed class TransferDecodingStream : Stream
     private readonly Base64Decoder? _b64;
     private readonly QuotedPrintableDecoder? _qp;
     private readonly UuDecoder? _uu;
-    private readonly byte[]? _in;
-    private readonly byte[]? _out;
+    private byte[]? _in;
+    private byte[]? _out;
+    private readonly int _chunk;
+    private bool _disposed;
     private int _outPos;
     private int _outLen;
     private bool _finished;
@@ -794,8 +797,9 @@ public sealed class TransferDecodingStream : Stream
                 chunk = (int)Math.Clamp(inner.Length - inner.Position, 512, LargeChunkSize);
             }
 
-            _in = new byte[chunk];
-            _out = new byte[chunk + 128];
+            _chunk = chunk;
+            _in = ArrayPool<byte>.Shared.Rent(chunk);
+            _out = ArrayPool<byte>.Shared.Rent(chunk + 128);
         }
     }
 
@@ -827,6 +831,7 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override int Read(Span<byte> buffer)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_in is null)
         {
             return _inner.Read(buffer);
@@ -839,7 +844,7 @@ public sealed class TransferDecodingStream : Stream
                 return 0;
             }
 
-            int n = _inner.Read(_in, 0, _in.Length);
+            int n = _inner.Read(_in, 0, _chunk);
             if (n > 0 && buffer.Length >= MaxOutputLength(n))
             {
                 // Room for the worst case: decode straight into the caller's buffer, with no copy through _out.
@@ -861,6 +866,7 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_in is null)
         {
             return await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
@@ -873,7 +879,7 @@ public sealed class TransferDecodingStream : Stream
                 return 0;
             }
 
-            int n = await _inner.ReadAsync(_in.AsMemory(), cancellationToken).ConfigureAwait(false);
+            int n = await _inner.ReadAsync(_in.AsMemory(0, _chunk), cancellationToken).ConfigureAwait(false);
             Decode(n);
         }
 
@@ -925,9 +931,27 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing && !_leaveOpen)
+        if (disposing)
         {
-            _inner.Dispose();
+            _disposed = true;
+            if (!_leaveOpen)
+            {
+                _inner.Dispose();
+            }
+
+            byte[]? rentedIn = _in;
+            byte[]? rentedOut = _out;
+            _in = null;
+            _out = null;
+            if (rentedIn is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedIn);
+            }
+
+            if (rentedOut is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedOut);
+            }
         }
 
         base.Dispose(disposing);

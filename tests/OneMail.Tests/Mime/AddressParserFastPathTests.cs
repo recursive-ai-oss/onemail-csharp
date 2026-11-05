@@ -31,7 +31,7 @@ public class AddressParserFastPathTests
         string[] pieces =
         [
             "a", "b.c", "Phillip", "x-y", "o'brien", "a.b.c", "", ".", "..", "A", "9", "k+tag", "=?utf-8?q?x?=", "\"q\"", "(c)", "\u00e9",
-            "a b", "a  b", "a\tb", "a\r\n b", "a\r\n\tb", "x@y", "d.e",
+            "a b", "a  b", "x\\y", "<", "a>b", "a\tb", "a\r\n b", "a\r\n\tb", "x@y", "d.e",
         ];
         string[] seps = [", ", ",", " ,", ",\r\n\t", ", \t", ",,", "; ", " "];
         string Piece() => pieces[rnd.Next(pieces.Length)];
@@ -49,8 +49,14 @@ public class AddressParserFastPathTests
                 }
 
                 string addr = Atoms() + "@" + Atoms();
-                switch (rnd.Next(4))
+                switch (rnd.Next(6))
                 {
+                    case 4:
+                        sb.Append('"').Append(Piece()).Append(rnd.Next(2) == 0 ? ", " : "  ").Append(Piece()).Append(rnd.Next(4) == 0 ? "" : "\"").Append(" <").Append(addr).Append('>');
+                        break;
+                    case 5:
+                        sb.Append(rnd.Next(2) == 0 ? "\"\"" : "\" \"").Append(rnd.Next(3) == 0 ? "" : " ").Append('<').Append(addr).Append('>');
+                        break;
                     case 0:
                         sb.Append(addr);
                         break;
@@ -83,5 +89,14 @@ public class AddressParserFastPathTests
         }
 
         Assert.True(clean > 1000, "the generator should produce plenty of clean lists; got " + clean);
+    }
+
+    [Fact]
+    public void KnownShapesComeOutAsWritten()
+    {
+        List<MimeAddress> list = AddressParser.Parse("\r\n\t\"Allen, Phillip K.\" <pallen@example.com>,\r\n\tBob Jones <bob@example.org>, carol@example.net, \"\" <d@example.net>"u8);
+        var m = list.Cast<MimeMailbox>().ToList();
+        Assert.Equal(["Allen, Phillip K.", "Bob Jones", null, null], m.Select(x => x.Name).ToArray());
+        Assert.Equal(["pallen@example.com", "bob@example.org", "carol@example.net", "d@example.net"], m.Select(x => x.Address).ToArray());
     }
 }

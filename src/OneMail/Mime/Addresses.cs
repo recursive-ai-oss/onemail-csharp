@@ -217,15 +217,33 @@ public static class AddressParser
             int i = 0;
             while (true)
             {
-                int comma = b.Slice(i).IndexOf((byte)',');
-                int end = comma < 0 ? b.Length : i + comma;
-                if (!TryElement(b.Slice(i, end - i), out MimeMailbox? mailbox))
+                // The element ends at the next comma outside a quoted string. A backslash inside quotes is left to the general parser.
+                int end = i;
+                bool quoted = false;
+                for (; end < b.Length; end++)
+                {
+                    byte c = b[end];
+                    if (c == (byte)'"')
+                    {
+                        quoted = !quoted;
+                    }
+                    else if (c == (byte)'\\' && quoted)
+                    {
+                        return null;
+                    }
+                    else if (c == (byte)',' && !quoted)
+                    {
+                        break;
+                    }
+                }
+
+                if (quoted || !TryElement(b.Slice(i, end - i), out MimeMailbox? mailbox))
                 {
                     return null;
                 }
 
                 result.Add(mailbox!);
-                if (comma < 0)
+                if (end >= b.Length)
                 {
                     return result;
                 }
@@ -243,7 +261,7 @@ public static class AddressParser
                 return false;
             }
 
-            int lt = e.IndexOf((byte)'<');
+            int lt = e.LastIndexOf((byte)'<');
             if (lt < 0)
             {
                 if (!IsSimpleAddress(e))
@@ -262,13 +280,38 @@ public static class AddressParser
 
             ReadOnlySpan<byte> name = e.Slice(0, lt).TrimEnd(" \t"u8);
             string? text = null;
-            if (!name.IsEmpty)
+            if (!name.IsEmpty && name[0] == (byte)'"')
             {
-                // Words of atom characters with one space (or tab) between them.
+                // One quoted string of plain printable ASCII with no escapes, angle brackets or encoded words.
+                if (name.Length < 2 || name[^1] != (byte)'"')
+                {
+                    return false;
+                }
+
+                ReadOnlySpan<byte> inner = name.Slice(1, name.Length - 2);
+                foreach (byte c in inner)
+                {
+                    if (c is < 0x20 or > 0x7E or (byte)'"' or (byte)'\\' or (byte)'<' or (byte)'>')
+                    {
+                        return false;
+                    }
+                }
+
+                if (inner.IndexOf("=?"u8) >= 0)
+                {
+                    return false;
+                }
+
+                string quotedText = Encoding.ASCII.GetString(inner).Trim(' ');
+                text = quotedText.Length == 0 ? null : quotedText;
+            }
+            else if (!name.IsEmpty)
+            {
+                // Words of atom characters with one space between them.
                 bool wordStart = true;
                 foreach (byte c in name)
                 {
-                    if (c is (byte)' ' or (byte)'\t')
+                    if (c == (byte)' ')
                     {
                         if (wordStart)
                         {
@@ -285,11 +328,6 @@ public static class AddressParser
                     {
                         return false;
                     }
-                }
-
-                if (name.IndexOf((byte)'\t') >= 0)
-                {
-                    return false; // the general path turns a tab into a space; leave that to it
                 }
 
                 text = Encoding.ASCII.GetString(name);
