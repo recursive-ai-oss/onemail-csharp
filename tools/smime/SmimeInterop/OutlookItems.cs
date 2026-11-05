@@ -44,6 +44,15 @@ internal static class OutlookItems
                 a.Properties.Add(MapiProperty.Create(new MapiTag(MapiPid.AttachDataBinary, MapiType.Binary), cms));
             }
 
+            // The sender, so that Outlook can compare the signer's certificate address with it (PidTagSender* and PidTagSentRepresenting*, SMTP address type).
+            string? from = e.Headers.GetFirst("From")?.Value?.Trim();
+            if (!string.IsNullOrEmpty(from))
+            {
+                foreach (ushort id in new ushort[] { 0x0C1A, 0x0042 }) { m.Properties.Add(Str(id, from)); }
+                foreach (ushort id in new ushort[] { 0x0C1F, 0x0065 }) { m.Properties.Add(Str(id, from)); }
+                foreach (ushort id in new ushort[] { 0x0C1E, 0x0064 }) { m.Properties.Add(Str(id, "SMTP")); }
+            }
+
             m.Properties.Add(Str(MapiPid.Subject, e.Headers.GetFirst("Subject")?.Value ?? "S/MIME test"));
             m.AddAttachment(a);
             string name = Path.GetRelativePath(source, f).Replace(Path.DirectorySeparatorChar, '_');

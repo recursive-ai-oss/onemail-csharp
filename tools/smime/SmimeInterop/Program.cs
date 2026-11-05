@@ -41,6 +41,16 @@ internal static partial class Program
             return Scan(args.Skip(1));
         }
 
+        if (args.Length > 2 && args[0] == "encrypt-to")
+        {
+            return EncryptTo(args[1], args[2]);
+        }
+
+        if (args.Length > 3 && args[0] == "decrypt-ec")
+        {
+            return DecryptEc(args[1], args[2], args[3]);
+        }
+
         if (args.Length > 2 && args[0] == "outlook-items")
         {
             return OutlookItems.Run(args[1], args[2]);
@@ -280,6 +290,32 @@ internal static partial class Program
 
         Console.WriteLine($"rfc9216: {Rows.Count(static r => r.Ok)}/{Rows.Count} pass");
         return Rows.All(static r => r.Ok) ? 0 : 1;
+    }
+
+    // `SmimeInterop encrypt-to <certificate.pem> <out.eml>`: this library's EnvelopedData message to one certificate, for opening in a client
+    // that holds the key (the certificate and key come from elsewhere, e.g. openssl).
+    private static int EncryptTo(string certPem, string outFile)
+    {
+        Certificate c = Certificate.FromPem(File.ReadAllText(certPem));
+        MimeEntity e = SmimeEncryptor.Encrypt(Content("encrypt-to"), new SmimeEncryptOptions { Recipients = [c], Kind = SmimeEncryptionKind.Enveloped });
+        e.Headers.Add("MIME-Version", "1.0");
+        e.Headers.Add("From", "sender@example.test");
+        e.Headers.Add("To", "recipient@example.test");
+        e.Headers.Add("Subject", "encrypt-to");
+        File.WriteAllBytes(outFile, e.ToArray());
+        return 0;
+    }
+
+    // `SmimeInterop decrypt-ec <message.eml> <certificate.pem> <ec key.pem>`: opens a message with an EC key, for messages another client made.
+    private static int DecryptEc(string eml, string certPem, string keyPem)
+    {
+        Certificate c = Certificate.FromPem(File.ReadAllText(certPem));
+        using var dh = ECDiffieHellman.Create();
+        dh.ImportFromPem(File.ReadAllText(keyPem));
+        SmimeResult r = SmimeProcessor.Open(File.ReadAllBytes(eml), new SmimeOpenOptions { DecryptionKeys = [CmsDecryptionKey.FromECDiffieHellman(dh, c)], AllowLegacyCiphers = true });
+        string text = r.InnerItem?.TextBody?.ReadText() ?? "";
+        Console.WriteLine((r.Succeeded ? "ok " : "FAIL ") + string.Join(",", r.Layers.Select(static l => l.Kind + "=" + l.Status + (l.Detail is null ? "" : " (" + l.Detail + ")"))) + " [" + text.Trim() + "]");
+        return r.Succeeded ? 0 : 1;
     }
 
     // ---- identities ----
