@@ -69,6 +69,11 @@ internal static class Program
             return 0;
         }
 
+        if (args[0] == "cfb")
+        {
+            return CfbDump.Run(args[1]);
+        }
+
         if (args[0] == "damage")
         {
             return Damage.Run(args.Skip(1).SelectMany(Expand).ToArray());

@@ -1,7 +1,6 @@
 # Opens each .msg and .oft in a directory through Outlook's object model and records what Outlook sees: message class, subject, body sizes,
 # recipients, attachments (with their methods and sizes), embedded messages, and a re-save of the item to a new .msg. Message files are opened
-# with OpenSharedItem (the way a double-click opens them); a template (.oft) is also instantiated with CreateItemFromTemplate, which is how
-# Outlook uses one. Test-side only: the library never talks to Outlook.
+# with OpenSharedItem (the way a double-click opens them); a template (.oft) with CreateItemFromTemplate, which is how Outlook uses one. Test-side only: the library never talks to Outlook.
 #
 #   Check-Msgs.ps1 -Set <dir> -Out <result dir> [-Profile OneMailOracle] [-Dir <work dir>]
 param(
@@ -22,8 +21,11 @@ function Describe-Item($it) {
     $d = [ordered]@{ class = $it.MessageClass; subject = $it.Subject; bodyLength = ([string]$it.Body).Length; htmlLength = 0; unread = $null; size = $it.Size }
     try { $d.htmlLength = ([string]$it.HTMLBody).Length } catch { }
     try { $d.unread = [bool]$it.UnRead } catch { }
-    $d.recipients = @(foreach ($r in $it.Recipients) { [ordered]@{ name = $r.Name; type = $r.Type; address = $r.Address } })
-    $d.attachments = @(foreach ($a in $it.Attachments) {
+    $d.recipientCount = $it.Recipients.Count
+    $d.recipients = @(for ($k = 1; $k -le $it.Recipients.Count; $k++) { $r = $it.Recipients.Item($k); [ordered]@{ name = $r.Name; type = $r.Type; address = $r.Address } })
+    $d.attachmentCount = $it.Attachments.Count
+    $d.attachments = @(for ($k = 1; $k -le $it.Attachments.Count; $k++) {
+        $a = $it.Attachments.Item($k)
         $e = [ordered]@{ name = $a.DisplayName; file = $a.FileName; type = $a.Type; size = $null }
         try { $e.size = $a.Size } catch { }
         $e
@@ -38,38 +40,34 @@ foreach ($f in $files) {
     $work = "$Dir\work\msg-$([guid]::NewGuid().ToString('N'))$($f.Extension)"
     Copy-Item $f.FullName $work
     $mark = if (Test-Path $dialogLog) { (Get-Content $dialogLog).Count } else { 0 }
+    $steps = [ordered]@{}
+    $alive = $false
+    try { $alive = [bool](Get-Process OUTLOOK -ErrorAction SilentlyContinue) -and ($null -ne $app.Session) } catch { }
+    if (-not $alive) { $app = Start-OutlookSession -Profile $Profile -Dir $Dir }
+    $it = $null
     try {
-        $alive = $false
-        try { $alive = [bool](Get-Process OUTLOOK -ErrorAction SilentlyContinue) -and ($null -ne $app.Session) } catch { }
-        if (-not $alive) { $app = Start-OutlookSession -Profile $Profile -Dir $Dir }
         $res.stage = "open"
-        $it = $app.Session.OpenSharedItem($work)
+        $it = if ($f.Extension -eq ".oft") { $app.CreateItemFromTemplate($work) } else { $app.Session.OpenSharedItem($work) }
         $res.opened = $true
-        $res.item = Describe-Item $it
-        $res.stage = "resave"
-        $back = "$work.resaved.msg"
-        $it.SaveAs($back, 3)   # olMSGUnicode
-        $res.resavedLength = (Get-Item $back).Length
-        $it.Close(1)   # olDiscard
-        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($it)
-        Remove-Item $back -Force -ErrorAction SilentlyContinue
-        if ($f.Extension -eq ".oft") {
-            $res.stage = "template"
-            $t = $app.CreateItemFromTemplate($work)
-            $res.fromTemplate = Describe-Item $t
-            $t.Close(1)
-            [void][Runtime.InteropServices.Marshal]::ReleaseComObject($t)
-        }
-    } catch {
-        $res.opened = [bool]$res.opened
-        $res.error = $_.Exception.Message
+    } catch { $res.opened = $false; $res.error = "open: " + $_.Exception.Message }
+    if ($it) {
+        try { $res.stage = "describe"; $res.item = Describe-Item $it } catch { $res.error = "describe: " + $_.Exception.Message }
+        try {
+            $res.stage = "resave"
+            $back = "$work.resaved.msg"
+            $it.SaveAs($back, 9)   # olMSGUnicode
+            $res.resavedLength = (Get-Item $back).Length
+            Remove-Item $back -Force -ErrorAction SilentlyContinue
+        } catch { $res.resaveError = $_.Exception.Message }
+        try { $it.Close(1) } catch { }   # olDiscard
+        try { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($it) } catch { }
     }
     Start-Sleep -Milliseconds 500
     $res.dialogs = @(if (Test-Path $dialogLog) { Get-Content $dialogLog | Select-Object -Skip $mark })
     $json = Join-Path $Out (($rel -replace '[\\/]', '__') + ".outlook.json")
     ($res | ConvertTo-Json -Depth 8 -Compress) | Set-Content $json -Encoding UTF8
     Remove-Item $work -Force -ErrorAction SilentlyContinue
-    "{0}: opened={1} dialogs={2} stage={3} {4}" -f $rel, $res.opened, $res.dialogs.Count, $res.stage, $res.error
+    "{0}: opened={1} dialogs={2} stage={3} {4} {5}" -f $rel, $res.opened, $res.dialogs.Count, $res.stage, $res.error, $res.resaveError
 }
 Stop-DialogWatcher $watcher
 Stop-OutlookGracefully $app
