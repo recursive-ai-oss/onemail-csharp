@@ -146,6 +146,47 @@ dumps (addresses, dates, defects, decoded body hashes) for 517,401 of 517,401 me
 probe (224) sets; the differential run against MimeKit, Python and Go over a 20,000-message Enron sample and those three sets has no unexplained difference;
 the Enron round trip is byte-identical, 517,401 of 517,401.
 
+### Borrowing APIs and shared header blocks (second round, indicative)
+
+The next round added body APIs that avoid copies (`TryGetDecodedContentMemory`, `CopyDecodedContentTo`, `SetDecodedContentBorrowed`; see `docs/mime-reading.md`),
+gave a parsed entity's header fields one shared array, and made the general address parser reuse its token lists. The rows above stay on the
+existing copying API, so the MimeKit comparison is still equal work. The rows below are labelled as borrowing: they compare the same work
+through the copying and the borrowing API inside one BenchmarkDotNet class (so the pairs ran back to back), on the same machine as above, 10 iterations
+times 3 launches, ordinary (not bench-class) jobs while the machine's load average was 5 to 26: absolute times are noisy, allocation figures are reliable.
+
+| Row | Input | Copying ns | Borrowing ns | Native ns | Borrowing / native | B/op copying | B/op borrowing |
+|---|---|---:|---:|---:|---:|---:|---:|
+| bodies | generated 6 MB | 1,189,202 | 642,263 | 304,146 | 2.1 | 4,415 KB | 21 KB |
+| bodies | dovecot-multipart | 80,736 | 19,720 | 9,201 | 2.1 | 121 KB | 24 KB |
+| bodies | enron-20k | 3,588 | 1,276 | 645 | 2.0 | 25 KB | 3.1 KB |
+| bodies | enron-2k | 1,759 | 1,534 | 843 | 1.8 | 4.8 KB | 3.6 KB |
+| build | text + 1 MB attachment | 237,100 | 104,300 | 54,995 | 1.9 | 984 KB | 6.7 KB |
+
+With the borrowing API the allocation is nearly gone (the 6 MB message's bodies decode into a pooled buffer; the build keeps the caller's attachment),
+and the time is about 2x the native crate where it was 2.6x to 6.5x. These rows are still above the 1.5x target: what remains is the base64 decode
+itself (the stride cut-out into a scratch buffer, then the BCL decoder) and, for the small inputs, the tree. The native column is the earlier median,
+not measured at the same instant.
+
+The copying rows in the same job moved as follows (parse, headers; the ratio against MimeKit is 0.065 geomean over the 13 rows, worst 0.198 in this noisy job,
+and 0.070 / 0.154 in an earlier job on the tree before the pooled header buffer; the time columns are not comparable between jobs, the allocation columns are):
+
+| Row | Input | B/op before | B/op after |
+|---|---|---:|---:|
+| parse | enron-2k | 4,008 | 3,720 |
+| parse | enron-20k | 3,368 | 3,120 |
+| parse | dovecot-multipart | 8,864 | 8,272 |
+| headers | enron-20k | 4,336 | 4,128 |
+| headers | dovecot-multipart | 10,096 | 9,584 |
+| mbox | dovecot, per message (`alloc-tree`) | 8,353 | 7,873 |
+
+Header time and bytes against native are within noise of the previous round (shared header arrays save one array per field, but each field object
+grew by two ints and the block copy remains). The address parser's token-list reuse only matters for headers the plain-list fast path does not take.
+The stride idea for the quoted-printable decoder and `Base64Decoder.Finish` was not pursued: none of these rows is dominated by either, and no profile pointed at them.
+
+Equality checks: the dump driver built from the tree before and after produced byte-identical dumps for 517,401 of 517,401 Enron messages (same MD5
+`602d5797...` for both), Dovecot 2,859, Mime4j 80 and probes 225; the Enron round trip is byte-identical, 517,401 of 517,401. The `mime-tree` fuzz target
+(now also checking the copy-into and borrowing readers against `GetDecodedContent`) ran 600 s: 12,795,524 executions, no finding.
+
 ## Machines and runs, 2026-11-04
 
 | | x64 | arm64 |
