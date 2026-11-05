@@ -91,6 +91,61 @@ process. Ratio is OneMail's bench-class median / native median (the two were not
 target; decoded headers, the base64 body decode (the 6 MB input decodes 4.5 MB in 7.0 ms and allocates 16.8 MB, about 3.7x the output)
 and the build row are the gaps to native. None gates. GMime has no distribution package on either machine, so it isn't measured.
 
+## Tuning against the native reference (before / after, indicative)
+
+The native Rust references (above) were 23.6x ahead on decoding the 6 MB message's bodies, 1.8x to 3.4x on decoded headers, 7.4x on building a
+message with a 1 MB attachment, and 1.3x to 1.9x on parse. This round of tuning changed the MIME hot paths only; parse results, defects and written
+bytes are unchanged (below). All numbers are indicative: one launch of ten iterations per row, run as ordinary (not bench-class) jobs on the same
+x64 machine (AMD Ryzen 9 7950X3D, 32 cores, .NET 10.0.403, BenchmarkDotNet 0.15.8, MimeKit 4.18.2), the "before" tree and the "after" tree one after
+the other in one job. The machine was shared with other work (load average 13 at the start, 6.6 in the middle and 15 at the end of the job), so
+absolute times move by tens of percent between runs; the ratios between rows and the allocation figures are the reliable part. The native column is the
+median of the earlier native run, not measured at the same instant.
+
+| Row | Input | Before ns | After ns | Native ns | After / native | B/op before | B/op after | MimeKit B/op |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| bodies | generated 6 MB | 8,073,002 | 777,847 | 304,146 | 2.6 | 16,778,019 | 4,521,822 | 18,583,884 |
+| bodies | dovecot-multipart | 192,033 | 60,248 | 9,201 | 6.5 | 503,617 | 124,143 | 556,690 |
+| bodies | enron-20k | 4,615 | 3,015 | 645 | 4.7 | 49,496 | 25,672 | 101,208 |
+| bodies | enron-2k | 1,630 | 1,217 | 843 | 1.4 | 8,160 | 5,152 | 20,904 |
+| headers | generated 6 MB | 182,926 | 98,634 | 69,773 | 1.4 | 10,688 | 5,936 | 6,321,655 |
+| headers | dovecot-multipart | 7,288 | 5,913 | 3,793 | 1.6 | 15,088 | 10,096 | 174,570 |
+| headers | enron-20k | 2,947 | 1,419 | 702 | 2.0 | 8,328 | 4,336 | 41,400 |
+| headers | enron-2k | 3,522 | 1,610 | 1,021 | 1.6 | 10,328 | 5,256 | 22,344 |
+| build | text + 1 MB attachment | 396,657 | 141,172 | 54,995 | 2.6 | 2,744,091 | 1,007,219 | 36,782 |
+| parse | generated 6 MB | 102,688 | 96,000 to 104,000 (150,000 in this job) | 69,500 | 1.4 | 5,344 | 4,688 | 6,318,608 |
+| parse | dovecot-multipart | 5,303 | 5,224 | 3,766 | 1.4 | 9,920 | 8,864 | 171,802 |
+| parse | enron-20k | 965 | 902 | 652 | 1.4 | 4,360 | 3,368 | 39,360 |
+| parse | enron-2k | 1,202 | 1,063 | 815 | 1.3 | 5,280 | 4,008 | 19,448 |
+| mbox | dovecot, per message | 3,092 | 2,866 | | | 8,475 | 7,106 | 28,393 |
+
+Against MimeKit in the same job the geometric mean over these 14 rows moved from 0.116 to 0.069 and the worst row from 0.574 (bodies of the 6 MB message)
+to 0.152 (build). The 6 MB parse row in this job was disturbed by another job; five other runs the same day gave 95,600 to 104,000 ns for the unchanged
+code. The publishable rows are re-run at the freeze.
+
+What changed:
+
+- **Base64 bodies.** `Base64Decoder` cuts out the lines of one width at their stride (checking only the line ends) into a scratch buffer and hands
+  whole groups to `System.Buffers.Text.Base64.DecodeFromUtf8`. A stretch the BCL decoder does not accept (a bad character, padding in the middle,
+  a group split by white space) goes back to the byte-at-a-time decoder, which makes the same repairs and reports the same issues as before; so does
+  anything not wrapped at one width. `GetDecodedContent()` sizes its result from the first line's width and the closing padding, so the usual case fills one
+  array with no trim copy, decodes straight into it, and `TransferDecodingStream` borrows its two buffers from the pool and sizes them to the body (up to
+  60 KiB).
+- **Build.** `SetDecodedContent` with base64 keeps the attachment bytes once, in a source that produces the wrapped base64 text as it is read, so the
+  encoded text of a large attachment is never held and the writer pulls it a 64 KiB chunk at a time. The remaining 1 MB is the copy of the caller's span;
+  the native crate borrows the buffer instead.
+- **Decoded headers.** Plain address lists (`addr`, `Name <addr>`, `"Quoted, Name" <addr>`, comma separated, unfolded) and dates in the form
+  `[Www, ]D Mon YYYY HH:MM:SS +ZZZZ[ (comment)]` are read straight from the bytes; everything else, and anything that would raise a defect, goes to the
+  general parsers unchanged. A header look-up compares the name in place instead of building a string for every header, the message-id reader decodes in
+  place, and the reader allocates its boundary and frame tables only when a multipart needs them.
+- **Equivalence.** Randomised tests compare each fast path with the general path (`Base64DecoderEquivalenceTests`, `DateParserFastPathTests`,
+  `AddressParserFastPathTests`, `Base64WrappedSourceTests`), and the `mime-tree` fuzz target checks bulk base64 decoding against the byte-at-a-time
+  decoder on every input it generates.
+
+Equality checks run on the same job: the OneMail dump driver built from the tree before the tuning and from the tuned tree produced byte-identical
+dumps (addresses, dates, defects, decoded body hashes) for 517,401 of 517,401 messages of the CMU Enron maildir, and for the Dovecot (2,859), Mime4j (80) and
+probe (224) sets; the differential run against MimeKit, Python and Go over a 20,000-message Enron sample and those three sets has no unexplained difference;
+the Enron round trip is byte-identical, 517,401 of 517,401.
+
 ## Machines and runs, 2026-11-04
 
 | | x64 | arm64 |
