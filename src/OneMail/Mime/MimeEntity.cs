@@ -95,9 +95,19 @@ internal sealed class RawContent
                 return -1;
             }
 
+            // The body usually ends with the line end of its last line, which is not data.
+            Span<byte> tail = buffer.AsSpan(0, 8);
+            int end = Peek(Length - tail.Length, tail);
+            long dataLength = Length;
+            while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n')
+            {
+                end--;
+                dataLength--;
+            }
+
             long stride = line + eol;
-            long full = Length / stride;
-            long rest = Length - (full * stride);
+            long full = dataLength / stride;
+            long rest = dataLength - (full * stride);
             if (rest > line)
             {
                 return -1; // a partial line end: not the layout the first line promised
@@ -107,13 +117,6 @@ internal sealed class RawContent
             if (chars % 4 != 0)
             {
                 return -1;
-            }
-
-            Span<byte> tail = buffer.AsSpan(0, 8);
-            int end = Peek(Length - tail.Length, tail);
-            while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
-            {
-                end--;
             }
 
             int pad = 0;
