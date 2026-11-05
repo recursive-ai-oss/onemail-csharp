@@ -162,6 +162,18 @@ public static class AddressParser
         private int _p;
         private bool _stop;
 
+        // Token lists are reused from one list element to the next instead of allocated for each; a stack, because a group's
+        // members are parsed while the group's own lists are still held.
+        private readonly Stack<List<Tok>> _freeLists = new();
+
+        private List<Tok> RentTokens() => _freeLists.TryPop(out List<Tok>? l) ? l : [];
+
+        private void ReturnTokens(List<Tok> l)
+        {
+            l.Clear();
+            _freeLists.Push(l);
+        }
+
         public Parser(ReadOnlySpan<byte> raw, List<MimeDefect>? defects, long baseOffset, int depth)
         {
             _defects = defects;
@@ -623,8 +635,21 @@ public static class AddressParser
 
         private void ParseElement(bool inGroup, List<MimeAddress> result, List<MimeMailbox>? groupMembers)
         {
-            var words = new List<Tok>();
-            var comments = new List<Tok>();
+            List<Tok> words = RentTokens();
+            List<Tok> comments = RentTokens();
+            try
+            {
+                ParseElementTokens(words, comments, inGroup, result, groupMembers);
+            }
+            finally
+            {
+                ReturnTokens(words);
+                ReturnTokens(comments);
+            }
+        }
+
+        private void ParseElementTokens(List<Tok> words, List<Tok> comments, bool inGroup, List<MimeAddress> result, List<MimeMailbox>? groupMembers)
+        {
             bool sawAt = false;
             int domainStart = -1;
             while (true)
@@ -749,9 +774,22 @@ public static class AddressParser
         {
             string? name = PhraseText(nameWords, 0, nameWords.Count) ?? CommentName(comments);
             Tok open = lt;
+            List<Tok> parts = RentTokens();
+            try
+            {
+                ParseAngleParts(parts, name, open, comments, result, groupMembers);
+            }
+            finally
+            {
+                ReturnTokens(parts);
+            }
+        }
+
+        private void ParseAngleParts(List<Tok> parts, string? name, Tok open, List<Tok> comments, List<MimeAddress> result, List<MimeMailbox>? groupMembers)
+        {
             while (true)
             {
-                var parts = new List<Tok>();
+                parts.Clear();
                 bool closed = false;
                 bool first = true;
                 while (true)

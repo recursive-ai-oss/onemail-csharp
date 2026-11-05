@@ -4,6 +4,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Borrowing body APIs on `MimePart`: `TryGetRawContentMemory`, `TryGetDecodedContentMemory` (a view of the caller's buffer when no decoding is needed), `GetMaxDecodedContentLength` with `CopyDecodedContentTo(Span<byte>)` and `CopyDecodedContentTo(IBufferWriter<byte>)` (decode into caller memory), and `SetDecodedContentBorrowed` (keeps the caller's memory until the part is written). The existing copying APIs are unchanged. Benchmark rows `BodiesBorrowedRow` and `BuildBorrowedRow` measure them separately.
+
+### Changed
+
+- Parsed headers of an entity share one array instead of one array each, and the general address parser reuses its token lists across the elements of a list; parse results, defects and written bytes are unchanged.
+
 ## [0.8.0-preview.1]
 
 ### Added

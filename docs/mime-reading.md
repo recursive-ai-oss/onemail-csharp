@@ -116,6 +116,26 @@ The read buffer is pooled and grows only to hold one header field, never past tw
   after it. Hard line ends are copied as they are.
 - uuencode (`x-uuencode`, `uuencode`, `x-uue`, `uue`): text before the `begin` line is ignored and decoding stops at `end`.
 
+## Reading and writing bodies without copying
+
+`MimePart.GetDecodedContent()` returns a new array. For callers that want to avoid that copy there are borrowing forms, which give the
+same bytes (checked against `GetDecodedContent()` by randomised tests and by the `mime-tree` fuzz target):
+
+- `TryGetRawContentMemory(out ReadOnlyMemory<byte>)`: the body as transported, as a view. True only when the part lives in memory
+  (a tree parsed from a `ReadOnlyMemory<byte>` or `MemorySource`, or a body the caller set); false for files, streams and ranged sources.
+- `TryGetDecodedContentMemory(out ReadOnlyMemory<byte>)`: the decoded body as a view, when no decoding is needed (7bit, 8bit, binary
+  or an unknown encoding) and the part lives in memory. The view is the caller's own buffer: it is valid while that buffer is alive and unchanged.
+- `GetMaxDecodedContentLength()` and `CopyDecodedContentTo(Span<byte>)`: decode into a caller buffer. The query is an upper bound
+  (exact for identity encodings, up to about a third more for base64); the copy returns the real count and throws `ArgumentException` for a shorter span.
+- `CopyDecodedContentTo(IBufferWriter<byte>)`: decode into a writer; whole body at once for in-memory parts, in chunks otherwise.
+  For a body that does not fit one span (over about 1 GiB) use this or `OpenDecodedContent()`.
+- `SetDecodedContentBorrowed(ReadOnlyMemory<byte>, encoding)`: like `SetDecodedContent`, but keeps the caller's memory instead of a copy,
+  for base64 (encoded as it is written) and the identity encodings. **Do not change the memory until the part has been written.**
+  Quoted-printable encodes eagerly and so holds a new array.
+
+Parsed headers of one entity share one array holding the entity's header block; this is invisible through `MimeHeader` (`Raw`,
+`RawValue`, `Value`), and editing a field gives that field an array of its own.
+
 ## Writing
 
 `MimeWriter` copies reader events byte for byte, and generates headers (folded at word boundaries at 78 columns) and delimiters. Non-ASCII text in free-text fields (`Subject`,

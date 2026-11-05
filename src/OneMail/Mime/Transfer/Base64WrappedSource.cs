@@ -13,11 +13,11 @@ internal sealed class Base64WrappedSource : IRandomAccessSource
     private const int DataPerLine = 57;     // 57 bytes encode to exactly 76 characters
     private const int LineWithBreak = 78;   // 76 characters and CRLF
 
-    private readonly byte[] _data;
+    private readonly ReadOnlyMemory<byte> _data;
     private readonly long _lineCount;
 
-    /// <summary>Takes ownership of <paramref name="data"/>; the caller must not change it afterwards.</summary>
-    public Base64WrappedSource(byte[] data)
+    /// <summary>Reads <paramref name="data"/> in place; the caller must not change it for as long as the source is used.</summary>
+    public Base64WrappedSource(ReadOnlyMemory<byte> data)
     {
         _data = data;
         _lineCount = (data.Length + DataPerLine - 1) / DataPerLine;
@@ -90,7 +90,7 @@ internal sealed class Base64WrappedSource : IRandomAccessSource
         // Encode once, unbroken, into the end of the destination, then spread the lines forward with their line ends. A line's
         // destination never starts after its source and ends before the next line's source, so nothing is overwritten unread.
         int tail = total - encoded;
-        _ = System.Buffers.Text.Base64.EncodeToUtf8(_data.AsSpan((int)dataStart, dataLength), destination.Slice(tail), out _, out _);
+        _ = System.Buffers.Text.Base64.EncodeToUtf8(_data.Span.Slice((int)dataStart, dataLength), destination.Slice(tail), out _, out _);
         int o = 0;
         for (int k = 0; k < count; k++)
         {

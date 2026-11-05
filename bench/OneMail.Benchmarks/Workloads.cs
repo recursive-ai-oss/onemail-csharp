@@ -98,6 +98,50 @@ internal static class Workloads
         }
     }
 
+    // OneMail, borrowing APIs (labelled as such in the report; the MimeKit comparison uses BodiesOneMail): the same parts, decoded into
+    // a pooled buffer, or viewed in place when the encoding needs no decoding.
+    public static long BodiesOneMailBorrowed(byte[] data)
+    {
+        long n = 0;
+        WalkBorrowed(OneEntity.Parse(data), ref n);
+        return n;
+    }
+
+    private static void WalkBorrowed(OneEntity e, ref long n)
+    {
+        switch (e)
+        {
+            case OnePart p:
+                if (p.TryGetDecodedContentMemory(out ReadOnlyMemory<byte> view))
+                {
+                    n += view.Length;
+                    break;
+                }
+
+                byte[] room = System.Buffers.ArrayPool<byte>.Shared.Rent(p.GetMaxDecodedContentLength());
+                try
+                {
+                    n += p.CopyDecodedContentTo(room);
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(room);
+                }
+
+                break;
+            case MimeMultipart mp:
+                foreach (OneEntity c in mp.Children)
+                {
+                    WalkBorrowed(c, ref n);
+                }
+
+                break;
+            case MimeMessagePart mm when mm.Message is not null:
+                WalkBorrowed(mm.Message, ref n);
+                break;
+        }
+    }
+
     // MimeKit: every MimePart in BodyParts decoded into a fresh MemoryStream (transfer encoding undone; no charset decoding).
     public static long BodiesMimeKit(byte[] data)
     {
@@ -143,7 +187,7 @@ internal static class Workloads
 
     // Built: headers, a text part and a 1 MB binary attachment, built and written in one go. Boundaries are fixed on our side;
     // MimeKit generates its own.
-    public static long BuildWriteOneMail(byte[] attachment)
+    public static long BuildWriteOneMail(byte[] attachment, bool borrowed = false)
     {
         var root = new MimeMultipart("mixed", "bench-boundary");
         root.Headers.Add("From", "Alice Example <alice@example.org>");
@@ -155,7 +199,15 @@ internal static class Workloads
         text.SetDecodedContent("See the attachment.\r\n"u8, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.QuotedPrintable);
         root.Add(text);
         var att = new OnePart("application/octet-stream");
-        att.SetDecodedContent(attachment, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.Base64);
+        if (borrowed)
+        {
+            att.SetDecodedContentBorrowed(attachment, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.Base64);
+        }
+        else
+        {
+            att.SetDecodedContent(attachment, RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.Base64);
+        }
+
         root.Add(att);
         root.WriteTo(Stream.Null);
         return 0;

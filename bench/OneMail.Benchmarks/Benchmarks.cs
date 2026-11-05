@@ -56,6 +56,13 @@ public class BodiesRow : InputRow
     [Benchmark] public long Theirs() => Workloads.BodiesMimeKit(Data);
 }
 
+/// <summary>Row 3, borrowing APIs: the same work through <c>TryGetDecodedContentMemory</c> and <c>CopyDecodedContentTo</c>. Compared with the row above, not with MimeKit.</summary>
+public class BodiesBorrowedRow : InputRow
+{
+    [Benchmark(Baseline = true)] public long OursCopying() => Workloads.BodiesOneMail(Data);
+    [Benchmark] public long OursBorrowed() => Workloads.BodiesOneMailBorrowed(Data);
+}
+
 /// <summary>Row 4a: write an unmodified parsed message.</summary>
 public class WriteRow : InputRow
 {
@@ -92,6 +99,24 @@ public class BuildRow
 
     [Benchmark] public long Ours() => Workloads.BuildWriteOneMail(_att);
     [Benchmark] public long Theirs() => Workloads.BuildWriteMimeKit(_att);
+}
+
+/// <summary>Row 4b, borrowing API: <c>SetDecodedContentBorrowed</c>. Compared with the row above, not with MimeKit.</summary>
+[Config(typeof(RowConfig))]
+[MemoryDiagnoser(displayGenColumns: false)]
+public class BuildBorrowedRow
+{
+    private byte[] _att = [];
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _att = new byte[1_000_000];
+        new Random(7).NextBytes(_att);
+    }
+
+    [Benchmark(Baseline = true)] public long OursCopying() => Workloads.BuildWriteOneMail(_att);
+    [Benchmark] public long OursBorrowed() => Workloads.BuildWriteOneMail(_att, borrowed: true);
 }
 
 /// <summary>Row 5: the Dovecot test mbox as messages; operations are messages, so time and allocations are per message.</summary>
