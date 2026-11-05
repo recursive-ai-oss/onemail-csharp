@@ -194,6 +194,60 @@ public class RecurrenceTests
         Assert.Single(o); // only DTSTART
     }
 
+    [Theory]
+    [InlineData("2")]
+    [InlineData("0")]
+    [InlineData("1")]
+    [InlineData("SECOND")]
+    [InlineData("")]
+    [InlineData("DAILY,WEEKLY")]
+    public void FreqThatIsNotOneOfTheSevenNamesIsRejected(string freq)
+    {
+        // Enum parsing would take the digits as a frequency; RFC 5545 §3.3.10 allows only the names.
+        Assert.False(RecurrenceRule.TryParse("FREQ=" + freq, null, out _));
+    }
+
+    [Theory]
+    [InlineData("secondly", RecurrenceFrequency.Secondly)]
+    [InlineData("Minutely", RecurrenceFrequency.Minutely)]
+    [InlineData("HOURLY", RecurrenceFrequency.Hourly)]
+    [InlineData("daily", RecurrenceFrequency.Daily)]
+    [InlineData("weekly", RecurrenceFrequency.Weekly)]
+    [InlineData("MONTHLY", RecurrenceFrequency.Monthly)]
+    [InlineData("yearly", RecurrenceFrequency.Yearly)]
+    public void FreqNamesAreCaseInsensitive(string freq, RecurrenceFrequency expected)
+    {
+        Assert.True(RecurrenceRule.TryParse("freq=" + freq, null, out RecurrenceRule rule));
+        Assert.Equal(expected, rule.Frequency);
+    }
+
+    [Theory]
+    [InlineData("SECONDLY", true)]
+    [InlineData("MINUTELY", true)]
+    [InlineData("HOURLY", false)]
+    [InlineData("DAILY", false)]
+    public void InstancesThatNeverFallInTheWindowAreBounded(string freq, bool hitsTheLimit)
+    {
+        // The occurrence ends a thousand years before it starts, so no instance after the window start overlaps it. The scan limit
+        // used to count only instances before the window, so this walked to year 9999.
+        ExpansionReport report = new();
+        List<Occurrence> o = Run(["DTSTART:20260105T100000Z", "DTEND:10260105T103000Z", "RRULE:FREQ=" + freq],
+            report, new ExpansionOptions { MaxInstancesScanned = 500 }, window: OccurrenceWindow.From(new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc), TimeSpan.FromDays(1)));
+        Assert.Empty(o);
+        // Hourly and daily series run out of the window's scan margin before 500 instances; minutely and secondly ones reach the limit.
+        Assert.Equal(hitsTheLimit ? 1 : 0, report.CountOf(RecurrenceDefectKind.ScanLimit));
+    }
+
+    [Fact]
+    public void ExcludedInstancesCountAgainstTheScanLimit()
+    {
+        ExpansionReport report = new();
+        List<Occurrence> o = Run(["DTSTART:20260105T100000Z", "RRULE:FREQ=SECONDLY", "EXRULE:FREQ=SECONDLY"],
+            report, new ExpansionOptions { MaxInstancesScanned = 20_000 });
+        Assert.Empty(o);
+        Assert.Equal(1, report.CountOf(RecurrenceDefectKind.ScanLimit));
+    }
+
     [Fact]
     public void ContradictoryPartsAreLimitedByIterations()
     {

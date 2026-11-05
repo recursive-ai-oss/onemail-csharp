@@ -312,4 +312,59 @@ public class CalendarCardTests
         Assert.Empty(CalendarCard.FromIcs("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"u8.ToArray()));
         Assert.Empty(CalendarCard.FromIcs("garbage"u8.ToArray()));
     }
+
+    [Theory]
+    [InlineData("FREQ=2")]
+    [InlineData("FREQ=SECONDLY")]
+    [InlineData("FREQ=MINUTELY")]
+    public void HostileSeriesAreBoundedWithADisplayZoneAndAFarAfter(string rule)
+    {
+        // From a fuzz finding: an event whose end is a thousand years before its start has no occurrence in any window, and a
+        // minutely or secondly series used to scan until year 9999. FREQ=2 was read as MINUTELY by an enum parse.
+        string ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\n"
+            + "DTSTART;TZID=Europe/Paris:20260105T100000\r\nDTEND;TZID=Europe/Paris:10260105T103000\r\nRRULE:" + rule + "\r\nSUMMARY:S\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        CalendarCardOptions o = new() { DisplayTimeZone = "Asia/Tokyo", NextOccurrences = 20, After = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc) };
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        foreach (CalendarCard c in CalendarCard.FromIcs(Encoding.ASCII.GetBytes(ics), o))
+        {
+            _ = c.ToHtml(linkUrls: true);
+        }
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), "took " + sw.Elapsed);
+    }
+
+    private static byte[] Repro(string name, [System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        File.ReadAllBytes(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "..", "testdata", "fuzz", name)));
+
+    // The valid series the fuzz target patches bytes into (fuzz/OneMail.Fuzz/CalcardTarget.cs).
+    private const string FuzzSeries =
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\n" +
+        "DTSTART;TZID=Europe/Paris:20260105T100000\r\nDTEND;TZID=Europe/Paris:20260105T103000\r\nRRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=10;BYDAY=MO,TH\r\n" +
+        "EXDATE;TZID=Europe/Paris:20260108T100000\r\nSUMMARY:Series\r\nLOCATION:Room\r\nURL:https://example.com/x\r\nCONFERENCE:https://meet.example.com/y\r\n" +
+        "ORGANIZER;CN=Org:mailto:org@example.com\r\nATTENDEE;CN=A;PARTSTAT=ACCEPTED;ROLE=REQ-PARTICIPANT:mailto:a@example.com\r\nDESCRIPTION:Hello\\nworld\r\n" +
+        "ATTACH;FILENAME=f.txt:https://example.com/f.txt\r\nEND:VEVENT\r\n" +
+        "BEGIN:VEVENT\r\nUID:a@example.com\r\nDTSTAMP:20260101T000000Z\r\nRECURRENCE-ID;TZID=Europe/Paris:20260119T100000\r\nDTSTART;TZID=Europe/Paris:20260120T110000\r\nSUMMARY:Moved\r\nEND:VEVENT\r\n" +
+        "END:VCALENDAR\r\n";
+
+    [Fact]
+    public void TheMinimisedFuzzInputFinishesQuickly()
+    {
+        byte[] data = Repro("calcard-recurrence-numeric-freq-slow.bin");
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        // The fuzz target's shape 1 patches bytes into a valid series; this is the patched file that took 26 seconds.
+        Assert.Equal(1, data[0] % 3);
+        byte[] ics = Encoding.ASCII.GetBytes(FuzzSeries);
+        ReadOnlySpan<byte> rest = data.AsSpan(1);
+        for (int i = 0; i + 2 < rest.Length; i += 3)
+        {
+            ics[(rest[i] | (rest[i + 1] << 8)) % ics.Length] = rest[i + 2];
+        }
+
+        foreach (CalendarCard c in CalendarCard.FromIcs(ics, new CalendarCardOptions { DisplayTimeZone = "Asia/Tokyo", NextOccurrences = 20, After = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc) }))
+        {
+            _ = c.ToHtml(linkUrls: true);
+        }
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), "took " + sw.Elapsed);
+    }
 }

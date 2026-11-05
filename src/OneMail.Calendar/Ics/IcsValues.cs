@@ -469,6 +469,18 @@ public sealed class RecurrenceRule
     /// <summary>Parts this parser does not know, as written, in order.</summary>
     public IReadOnlyList<KeyValuePair<string, string>> OtherParts { get; private set; } = [];
 
+    private static RecurrenceFrequency? FrequencyFromName(string name) => name.ToUpperInvariant() switch
+    {
+        "SECONDLY" => RecurrenceFrequency.Secondly,
+        "MINUTELY" => RecurrenceFrequency.Minutely,
+        "HOURLY" => RecurrenceFrequency.Hourly,
+        "DAILY" => RecurrenceFrequency.Daily,
+        "WEEKLY" => RecurrenceFrequency.Weekly,
+        "MONTHLY" => RecurrenceFrequency.Monthly,
+        "YEARLY" => RecurrenceFrequency.Yearly,
+        _ => null,
+    };
+
     /// <summary>Parses a recurrence rule. Each part may appear once; part names are case-insensitive.</summary>
     /// <param name="value">The RECUR text, for example <c>FREQ=WEEKLY;BYDAY=MO,WE</c>.</param>
     /// <param name="tzid">The <c>TZID</c> of the owning property, used to read a date-time UNTIL, or null.</param>
@@ -503,12 +515,14 @@ public sealed class RecurrenceRule
             switch (key)
             {
                 case "FREQ":
-                    if (!Enum.TryParse(v, true, out RecurrenceFrequency f) || !Enum.IsDefined(f))
+                    // RFC 5545 §3.3.10: FREQ is one of the seven names, in any case; Enum.TryParse would also take digits.
+                    RecurrenceFrequency? f = FrequencyFromName(v);
+                    if (f is null)
                     {
                         return false;
                     }
 
-                    rule.Frequency = f;
+                    rule.Frequency = f.Value;
                     haveFreq = true;
                     break;
                 case "UNTIL":

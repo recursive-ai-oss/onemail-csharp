@@ -80,7 +80,7 @@ public enum RecurrenceDefectKind
     /// <summary>A rule went <see cref="ExpansionOptions.MaxIterationsWithoutHit"/> periods without producing an instance. Enumeration of that rule ends.</summary>
     IterationLimit,
 
-    /// <summary>A rule generated more than <see cref="ExpansionOptions.MaxInstancesScanned"/> instances before the window. Enumeration of that rule ends.</summary>
+    /// <summary>The expansion looked at more than <see cref="ExpansionOptions.MaxInstancesScanned"/> instances without yielding one (before the window, excluded, replaced by an override, or outside the window). Enumeration ends.</summary>
     ScanLimit,
 }
 
