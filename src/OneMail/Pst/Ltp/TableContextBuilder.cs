@@ -487,8 +487,8 @@ public sealed class TableContextBuilder
 
             DataTreeResult r = _tree.Complete();
             Nid nid = _values.NextNid();
-            _values.Subnodes.Add(new SubnodeEntry(nid, r.Root, default));
-            hnidRows = nid.Value;
+            // Registered like any large value so the message size Outlook checks counts the matrix too.
+            hnidRows = _values.Register(nid, r);
         }
         else if (_rowsInBlock > 0)
         {

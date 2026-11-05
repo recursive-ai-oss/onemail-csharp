@@ -147,6 +147,7 @@ public sealed class PstBuilderTests
             PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
             inbox.AddMessage(Message("plain", recipients: 0));
             inbox.AddMessage(Message("big", recipients: 3, attachments: 2, body: new string('b', 20_000)));
+            inbox.AddMessage(Message("many recipients", recipients: 400));   // the recipient table's row matrix is a subnode of its own
         });
         using (store)
         {
@@ -158,7 +159,7 @@ public sealed class PstBuilderTests
                 checkedMessages++;
             }
 
-            Assert.Equal(2, checkedMessages);
+            Assert.Equal(3, checkedMessages);
             Assert.Equal([], StoreChecks.Consistency(store));
         }
 

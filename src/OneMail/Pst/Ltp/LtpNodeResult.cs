@@ -142,7 +142,7 @@ internal sealed class LtpValuePlacer
         return Register(nid, _blocks.WriteData(source, length));
     }
 
-    private uint Register(Nid nid, DataTreeResult r)
+    internal uint Register(Nid nid, DataTreeResult r)
     {
         Subnodes.Add(new SubnodeEntry(nid, r.Root, default));
         SubnodeBytes += r.Length;
