@@ -1151,10 +1151,20 @@ internal sealed class MimeTreeBuilder
     private readonly IRandomAccessSource _source;
     private readonly Stack<Pending> _stack = new();
     private MimeEntity? _root;
-    private byte[] _scratch = new byte[1024];
+    private byte[] _scratch = [];
     private int _scratchLength;
 
     public MimeTreeBuilder(IRandomAccessSource source) => _source = source;
+
+    // The scratch buffer is only needed between an entity's first field and its end of headers, so it goes back to the pool there.
+    private void ReturnScratch()
+    {
+        if (_scratch.Length > 0)
+        {
+            ArrayPool<byte>.Shared.Return(_scratch);
+            _scratch = [];
+        }
+    }
 
     public void Handle(MimeReader r)
     {
@@ -1173,7 +1183,10 @@ internal sealed class MimeTreeBuilder
                 int valueOffset = raw.IndexOf((byte)':') + 1;
                 if (_scratch.Length - _scratchLength < raw.Length)
                 {
-                    Array.Resize(ref _scratch, Math.Max(_scratch.Length * 2, _scratchLength + raw.Length));
+                    byte[] bigger = ArrayPool<byte>.Shared.Rent(Math.Max(1024, Math.Max(_scratch.Length * 2, _scratchLength + raw.Length)));
+                    _scratch.AsSpan(0, _scratchLength).CopyTo(bigger);
+                    ReturnScratch();
+                    _scratch = bigger;
                 }
 
                 raw.CopyTo(_scratch.AsSpan(_scratchLength));
@@ -1198,6 +1211,7 @@ internal sealed class MimeTreeBuilder
                     _scratchLength = 0;
                 }
 
+                ReturnScratch();
                 StartEntity(r);
                 break;
 
