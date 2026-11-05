@@ -7,6 +7,9 @@
 # Writes BenchmarkDotNet's results under OUTDIR/bdn, peak-memory lines to OUTDIR/peak.tsv and the table to OUTDIR/report.tsv,
 # and records the machine and its load before, during and after.
 set -euo pipefail
+# ROWS_STAGES picks which parts run (comma list of bdn, peak, native, curve; default all): the timed rows can then go to the bench queue on
+# their own while the memory measurements run as ordinary jobs.
+stage() { case ",${ROWS_STAGES:-bdn,peak,native,curve}," in *",$1,"*) return 0;; *) return 1;; esac; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="${1:?output directory}"; shift || true
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
@@ -28,12 +31,14 @@ mon=$!
 trap 'kill $mon 2>/dev/null || true' EXIT
 
 # Arguments replace the default filter; BenchmarkDotNet rejects a second --filter.
-if [ $# -eq 0 ]; then set -- -f '*'; full=1; else full=0; fi
-dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
-[ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+if [ $# -eq 0 ]; then set -- -f '*.ParseRow*' '*.HeadersRow*' '*.BodiesRow*' '*.WriteRow*' '*.BuildRow*' '*.MboxRow*'; full=1; else full=0; fi
+if stage bdn; then
+  dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
+  [ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+fi
 
+if [ "$full" = 1 ] && stage peak; then
 : > "$out/peak.tsv"
-if [ "$full" = 1 ]; then
 for in in enron-2k enron-20k dovecot-multipart generated-attachment-6m; do
   for row in parse headers bodies write; do
     for side in ours theirs; do dotnet "$dll" peak $row $side $in | grep '^PEAK' >> "$out/peak.tsv"; done
@@ -42,6 +47,16 @@ done
 for side in ours theirs; do dotnet "$dll" peak mbox $side dovecot | grep '^PEAK' >> "$out/peak.tsv"; dotnet "$dll" peak build $side attachment | grep '^PEAK' >> "$out/peak.tsv"; done
 fi
 
+# Native reference (not a gate): the released Rust mail-parser and mail-builder crates over the same four inputs.
+if stage native && command -v cargo >/dev/null 2>&1; then
+  dotnet "$dll" inputs "$out/inputs"
+  ( cd "$here/native/mimeparse" && CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$out/cargo-target}" cargo build --release -q )
+  : > "$out/native.tsv"
+  for in in enron-2k enron-20k dovecot-multipart generated-attachment-6m; do
+    "${CARGO_TARGET_DIR:-$out/cargo-target}/release/mimeparse" "$out/inputs/$in.eml" | sed "s/^/$in\t/" >> "$out/native.tsv"
+  done
+fi
+
 kill $mon 2>/dev/null || true
 { machine after; } | tee -a "$out/machine.txt"
-dotnet "$dll" report "$out/bdn/results" | tee "$out/report.tsv"
+if stage bdn; then dotnet "$dll" report "$out/bdn/results" | tee "$out/report.tsv"; fi

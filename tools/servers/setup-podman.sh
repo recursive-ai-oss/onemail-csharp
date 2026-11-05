@@ -16,6 +16,8 @@ T="$R/tools/podman-linux-amd64/usr/local"
 cat > "$R/conf/containers.conf" <<C
 [containers]
 cgroups="disabled"
+# No per-container session keyring: each one costs the user a kernel key, and the quota is only 200.
+keyring=false
 [engine]
 helper_binaries_dir=["$T/lib/podman","$T/bin"]
 runtime="crun"

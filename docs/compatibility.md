@@ -78,7 +78,7 @@ folders, items, recipients and attachments, 548 compared fields, 0 differences; 
 allocation map. On the PSTs we write, `pffexport` finds every item (5,032 of 5,032 Enron; 3,241 against 3,237 dovecot messages, the extra four being embedded
 messages it counts) and shows only its known reading limits ([`pst-writing.md`](pst-writing.md)): the narrow-string code page (it ignores
 `PidTagMessageCodepage`), `Attachment.txt` for an unnamed attachment (48 cases), a `_` in front of a numeric attachment name (11), and one POI MSG whose
-subject it reads as `Importance:` plus tabs (not yet explained; listed in the gaps).
+subject it reads as `Importance:` plus tabs (explained: `blank.msg` has an empty subject, and pffexport then writes `Subject:` with no line end, so the next label lands on the same line of `OutlookHeaders.txt`; ours is right).
 
 **Working set**, indicative runs on a loaded machine (release build). The largest real store in the corpora is a 16 MiB OST, so the large stores are generated.
 
@@ -348,6 +348,19 @@ RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: 
 | PDF structure | the 76 kept PDFs | poppler `pdfinfo` reads all 76 without a message, every one tagged, title = subject | `qpdf --check` and veraPDF were not run (no prebuilt copy on the worker) |
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | 0 warnings; renders one message to PDF and to PNG (`render: ok`); `.Render` is not referenced by the browser smoke | |
 
+## Browser (WebAssembly)
+
+The format core (`RecursiveAI.OneMail` and `.Calendar`) runs in the browser's .NET runtime (`browser-wasm`, the interpreter, no threads). Two checks:
+
+- `smoke/Wasm/run-headless.sh` publishes a small app with fixed checks (MIME, stores, calendar, the Outlook formats, conversions) and runs it in headless Chromium.
+- `tests/Wasm/run.sh` compiles the format-core test sources of `tests/OneMail.Tests` into a `browser-wasm` app with a small runner (xUnit's own runner needs threads), serves it on localhost and runs it in headless Chrome. The data files the tests read are copied into the runtime's file system at the paths the tests expect. Protocols, cryptography, rendering and the command-line tool are not in the browser build, so their tests are not compiled in.
+
+| Check | Result | Exclusions |
+|---|---|---|
+| Format-core suite in headless Chrome (Chrome from the distribution package, .NET 10.0.14 runtime, interpreter) | 1,658 tests: 1,648 passed, 0 failed, 8 skipped (corpora not fetched, as natively), 2 excluded | `Platform=native`: 1 needs file locking (`NdbEditorTests.AnOpenEditorHoldsTheFileExclusively`, the browser file system has none), 1 counts allocations per message against the optimising JIT (`SharedViewTests.EnumeratingAnMboxAllocatesLittlePerMessage`). Not compiled: `PackageLayoutTests` (looks at all five packages). |
+
+Browser limits that touch the library: no threads (an API must not block on a task another thread would run), no file locking, no memory-mapped files (file sources use ordinary reads), and the interpreter makes the heaviest tests slow (the whole run is about 4 minutes). The `wasm` job in CI builds the smoke app and runs this suite.
+
 ## Android and iOS
 
 The mobile smoke apps (`smoke/Android`, `smoke/iOS`) reference the core, Calendar, Client, Cryptography and Render projects, build in Release
@@ -362,6 +375,41 @@ SMTP server, DKIM/ARC with generated keys, S/MIME with a test anchor, sanitiser 
 | iOS (`net10.0-ios`, `iossimulator-arm64`, workload 27.1 with Xcode 27.1) | iPhone simulator, iOS 27.1, Apple silicon | 39 checks `ok`, `mobile smoke: ok`; 0 build warnings; the trimmer cut `RecursiveAI.OneMail.dll` from 1,752,064 to 1,402,880 bytes; app 37.0 MB | the runtime is Mono with `UseInterpreter`: with ahead-of-time compilation only, the first file open failed ("Attempting to JIT compile ... aot-only mode", the file handle marshaller), which is the runtime's, not ours. The app adopts the scene lifecycle that iOS 27 requires. The simulator build only: no device or signing. The `ios` workload must match the installed Xcode (`dotnet workload update`); with workload 26.0 and Xcode 27 the build runs but the app does not load |
 
 The `android` job in CI builds the Android app on every push (build only).
+
+## Provider smoke (`tools/providers`, `providers.md`)
+
+Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all mail to the account itself, cleaned up afterwards. 27 pass, 1 not-offered (QRESYNC is not advertised), 0 FAIL (POP3 rerun after POP was enabled in the account). Outlook.com: not run (no OAuth client). Yahoo, iCloud: not run (no accounts).
+
+| Protocol | Feature | Result | Detail |
+|---|---|---|---|
+| smtp | attachment+non-ASCII subject (encoded-word) | pass | 55447 bytes |
+| smtp | SMTPUTF8 raw UTF-8 subject | pass | 432 bytes |
+| smtp | 5 MB message | pass | 5337486 bytes |
+| smtp | 587 starttls XOAUTH2 auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 587 starttls OAUTHBEARER auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 465 implicit XOAUTH2 auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| smtp | 465 implicit OAUTHBEARER auth+send | pass | extensions: SIZE 8BITMIME ENHANCEDSTATUSCODES PIPELINING CHUNKING SMTPUTF8 LIMITS |
+| imap | XOAUTH2 login | pass | capabilities: IMAP4rev1 UNSELECT IDLE NAMESPACE QUOTA ID XLIST CHILDREN X-GM-EXT-1 UIDPLUS COMPRESS=DEFLATE ENABLE MOVE CONDSTORE ESEARCH UTF8=ACCEPT LIST-EXTENDED LIST-STATUS LITERAL- SPECIAL-USE APPENDLIMIT=35651584 |
+| imap | OAUTHBEARER login | pass | capabilities: IMAP4rev1 UNSELECT IDLE NAMESPACE QUOTA ID XLIST CHILDREN X-GM-EXT-1 UIDPLUS COMPRESS=DEFLATE ENABLE MOVE CONDSTORE ESEARCH UTF8=ACCEPT LIST-EXTENDED LIST-STATUS LITERAL- SPECIAL-USE APPENDLIMIT=35651584 |
+| imap | list + SPECIAL-USE | pass | 9 folders; special-use: All,Drafts,Important,Sent,Junk,Flagged,Trash |
+| imap | select INBOX | pass | 13 messages |
+| imap | fetch+compare XOAUTH2s | pass | BODY[] body equal (70 bytes), 9 sent headers intact, 2 added; size 763, sent 408 |
+| imap | fetch+compare unicode-attach | pass | BODY[] body equal (55070 bytes), 8 sent headers intact, 2 added; size 55802, sent 55447 |
+| imap | fetch+compare utf8-subject | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 790, sent 432 |
+| imap | fetch+compare big | pass | BODY[] body equal (5337163 bytes), 8 sent headers intact, 2 added; size 5337841, sent 5337486 |
+| imap | fetch+compare OAUTHBEARERs | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 779, sent 424 |
+| imap | fetch+compare XOAUTH2i | pass | BODY[] body equal (70 bytes), 9 sent headers intact, 2 added; size 764, sent 408 |
+| imap | fetch+compare OAUTHBEARERi | pass | BODY[] body equal (78 bytes), 9 sent headers intact, 2 added; size 780, sent 424 |
+| imap | search | pass | 7 hits for run header (sent 7) |
+| imap | flags store | pass | flags: $OneMailSmoke \Flagged |
+| imap | CONDSTORE select+modseq | pass | HIGHESTMODSEQ 3304 |
+| imap | QRESYNC reselect | not-offered | not-offered |
+| imap | APPEND + fetch | pass | APPENDUID; BODY[] body equal (70 bytes), 9 sent headers intact, 0 added |
+| imap | MOVE to Trash/All | pass | moved to uid 12 |
+| imap | IDLE sees new message | pass | EXISTS pushed |
+| imap | COMPRESS=DEFLATE | pass | compressed session, INBOX 14 |
+| pop3 | XOAUTH2 + UIDL + RETR | pass | 7 messages, UIDL present; test message retrieved |
+| imap | cleanup | pass | 17 moved/removed |
 
 ## Speed
 

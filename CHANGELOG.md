@@ -4,8 +4,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `tools/providers`: OAuth token minting (Google loopback with PKCE, Microsoft device code) and a provider smoke runner for Gmail and Outlook.com over SMTP, IMAP and POP3; setup and endpoints in `docs/providers.md`.
+
 ### Changed
 
+- `TransferEncoder.Base64` encodes once and spreads the 76-character lines in place instead of calling the encoder per line and copying the result: building a message with a 1 MB attachment, 750 us to 445 us and 4.1 MB to 2.7 MB allocated (x64, indicative).
+- The test servers script turns off podman's per-container session keyring and stops podman's pause helper after each run, so repeated runs can no longer use up the user's kernel key quota.
 - `VCardView.Emails`, `Phones`, `Urls`, `Addresses` and the other typed lists count their properties when asked and build an item the first time it is read, so counting costs a scan of the card: vCard parse with a typed pass over 10,000 cards, 79.7 ms to 55.8 ms (comparator 67.2 ms), 5,500 to 4,000 bytes per card (Apple M2, indicative).
 - In-place PST writing changes a big folder's contents, associated-contents and hierarchy tables row by row at commit instead of writing them whole: with 100,000 rows a one-item add commits in about 0.15 s instead of 2.5 s and writes 0.2 MiB instead of 33 MiB; with 600,000 rows 0.45 s instead of 10.7 s (`docs/benchmarks.md`, `docs/pst-writing.md`). `DeleteMessage` and `MoveMessage` no longer read the folder's table again for every call. Small tables, tables of other layouts and large change sets are still written whole, with the same results.
 - `RecursiveAI.OneCrypto` 0.4.0-preview.1 (was 0.1.0-preview.1), plus `RecursiveAI.OneCrypto.OpenPgp`, for `.Cryptography`.
@@ -13,6 +19,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- `tests/Wasm`: the format-core tests (core and Calendar: everything under `tests/OneMail.Tests` except protocols, cryptography, rendering and the command-line tool) run in headless Chromium on `browser-wasm` through a small runner (`tests/Wasm/run.sh`). A test that needs something the browser lacks carries `[Trait("Platform", "native")]` with a `Reason` and is counted as an exclusion.
+- Samples for every happy-path task (`samples/ParseMessage`, `OpenStore`, `Convert`, `Sending`, `Imap`, `Display`, `ReplyAndSend`, plus `Reading`), `docs/migrating-from-mimekit.md` (a map from MimeKit and MailKit calls to OneMail's, and the behavioural differences) and a README quick start.
+- `DisplayOptions.WithStatusBanner(...)`: a copy of the options with the status banner replaced; `PgpDisplay` and `SmimeDisplay` use it instead of copying every field.
 - S/MIME in Thunderbird: `tools/thunderbird/smime.py` imports the test CA and the user's PKCS #12 file into the headless Thunderbird 159.0's certificate store and opens our signed, encrypted and signed+encrypted messages (RSA-2048, RSA-3072, ECDSA P-256; 15/15, and an untrusted-CA control 3/3), and has Thunderbird write signed, encrypted and combined messages that OneMail verifies and decrypts (9/9). `SmimeInterop thunderbird` writes the vectors; both sets are committed in `testdata/smime/vectors` and read back by `SmimeInteropVectors`.
 - `SmimeDisplay.ToDisplayHtml(SmimeResult)` and `SmimeDisplay.StatusHtml`: a display with a status block (signer, chain, sender match, encryption, parts outside the signature, weak algorithms) through `DisplayOptions.StatusBanner`, never showing unsigned wrapper parts as signed.
 - Thunderbird interoperability for OpenPGP mail: `tools/thunderbird` runs the pinned Thunderbird 159.0 release headless, opens our PGP/MIME messages (signed, encrypted, combined, sign-then-encrypt) and has it write signed, encrypted and combined messages that `PgpInteropVectors` reads back from `testdata/openpgp/vectors/thunderbird`.

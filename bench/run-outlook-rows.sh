@@ -11,6 +11,9 @@
 # (pffexport.tsv; a native reference only, it also writes every item to disk, mode items). Arguments replace the default filter and skip those extras.
 # Writes BenchmarkDotNet's results under OUTDIR/bdn, the table to OUTDIR/report.tsv, and the machine and its load before, during and after.
 set -euo pipefail
+# ROWS_STAGES picks which parts run (comma list of bdn, peak, native, curve; default all): the timed rows can then go to the bench queue on
+# their own while the memory measurements run as ordinary jobs.
+stage() { case ",${ROWS_STAGES:-bdn,peak,native,curve}," in *",$1,"*) return 0;; *) return 1;; esac; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="${1:?output directory}"; shift || true
 mkdir -p "$out"; out="$(cd "$out" && pwd)"
@@ -38,11 +41,14 @@ mon=$!
 trap 'kill $mon 2>/dev/null || true' EXIT
 
 if [ $# -eq 0 ]; then set -- -f '*PstRow*' '*PstLargeRow*' '*PstFourKiBRow*' '*MsgRow*' '*TnefRow*'; full=1; else full=0; fi
-dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
-[ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+if stage bdn; then
+  dotnet "$dll" --artifacts "$out/bdn" "$@" > "$out/bdn.log" 2>&1 || { tail -30 "$out/bdn.log"; exit 1; }
+  [ -d "$out/bdn/results" ] || { echo "no results; see $out/bdn.log"; tail -30 "$out/bdn.log"; exit 1; }
+fi
 
 if [ "$full" = 1 ]; then
   : > "$out/peak.tsv"; : > "$out/curve.tsv"
+  if stage peak; then
   while IFS=$'\t' read -r input _; do
     case "$input" in
       gen-*|cfreds-ost|tika-pst|tika-bodytypes) row=pst ;;
@@ -54,13 +60,16 @@ if [ "$full" = 1 ]; then
       case "$input" in gen-k4-*) [ "$side" = theirs ] && continue ;; esac
       DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" peak $row $side "$input" | grep '^PEAK' >> "$out/peak.tsv" || true; done
   done < "$out/counts.tsv"
+  fi
+  if stage curve; then
   for input in gen-u10k gen-u50k; do
     for side in ours theirs; do DOTNET_GCgen0MaxBudget=2000000 dotnet "$dll" curve pst $side "$input" | grep '^CURVE' >> "$out/curve.tsv" || true; done
     # The comparator's documented cache release, for the memory comparison (it is much slower, so it is not a timed row).
     DOTNET_GCgen0MaxBudget=2000000 ONEMAIL_XST_CLEAR=1 dotnet "$dll" curve pst theirs "$input" | grep '^CURVE' | awk -F'\t' -v OFS='\t' '$2 == "theirs" { $2 = "theirs-clear" } { print }' >> "$out/curve.tsv" || true
   done
+  fi
   lp="${ONEMAIL_LIBPFF:-$HOME/onemail/oracles/libpff}"
-  if [ -f "$lp"/env.sh ]; then
+  if stage native && [ -f "$lp"/env.sh ]; then
     ( cd "$lp" && set +u && . ./env.sh && set -u
       printf 'input\trun\twall_s\tmax_rss_KiB\n' > "$out/pffexport.tsv"
       for input in cfreds-ost tika-pst tika-bodytypes gen-u1k gen-u10k gen-u50k; do
@@ -76,4 +85,4 @@ fi
 
 kill $mon 2>/dev/null || true
 { machine after; } | tee -a "$out/machine.txt"
-dotnet "$dll" report "$out/bdn/results" "$out/counts.tsv" | tee "$out/report.tsv"
+if stage bdn; then dotnet "$dll" report "$out/bdn/results" "$out/counts.tsv" | tee "$out/report.tsv"; fi

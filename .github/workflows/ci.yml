@@ -62,6 +62,9 @@ jobs:
         run: dotnet workload install wasm-tools
       - name: Build the browser smoke app
         run: dotnet build smoke/Wasm -c Release
+      - name: Format-core tests in headless Chrome
+        # Publishes tests/Wasm for browser-wasm and runs it in the runner's Chrome; about 8 minutes.
+        run: tests/Wasm/run.sh "$RUNNER_TEMP/wasm-tests"
 
   android:
     # The Android smoke app builds trimmed in Release with warnings as errors. Build only: running it needs an emulator

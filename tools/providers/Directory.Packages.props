@@ -1,0 +1,6 @@
+<Project>
+  <!-- No package references; this tool stands on the library projects and the BCL. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

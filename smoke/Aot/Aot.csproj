@@ -8,7 +8,15 @@
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Apple's static libraries carry clang module debug info whose module cache doesn't exist on a fresh machine, so
+         the macOS linker warns about every missing .pcm and -warnaserror fails the publish. The smoke app needs no native
+         debug info: the linker drops it (-S) and no dSYM is made from the stripped binary. -->
+    <StripSymbols Condition="$([MSBuild]::IsOSPlatform('OSX'))">false</StripSymbols>
   </PropertyGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <ExtraLinkerArg Include="-S" />
+  </ItemGroup>
 
   <ItemGroup>
     <Using Include="System" />

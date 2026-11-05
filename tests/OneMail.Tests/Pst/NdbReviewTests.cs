@@ -39,6 +39,12 @@ public sealed class NdbReviewTests
 
     private static T WithTimeout<T>(Func<T> work)
     {
+        if (OperatingSystem.IsBrowser())
+        {
+            // The browser has one thread: a worker task would never run while this one waits.
+            return work();
+        }
+
         Task<T> t = Task.Run(work);
         Assert.True(t.Wait(TimeSpan.FromSeconds(30)), "the operation did not finish in 30 seconds");
         return t.Result;

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <!-- The format-core tests (the core and Calendar packages) compiled into a browser-wasm app with a small runner (Runner.cs).
+       The test sources are the ones tests/OneMail.Tests compiles; nothing is copied. Same assembly name, so the tests see
+       the internals the library exposes to them. -->
+  <PropertyGroup>
+    <AssemblyName>$(PackagePrefix).OneMail.Tests</AssemblyName>
+    <RootNamespace>$(PackagePrefix).OneMail.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <PublishTrimmed>false</PublishTrimmed>
+    <NoWarn>$(NoWarn);xUnit1051;CA1707</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <!-- Everything under tests/OneMail.Tests except the packages the browser does not host: protocols, crypto, rendering,
+         and the command-line tool. -->
+    <Compile Include="../OneMail.Tests/**/*.cs" Exclude="../OneMail.Tests/Client/**;../OneMail.Tests/Cryptography/**;../OneMail.Tests/Render/**;../OneMail.Tests/Cli/**;../OneMail.Tests/PackageLayoutTests.cs;../OneMail.Tests/obj/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.assert" />
+    <PackageReference Include="xunit.v3.extensibility.core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneMail.Calendar/OneMail.Calendar.csproj" />
+    <ProjectReference Include="../../src/OneMail/OneMail.csproj" />
+  </ItemGroup>
+
+</Project>
