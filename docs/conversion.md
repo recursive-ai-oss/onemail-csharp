@@ -253,7 +253,7 @@ codes (folders, flags, keywords, mbox line endings). The matrix of what each sou
 `TransportHeadersRewritten`, `ValueOutOfRange`; TNEF: `TnefCodePageDiffers`, `TnefMessageClassUsed`, `TnefNotUsed`, `TnefPartUnpacked`, `TnefTrailingCrLfIgnored`,
 `TnefPlainTextNotRendered`, `TnefPropertyIgnored`, `TnefPropertyWithoutName`, `TnefRecipientIgnored`, `TnefWriterLimit`; MSG: `MsgDuplicatePropertyDropped`, `MsgEmptyStringDropped`, `MsgNamedPropertyUnmapped`, `MsgPropertyAdjusted`, `MsgStorageDropped`,
 `MsgStorageEntryDropped`, `MsgStringsConverted`, `MsgValueResized`; PST: `PstDuplicatePropertyDropped`, `PstEmbeddingTooDeep`, `PstNamedPropertyLimit`,
-`PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded` (bookkeeping: a property every PST item must have was added), `PstTooManyChildren`, `PstUnsupportedType`.
+`PstNamedPropertyUnmapped`, `PstObjectStorageDropped`, `PstPropertyAdded` (bookkeeping: a property every PST item must have was added), `PstPropertyAdjusted` (bookkeeping: a value was rewritten in the form the PST needs), `PstTooManyChildren`, `PstUnsupportedType`.
 
 ## Limits
 

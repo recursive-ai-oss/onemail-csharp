@@ -238,6 +238,41 @@ internal static class LtpCommands
 
     // ---- blockat: what is at a file offset ----
 
+    /// <summary>Prints every row of a table node: <c>rows &lt;file&gt; &lt;nid hex&gt;</c>, each present cell as column tag and the first bytes of its value.</summary>
+    public static int Rows(NdbFile f, string nidHex)
+    {
+        if (!TableContext.TryOpen(f, new Nid(Convert.ToUInt32(nidHex, 16)), out TableContext? tc, out _) || tc is null)
+        {
+            Console.WriteLine("not a table");
+            return 1;
+        }
+
+        using (tc)
+        {
+            var row = new byte[tc.RowSize];
+            for (uint r = 0; r < tc.RowCount; r++)
+            {
+                if (!tc.TryReadRow(r, row))
+                {
+                    continue;
+                }
+
+                TableRow tr = tc.GetRow(row);
+                Console.WriteLine($"row {r} id {tr.RowId:X}");
+                for (int c = 0; c < tc.Columns.Count; c++)
+                {
+                    if (tr.TryGetCell(c, out LtpValueRef v))
+                    {
+                        byte[]? bytes = tc.ReadValue(v);
+                        Console.WriteLine($"  {tc.Columns[c].Tag:X8} {(bytes is null ? "-" : Convert.ToHexString(bytes.AsSpan(0, Math.Min(24, bytes.Length))))}");
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+
     public static int BlockAt(NdbFile f, string[] offsets)
     {
         foreach (string o in offsets)

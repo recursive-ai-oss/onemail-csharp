@@ -99,6 +99,11 @@ internal static class Program
             return OutlookVariants.Required(args[1]);
         }
 
+        if (args[0] == "ansi")
+        {
+            return OutlookVariants.Ansi(args[1]);
+        }
+
         if (args[0] == "cfb")
         {
             return CfbDump.Run(args[1]);

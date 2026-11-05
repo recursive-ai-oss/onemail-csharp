@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using RecursiveAI.OneArchive;
+using RecursiveAI.OneArchive.Cfb;
 using RecursiveAI.OneMail.Mapi;
 using RecursiveAI.OneMail.Pst.Ltp;
 using RecursiveAI.OneMail.Pst.Ndb;
@@ -627,19 +629,34 @@ internal sealed class PstItemWriter
         return cells;
     }
 
+    // The template tables declare these columns as PtypString. A value kept as PtypString8 would go to an extra column and leave the standard one empty,
+    // and the repair tool of Outlook then reports the row as not matching its sub-object, so the value is written as PtypString.
+    private void WidenStrings(List<Prop> props, (ushort Id, ushort Type)[] columns, MapiObject owner, string location)
+    {
+        foreach ((ushort id, ushort type) in columns)
+        {
+            if (type == 0x1F && Find(props, id) is { Type: 0x1E, Source: { } narrowSource } narrow)
+            {
+                narrow.Type = 0x1F;
+                narrow.Bytes = Encoding.Unicode.GetBytes(narrowSource.AsString(owner.String8Encoding) ?? string.Empty);
+                narrow.Source = null;
+                Report(PstWriteDefectKind.PropertyAdjusted, location, $"property 0x{id:X4} was a PtypString8 and was written as PtypString");
+            }
+        }
+    }
+
     private WrittenObject WriteMessageObject(MapiMessage m, uint key, Ctx ctx, int depth, string location)
     {
         NdbBlockBuilder blocks = _file.Blocks;
         bool outerString8 = _string8Seen;
         _string8Seen = false;
         List<Prop> props = Collect(m, location, skipObject: false);
-        if (_options.AddRequiredProperties && Find(props, 0x001A) is { Type: 0x1E, Source: { } classSource } narrowClass)
+        if (_options.AddRequiredProperties)
         {
             // The repair tool of Outlook looks for PidTagMessageClass as a Unicode string and reports a message whose class is a PtypString8 as having none.
-            narrowClass.Type = 0x1F;
-            narrowClass.Bytes = Encoding.Unicode.GetBytes(classSource.AsString(m.String8Encoding) ?? string.Empty);
-            narrowClass.Source = null;
-            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageClass was a PtypString8 and was written as PtypString");
+            // It also compares each Unicode column of the folder's contents row with the property context and reports "row doesn't match sub-object" when
+            // the context holds the value as PtypString8 (the subject, for one), so those values are written as PtypString too.
+            WidenStrings(props, ContentsColumns, m, location);
         }
 
         long size = 0;
@@ -704,6 +721,20 @@ internal sealed class PstItemWriter
             // MS-PST 2.4.5.1.1: the properties every message property context must have.
             Ensure(props, 0x001A, 0x1F, Encoding.Unicode.GetBytes("IPM.Note"), location);
             Ensure(props, 0x0E07, 3, I32(flags), location);
+            // PidTagDisplayTo, ...Cc and ...Bcc (MS-OXOMSG 2.2.1.5 - 2.2.1.7) list the recipients' names by type, "; " between them. The repair tool
+            // of Outlook derives them from the recipient table and reports a contents row that disagrees ("row doesn't match sub-object").
+            foreach ((int type, ushort id) in new[] { (1, (ushort)0x0E04), (2, (ushort)0x0E03), (3, (ushort)0x0E02) })
+            {
+                if (Find(props, id) is null)
+                {
+                    string names = string.Join("; ", recipients.Where(r => (r.RecipientTypeValue ?? 1) == type && !string.IsNullOrEmpty(r.DisplayName)).Select(static r => r.DisplayName));
+                    if (names.Length > 0)
+                    {
+                        Ensure(props, id, 0x1F, Encoding.Unicode.GetBytes(names), location);
+                    }
+                }
+            }
+
             // PidTagMessageSize is the bytes in the data trees of the message node and all its subnodes, attachments and embedded messages included
             // (what Outlook writes, and what its repair tool checks the folder's row against). It depends on the size of the context it is in, so it is
             // filled in when that context is built.
@@ -805,6 +836,11 @@ internal sealed class PstItemWriter
         for (int i = 0; i < count; i++)
         {
             List<Prop> props = Collect(recipients[i], location + " recipient " + i, skipObject: true);
+            if (_options.AddRequiredProperties)
+            {
+                WidenStrings(props, RecipientColumns, recipients[i], location + " recipient " + i);
+            }
+
             // MS-OXCMSG makes PidTagRecipientType a required recipient property. Outlook's repair tool treats a recipient table whose rows
             // lack it as unusable (it leaves the table out when it measures an embedded message), so a recipient without one is written as "To" (the property is reported as added).
             Ensure(props, 0x0C15, 3, [1, 0, 0, 0], location + " recipient " + i);
@@ -886,9 +922,14 @@ internal sealed class PstItemWriter
                 }
             }
 
-            if (a.ObjectStorage is not null && embedded is null)
+            if (a.ObjectStorage is { } storage && embedded is null)
             {
-                Report(PstWriteDefectKind.ObjectStorageDropped, loc, "the attachment is an OLE object or a raw storage; its storage was left out");
+                // An OLE attachment without its object is hidden by Outlook (it showed two of three attachments), and how Outlook stores the object
+                // in a PST is not documented well enough to write it, so the storage is kept as the bytes of a compound file in an ordinary file attachment.
+                props.RemoveAll(static p => p.Id is 0x3701 or 0x3705);
+                props.Add(new Prop { Id = 0x3701, Type = 0x102, Bytes = StorageToCompoundFile(storage) });
+                props.Add(new Prop { Id = 0x3705, Type = 3, Bytes = I32(1) });
+                Report(PstWriteDefectKind.PropertyAdjusted, loc, "the attachment is an OLE object or a raw storage; it was written as a file attachment holding the storage as a compound file");
             }
 
             int method = Find(props, 0x3705) is { Type: 3 } mp && ValueLength(mp) == 4 ? BinaryPrimitives.ReadInt32LittleEndian(mp.Bytes ?? mp.Source!.GetBytes(0).Span) : (embedded is not null ? 5 : 1);
@@ -965,5 +1006,29 @@ internal sealed class PstItemWriter
         size += t.DataLength + t.SubnodeBytes;
         entries.Add(new SubnodeEntry(new Nid(PstBuilder.NidAttachmentTable), t.Data, t.WriteSubnodes(blocks)));
         return entries;
+    }
+
+    private static byte[] StorageToCompoundFile(MapiRawStorage storage)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new CompoundFileWriter(ms, new CompoundFileWriterOptions(), leaveOpen: true))
+        {
+            w.WriteEntry(new CfbEntry { Name = string.Empty, RawName = string.Empty, Kind = ArchiveEntryKind.Directory, ClassId = storage.ClassId });
+            foreach (MapiRawStorageEntry e in storage.Entries)
+            {
+                string name = "/" + e.Path;
+                if (e.IsStorage)
+                {
+                    w.WriteEntry(new CfbEntry { Name = name, RawName = name, Kind = ArchiveEntryKind.Directory });
+                }
+                else
+                {
+                    using Stream content = storage.OpenStream(e.Path);
+                    w.WriteEntry(new ArchiveEntry { Name = name, Kind = ArchiveEntryKind.File, Size = e.Length }, content);
+                }
+            }
+        }
+
+        return ms.ToArray();
     }
 }

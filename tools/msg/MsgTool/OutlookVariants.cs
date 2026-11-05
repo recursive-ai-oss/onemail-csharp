@@ -209,6 +209,26 @@ internal static class OutlookVariants
         return 0;
     }
 
+    /// <summary>Messages with 8-bit strings in a Windows code page, differing in where the non-ASCII text is (subject, recipient name).</summary>
+    public static int Ansi(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        foreach ((string name, string subject, string? recipient) in new[] { ("a1-ascii-subject-cyr-recipient", "plain", "тема"), ("a2-cyr-subject-no-recipient", "Привет", null), ("a3-cyr-subject-ascii-recipient", "Привет", "Ann"), ("a4-all-ascii", "plain", "Ann") })
+        {
+            MapiMessage m = Base(subject);
+            if (recipient is not null)
+            {
+                var r = new MapiRecipient(m);
+                r.Properties.Add(Str(0x3001, recipient));
+                m.AddRecipient(r);
+            }
+
+            MsgWriter.Write(m, Path.Combine(dir, name + ".msg"), new MsgWriterOptions { Strings = MsgStringMode.Ansi, AnsiCodePage = 1251 });
+        }
+
+        return 0;
+    }
+
     private static void Write2(string dir, string name, MapiMessage m) => MsgWriter.Write(m, Path.Combine(dir, name + ".msg"));
 
     /// <summary>Variants of a message with parts left out, to find which part Outlook dislikes.</summary>

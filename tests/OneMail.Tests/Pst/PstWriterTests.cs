@@ -354,4 +354,60 @@ public sealed class PstWriterTests
             Assert.Equal((777u << 5) | 4, BitConverter.ToUInt32(first));
         }
     }
+
+    private sealed class OleAttachment(MapiMessage parent) : MapiAttachment(parent)
+    {
+        protected override MapiRawStorage? LoadObjectStorage() => new FakeStorage();
+    }
+
+    private sealed class FakeStorage : MapiRawStorage
+    {
+        public override Guid ClassId => Guid.Parse("00020D0B-0000-0000-C000-000000000046");
+
+        public override IReadOnlyList<MapiRawStorageEntry> Entries { get; } = [new("\u0001Ole", false, 3)];
+
+        public override Stream OpenStream(string path) => new MemoryStream([1, 2, 3]);
+    }
+
+    [Fact]
+    public void EightBitStringsInTemplateColumnsAndAnOleAttachmentAreWrittenInTheFormOutlookAccepts()
+    {
+        // Found with the repair tool of Outlook: a PtypString8 subject or recipient name leaves the Unicode column of the table empty ("row doesn't match
+        // sub-object"), and an OLE attachment whose storage was left out is hidden.
+        string path = Temp();
+        try
+        {
+            var m = new MapiMessage();
+            m.Properties.Add(Prop(0x001A, MapiType.String8, Encoding.ASCII.GetBytes("IPM.Note")));
+            m.Properties.Add(Prop(0x0037, MapiType.String8, Encoding.ASCII.GetBytes("plain")));
+            var r = new MapiRecipient(m);
+            r.Properties.Add(Prop(0x3001, MapiType.String8, Encoding.ASCII.GetBytes("Ann")));
+            m.AddRecipient(r);
+            var a = new OleAttachment(m);
+            a.Properties.Add(Prop(0x3705, MapiType.Integer32, BitConverter.GetBytes(6)));
+            m.AddAttachment(a);
+            using (PstBuilder b = Create(path))
+            {
+                b.IpmSubtree.AddMessage(m);
+                Assert.Contains(b.Defects, d => d.Kind == PstWriteDefectKind.PropertyAdjusted && d.Detail.Contains("0x0037", StringComparison.Ordinal));
+                Assert.Contains(b.Defects, d => d.Kind == PstWriteDefectKind.PropertyAdjusted && d.Detail.Contains("0x3001", StringComparison.Ordinal));
+                Assert.Contains(b.Defects, d => d.Kind == PstWriteDefectKind.PropertyAdjusted && d.Detail.Contains("compound file", StringComparison.Ordinal));
+                b.Complete();
+            }
+
+            using PstStore s = Open(path);
+            PstMessage back = s.EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(MapiType.UnicodeString, back.Properties.Get(0x0037)!.Tag.PropertyType);
+            Assert.Equal("Ann", back.Properties.Get(0x0E04)!.AsString(back.String8Encoding));
+            Assert.Equal(MapiType.UnicodeString, back.Recipients[0].Properties.Get(0x3001)!.Tag.PropertyType);
+            MapiAttachment ba = back.Attachments.Single();
+            Assert.Equal(1, ba.GetInt32(0x3705));
+            byte[] data = ba.Properties.Get(0x3701)!.GetBytes().ToArray();
+            Assert.True(data.Length > 512 && data[0] == 0xD0 && data[1] == 0xCF);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
