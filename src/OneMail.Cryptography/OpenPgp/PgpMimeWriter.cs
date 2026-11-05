@@ -64,6 +64,12 @@ public sealed class PgpMimeEncryptOptions
     public bool ForceSeipd1 { get; init; }
 
     /// <summary>
+    /// Write the encrypted session key packets without naming their recipients (a version 3 packet carries an all-zero key ID; a version 6 packet carries no key
+    /// version or fingerprint), for blind copies. A reader then tries each secret key it holds. Default false.
+    /// </summary>
+    public bool HiddenRecipients { get; init; }
+
+    /// <summary>
     /// Headers to put inside the encrypted content (and so, with <see cref="Signers"/>, inside the signature) and to repeat on the returned <c>multipart/encrypted</c>, with
     /// the outer <c>Subject</c> optionally replaced by <c>...</c>. Default null. When the content is a <c>multipart/signed</c> whose signed part already has
     /// <c>protected-headers</c> (made with <see cref="PgpMimeSignOptions.ProtectedHeaders"/>), the content is left as it is and only the outer fields are written; pass the same headers to both.
@@ -339,6 +345,7 @@ public static class PgpMimeEncryptor
             SignatureHash = options.Hash,
             Policy = options.Policy,
             ForceSeipd1 = options.ForceSeipd1,
+            HiddenRecipients = options.HiddenRecipients,
             Armor = true,
         });
         byte[] armoredBytes = armored.ToArray();

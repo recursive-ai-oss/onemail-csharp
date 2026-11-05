@@ -184,6 +184,22 @@ public class PgpReviewTests
         Assert.DoesNotContain(PgpIssue.SignedPartTrailingWhitespaceStripped, result.Layers[0].Issues);
     }
 
+    [Fact]
+    public void HiddenRecipientsWriteTheWildcardKeyIdAndStillDecrypt()
+    {
+        MimeMultipart enc = PgpMimeEncryptor.Encrypt(PgpFixtures.Text("blind copy\r\n"), new PgpMimeEncryptOptions { Now = PgpFixtures.Now, Recipients = [Bob.ToPublicCertificate()], HiddenRecipients = true });
+        byte[] binary = Dearmor(((MimePart)enc.Children[1]).GetDecodedContent());
+
+        // RFC 9580 5.1.1: packet 1 is a version 3 public-key encrypted session key; its key ID is eight zero bytes for a hidden recipient.
+        Assert.Equal(0xC1, binary[0]);
+        Assert.Equal(3, binary[2]);
+        Assert.All(binary[3..11], static b => Assert.Equal(0, b));
+
+        PgpResult r = PgpMimeProcessor.Open(enc, new PgpOpenOptions { Now = PgpFixtures.Now, SecretKeys = [Bob] });
+        Assert.True(r.Layers[0].Content is MimePart);
+        Assert.Contains("blind copy", Encoding.UTF8.GetString(((MimePart)r.Layers[0].Content!).GetDecodedContent()), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -17,8 +17,7 @@ public class WindowsEcdhTests
 
     public static TheoryData<string> Messages => new(Directory.GetFiles(Dir(), "windows-*.eml").Select(Path.GetFileName).Order(StringComparer.Ordinal).Select(static f => f!).ToArray());
 
-    // Waits for OneCrypto to accept NULL parameters on an EC originator key; until then these messages come back as DecryptionFailed.
-    [Theory(Skip = "needs an EC originator key with NULL parameters to be accepted by the CMS reader")]
+    [Theory]
     [MemberData(nameof(Messages))]
     public void WindowsEcdhMessagesDecrypt(string file)
     {
