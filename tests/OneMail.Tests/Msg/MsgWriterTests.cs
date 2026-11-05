@@ -319,4 +319,40 @@ public class MsgWriterTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void RecipientAndAttachmentNumbersAndTheSubjectMarkerAreResolvedForOutlook()
+    {
+        // Found with Outlook: it cannot save a message whose recipients have no PidTagRowid, cannot open one whose attachments have no
+        // PidTagAttachNumber, and shows a PST item's U+0001 subject marker as two stray characters.
+        var m = new MapiMessage();
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x001A, MapiType.UnicodeString), Encoding.Unicode.GetBytes("IPM.Note")));
+        m.Properties.Add(MapiProperty.Create(new MapiTag(0x0037, MapiType.UnicodeString), Encoding.Unicode.GetBytes("\u0001\u0005Re: Feature")));
+        var r = new MapiRecipient(m);
+        r.Properties.Add(MapiProperty.Create(new MapiTag(0x3001, MapiType.UnicodeString), Encoding.Unicode.GetBytes("Ann")));
+        m.AddRecipient(r);
+        var a = new MapiAttachment(m);
+        a.Properties.Add(MapiProperty.Create(new MapiTag(0x3705, MapiType.Integer32), BitConverter.GetBytes(1)));
+        a.Properties.Add(MapiProperty.Create(new MapiTag(0x3701, MapiType.Binary), [1, 2, 3]));
+        m.AddAttachment(a);
+
+        MsgWriteResult written = MsgWriter.Write(m, new MemoryStream());
+        foreach (string what in new[] { "PidTagRowid", "PidTagAttachNumber", "PidTagSubject " })
+        {
+            Assert.Contains(written.Defects, d => d.Kind == MsgWriteDefectKind.PropertyAdjusted && d.Detail.Contains(what, StringComparison.Ordinal));
+        }
+
+        MapiMessage back = Read(MsgWriter.ToArray(m));
+        Assert.Equal(0, back.Recipients[0].GetInt32(0x3000));
+        Assert.Equal(0, back.Attachments[0].GetInt32(0x0E21));
+        Assert.Equal("Re: Feature", back.GetString(0x0037));
+        Assert.Equal("Re: ", back.GetString(0x003D));
+        Assert.Equal("Feature", back.GetString(0x0E1D));
+
+        // Off, the model is written as it is.
+        MapiMessage plain = Read(MsgWriter.ToArray(m, new MsgWriterOptions { AddRequiredProperties = false }));
+        Assert.Null(plain.Recipients[0].GetInt32(0x3000));
+        Assert.Null(plain.Attachments[0].GetInt32(0x0E21));
+        Assert.Equal("\u0001\u0005Re: Feature", plain.GetString(0x0037));
+    }
 }

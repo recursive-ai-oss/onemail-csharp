@@ -52,6 +52,8 @@ internal sealed class MsgPlanner
     private const uint MessageCodepageTag = 0x3FFD0003;
     private const uint MessageFlagsTag = 0x0E070003;
     private const uint AttachMethodTag = 0x37050003;
+    private const uint RowIdTag = 0x30000003;           // PidTagRowid
+    private const uint AttachNumberTag = 0x0E210003;    // PidTagAttachNumber
     private const uint AttachObjectTag = 0x3701000D;
     private const int StoreUnicodeOk = 0x00040000;
     private const int MsgFlagUnsent = 0x8;
@@ -213,7 +215,14 @@ internal sealed class MsgPlanner
             string rd = Join(dir, "__recip_version1.0_#" + Hex8(i));
             CountObject(rd);
             _plan.Recipients++;
-            EmitProperties(rd, new byte[8], Prepare(recipients[i], rd, Kind.Recipient, hasObject: false), embeddedMarker: null);
+            List<Prep> rp = Prepare(recipients[i], rd, Kind.Recipient, hasObject: false);
+            // Outlook cannot save a message whose recipients have no PidTagRowid (the recipient's number): found with Outlook 16, not in MS-OXMSG.
+            if (_o.AddRequiredProperties)
+            {
+                AddIndexProperty(rp, RowIdTag, i, rd, "PidTagRowid was missing; set to the recipient's number");
+            }
+
+            EmitProperties(rd, new byte[8], rp, embeddedMarker: null);
         }
 
         for (int i = 0; i < attachments.Count; i++)
@@ -231,6 +240,12 @@ internal sealed class MsgPlanner
 
             List<Prep> ap = Prepare(a, ad, Kind.Attachment, hasObject: embedded is not null || storage is not null);
             AdjustAttachMethod(ap, ad, embedded is not null, storage is not null);
+            // Outlook refuses to open a message file whose attachments have no PidTagAttachNumber: found with Outlook 16, not in MS-OXMSG.
+            if (_o.AddRequiredProperties)
+            {
+                AddIndexProperty(ap, AttachNumberTag, i, ad, "PidTagAttachNumber was missing; set to the attachment's number");
+            }
+
             uint? marker = embedded is not null ? 1u : storage is not null ? (a.AttachMethodValue == 5 ? 1u : 4u) : null;
             EmitProperties(ad, new byte[8], ap, marker);
             string objectPath = Join(ad, MsgObjectReader.EmbeddedObjectName);
@@ -360,7 +375,45 @@ internal sealed class MsgPlanner
         }
 
         Adjust(list, byTag, dir, kind, obj);
+        if (_o.AddRequiredProperties && kind is Kind.Message or Kind.Embedded)
+        {
+            SplitSubjectMarker(list, dir);
+        }
+
         return list;
+    }
+
+    // A message in a PST keeps its subject as U+0001, a character one more than the prefix's length, the prefix and the rest ("\u0001\u0005Re: Feature").
+    // Outlook's own message files hold the plain subject with PidTagSubjectPrefix and PidTagNormalizedSubject beside it, and shows the marker as two
+    // stray characters when it finds it in a message file, so the marker is resolved on the way out.
+    private void SplitSubjectMarker(List<Prep> list, string dir)
+    {
+        int at = list.FindIndex(static p => p.Tag.Id == 0x0037 && p.Tag.PropertyType == MapiType.UnicodeString && p.Count == 1);
+        if (at < 0)
+        {
+            return;
+        }
+
+        string text = Encoding.Unicode.GetString(list[at].Bytes(0).Span).TrimEnd('\0');
+        if (text.Length < 2 || text[0] != '\u0001' || text[1] < 1 || 2 + (text[1] - 1) > text.Length)
+        {
+            return;
+        }
+
+        string prefix = text.Substring(2, text[1] - 1);
+        string normalized = text[(2 + prefix.Length)..];
+        list[at] = new Prep { Tag = list[at].Tag, Values = [Encoding.Unicode.GetBytes(prefix + normalized)] };
+        if (prefix.Length > 0 && !list.Exists(static p => p.Tag.Id == 0x003D))
+        {
+            list.Add(new Prep { Tag = new MapiTag(0x003D, (ushort)MapiType.UnicodeString), Values = [Encoding.Unicode.GetBytes(prefix)] });
+        }
+
+        if (normalized.Length > 0 && !list.Exists(static p => p.Tag.Id == 0x0E1D))
+        {
+            list.Add(new Prep { Tag = new MapiTag(0x0E1D, (ushort)MapiType.UnicodeString), Values = [Encoding.Unicode.GetBytes(normalized)] });
+        }
+
+        Warn(MsgWriteDefectKind.PropertyAdjusted, dir, "PidTagSubject had the U+0001 prefix marker; it was split into the subject, PidTagSubjectPrefix and PidTagNormalizedSubject");
     }
 
     private int AssignName(MapiNamedProperty name, string where)
@@ -657,6 +710,19 @@ internal sealed class MsgPlanner
         {
             SetInt(list, byTag, AttachMethodTag, 6, dir, "PidTagAttachMethod was set to ATTACH_OLE");
         }
+    }
+
+    private void AddIndexProperty(List<Prep> list, uint tag, int value, string dir, string what)
+    {
+        foreach (Prep p in list)
+        {
+            if (p.Tag.Id == (ushort)(tag >> 16))
+            {
+                return;
+            }
+        }
+
+        SetInt(list, new Dictionary<uint, int>(), tag, value, dir, what);
     }
 
     private static int? IntOf(List<Prep> list, Dictionary<uint, int> byTag, uint tag)

@@ -22,12 +22,15 @@ internal static class CfbDump
             if (e.ObjectType == CfbObjectType.Stream)
             {
                 Console.WriteLine($"{name}\t{e.Size}");
-                if (e.Name == "__properties_version1.0")
+                if (e.Name.EndsWith("__properties_version1.0", StringComparison.Ordinal))
                 {
                     var buf = new byte[(int)e.Size];
                     using Stream s = r.OpenEntryStream(e);
                     s.ReadExactly(buf);
-                    int header = prefix.Contains("__substg1.0_3701000D") || prefix.Contains("__attach") || prefix.Contains("__recip") ? 8 : (top ? 32 : 24);
+                    string parent = e.Name.Contains('/') ? e.Name[..e.Name.LastIndexOf('/')] : prefix;
+                    string last = parent[(parent.LastIndexOf('/') + 1)..];
+                    // MS-OXMSG 2.4: 32-byte header for the top-level message, 24 for an embedded one, 8 for a recipient or attachment.
+                    int header = last.StartsWith("__attach", StringComparison.Ordinal) || last.StartsWith("__recip", StringComparison.Ordinal) ? 8 : last == "" ? 32 : 24;
                     Console.WriteLine($"    header {Convert.ToHexString(buf.AsSpan(0, Math.Min(header, buf.Length)))}");
                     for (int i = header; i + 16 <= buf.Length; i += 16)
                     {

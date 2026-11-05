@@ -69,6 +69,11 @@ internal static class Program
             return 0;
         }
 
+        if (args[0] == "variants")
+        {
+            return OutlookVariants.Run(args[1]);
+        }
+
         if (args[0] == "cfb")
         {
             return CfbDump.Run(args[1]);
