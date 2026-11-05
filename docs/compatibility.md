@@ -29,7 +29,7 @@ count libFuzzer reported at the end (the host reports a constant `cov: 3` for .N
 | Target | Exec (M) | ft | Target | Exec (M) | ft | Target | Exec (M) | ft |
 |---|---|---|---|---|---|---|---|---|
 | authres | 11.5 | 3,661 | mhtml-uri | 21.2 | 1,269 | reports | 4.3 | 2,803 |
-| **calcard** | 2.9* | 10,734 | mime-reader | 16.1 | 1,498 | rtf-decompress | 21.2 | 104 |
+| calcard | 7.9 | 11,014 | mime-reader | 16.1 | 1,498 | rtf-decompress | 21.2 | 104 |
 | calendar | 8.3 | 4,051 | mime-tree | 10.0 | 11,473 | rtf-deencap | 20.4 | 1,401 |
 | composition | 2.5 | 24,184 | msg | 6.3 | 4,056 | rtf-html | 8.2 | 5,623 |
 | contentlines | 16.3 | 2,617 | msg-write | 1.5 | 8,378 | sanitizer | 3.7 | 2,832 |
@@ -47,18 +47,19 @@ count libFuzzer reported at the end (the host reports a constant `cov: 3` for .N
 | mail-open | 5.9 | 10,851 | render | 0.1 | 2,223 | xcal-xcard | 16.1 | 230 |
 | mbox | 13.3 | 980 | render-datauri | 32.4 | 7 |  | |  |
 
-**Findings: 2 (one stale checker, fixed; one slow input in `calcard`, open).**
+**Findings: 2, both closed.**
 
 * `msg-write` (first run: crash after 13 executions): the target compared the written file with the model and the writer now adds the properties Outlook needs
   on recipients and attachments (`PidTagRowid`, `PidTagRecipientType`, `PidTagAttachNumber`), reporting each as a `PropertyAdjusted` defect. The checker flagged
   that as a difference. A stale checker, not a library fault: the target now ignores those three tags (repro `testdata/fuzz/msg-write-required-defaults.bin`),
   and the rerun passed 600 s, 1.5 M executions, 0 findings.
-* `calcard` (timeout, 46-byte input, `testdata/fuzz/calcard-recurrence-numeric-freq-slow.bin`; the run stopped at 2.9 M executions, so its row is not a full 600 s):
-  `CalendarCard.FromIcs` with a display zone and an "after" date spent 26 s (Checked) on a series whose `RRULE` reads `FREQ=2`. `Enum.TryParse` in
-  `RecurrenceRule.TryParse` accepts the digit string, so a numeric FREQ is taken as `SECONDLY`, and a `SECONDLY` or `MINUTELY` series with
-  `NextOccurrences` and an `After` date weeks past DTSTART does not stop at the card's 200,000-instance scan limit within two minutes (Release build, valid input
-  `RRULE:FREQ=SECONDLY`; `HOURLY` takes 2.6 s). Open: the fix is to reject a FREQ that is not one of the seven names, and find
-  out why the scan limit does not bound `SECONDLY` expansion across a zone. The target is to be re-run once fixed.
+* `calcard` (timeout, 46-byte input, `testdata/fuzz/calcard-recurrence-numeric-freq-slow.bin`): two faults met in one input. `RecurrenceRule.TryParse` took `FREQ=2` as
+  MINUTELY because it parsed the value as an enum (digits included); it now accepts only the seven RFC 5545 names, in any case, and rejects the rest like any invalid rule.
+  And the scan limit (`ExpansionOptions.MaxInstancesScanned`) counted only instances that fell before the window, so an event whose DTEND is a thousand years before its DTSTART
+  (no instance ever overlaps any window) walked to year 9999 at 26 s on the card path, and over two minutes for SECONDLY. Every instance the expansion looks at and does not yield
+  (before the window, excluded, replaced by an override, outside the window) now counts, so each expansion stops at the same limit and reports `ScanLimit` (the card: `ExpansionLimited`).
+  Re-run after the fix: `calcard` 7.9 M executions in 600 s, 0 findings; with it `calendar` 13.3 M, `recurrence` 2.1 M, `oxocal` 1.4 M, `oxcmail` 2.6 M, `jcal-jcard` 12.4 M and
+  `composition` 3.0 M (the targets that reach recurrence parsing or expansion), all 600 s, 0 findings.
 
 `rtf-decompress`, `render-datauri`, `xcal-xcard` and `span-cfb` saturate early (a handful of new features after the first seconds); `render` is slow
 because each input renders to PDF.

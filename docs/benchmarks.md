@@ -25,6 +25,8 @@ No re-run row is over 1.25 and no geomean is over 1.0. Two non-gating notes: the
 corpus file), and the MIME build row allocates about 1 MB per message against MimeKit's 37 KB while running 6.7x faster (allocations per message are reported, not gated).
 On the MIME rows most of the peak-working-set columns is the runtime's own allocation budget.
 
+**Recurrence and ICS parse after the scan-limit fix (indicative, `wq` heavy, 4 cores, load 3-8).** The reused recurrence and ICS parse rows were re-measured on the tree before the fix and after it, each side twice (base, new, then new, base), medians in ns: ICS parse invite 4,119 / 4,024 (before / after), holidays 967,274 / 979,681; recurrence daily UTC 527,418 / 529,347, weekly floating 243,820 / 236,640, monthly New York 172,643 / 171,139, yearly Berlin 42,455 / 42,268, daily New York 10.11 M / 10.11 M. The largest change is +1.3% (holidays), the geometric mean of the after/before ratios 0.993: within noise, so the dated rows above stand. The 50k-event ICS row was not re-run.
+
 ## 1.0 re-run, 2026-11-05, commit be1a504
 
 Medians in ns per operation (per message for mbox); B/op is bytes allocated per operation. Peak working set is x64 only: one process per side (`peak.tsv`), MiB, ours / comparator.
