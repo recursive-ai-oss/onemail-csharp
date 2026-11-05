@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <Description>Mail cryptography for .NET: S/MIME (RFC 8551) signing, verification, encryption and decryption on OneCrypto's CMS, and OpenPGP mail (PGP/MIME per RFC 3156, inline PGP, Autocrypt headers) on OneCrypto's OpenPGP messages, all with structured results; DKIM and ARC signing and verification (RSA and Ed25519) with a DNS TXT client. Native platforms only (not browser WebAssembly).</Description>
+    <!-- A stable package cannot depend on OneCrypto's prerelease packages, so this package is packed only for prerelease versions. It stays
+         in the solution, built and tested, and ships at the first stable version after OneCrypto's. -->
+    <IsPackable Condition="!$(Version.Contains('-'))">false</IsPackable>
     <PackageTags>$(PackageTags);smime;cms;openpgp;pgp;dkim;arc;dns</PackageTags>
     <!-- This package's own readme replaces the shared one; it is stamped with the release tag like the shared one. -->
     <PackageReadmeSource>$(MSBuildProjectDirectory)/PACKAGE.md</PackageReadmeSource>

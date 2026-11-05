@@ -8,9 +8,24 @@ namespace RecursiveAI.OneMail.Tests.Cryptography;
 
 internal static class DkimFixtures
 {
-    private static readonly Lazy<RSA> RsaKey = new(() => RSA.Create(2048));
+    // One key is generated for the whole run, but every caller gets its own RSA instance over it. A single RSA object used by parallel tests
+    // produced wrong signatures now and then on macOS (the platform key object is not safe for concurrent use), which showed up as ARC and DKIM
+    // verifications failing at random.
+    private static readonly Lazy<byte[]> RsaPkcs8 = new(() =>
+    {
+        using RSA generated = RSA.Create(2048);
+        return generated.ExportPkcs8PrivateKey();
+    });
 
-    public static RSA Rsa => RsaKey.Value;
+    public static RSA Rsa
+    {
+        get
+        {
+            RSA rsa = RSA.Create();
+            rsa.ImportPkcs8PrivateKey(RsaPkcs8.Value, out _);
+            return rsa;
+        }
+    }
 
     public static readonly byte[] Seed = [.. Enumerable.Range(1, 32).Select(i => (byte)i)];
 

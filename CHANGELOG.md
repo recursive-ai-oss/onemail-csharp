@@ -4,6 +4,16 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-05
+
+The first stable release: `RecursiveAI.OneMail`, `.Calendar`, `.Client`, `.Render` and the `onemail` tool (`RecursiveAI.OneMail.Cli`). Everything below accumulated through the previews and is part of it.
+
+`RecursiveAI.OneMail.Cryptography` (S/MIME, OpenPGP, DKIM, ARC) is not in 1.0.0: it depends on OneCrypto, which is still a preview, and a stable package cannot depend on a prerelease. It publishes at the first 1.x release after OneCrypto 1.0. A prerelease version still packs it, and the project stays in the solution, built and tested.
+
+Known gaps, in full in `docs/compatibility.md`: Outlook.com provider rows not yet run; Outlook's signature-validity verdict can't be read unattended; Outlook's repair tool miscounts tables over 65,535 rows; protocol rows are x64 only; `LastVerbExecuted` after a real send is unchecked.
+
+Package validation against 0.3.0-preview.2 reports no breaking change, so no suppressions are needed; the next release validates against 1.0.0.
+
 ### Added
 
 - `PgpMimeEncryptOptions.HiddenRecipients` writes the encrypted session key packets without naming their recipients (all-zero key ID), for blind copies.
@@ -252,3 +262,8 @@ First preview: the MIME core, mailbox stores and the one-line reading path. What
 - The `onemail inspect` command.
 - The ambiguity table (`docs/ambiguities.md`), the differential and round-trip tools, fuzz targets and the MIME benchmark rows.
 - Package skeleton: the `RecursiveAI.OneMail`, `.Calendar`, `.Client`, `.Cryptography` and `.Render` packages and the `onemail` tool as buildable placeholders, with tests, a benchmark shell, a fuzz shell and NativeAOT and browser WebAssembly smoke apps.
+
+[Unreleased]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v0.3.0-preview.2...v1.0.0
+[0.3.0-preview.2]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v0.2.0-preview.2...v0.3.0-preview.2
+[0.2.0-preview.2]: https://github.com/recursive-ai-oss/onemail-csharp/releases/tag/v0.2.0-preview.2
