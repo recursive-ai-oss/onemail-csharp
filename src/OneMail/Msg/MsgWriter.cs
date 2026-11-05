@@ -56,7 +56,7 @@ public static class MsgWriter
         long start = output.CanSeek ? output.Position : 0;
         using (var w = new CompoundFileWriter(output, WriterOptions(options), leaveOpen: true))
         {
-            w.WriteEntry(RootEntry());
+            w.WriteEntry(RootEntry(options));
             foreach (MsgPart part in plan.Parts)
             {
                 if (part.IsStorage)
@@ -91,7 +91,7 @@ public static class MsgWriter
         var w = new CompoundFileWriter(output, WriterOptions(options), leaveOpen: true);
         await using (w.ConfigureAwait(false))
         {
-            await w.WriteEntryAsync(RootEntry(), null, cancellationToken).ConfigureAwait(false);
+            await w.WriteEntryAsync(RootEntry(options), null, cancellationToken).ConfigureAwait(false);
             foreach (MsgPart part in plan.Parts)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -158,7 +158,9 @@ public static class MsgWriter
     private static CompoundFileWriterOptions WriterOptions(MsgWriterOptions o) =>
         new() { MaxBufferedBytes = Math.Min(long.MaxValue - (1L << 28), o.MaxTotalBytes + (1L << 28)) };
 
-    private static CfbEntry RootEntry() => new() { Name = string.Empty, RawName = string.Empty, Kind = ArchiveEntryKind.Directory, ClassId = MsgPlanner.RootClassId };
+    // Outlook gives a template (.oft) a different root class ID from a message file, whatever the item's class: found by saving
+    // a mail item, an appointment, a contact, a task and a note as templates in Outlook 16.
+    private static CfbEntry RootEntry(MsgWriterOptions o) => new() { Name = string.Empty, RawName = string.Empty, Kind = ArchiveEntryKind.Directory, ClassId = o.Template ? MsgPlanner.TemplateClassId : MsgPlanner.RootClassId };
 
     private static CfbEntry StorageEntry(MsgPart part) => new() { Name = part.Path, RawName = part.Path, Kind = ArchiveEntryKind.Directory, ClassId = part.ClassId };
 

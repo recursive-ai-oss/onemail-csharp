@@ -52,6 +52,7 @@ internal sealed class MsgPlanner
     private const uint MessageCodepageTag = 0x3FFD0003;
     private const uint MessageFlagsTag = 0x0E070003;
     private const uint AttachMethodTag = 0x37050003;
+    private const uint RecipientTypeTag = 0x0C150003;  // PidTagRecipientType
     private const uint RowIdTag = 0x30000003;           // PidTagRowid
     private const uint AttachNumberTag = 0x0E210003;    // PidTagAttachNumber
     private const uint AttachObjectTag = 0x3701000D;
@@ -220,6 +221,8 @@ internal sealed class MsgPlanner
             if (_o.AddRequiredProperties)
             {
                 AddIndexProperty(rp, RowIdTag, i, rd, "PidTagRowid was missing; set to the recipient's number");
+                // A recipient with no type makes Outlook fail when it saves the message ("Value does not fall within the expected range"); To is what a PST row does too.
+                AddIndexProperty(rp, RecipientTypeTag, 1, rd, "PidTagRecipientType was missing; set to To");
             }
 
             EmitProperties(rd, new byte[8], rp, embeddedMarker: null);
@@ -361,6 +364,13 @@ internal sealed class MsgPlanner
                 tag = new MapiTag((ushort)AssignName(name, dir), tag.Type);
             }
 
+            // Outlook cannot read a message file that holds a PtypErrorCode property ("Cannot read the item"): found with Outlook 16, not in MS-OXMSG.
+            if (_o.AddRequiredProperties && tag.PropertyType == MapiType.ErrorCode)
+            {
+                Warn(MsgWriteDefectKind.PropertyAdjusted, dir + " " + tag, $"property {tag} has the error type, which Outlook cannot read in a message file; it was left out");
+                continue;
+            }
+
             Prep? prep = Convert(p, tag, dir, objectEncoding);
             if (prep is not null)
             {
@@ -378,6 +388,12 @@ internal sealed class MsgPlanner
         if (_o.AddRequiredProperties && kind is Kind.Message or Kind.Embedded)
         {
             SplitSubjectMarker(list, dir);
+            // Outlook cannot open a message file with no message class ("Cannot read the item"); IPM.Note is what it treats an unclassed item as.
+            if (!list.Exists(static p => p.Tag.Id == 0x001A))
+            {
+                list.Add(new Prep { Tag = new MapiTag(0x001A, (ushort)(_o.Strings == MsgStringMode.Ansi ? MapiType.String8 : MapiType.UnicodeString)), Values = [_o.Strings == MsgStringMode.Ansi ? Encoding.ASCII.GetBytes("IPM.Note") : Encoding.Unicode.GetBytes("IPM.Note")] });
+                Warn(MsgWriteDefectKind.PropertyAdjusted, dir, "PidTagMessageClass was missing; set to IPM.Note");
+            }
         }
 
         return list;
@@ -682,6 +698,14 @@ internal sealed class MsgPlanner
                 }
             }
 
+            // Outlook cannot open a message file whose top-level message lacks PidTagStoreSupportMask, nor save a copy when an embedded message lacks it:
+            // found with Outlook 16, not in MS-OXMSG. A message written as given gets the Unicode bit when none of its strings is 8-bit.
+            if (_o.AddRequiredProperties && !byTag.ContainsKey(StoreSupportMaskTag))
+            {
+                bool eightBit = list.Exists(static p => p.Tag.PropertyType is MapiType.String8 or MapiType.MultipleString8);
+                SetInt(list, byTag, StoreSupportMaskTag, ansi || eightBit ? 0 : StoreUnicodeOk, dir, "PidTagStoreSupportMask was missing; added");
+            }
+
             if (_o.Template && kind == Kind.Message && ((IntOf(list, byTag, MessageFlagsTag) ?? 0) & MsgFlagUnsent) == 0)
             {
                 SetInt(list, byTag, MessageFlagsTag, (IntOf(list, byTag, MessageFlagsTag) ?? 0) | MsgFlagUnsent, dir, "PidTagMessageFlags got MSGFLAG_UNSENT for a template");
@@ -949,6 +973,9 @@ internal sealed class MsgPlanner
 
     /// <summary>The root storage's class ID: the one Outlook gives message files (00020D0B-0000-0000-C000-000000000046).</summary>
     public static Guid RootClassId => CompoundFileClassId;
+
+    /// <summary>The root storage's class ID Outlook gives templates (0006F046-0000-0000-C000-000000000046).</summary>
+    public static Guid TemplateClassId { get; } = new("0006F046-0000-0000-C000-000000000046");
 
     private static readonly uint[] s_crcTable = BuildCrcTable();
 
