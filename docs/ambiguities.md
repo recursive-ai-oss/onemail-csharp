@@ -404,8 +404,9 @@ No Outlook has been observed yet, so each resolution is provisional.
 
 ## PST/OST messaging and LTP
 
-Observed on the Tika testPST files, the CFReDS OST and our generated files against `pffexport` 20180714 as a black-box oracle. No Outlook
-has been observed yet, so each resolution is provisional. LT-entries are the lists-tables-properties choices of `docs/pst-ltp.md`.
+Observed on the Tika testPST files, the CFReDS OST and our generated files against `pffexport` 20180714 as a black-box oracle. LT5 and LT6
+were settled from a store Outlook wrote; every other resolution here is still provisional (Outlook's repair tool and object model have checked the stores
+we write, `docs/pst-writing.md`, but none of these rows was decided by it). LT-entries are the lists-tables-properties choices of `docs/pst-ltp.md`.
 
 | ID | Case | Other reader | Resolution | Defect | Basis |
 |---|---|---|---|---|---|
@@ -416,6 +417,8 @@ has been observed yet, so each resolution is provisional. LT-entries are the lis
 | LT2 | BTH key that does not increase | n/a | Skipped, so a node reached twice gives no duplicates | none | prov. |
 | LT3 | Property or cell of an unknown type | n/a | Read as an HNID in a PC; kept inline when one, two or eight bytes | none | prov. |
 | LT4 | Positions in a heap's fill-level bitmap blocks (HNBITMAPHDR) | n/a | Allocations may not start before the block's header (12, 66 or 136... bytes, 2 elsewhere) | none | exercised on our files only |
+| LT5 | String8 value with bytes after its first NUL (Outlook keeps a subject in a fixed 20-byte buffer in ANSI stores) | n/a | The text ends at the first NUL (MS-OXCDATA 2.11.1.2); the stale bytes after it are not part of the value | none | an Outlook-written ANSI store (`testdata/pst/outlook-ansi.pst`) |
+| LT6 | Row-index BTH of a table with 2-byte values (ANSI `dwRowIndex`) | n/a | Read as a 16-bit row number | none (`TcRowIndexShape` for any shape other than 4/4 or 4/2) | MS-PST 2.3.4.3; the same store |
 
 ## PST/OST recovery
 

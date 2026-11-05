@@ -194,6 +194,13 @@ public sealed class PstFolderWriter
             PstItemWriter.WriteTable(file, new Nid(baseNid | (uint)NidType.SearchContentsTable), PstItemWriter.SearchContentsColumns, []);
             PstItemWriter.WriteTable(file, new Nid(baseNid | (uint)NidType.HierarchyTable), PstItemWriter.HierarchyColumns, []);
             PstItemWriter.WriteTable(file, new Nid(baseNid | (uint)NidType.AssocContentsTable), PstItemWriter.AssocColumns, []);
+            // A search folder also has an update queue (an empty node) and a criteria object (a property context with the one property 0x660B = 0, as in files
+            // Outlook wrote); the repair tool reports a search folder without them.
+            file.AddNode(new NodeEntry(new Nid(baseNid | (uint)NidType.SearchUpdateQueue), default, default, default));
+            var criteria = new PropertyContextBuilder(blocks);
+            criteria.Set(0x660B, LtpPropertyTypes.PtypInteger32, new byte[4]);
+            LtpNodeResult cr = criteria.Build();
+            file.AddNode(new NodeEntry(new Nid(baseNid | (uint)NidType.SearchCriteriaObject), cr.Data, cr.WriteSubnodes(blocks), default));
             return;
         }
 
@@ -214,6 +221,7 @@ public sealed class PstFolderWriter
     }
 
     // The row a parent's hierarchy table holds for this folder (MS-PST 2.4.4.4.1): name, counts, whether it has subfolders, container class.
+    // A cell is present only when the folder's property context has the property: the repair tool compares the two.
     private byte[]?[] HierarchyRow()
     {
         var cells = new byte[]?[PstItemWriter.HierarchyColumns.Length];
@@ -226,7 +234,6 @@ public sealed class PstFolderWriter
                 0x3603 => I32(_unread),
                 0x360A => [(byte)(_children.Count > 0 ? 1 : 0)],
                 0x3613 when ContainerClass is not null => Encoding.Unicode.GetBytes(ContainerClass),
-                0x6635 or 0x6636 => I32(0),
                 _ => null,
             };
         }

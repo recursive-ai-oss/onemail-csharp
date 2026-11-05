@@ -33,6 +33,9 @@ public enum PstWriteDefectKind
 
     /// <summary>An item has more recipients or attachments than a table can describe. The rest were left out.</summary>
     TooManyChildren,
+
+    /// <summary>A property the item carried disagreed with the rest of the item, so the builder changed its value: <c>PidTagMessageFlags</c> without MSGFLAG_HASATTACH on a message that has attachments (Outlook shows no attachments then).</summary>
+    PropertyAdjusted,
 }
 
 /// <summary>One thing the builder changed or left out while writing an item.</summary>
@@ -108,10 +111,15 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
     internal const uint NidSearchContentsTemplate = 0x610;
     internal const uint NidRecipientTable = 0x692;
     internal const uint NidAttachmentTable = 0x671;
+    internal const uint NidReceiveFolderTable = 0x62B;
+    internal const uint NidOutgoingQueueTable = 0x64C;
+    internal const uint NidTemplate1 = 0x6B6;
+    internal const uint NidTemplate2 = 0x6D7;
+    internal const uint NidTemplate3 = 0x6F8;
     private const uint NidIpmSubtree = 0x8022;
     private const uint NidSearchRoot = 0x8042;
     private const uint NidDeletedItems = 0x8062;
-    private const uint NidSpamSearch = 0x2223;
+    internal const uint NidSpamSearch = 0x2223;
 
     private readonly PstFileWriter _file;
     private readonly PstBuilderOptions _options;
@@ -123,6 +131,7 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
     private uint _nextFolderIndex = 0x404;
     private uint _nextMessageIndex = 0x10000;
     private uint _nextAssocIndex = 0x8000;
+    private uint _maxAttachmentIndex;
     private bool _completed;
     private bool _disposed;
 
@@ -133,7 +142,9 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
         _storeId = options.StoreId ?? Guid.NewGuid();
         _timestamp = options.Timestamp ?? DateTimeOffset.UtcNow;
         _spool = new PstRowSpool(options.CreateSpool);
-        _items = new PstItemWriter(_file, options, _timestamp, Defects);
+        _items = new PstItemWriter(_file, options, _timestamp, Defects,
+            nextEmbeddedMessage: () => new Nid((_nextMessageIndex++ << 5) | (uint)NidType.NormalMessage),
+            noteAttachmentIndex: index => _maxAttachmentIndex = Math.Max(_maxAttachmentIndex, index));
         Root = new PstFolderWriter(this, null, NidRootFolder, string.Empty, null, isSearch: false);
         _folders.Add(Root);
         IpmSubtree = AddFixedFolder(Root, NidIpmSubtree, "Top of Personal Folders", null);
@@ -253,7 +264,11 @@ public sealed class PstBuilder : IDisposable, IAsyncDisposable
         n[(int)NidType.NormalFolder] = _nextFolderIndex - 1;
         n[(int)NidType.NormalMessage] = _nextMessageIndex - 1;
         n[(int)NidType.AssocMessage] = _nextAssocIndex - 1;
+        n[(int)NidType.Attachment] = Math.Max(n[(int)NidType.Attachment], _maxAttachmentIndex);
         n[(int)NidType.SearchFolder] = Math.Max(n[(int)NidType.SearchFolder], 0x112);
+        // A folder's hierarchy, contents and associated-contents tables take its index, and the repair tool of Outlook checks that these three counters
+        // reach the highest index in use (files it wrote have them equal to the folder counter).
+        n[(int)NidType.HierarchyTable] = n[(int)NidType.ContentsTable] = n[(int)NidType.AssocContentsTable] = n[(int)NidType.NormalFolder];
         return _file.Complete();
     }
 

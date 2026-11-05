@@ -11,8 +11,9 @@ namespace RecursiveAI.OneMail.Pst.Ltp;
 /// </summary>
 public sealed class LtpNodeResult
 {
-    internal LtpNodeResult(Bid data, long dataLength, int heapBlocks, List<SubnodeEntry> subnodes)
+    internal LtpNodeResult(Bid data, long dataLength, int heapBlocks, List<SubnodeEntry> subnodes, long subnodeBytes = 0)
     {
+        SubnodeBytes = subnodeBytes;
         Data = data;
         DataLength = dataLength;
         HeapBlockCount = heapBlocks;
@@ -24,6 +25,9 @@ public sealed class LtpNodeResult
 
     /// <summary>The bytes in the heap's data blocks.</summary>
     public long DataLength { get; }
+
+    /// <summary>The bytes in the data trees of the subnodes the builder created (not counting the subnodes the caller adds).</summary>
+    internal long SubnodeBytes { get; }
 
     /// <summary>The number of heap blocks (data blocks of the node's data tree).</summary>
     public int HeapBlockCount { get; }
@@ -53,7 +57,7 @@ public sealed class LtpNodeResult
     /// Writes the heap blocks as a data tree: each heap block is one data block, so the block indexes in the heap's HIDs are the leaf
     /// positions the reader uses.
     /// </summary>
-    internal static LtpNodeResult WriteHeap(NdbBlockBuilder blocks, HeapNodeBuilder heap, List<SubnodeEntry> subnodes)
+    internal static LtpNodeResult WriteHeap(NdbBlockBuilder blocks, HeapNodeBuilder heap, List<SubnodeEntry> subnodes, long subnodeBytes = 0)
     {
         IReadOnlyList<ReadOnlyMemory<byte>> images = heap.Finish();
         NdbBlockBuilder.DataTreeWriter tree = blocks.BeginDataTree();
@@ -63,7 +67,7 @@ public sealed class LtpNodeResult
         }
 
         DataTreeResult r = tree.Complete();
-        return new LtpNodeResult(r.Root, r.Length, images.Count, subnodes);
+        return new LtpNodeResult(r.Root, r.Length, images.Count, subnodes, subnodeBytes);
     }
 }
 
@@ -82,6 +86,9 @@ internal sealed class LtpValuePlacer
     }
 
     public List<SubnodeEntry> Subnodes { get; } = [];
+
+    /// <summary>The bytes in the data trees of the subnodes made so far.</summary>
+    public long SubnodeBytes { get; private set; }
 
     /// <summary>A fresh subnode NID: the caller's allocator, or NID_TYPE_LTP (0x1F) with a counter from 1.</summary>
     public Nid NextNid()
@@ -135,9 +142,10 @@ internal sealed class LtpValuePlacer
         return Register(nid, _blocks.WriteData(source, length));
     }
 
-    private uint Register(Nid nid, DataTreeResult r)
+    internal uint Register(Nid nid, DataTreeResult r)
     {
         Subnodes.Add(new SubnodeEntry(nid, r.Root, default));
+        SubnodeBytes += r.Length;
         return nid.Value;
     }
 }

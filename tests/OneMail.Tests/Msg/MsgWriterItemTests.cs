@@ -115,7 +115,7 @@ public class MsgWriterItemTests
     // The mask is added by the writer; nothing else may differ.
     private static void AssertSame(MapiMessage original, MsgWriterOptions? options = null)
     {
-        byte[] file = MsgWriter.ToArray(original, options);
+        byte[] file = MsgWriter.ToArray(original, options ?? new MsgWriterOptions { AddRequiredProperties = false });
         using MsgFile f = OpenAll(file);
         Assert.Empty(f.Defects);
         List<string> diffs = Differences(original, f.Message, ignore: k => k == "340D0003");

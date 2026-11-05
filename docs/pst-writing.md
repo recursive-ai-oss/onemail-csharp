@@ -16,7 +16,7 @@ files are never written. Changing an existing PST in place is the last section (
 | 0x0000 to 0x4400 | Zero until the end, except the density list at 0x4200. |
 | Ranges | From 0x4400 the file is a series of 253,952-byte ranges (496 × 8 × 64, MS-PST 2.2.2.7.2). A range starts with its AMap page, then a PMap page when its index is a multiple of 8, an FMap page at index 128 and every 496th after, an FPMap page at index 8,192 and every 3,968th after. Blocks (64-byte aligned) and B-tree pages (512-byte aligned) follow in the order they are made; none crosses into the next range, so a block that does not fit starts the next one and the gap stays free in the AMap. The last range is written whole, so a file is always 0x4400 plus a whole number of ranges (an empty store is 271,360 bytes, as Outlook's is). |
 | AMap | 496 bytes of bits, one per 64 bytes (the first slot is the **high** bit of the first byte: seen in files Outlook wrote, MS-PST does not say), set for the map pages themselves and every block and page; trailer type 0x84, signature zero, BID equal to the page's offset. `cbAMapFree` is the sum of the clear bits. |
-| PMap, FMap, FPMap | Valid pages (CRC, trailer) of types 0x83, 0x82 and 0x85, every byte 0xFF. The PMap content is what Outlook wrote in the files we have (all ones). FMap and FPMap content and position follow the specification's statement that they must exist at the right intervals and the header's note that its own FMap covers the first 128 ranges; this is **not verified against Outlook** (it matters only for files over about 32 MB). |
+| PMap, FMap, FPMap | Valid pages (CRC, trailer) of types 0x83, 0x82 and 0x85, every byte 0xFF. The PMap content is what Outlook wrote in the files we have (all ones). FMap and FPMap content and position follow the specification's statement that they must exist at the right intervals and the header's note that its own FMap covers the first 128 ranges; Outlook opens a 54 MB store written this way (one FMap page, at range index 128) and `scanpst.exe` validates its allocation maps with no finding; neither names the FMap or PMap pages, and no store reaches the first FPMap page (over 2 GB). |
 | Density list | At 0x4200: `DFL_BACKFILL_COMPLETE`, up to 119 entries of (range index, free 64-byte slots) with the emptiest range first, and the last range as the current page. |
 | Blocks | Placed as the `NdbBlockBuilder` makes them; each gets a block-B-tree entry with `cRef` 2. A BID reserved early for a block written later (the first block of a heap) holds back only the entries after it until it is placed. |
 | Block B-tree | Pages are written as entries arrive, bottom-up, with one open page per level: 20 entries per leaf page (24 bytes each) and 20 per index page, so the tree costs no memory per block. |
@@ -77,7 +77,7 @@ layout (counts and offsets for strings and binaries). These differences are list
 **Name-to-ID map** (MS-PST 2.4.7): GUID stream (property sets other than the two well-known ones), entry stream (one NAMEID per name: numeric ID or string-stream offset,
 the GUID index and N bit, the property index), string stream (length-prefixed UTF-16, padded to four bytes) and 251 hash buckets of NAMEID records, each
 holding the CRC of the name for string names. The bucket number is `(dword 0 XOR low word of dword 1) mod 251`, with the CRC as dword 0 for string names; the specification
-leaves open whether the CRC or the offset selects the bucket for a string name, and this is **not verified against Outlook**.
+leaves open whether the CRC or the offset selects the bucket for a string name, and Outlook does not show which choice it makes (below, *Not verified*).
 
 **Search update queue.** There is nothing to queue in a store with no search folder content; the queue and the activity list are empty nodes, and the
 spam search folder has no criteria. The store is consistent.
@@ -119,17 +119,60 @@ Two things the corpora found: libpff refuses a name-to-ID map whose entry, GUID 
 a placeholder: the numbered name 0x8503 in the Common set and the public string "Keywords"), and it decodes the `PtypString8` values of an item by its own code page, so
 the builder adds `PidTagMessageCodepage` (taken from the item's code page rule) to an item that has narrow strings but did not carry one.
 
+## What Outlook requires beyond MS-PST
+
+These rules are not in MS-PST (or not where a writer would look). Each one was found by opening a written store in Outlook 16.0.20527 and running its repair tool, `scanpst.exe` 16.0.20527.20088, over it: the tool says what it is looking for, and the store changes until it stops saying it. `tools/outlook` drives both; the fixtures that show each rule are the builder and edited stores listed under *Checked against Outlook*.
+
+| Rule | What the repair tool did without it |
+|---|---|
+| The header's NID counters are at least the highest index in use: one counter for the folder-table types (0x0D to 0x0F share a folder's own index) and one for attachments (type 5), and an embedded message takes the next message NID of the top-level message (not the counter's own value) | reported the high-water marks and the embedded NIDs as inconsistent |
+| The store carries the receive-folder table (NID 0x62B, with its one row), the outgoing queue (0x64C), the template tables 0x6B6, 0x6D7 and 0x6F8, and the nodes 0xC01 and 0xEC1 | reported each as missing |
+| Search folders have their update queue and criteria nodes, empty when there is nothing to search | reported the search folder as lacking them |
+| The template tables have the columns `PidTagLtpRowId`/`PidTagLtpRowVer` plus 0x0E30, 0x3013, 0x682F and 0x0058 where Outlook's files have them | reported the column sets |
+| A hierarchy row has a cell only where the folder's own property context has the property | compared the row with the folder and reported a stale row |
+| Table columns sort as unsigned tags, so named-property columns (IDs from 0x8000) stay in order | "tags not all increasing", then every other column missing |
+| `PidTagMessageSize` is the bytes in the data trees of the message node and all its subnodes (embedded messages included) and is recomputed on every write, whatever the item carried; `PidTagAttachSize` is the sum of the attachment's value sizes with an embedded message counted whole | reported a size that disagrees with the node as invalid, and a folder row that disagrees with the message as stale |
+| An embedded message's own recipient and attachment tables count toward its size; a recipient without `PidTagRecipientType` is written as To (reported as `PropertyAdded`), because the tool drops a typeless recipient table when it measures the message | an embedded message with a typeless recipient was measured too small |
+| `PidTagMessageClass` is a Unicode string (a PtypString8 class is rewritten, `PropertyAdjusted`) | reported the message as having no class |
+| `MSGFLAG_HASATTACH` is set exactly when the message has attachments, in both directions (`PropertyAdjusted`) | Outlook did not show the attachments; a stale flag was reported |
+| Heap blocks are full except the last; a row matrix's last block ends at its last row even when it holds a full block's rows (never padded) | "bad LCB" on a table of exactly 64 rows per block |
+| The editor refuses to move or delete the top-level folders of the store, or to move anything into the root (`InvalidFolderOperation`) | rejected a store where those folders had another parent |
+
+Outlook can still make ANSI stores when asked (`wVer` 14); the reader notes for them are in `pst-ltp.md` and `ambiguities.md` (LT5, LT6). The writer makes Unicode stores only.
+
+### Checked against Outlook
+
+Outlook 16.0.20527 opened each store through its object model (`tools/outlook/Check-Stores.ps1`: no dialog, the folders, item counts, subjects, classes, recipient and attachment counts, read state and sender compared with our reader's view) and `scanpst.exe` scanned it without repairing. Outlook-written stores run the same way as controls: they open, and `scanpst.exe` reports only minor inconsistencies on them, which is the baseline a written store is judged against. The table gives the last run (the code in this repository, Outlook and `scanpst.exe` as above):
+
+| Set | Files | Opened in Outlook, views agree with ours | `scanpst.exe` |
+|---|---|---|---|
+| Builder: two Tika PSTs, the generated MSGs, three folders of ICS and vCard items, 3,000 generated messages, 5,032 Enron messages (54 MB, so one FMap page) | 8 | 8 of 8 open, no dialog; views agree 7 of 8 (below) | 7 minor only; 1 with two findings (below) |
+| Outlook-written stores and the durability bases made from them and from the builder | 5 | 5 of 5 | 5 of 5 minor only |
+| In-place edits, tables changed row by row (the 21 durability scenarios: add, delete, folders, grow, split, named, mixed on three bases) | 21 | 21 of 21 | 21 of 21 minor only |
+| The same edits with tables written whole | 21 | 21 of 21 | 21 of 21 minor only |
+| Compaction of edited stores through the builder | 3 | 3 of 3 | 3 of 3 minor only |
+| One folder of 60,000 items (builder) | 1 | not opened | minor only, 60,010 items found |
+| One folder of 100,000 items (`Durability tables-make`), before and after 200 items were added, deleted or moved in place (rows changed one by one) and 200 added with the table written whole | 5 | 5 of 5, folder counts 100,010, 100,210, 99,810, 100,010 and 100,210, all equal to ours | the tool did not finish in 15 minutes on either of two files and reports errors (below) |
+
 ## Not verified
 
-Needs Outlook and `scanpst.exe`, which are not available yet: that Outlook opens the files, FMap and FPMap pages and the name-to-ID bucket choice (above), that the
-hierarchy and contents rows Outlook expects beyond MS-PST's minimum template (replication columns, view descriptors) are enough, that a store without
-`PidTagValidFolderMask`, `PidTagIpmSubTreeEntryId` siblings such as the outbox and sent-items entry IDs, and without a message-store `PidTagRecordKey`-derived search
-key opens without a repair prompt, and the `cRef` of blocks shared by several nodes (none are shared here).
+Still open after the Outlook runs:
+
+- FPMap pages (a file over 2 GB), 4 KiB-page stores and ANSI files are never written, so none has been through Outlook.
+- The bucket a string name takes in the name-to-ID map (CRC or offset, above): Outlook opens stores with named properties and the repair tool says nothing about the map, which does not show which choice it makes.
+- The `cRef` of blocks shared by several nodes (none are shared here).
+- Item kinds with Outlook-only settings: whether the search folders' contents are rebuilt silently when Outlook opens a store that had items added to a folder a search covers; Outlook's behaviour on `fAMapValid` = 0 files.
+- The two findings just above.
+
+**Two findings that are not clean passes**
+
+1. *Stores over 65,535 rows in one folder.* Outlook opens them and shows every item, but `scanpst.exe` does not accept the table. A folder of 60,000 builder-written items scans with only minor findings (60,010 items found, about a minute); the same builder with 66,000 items reports `Row matrix ... bad row count (cRow=66000, cRowBTH=464)`, a computed content count of 0 against 66,000, and each message "added back to the database", and takes 13 minutes; the 100,000-item stores (the base and one edited one) were still running after 15 minutes with the same findings. 464 is 66,000 modulo 65,536, so the tool counts the row index in 16 bits. We could not tell whether it does the same to a folder Outlook itself wrote: Outlook made only 30,065 items in 22 minutes (that store scans with only minor findings), so there is no control above 65,535 rows. Until there is, a folder this size is checked by Outlook opening it and by our own reader, not by the repair tool. Folders over 65,535 items are an Outlook-visible case the format allows (the row matrix is a subnode; the row index is a BTH with 4-byte row numbers).
+2. *Stores built from MSG files that carry 8-bit strings.* `from-msg.pst` scans with two findings, "Contents Table ... row doesn't match sub-object" for the two messages read from the ANSI-string MSG fixtures (`ansi-cp1251.msg`, `ansi-terminator-in-stream.msg`). Their subjects are `PtypString8`; the contents row holds the subject as a Unicode string and the property context keeps the narrow one. This is the likely cause and has not been tried; no store read from Outlook items has `PtypString8` subjects, and the other 7 builder stores are clean. The same store shows a difference in Outlook's view: the message built from `recipients-attachments.msg` (3 attachments in our reader) shows 2 in Outlook, the same file Outlook cannot open as an MSG (see `msg.md`).
 
 ## In place
 
 `PstStore.OpenForWriting` (`RecursiveAI.OneMail.Pst.Messaging.PstWritableStore`) and, underneath it, `NdbEditor` (`RecursiveAI.OneMail.Pst.Ndb`) change an existing
-Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. Its commit path has had an independent review (*Review*, below). It has **not** been opened in Outlook or checked by `scanpst.exe`: treat it as preview quality and keep a copy of files you cannot lose.
+Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. Its commit path has had an independent review (*Review*, below). Outlook opens the files it edits and `scanpst.exe` reports only minor findings on them (*Checked against Outlook*, above), but treat it as preview quality and keep a copy of files you cannot lose.
 
 ### Opening
 
@@ -214,8 +257,7 @@ named property; existing names keep their IDs (ID = 0x8000 + position), which ne
 * A folder delete unlinks the folder (and its tables and subfolders) and commits that first; the items are then freed in batches, each a commit. A stop in between leaves a consistent file whose
   not-yet-freed items are unreachable.
 * A move changes the node's parent and the two folders' tables; the item's blocks are untouched.
-* Search folders' criteria and search update queues (MS-PST 2.4.8) are not maintained. A client rebuilds a search folder when it opens it; whether Outlook accepts that without a repair
-  prompt is listed under "Not verified".
+* Search folders' criteria and search update queues (MS-PST 2.4.8) are not maintained. A client rebuilds a search folder when it opens it; Outlook opened every edited store without a prompt, but none of them had items added to a folder a search folder covers (listed under "Not verified").
 * Memory: B-tree pages changed in a transaction (4 KiB per touched leaf path) and one row at a time per table; `PstWriteOptions.AutoCommitRows` (default 20,000) commits at the end of an
   operation when that many rows are waiting. A table that is written whole costs time proportional to its rows; a big table is changed row by row instead (next section), so a commit that touches a few rows of a folder of 100,000 items reads and writes a few blocks.
 
@@ -313,11 +355,8 @@ refusals, and the durability harness itself. The review read the code against MS
 * *Free space is not wiped after a stop.* Content written by a stopped or rolled-back transaction, and blocks freed by a commit that stopped before step 5, stay in free space un-wiped until reused; `PstCompaction` writes a file without them.
 * *Sizes of blocks and pages* in the trees are trusted beyond the trailer check at free time; a crafted file whose extents overlap with consistent trailers is not detected at open (the checker detects it).
 
-**Not covered** (needs Outlook and `scanpst.exe`, listed under *Not verified* below): whether Outlook opens an edited file without a repair prompt, and how it treats the PMap, FMap and FPMap pages left as they were; Outlook's own
-behaviour on `fAMapValid` = 0; files over 2 GB, 4 KiB and ANSI files (never written).
+**Not covered**: Outlook's own behaviour on `fAMapValid` = 0 files and on a search folder whose source folder was edited; files over 2 GB, 4 KiB and ANSI files (never written).
 
 ### Not verified
 
-Needs Outlook and `scanpst.exe`: that Outlook opens an edited file without a repair prompt; the FMap and FPMap pages and the PMap left as they were in existing ranges; rows added to Outlook's contents tables
-carrying only the columns our template fills (other columns absent); a folder created with only the properties the builder writes; search folders left to the client; the reader-side behaviour on
-`fAMapValid` = 0 files. Not verified at all: 4 KiB or ANSI files (never written), and files over 2 GB.
+Still open: Outlook's behaviour on a file with `fAMapValid` = 0; search folders whose covered folders were edited (the editor leaves their contents to the client); whether the repair tool or Outlook notices the PMap, FMap and FPMap pages left as they were in an existing range after a long run of edits (the edited stores here are one to a few ranges); files over 2 GB, 4 KiB and ANSI files, which are never written.

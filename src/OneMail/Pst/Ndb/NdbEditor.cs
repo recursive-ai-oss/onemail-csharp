@@ -714,6 +714,17 @@ public sealed class NdbEditor : IBidAllocator, INdbBlockSink, INdbNodeSink, IDis
         return nid;
     }
 
+    /// <summary>Makes the header's counter of a NID type at least <paramref name="index"/>, for NIDs a caller made itself (subnodes numbered from a fixed start).</summary>
+    internal void RaiseNidCounter(NidType type, uint index)
+    {
+        ThrowIfUnusable();
+        if (_counters[(int)type] < index)
+        {
+            _counters[(int)type] = index;
+            _changed = true;
+        }
+    }
+
     /// <summary>Calls <paramref name="visit"/> for every node, in NID order, as the tree stands now.</summary>
     public void ForEachNode(Action<NodeEntry> visit)
     {

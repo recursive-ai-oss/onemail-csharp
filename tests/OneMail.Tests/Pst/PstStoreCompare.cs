@@ -113,7 +113,14 @@ public static class PstStoreCompare
                 return false;
             }
 
-            if (ValueHash(wp) != ValueHash(p))
+            // The writer sets MSGFLAG_HASATTACH on a message that has attachments, which Outlook needs to show them (reported as PropertyAdjusted).
+            bool hasAttachAdded = p.Id == 0x0E07 && source is MapiMessage { Attachments.Count: > 0 } && p.GetBytes(0).Length == 4 && wp.GetBytes(0).Length == 4
+                && (BitConverter.ToInt32(p.GetBytes(0).Span) | 0x10) == BitConverter.ToInt32(wp.GetBytes(0).Span);
+            // ... and clears it on one that has none.
+            hasAttachAdded |= p.Id == 0x0E07 && source is MapiMessage { Attachments.Count: 0 } && p.GetBytes(0).Length == 4 && wp.GetBytes(0).Length == 4
+                && (BitConverter.ToInt32(p.GetBytes(0).Span) & ~0x10) == BitConverter.ToInt32(wp.GetBytes(0).Span);
+            // PidTagMessageSize is computed by the store, so the written one describes the written layout, not the source's.
+            if (!hasAttachAdded && p.Id != 0x0E08 && ValueHash(wp) != ValueHash(p))
             {
                 why?.Append("different value ").Append(k).Append(" written ").Append(Convert.ToHexString(wp.GetBytes(0).Span[..Math.Min(24, wp.GetBytes(0).Length)])).Append(" source ").Append(Convert.ToHexString(p.GetBytes(0).Span[..Math.Min(24, p.GetBytes(0).Length)])).Append("; ");
                 return false;

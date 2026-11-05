@@ -393,9 +393,6 @@ internal sealed class FolderState : IDisposable
                 case 0x3613 when ContainerClass is not null:
                     cells[i] = PstWritableStore.Utf16(ContainerClass);
                     break;
-                case 0x6635 or 0x6636 when existing is null:
-                    cells[i] = PstWritableStore.I32(0);
-                    break;
             }
         }
 

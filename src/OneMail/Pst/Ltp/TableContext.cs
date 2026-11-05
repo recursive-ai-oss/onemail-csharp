@@ -210,13 +210,14 @@ public sealed class TableContext : IDisposable
         Bth? rowIndex = null;
         if (!hidRowIndex.IsNull && Bth.TryOpen(heap, hidRowIndex, out Bth? bth) && bth is not null)
         {
-            if (bth.KeySize == 4 && bth.DataSize == 4)
+            // MS-PST 2.3.4.3: dwRowIndex is 4 bytes in a Unicode file and 2 bytes in an ANSI one (a file Outlook wrote shows the 2).
+            if (bth.KeySize == 4 && bth.DataSize is 4 or 2)
             {
                 rowIndex = bth;
             }
             else
             {
-                heap.Report(LtpDefectKind.TcRowIndexShape, $"row index BTH has cbKey {bth.KeySize} and cbEnt {bth.DataSize}; expected 4 and 4");
+                heap.Report(LtpDefectKind.TcRowIndexShape, $"row index BTH has cbKey {bth.KeySize} and cbEnt {bth.DataSize}; expected 4 and 4 (Unicode) or 2 (ANSI)");
             }
         }
 
@@ -270,12 +271,13 @@ public sealed class TableContext : IDisposable
 
         Span<byte> key = [(byte)rowId, (byte)(rowId >> 8), (byte)(rowId >> 16), (byte)(rowId >> 24)];
         Span<byte> data = [0, 0, 0, 0];
+        data = data[.._rowIndex.DataSize];
         if (!_rowIndex.TryFind(key, data))
         {
             return false;
         }
 
-        rowIndex = LtpBytes.U32(data, 0);
+        rowIndex = data.Length == 2 ? LtpBytes.U16(data, 0) : LtpBytes.U32(data, 0);
         return true;
     }
 
@@ -291,7 +293,7 @@ public sealed class TableContext : IDisposable
         BthCursor c = _rowIndex.CreateCursor();
         while (c.MoveNext())
         {
-            yield return new TcRowIndexEntry((uint)c.KeyValue, LtpBytes.U32(c.Data, 0));
+            yield return new TcRowIndexEntry((uint)c.KeyValue, c.Data.Length == 2 ? LtpBytes.U16(c.Data, 0) : LtpBytes.U32(c.Data, 0));
         }
     }
 

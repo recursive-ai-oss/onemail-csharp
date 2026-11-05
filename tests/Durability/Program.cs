@@ -50,6 +50,9 @@ switch (args[0])
         return Campaign.Child(args[1], args[2], I(args[3]), I(args[4]));
     case "make":
         return Campaign.Make(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), corpus);
+    case "base":
+        File.WriteAllBytes(args[2], Bases.Load(args[1], corpus));
+        return 0;
     case "leftovers":
         return Campaign.Leftovers(args[1], Opt("--bases", "ours,tika1,tika2").Split(','), Opt("--scenarios", string.Join(',', Scenarios.Names)).Split(','), I(Opt("--per-phase", "2")), I(Opt("--seed", "3")), corpus);
     case "nids":

@@ -30,27 +30,44 @@ internal sealed class PstItemWriter
     // MS-PST 2.4.4.4.1, 2.4.4.5.1, 2.4.4.6.1, 2.4.8.6.2.1, 2.4.5.3.1 and 2.4.6.1.1: the template tables' columns.
     internal static readonly (ushort Id, ushort Type)[] HierarchyColumns =
     [
-        (0x0E30, 3), (0x0E33, 0x14), (0x0E34, 0x102), (0x0E38, 3), (0x3001, 0x1F), (0x3602, 3), (0x3603, 3), (0x360A, 0xB), (0x3613, 0x1F), (0x6635, 3), (0x6636, 3),
+        (0x0E30, 0x102), (0x0E33, 0x14), (0x0E34, 0x102), (0x0E38, 3), (0x3001, 0x1F), (0x3602, 3), (0x3603, 3), (0x360A, 0xB), (0x3613, 0x1F), (0x6635, 3), (0x6636, 3),
     ];
 
     internal static readonly (ushort Id, ushort Type)[] ContentsColumns =
     [
         (0x0017, 3), (0x001A, 0x1F), (0x0036, 3), (0x0037, 0x1F), (0x0039, 0x40), (0x0042, 0x1F), (0x0057, 0xB), (0x0058, 0xB), (0x0070, 0x1F), (0x0071, 0x102),
-        (0x0E03, 0x1F), (0x0E04, 0x1F), (0x0E06, 0x40), (0x0E07, 3), (0x0E08, 3), (0x0E17, 3), (0x0E30, 3), (0x0E33, 0x14), (0x0E34, 0x102), (0x0E38, 3),
-        (0x0E3C, 0x102), (0x0E3D, 0x102), (0x1097, 3), (0x3008, 0x40), (0x65C6, 3),
+        (0x0E03, 0x1F), (0x0E04, 0x1F), (0x0E06, 0x40), (0x0E07, 3), (0x0E08, 3), (0x0E17, 3), (0x0E30, 0x102), (0x0E33, 0x14), (0x0E34, 0x102), (0x0E38, 3),
+        (0x0E3C, 0x102), (0x0E3D, 0x102), (0x1097, 3), (0x3008, 0x40), (0x3013, 0x102), (0x65C6, 3),
     ];
 
     internal static readonly (ushort Id, ushort Type)[] AssocColumns =
     [
         (0x001A, 0x1F), (0x0E07, 3), (0x0E17, 3), (0x3001, 0x1F), (0x6800, 0x1F), (0x6803, 0xB), (0x6805, 0x1003), (0x7003, 3), (0x7004, 0x102), (0x7005, 0x102),
-        (0x7006, 0x1F), (0x7007, 3),
+        (0x7006, 0x1F), (0x7007, 3), (0x682F, 0x1F),
     ];
 
     internal static readonly (ushort Id, ushort Type)[] SearchContentsColumns =
     [
-        (0x0017, 3), (0x001A, 0x1F), (0x0036, 3), (0x0037, 0x1F), (0x0042, 0x1F), (0x0057, 0xB), (0x0E03, 0x1F), (0x0E04, 0x1F), (0x0E05, 0x1F), (0x0E06, 0x40),
+        (0x0017, 3), (0x001A, 0x1F), (0x0036, 3), (0x0037, 0x1F), (0x0042, 0x1F), (0x0057, 0xB), (0x0058, 0xB), (0x0E03, 0x1F), (0x0E04, 0x1F), (0x0E05, 0x1F), (0x0E06, 0x40),
         (0x0E07, 3), (0x0E08, 3), (0x0E17, 3), (0x0E2A, 0xB), (0x3008, 0x40), (0x67F1, 3),
     ];
+
+    // The columns of the tables Outlook writes besides the ones MS-PST lists; read from files it wrote.
+    internal static readonly (ushort Id, ushort Type)[] ReceiveFolderColumns = [(0x001A, 0x1F), (0x6605, 3)];
+
+    internal static readonly (ushort Id, ushort Type)[] OutgoingQueueColumns =
+    [
+        (0x000F, 0x40), (0x0039, 0x40), (0x0E07, 3), (0x0E10, 3), (0x0E14, 3), (0x0E29, 0x1F), (0x0EA2, 3), (0x67F1, 3),
+    ];
+
+    internal static readonly (ushort Id, ushort Type)[] Template1Columns = [(0x0E33, 0x14), (0x0E37, 0x102), (0x0E38, 3)];
+
+    internal static readonly (ushort Id, ushort Type)[] Template2Columns =
+    [
+        (0x001A, 0x1F), (0x0E30, 0x102), (0x0E31, 0x102), (0x0E33, 0x14), (0x0E34, 0x102), (0x0E38, 3), (0x0E3E, 0x102),
+    ];
+
+    internal static readonly (ushort Id, ushort Type)[] Template3Columns = [(0x0E33, 0x14), (0x3007, 0x40)];
 
     private static readonly (ushort Id, ushort Type)[] RecipientColumns =
     [
@@ -85,8 +102,16 @@ internal sealed class PstItemWriter
         public Nid NextAttachment() => new((Attach++ << 5) | (uint)NidType.Attachment);
     }
 
-    public PstItemWriter(INdbNodeSink file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects)
+    // Where the file's NID counters come from: an embedded message takes the next NID of a top-level message, as in files Outlook wrote, and the highest
+    // attachment index used is noted so the header's counter for attachments reaches it (the repair tool of Outlook checks both).
+    private readonly Func<Nid>? _nextEmbeddedMessage;
+    private readonly Action<uint>? _noteAttachmentIndex;
+
+    public PstItemWriter(INdbNodeSink file, PstBuilderOptions options, DateTimeOffset timestamp, List<PstWriteDefect> defects,
+        Func<Nid>? nextEmbeddedMessage = null, Action<uint>? noteAttachmentIndex = null)
     {
+        _nextEmbeddedMessage = nextEmbeddedMessage;
+        _noteAttachmentIndex = noteAttachmentIndex;
         _file = file;
         _options = options;
         _timestamp = timestamp;
@@ -267,6 +292,24 @@ internal sealed class PstItemWriter
         WriteTable(_file, new Nid(PstBuilder.NidSearchContentsTemplate), SearchContentsColumns, []);
         WriteTable(_file, new Nid(PstBuilder.NidRecipientTable), RecipientColumns, []);
         WriteTable(_file, new Nid(PstBuilder.NidAttachmentTable), AttachmentColumns, []);
+        // Tables the repair tool of Outlook looks for in every store (not in MS-PST's list of mandatory nodes): the receive folder table with its one
+        // row for the default message class (the empty string), the outgoing queue, and three further template tables.
+        WriteTable(_file, new Nid(PstBuilder.NidReceiveFolderTable), ReceiveFolderColumns,
+            [(1u, [[], I32(unchecked((int)PstBuilder.NidRootFolder))])]);
+        WriteTable(_file, new Nid(PstBuilder.NidOutgoingQueueTable), OutgoingQueueColumns, []);
+        WriteTable(_file, new Nid(PstBuilder.NidTemplate1), Template1Columns, []);
+        WriteTable(_file, new Nid(PstBuilder.NidTemplate2), Template2Columns, []);
+        WriteTable(_file, new Nid(PstBuilder.NidTemplate3), Template3Columns, []);
+        // Two more nodes the repair tool of Outlook looks for (found by trying stores without them; MS-PST does not list them):
+        // 0xC01, a heap-on-node (client signature 0x9C) holding an empty B-tree-on-heap with 16-byte keys and 4-byte values, which the tool calls
+        // the HMP and otherwise recreates; and 0xEC1, a queue of 20-byte search update descriptors (MS-PST 2.4.8.1.1) holding one SUDT_SRCH_ADD for the
+        // spam search folder, without which it reports the search folder as lacking an update queue.
+        byte[] hmp = [0x18, 0, 0xEC, 0x9C, 0x20, 0, 0, 0, 0, 0, 0, 0, 0x40, 0, 0, 0, 0xB5, 0x10, 0x04, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0x0C, 0, 0x10, 0, 0x18, 0];
+        _file.AddNode(new NodeEntry(new Nid(0xC01), _file.Blocks.WriteData(hmp).Root, default, default));
+        byte[] queue = new byte[20];
+        BinaryPrimitives.WriteUInt16LittleEndian(queue.AsSpan(2), 0x0009);   // wSUDType = SUDT_SRCH_ADD; wFlags = 0
+        BinaryPrimitives.WriteUInt32LittleEndian(queue.AsSpan(4), PstBuilder.NidSpamSearch);   // SUD_SRCH_ADD.nidSrch
+        _file.AddNode(new NodeEntry(new Nid(0xEC1), _file.Blocks.WriteData(queue).Root, default, default));
         builder.WriteStoreNodes();
     }
 
@@ -504,7 +547,7 @@ internal sealed class PstItemWriter
 
     // ---- messages ------------------------------------------------------------------------------------------------------------------------------
 
-    private sealed record WrittenObject(Bid Data, Bid Sub, long Size, int Flags, int EffectiveStatus, byte[] LastModified);
+    private sealed record WrittenObject(Bid Data, Bid Sub, long Size, int SizeValue, int Flags, int EffectiveStatus, byte[] LastModified, Dictionary<ushort, byte[]> Added);
 
     /// <summary>Writes a top-level message node and returns the rows its folder keeps.</summary>
     public PstWrittenMessage WriteMessage(MapiMessage message, Nid nid, Nid folder, bool associated, string location)
@@ -512,14 +555,24 @@ internal sealed class PstItemWriter
         var ctx = new Ctx();
         WrittenObject o = WriteMessageObject(message, nid.Value, ctx, 0, location);
         _file.AddNode(new NodeEntry(nid, o.Data, o.Sub, folder));
+        if (ctx.Attach > 0x400)
+        {
+            _noteAttachmentIndex?.Invoke(ctx.Attach - 1);
+        }
 
         var eff = new Dictionary<ushort, byte[]>
         {
             [0x0E07] = I32(o.Flags),
-            [0x0E08] = I32((int)Math.Min(int.MaxValue, o.Size)),
+            [0x0E08] = I32(o.SizeValue),
             [0x0E17] = I32(o.EffectiveStatus),
             [0x3008] = o.LastModified,
         };
+        // A property the writer added (the message class of an item that had none) is in the folder's row too: a row without the class made Outlook stop working.
+        foreach ((ushort id, byte[] value) in o.Added)
+        {
+            eff.TryAdd(id, value);
+        }
+
         return new PstWrittenMessage
         {
             Flags = o.Flags,
@@ -580,6 +633,15 @@ internal sealed class PstItemWriter
         bool outerString8 = _string8Seen;
         _string8Seen = false;
         List<Prop> props = Collect(m, location, skipObject: false);
+        if (_options.AddRequiredProperties && Find(props, 0x001A) is { Type: 0x1E, Source: { } classSource } narrowClass)
+        {
+            // The repair tool of Outlook looks for PidTagMessageClass as a Unicode string and reports a message whose class is a PtypString8 as having none.
+            narrowClass.Type = 0x1F;
+            narrowClass.Bytes = Encoding.Unicode.GetBytes(classSource.AsString(m.String8Encoding) ?? string.Empty);
+            narrowClass.Source = null;
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageClass was a PtypString8 and was written as PtypString");
+        }
+
         long size = 0;
         var extra = new List<SubnodeEntry>();
 
@@ -613,19 +675,51 @@ internal sealed class PstItemWriter
             flags = attachments.Count > 0 ? 0x10 : 0;   // MSGFLAG_HASATTACH
         }
 
-        foreach (Prop p in props)
+        // MS-OXCMSG 2.2.1.6: MSGFLAG_HASATTACH says the message has attachments. Outlook shows none for a message whose flags lack it, so a message
+        // that has attachments gets the flag.
+        if (attachments.Count > 0 && (flags & 0x10) == 0 && Find(props, 0x0E07) is { } flagProp)
         {
-            size += ValueLength(p);
+            flags |= 0x10;
+            flagProp.Source = null;
+            flagProp.Bytes = I32(flags);
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageFlags lacked MSGFLAG_HASATTACH on a message with attachments; set");
+        }
+
+        // The other way round, the repair tool rejects a message that claims attachments it does not have (a recovered message whose attachment
+        // table was lost keeps the flag it was saved with).
+        if (attachments.Count == 0 && (flags & 0x10) != 0 && Find(props, 0x0E07) is { } staleFlag)
+        {
+            flags &= ~0x10;
+            staleFlag.Source = null;
+            staleFlag.Bytes = I32(flags);
+            Report(PstWriteDefectKind.PropertyAdjusted, location, "PidTagMessageFlags had MSGFLAG_HASATTACH on a message with no attachments; cleared");
         }
 
         byte[] lastModified = FileTime(_timestamp);
         int status = 0;
+        bool sizeAdded = false;
+        int declared = props.Count;
         if (_options.AddRequiredProperties)
         {
             // MS-PST 2.4.5.1.1: the properties every message property context must have.
             Ensure(props, 0x001A, 0x1F, Encoding.Unicode.GetBytes("IPM.Note"), location);
             Ensure(props, 0x0E07, 3, I32(flags), location);
-            Ensure(props, 0x0E08, 3, I32((int)Math.Min(int.MaxValue, size)), location);
+            // PidTagMessageSize is the bytes in the data trees of the message node and all its subnodes, attachments and embedded messages included
+            // (what Outlook writes, and what its repair tool checks the folder's row against). It depends on the size of the context it is in, so it is
+            // filled in when that context is built.
+            // MS-OXCMSG calls it read-only and computed by the store, so a value the item arrives with (it described the layout of the store it came
+            // from) is replaced rather than kept; Outlook's repair tool rejects a folder row whose size is far from the node's.
+            sizeAdded = true;
+            if (Find(props, 0x0E08) is { } existingSize)
+            {
+                existingSize.Type = 3;
+                existingSize.Bytes = I32(0);
+                existingSize.Source = null;
+            }
+            else
+            {
+                Ensure(props, 0x0E08, 3, I32(0), location);
+            }
             Ensure(props, 0x0E17, 3, I32(0), location);
             byte[] created = Find(props, 0x3008) is { } lm && lm.Type == 0x40 && ValueLength(lm) == 8 ? (lm.Bytes ?? lm.Source!.GetBytes(0).ToArray())
                 : Find(props, 0x0039) is { } cs && cs.Type == 0x40 && ValueLength(cs) == 8 ? (cs.Bytes ?? cs.Source!.GetBytes(0).ToArray()) : lastModified;
@@ -658,10 +752,31 @@ internal sealed class PstItemWriter
             SetProperty(pc, p);
         }
 
-        LtpNodeResult r = pc.Build();
+        long extras = size;
+        long messageSize = 0;
+        LtpNodeResult r = sizeAdded
+            ? pc.Build(0x0E08, own => { messageSize = own + extras; return (uint)Math.Min(int.MaxValue, messageSize); })
+            : pc.Build();
+        if (!sizeAdded)
+        {
+            messageSize = r.DataLength + r.SubnodeBytes + extras;
+        }
+
+        int sizeValue = Find(props, 0x0E08) is { Type: 3 } sv && ValueLength(sv) == 4 && !sizeAdded
+            ? BinaryPrimitives.ReadInt32LittleEndian(sv.Bytes ?? sv.Source!.GetBytes(0).Span)
+            : (int)Math.Min(int.MaxValue, messageSize);
         Bid sub = r.WriteSubnodes(blocks, extra);
         _string8Seen = outerString8;
-        return new WrittenObject(r.Data, sub, size, flags, status, lastModified);
+        var added = new Dictionary<ushort, byte[]>();
+        for (int i = declared; i < props.Count; i++)
+        {
+            if (props[i].Bytes is { } b)
+            {
+                added[props[i].Id] = b;
+            }
+        }
+
+        return new WrittenObject(r.Data, sub, messageSize, sizeValue, flags, status, lastModified, added);
     }
 
     private static byte[] SearchKey(uint key, List<Prop> props)
@@ -690,6 +805,9 @@ internal sealed class PstItemWriter
         for (int i = 0; i < count; i++)
         {
             List<Prop> props = Collect(recipients[i], location + " recipient " + i, skipObject: true);
+            // MS-OXCMSG makes PidTagRecipientType a required recipient property. Outlook's repair tool treats a recipient table whose rows
+            // lack it as unusable (it leaves the table out when it measures an embedded message), so a recipient without one is written as "To" (the property is reported as added).
+            Ensure(props, 0x0C15, 3, [1, 0, 0, 0], location + " recipient " + i);
             rows.Add(props);
             foreach (Prop p in props)
             {
@@ -720,13 +838,13 @@ internal sealed class PstItemWriter
                 }
 
                 SetCell(tc, tc.FindColumn(p.Id, p.Type), p);
-                size += ValueLength(p);
             }
 
             tc.EndRow();
         }
 
         LtpNodeResult t = tc.Build();
+        size += t.DataLength + t.SubnodeBytes;
         return new SubnodeEntry(new Nid(PstBuilder.NidRecipientTable), t.Data, t.WriteSubnodes(blocks));
     }
 
@@ -755,7 +873,7 @@ internal sealed class PstItemWriter
                 }
                 else
                 {
-                    Nid embNid = ctx.NextLtp();
+                    Nid embNid = _nextEmbeddedMessage?.Invoke() ?? ctx.NextLtp();
                     WrittenObject eo = WriteMessageObject(embedded, embNid.Value, ctx, depth + 1, loc + " embedded");
                     extra.Add(new SubnodeEntry(embNid, eo.Data, eo.Sub));
                     embeddedSize = eo.Size;
@@ -773,19 +891,39 @@ internal sealed class PstItemWriter
                 Report(PstWriteDefectKind.ObjectStorageDropped, loc, "the attachment is an OLE object or a raw storage; its storage was left out");
             }
 
-            long dataSize = Find(props, 0x3701) is { Type: 0x102 } d ? ValueLength(d) : embeddedSize;
             int method = Find(props, 0x3705) is { Type: 3 } mp && ValueLength(mp) == 4 ? BinaryPrimitives.ReadInt32LittleEndian(mp.Bytes ?? mp.Source!.GetBytes(0).Span) : (embedded is not null ? 5 : 1);
             if (_options.AddRequiredProperties)
             {
                 // MS-PST 2.4.6.2.1: the properties every attachment object must have.
-                Ensure(props, 0x0E20, 3, I32((int)Math.Min(int.MaxValue, dataSize)), loc);
                 Ensure(props, 0x3705, 3, I32(method), loc);
                 Ensure(props, 0x370B, 3, I32(-1), loc);   // PidTagRenderingPosition: not inline
-            }
+                // Outlook's PidTagAttachSize is the sum of the sizes of the attachment's property values, the embedded message counted whole in place of
+                // the object property's eight bytes (0x0E20 itself, four bytes, included), and its repair tool reports any other value as invalid.
+                // It is recomputed even when the item carries one: the sizes of what it describes change when the item is written again, and the tool
+                // reports a size that disagrees with the attachment as invalid.
+                long sum = 4;
+                foreach (Prop p in props)
+                {
+                    if (p.Id != 0x0E20)
+                    {
+                        sum += p.Type == 0x000D ? embeddedSize : ValueLength(p);
+                    }
+                }
 
-            foreach (Prop p in props)
-            {
-                size += ValueLength(p);
+                byte[] sizeBytes = I32((int)Math.Min(int.MaxValue, sum));
+                if (Find(props, 0x0E20) is { Type: 3 } existing)
+                {
+                    if (ValueLength(existing) != 4 || !(existing.Bytes ?? existing.Source!.GetBytes(0).ToArray()).AsSpan().SequenceEqual(sizeBytes))
+                    {
+                        existing.Source = null;
+                        existing.Bytes = sizeBytes;
+                        Report(PstWriteDefectKind.PropertyAdjusted, loc, "PidTagAttachSize disagreed with the attachment as written and was recomputed");
+                    }
+                }
+                else
+                {
+                    Ensure(props, 0x0E20, 3, sizeBytes, loc);
+                }
             }
 
             var pc = new PropertyContextBuilder(blocks, ctx.NextLtp);
@@ -795,6 +933,7 @@ internal sealed class PstItemWriter
             }
 
             LtpNodeResult r = pc.Build();
+            size += r.DataLength + r.SubnodeBytes + embeddedSize;
             entries.Add(new SubnodeEntry(nid, r.Data, r.WriteSubnodes(blocks, extra)));
 
             // The attachment table row (MS-PST 2.4.6.1.1): size, file name, method, rendering position.
@@ -823,6 +962,7 @@ internal sealed class PstItemWriter
         }
 
         LtpNodeResult t = tc.Build();
+        size += t.DataLength + t.SubnodeBytes;
         entries.Add(new SubnodeEntry(new Nid(PstBuilder.NidAttachmentTable), t.Data, t.WriteSubnodes(blocks)));
         return entries;
     }

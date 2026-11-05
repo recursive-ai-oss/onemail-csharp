@@ -43,6 +43,14 @@ public sealed class MsgWriterOptions
     /// </summary>
     public bool KeepEmptyStrings { get; init; }
 
+    /// <summary>
+    /// Whether the writer adds what Outlook needs and the model may lack: <c>PidTagRowid</c> on a recipient and <c>PidTagAttachNumber</c> on an
+    /// attachment (Outlook cannot save a message without the first or open one without the second), and the split of a subject that still has the
+    /// U+0001 prefix marker of a PST item into <c>PidTagSubject</c>, <c>PidTagSubjectPrefix</c> and <c>PidTagNormalizedSubject</c>. Each is reported as
+    /// <see cref="MsgWriteDefectKind.PropertyAdjusted"/>. Default true; false writes the model's properties and nothing else.
+    /// </summary>
+    public bool AddRequiredProperties { get; init; } = true;
+
     /// <summary>Most properties in one object (message, recipient or attachment). Default 1,048,576, the reader's limit.</summary>
     public int MaxProperties { get; init; } = 1 << 20;
 

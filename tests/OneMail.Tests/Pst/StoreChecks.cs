@@ -68,6 +68,7 @@ public static class StoreChecks
             using (OldTable contents = OldTable.Open(file, PstWritableStore.TableNid(f.Nid, NidType.ContentsTable), []))
             {
                 int subjectColumn = Array.IndexOf(contents.Columns, ((ushort)0x0037, (ushort)0x1F));
+                int classColumn = Array.IndexOf(contents.Columns, ((ushort)0x001A, (ushort)0x1F));
                 var rowIds = contents.RowIds().ToHashSet();
                 foreach (PstMessage m in f.EnumerateMessages(PstMessageSet.Normal))
                 {
@@ -85,6 +86,13 @@ public static class StoreChecks
                         && cells[subjectColumn] is { } cell && Encoding.Unicode.GetString(cell) != subject)
                     {
                         problems.Add($"{where}: item {m.Nid} has a different subject in its contents row");
+                    }
+
+                    // Outlook stops working on an item whose folder row has no message class.
+                    if (classColumn >= 0 && m.GetString(0x001A) is { } messageClass && contents.TryGetRow(m.Nid.Value, out byte[]?[] classCells)
+                        && (classCells[classColumn] is not { } classCell || Encoding.Unicode.GetString(classCell) != messageClass))
+                    {
+                        problems.Add($"{where}: item {m.Nid} has a different message class in its contents row");
                     }
                 }
 

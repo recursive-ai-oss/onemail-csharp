@@ -100,7 +100,17 @@ checked: neither protects anything (both are fixed, public tables or a public ch
 
 The index is held in memory: about 60 bytes per block and per node, so the peak working set grows with the store (660 MiB for a 926 MiB file with
 250,000 messages; about 165 MiB at 80,000 messages with a small allocation budget). Everything else streams, one item at a time. A message whose heap spans several blocks is lost with its node entry (only its first block can be found, and it reads incomplete). 4 KiB compressed blocks are found by the scan like any other; ANSI stores are
-scanned and parsed from the layout but no ANSI file has been seen (generated stores only).
+scanned and parsed from the layout; the one real ANSI store we have (`testdata/pst/outlook-ansi.pst`, written by Outlook) goes through the damage campaign below like the Unicode ones.
+
+### Checked against Outlook
+
+The damaged and deleted-from stores below started as stores Outlook made (`tools/outlook/Make-Fixtures.ps1`: a 15-item mixed store with folders, an appointment, a contact, a task, a note and an attachment; a 770-item store; and a store with 23 live items, items deleted but kept in Deleted Items, a folder deleted whole, and 6 items deleted and then deleted again from Deleted Items so they are gone for good) and were damaged with the 11 methods of `PstOracle pstcampaign`. Outlook 16.0.20527 and its repair tool `scanpst.exe` 16.0.20527.20088 were the judges:
+
+- **Repair into a new store.** The stores `PstRecovery.RepairTo` wrote from the mixed and big stores, 11 damages each (22 files), all open in Outlook with no dialog and show the same folders and items as our reader's view, and `scanpst.exe` reports only minor inconsistencies on each (the same finding Outlook-written stores get). The stores written from the Outlook-made ANSI store, 11 damages: 11 of 11 clean the same way.
+- **Forensic recovery.** On the store with 6 items deleted for good, `Live` is 23 and `Orphaned` is 6, and the 6 are exactly the 6 subjects deleted twice; `SoftDeleted` is 0, and nothing that was deleted is tagged `Live`.
+- **Against the tool's own repair.** On the same damaged files `scanpst.exe` with repair finds fewer items than recovery in all 12 comparisons we made (for example 600 against 697 items from the big store with 5 % of its units corrupted, 4 against 6 from the mixed store truncated to 50 %, 19 against 25 from the purge store truncated to 50 %). Recovery never writes to the damaged file; the tool rewrites it in place.
+
+Not checked: the hand-made damage cases beyond the 11 methods (the unit tests and fuzz target cover them), and OLM and DBX, which Outlook does not read.
 
 ## DBX: deleted and orphaned messages
 

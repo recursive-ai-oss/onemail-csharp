@@ -47,6 +47,38 @@ internal static class Program
             return 0;
         }
 
+        // oft <in dir or file>... <out dir>: each message written again as a template (MSGFLAG_UNSENT set), for opening in Outlook.
+        if (args[0] == "oft")
+        {
+            string outDir = args[^1];
+            Directory.CreateDirectory(outDir);
+            foreach (string f in args.Skip(1).Take(args.Length - 2).SelectMany(Expand))
+            {
+                if (!RecursiveAI.OneMail.Msg.MsgFile.TryOpen(f, out RecursiveAI.OneMail.Msg.MsgFile? mf, out _) || mf is null)
+                {
+                    continue;
+                }
+
+                using (mf)
+                {
+                    var res = RecursiveAI.OneMail.Msg.MsgWriter.Write(mf.Message, Path.Combine(outDir, Path.GetFileNameWithoutExtension(f) + ".oft"), new RecursiveAI.OneMail.Msg.MsgWriterOptions { Template = true });
+                    Console.WriteLine($"{Path.GetFileName(f)}\t{res.Defects.Count} findings");
+                }
+            }
+
+            return 0;
+        }
+
+        if (args[0] == "variants")
+        {
+            return OutlookVariants.Run(args[1]);
+        }
+
+        if (args[0] == "cfb")
+        {
+            return CfbDump.Run(args[1]);
+        }
+
         if (args[0] == "damage")
         {
             return Damage.Run(args.Skip(1).SelectMany(Expand).ToArray());

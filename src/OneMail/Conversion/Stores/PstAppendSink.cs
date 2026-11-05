@@ -67,6 +67,7 @@ internal sealed class PstAppendSink : IStoreSink
                 PstWriteDefectKind.UnsupportedType => (LossKind.Dropped, "PstUnsupportedType"),
                 PstWriteDefectKind.ObjectStorageDropped => (LossKind.Dropped, "PstObjectStorageDropped"),
                 PstWriteDefectKind.PropertyAdded => (LossKind.Internal, "PstPropertyAdded"),
+                PstWriteDefectKind.PropertyAdjusted => (LossKind.Internal, "PstPropertyAdjusted"),
                 PstWriteDefectKind.EmbeddingTooDeep => (LossKind.Dropped, "PstEmbeddingTooDeep"),
                 _ => (LossKind.Dropped, "PstTooManyChildren"),
             };

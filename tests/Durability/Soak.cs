@@ -258,7 +258,7 @@ internal static class Soak
         PstStoreCompare.Result r = PstStoreCompare.Compare(originals.Values, view, includeAssociated: false);
         if (r.Exact + r.WithAdditions < r.Source || r.PropertiesNotCarried > 0)
         {
-            problems.Add($"op {op}: {r.Source - r.Exact - r.WithAdditions} of {r.Source} added items do not read back exactly ({r.PropertiesNotCarried} properties differ)");
+            problems.Add($"op {op}: {r.Source - r.Exact - r.WithAdditions} of {r.Source} added items do not read back exactly ({r.PropertiesNotCarried} properties differ){(r.Notes.Count > 0 ? ": " + r.Notes[0] : string.Empty)}");
         }
 
         // Space that was not free when the run began, or lies beyond the file as it began, and is free now must have been wiped.

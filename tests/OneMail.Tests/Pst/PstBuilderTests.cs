@@ -89,6 +89,122 @@ public sealed class PstBuilderTests
     }
 
     [Fact]
+    public void AMessageClassTheWriterAddsIsAlsoInTheFoldersRow()
+    {
+        // An item with no properties at all gets PidTagMessageClass added; Outlook stopped working on such an item when its row in the folder's contents table had no class.
+        var m = new MapiMessage();
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(m));
+        using (store)
+        {
+            Assert.Equal("IPM.Note", store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single().MessageClass);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void AMessageWithAttachmentsAlwaysCarriesTheHasAttachFlag()
+    {
+        // Outlook shows no attachments for a message whose PidTagMessageFlags lacks MSGFLAG_HASATTACH, so the builder sets the flag.
+        MapiMessage m = Message("with file", recipients: 0, attachments: 1);
+        m.Properties.Add(Int(0x0E07, 1));   // read, no HASATTACH
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(m));
+        using (store)
+        {
+            PstMessage written = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(0x11, written.GetInt32(0x0E07));
+            Assert.Single(written.Attachments);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    // Bytes in the data trees of a node and of all its subnodes, nested ones included: what PidTagMessageSize holds in files Outlook wrote.
+    private static long NodeBytes(NdbFile file, Bid data, Bid sub)
+    {
+        long total = 0;
+        using (NdbDataTree? tree = file.OpenDataTree(data))
+        {
+            total += tree?.Length ?? 0;
+        }
+
+        foreach (SubnodeEntry e in file.OpenSubnodes(sub)?.Entries ?? [])
+        {
+            total += NodeBytes(file, e.Data, e.Sub);
+        }
+
+        return total;
+    }
+
+    [Fact]
+    public void MessageSizeIsTheBytesOfTheNodeAndItsSubnodes()
+    {
+        // Outlook's repair tool compares the folder's row with the message, and PidTagMessageSize in files Outlook wrote is the size of the whole node.
+        (PstStore store, string path) = Write(b =>
+        {
+            PstFolderWriter inbox = b.IpmSubtree.CreateFolder("Inbox");
+            inbox.AddMessage(Message("plain", recipients: 0));
+            inbox.AddMessage(Message("big", recipients: 3, attachments: 2, body: new string('b', 20_000)));
+            inbox.AddMessage(Message("many recipients", recipients: 400));   // the recipient table's row matrix is a subnode of its own
+        });
+        using (store)
+        {
+            int checkedMessages = 0;
+            foreach (PstMessage m in store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken))
+            {
+                Assert.True(store.Database.Nodes.TryGet(m.Nid, out NodeEntry node));
+                Assert.Equal<long?>(NodeBytes(store.Database, node.Data, node.Sub), m.GetInt32(0x0E08));
+                checkedMessages++;
+            }
+
+            Assert.Equal(3, checkedMessages);
+            Assert.Equal([], StoreChecks.Consistency(store));
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void AttachSizeIsTheSumOfTheAttachmentsValueSizes()
+    {
+        // 0x3701 (20,000 bytes) + 0x3707 ("file0.bin", UTF-16) + 0x3705, 0x370B and 0x0E20 itself (four bytes each).
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").AddMessage(Message("with file", recipients: 0, attachments: 1)));
+        using (store)
+        {
+            PstMessage m = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal<int?>(20_000 + (2 * "file0.bin".Length) + 12, ((PstAttachment)m.Attachments.Single()).Size);
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void TheStoreHasTheNodesAndCountersOutlooksRepairToolLooksFor()
+    {
+        // Found by running Outlook's repair tool over stores written without them (none of this is in MS-PST's list of mandatory nodes).
+        (PstStore store, string path) = Write(b => b.IpmSubtree.CreateFolder("Inbox").CreateFolder("Archive"));
+        using (store)
+        {
+            NdbFile file = store.Database;
+            foreach (uint nid in new uint[] { 0x62B, 0x64C, 0x6B6, 0x6D7, 0x6F8, 0xC01, 0xEC1, 0x2226, 0x2227 })
+            {
+                Assert.True(file.Nodes.TryGet(new Nid(nid), out _), $"node 0x{nid:X} is missing");
+            }
+
+            // The hierarchy, contents and associated-contents counters reach the highest folder index in use.
+            uint folders = file.Header.NodeCounters[(int)NidType.NormalFolder];
+            Assert.True(folders >= 0x405);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.HierarchyTable]);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.ContentsTable]);
+            Assert.Equal(folders, file.Header.NodeCounters[(int)NidType.AssocContentsTable]);
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
     public void String8TextTakesItsCodePageFromTheItemAndTheNameMapIsNeverEmpty()
     {
         var m = new MapiMessage();
@@ -135,6 +251,53 @@ public sealed class PstBuilderTests
             Assert.Equal(m2.Body, read[1].Body);
             Assert.Single(inbox.EnumerateSubfolders(TestContext.Current.CancellationToken));
             Assert.Equal(2, inbox.ContentCount);
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void ARecipientWithoutATypeIsWrittenAsToAndReported()
+    {
+        MapiMessage m = Message("typeless", recipients: 0);
+        var r = new MapiRecipient(m);
+        r.Properties.Add(Str(0x3001, "Someone"));
+        m.AddRecipient(r);
+        int added = 0;
+        (PstStore store, string path) = Write(b =>
+        {
+            b.IpmSubtree.CreateFolder("Inbox").AddMessage(m);
+            added = b.Defects.Count(d => d.Kind == PstWriteDefectKind.PropertyAdded && d.Location.Contains("recipient", StringComparison.Ordinal));
+        });
+        using (store)
+        {
+            Assert.Equal(1, added);
+            PstMessage read = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).Single();
+            Assert.Equal(1, read.Recipients.Single().RecipientTypeValue);
+            Assert.Equal("Someone", read.Recipients.Single().DisplayName);
+        }
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void AttachmentFlagMatchesTheAttachmentsWritten()
+    {
+        MapiMessage stale = Message("claims attachments", recipients: 0);
+        stale.Properties.Add(Int(0x0E07, 0x11));   // READ | HASATTACH, but no attachment
+        MapiMessage real = Message("has attachment", recipients: 0, attachments: 1);
+        real.Properties.Add(Int(0x0E07, 0x01));
+        (PstStore store, string path) = Write(b =>
+        {
+            PstFolderWriter f = b.IpmSubtree.CreateFolder("Inbox");
+            f.AddMessage(stale);
+            f.AddMessage(real);
+        });
+        using (store)
+        {
+            PstMessage[] read = store.EnumerateFolders(TestContext.Current.CancellationToken).Single(f => f.Name == "Inbox").EnumerateMessages(cancellationToken: TestContext.Current.CancellationToken).ToArray();
+            Assert.Equal(0x01, read.Single(m => m.Subject == "claims attachments").GetInt32(0x0E07));
+            Assert.Equal(0x11, read.Single(m => m.Subject == "has attachment").GetInt32(0x0E07));
         }
 
         File.Delete(path);

@@ -62,7 +62,7 @@ public class MsgWriterCorpusTests
 
         // The default: Unicode strings. Every string reads back as the same text; only the regenerated mask differs.
         using var ms = new MemoryStream();
-        MsgWriteResult r = MsgWriter.Write(m, ms, new MsgWriterOptions { MaxRecipients = 65_536, MaxAttachments = 65_536, KeepEmptyStrings = true });
+        MsgWriteResult r = MsgWriter.Write(m, ms, new MsgWriterOptions { MaxRecipients = 65_536, MaxAttachments = 65_536, KeepEmptyStrings = true, AddRequiredProperties = false });
         foreach (MsgWriteDefect d in r.Defects)
         {
             t.Warnings[d.Kind] = t.Warnings.GetValueOrDefault(d.Kind) + 1;

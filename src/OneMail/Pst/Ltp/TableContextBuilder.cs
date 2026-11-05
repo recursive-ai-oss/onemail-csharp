@@ -114,7 +114,9 @@ public sealed class TableContextBuilder
             throw new ArgumentException($"a table has at most 255 columns, not {list.Count}", nameof(columns));
         }
 
-        list.Sort(static (a, b) => ((a.Id << 16) | a.Type).CompareTo((b.Id << 16) | b.Type));
+        // As unsigned numbers: a named property's ID (0x8000 and up) would be negative as an int and sort before every other column, which the repair
+        // tool of Outlook rejects ("tags not all increasing") and then reports the other columns as missing.
+        list.Sort(static (a, b) => (((uint)a.Id << 16) | a.Type).CompareTo(((uint)b.Id << 16) | b.Type));
         _columns = Layout(list, out _ends);
         RowSize = _ends[3];
         if (RowSize > NdbBlockBuilder.MaxBlockData)
@@ -423,18 +425,20 @@ public sealed class TableContextBuilder
         BinaryPrimitives.WriteUInt32LittleEndian(_indexScratch, checked((uint)_rowCount));
         _rowIndex.Add(rowId, _indexScratch);
 
-        _row.CopyTo(_matrix.AsSpan(_rowsInBlock * RowSize));
-        _rowsInBlock++;
-        _rowCount++;
         if (_rowsInBlock == _rowsPerBlock)
         {
             // MS-PST 2.3.4.4: every block but the last holds the same number of whole rows and is a full 8,192 bytes, so it is written as
             // 8,176 bytes of data with the zero "dead space" after the last row that readers must ignore. A full block is always more than
-            // 3,580 bytes, so the matrix is a subnode from here on.
+            // 3,580 bytes, so the matrix is a subnode from here on. A full block is written only when another row follows: the last block
+            // ends at its last row even when it is full, which is how Outlook writes it and what its repair tool checks.
             _tree ??= _blocks.BeginDataTree();
             _tree.AddBlock(_matrix);
             _rowsInBlock = 0;
         }
+
+        _row.CopyTo(_matrix.AsSpan(_rowsInBlock * RowSize));
+        _rowsInBlock++;
+        _rowCount++;
     }
 
     /// <summary>Adds a whole row.</summary>
@@ -483,8 +487,8 @@ public sealed class TableContextBuilder
 
             DataTreeResult r = _tree.Complete();
             Nid nid = _values.NextNid();
-            _values.Subnodes.Add(new SubnodeEntry(nid, r.Root, default));
-            hnidRows = nid.Value;
+            // Registered like any large value so the message size Outlook checks counts the matrix too.
+            hnidRows = _values.Register(nid, r);
         }
         else if (_rowsInBlock > 0)
         {
@@ -519,9 +523,9 @@ public sealed class TableContextBuilder
         {
             _heap.Seal();
             DataTreeResult r = _heapTree.Complete();
-            return new LtpNodeResult(r.Root, r.Length, (int)r.BlockCount, _values.Subnodes);
+            return new LtpNodeResult(r.Root, r.Length, (int)r.BlockCount, _values.Subnodes, _values.SubnodeBytes);
         }
 
-        return LtpNodeResult.WriteHeap(_blocks, _heap, _values.Subnodes);
+        return LtpNodeResult.WriteHeap(_blocks, _heap, _values.Subnodes, _values.SubnodeBytes);
     }
 }

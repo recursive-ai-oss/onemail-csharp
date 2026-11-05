@@ -82,6 +82,10 @@ public sealed class PstWritableStoreTests
                 Assert.Equal(PstEditFailure.FolderNotFound, Assert.Throws<PstEditException>(() => w.AddMessage(new Nid((0x7FFFu << 5) | 2), Msg("x"))).Reason);
                 Assert.Equal(PstEditFailure.ItemNotFound, Assert.Throws<PstEditException>(() => w.DeleteMessage(new Nid((0x7FFFu << 5) | 4))).Reason);
                 Assert.Equal(PstEditFailure.InvalidFolderOperation, Assert.Throws<PstEditException>(() => w.MoveFolder(folder, folder)).Reason);
+                PstFolder top = w.View.EnumerateFolders(TestContext.Current.CancellationToken).First(x => !x.IsSearchFolder && x.ParentFolder is not null && x.ParentFolder.ParentFolder is null);
+                Assert.Equal(PstEditFailure.InvalidFolderOperation, Assert.Throws<PstEditException>(() => w.MoveFolder(top.Nid, folder)).Reason);
+                Assert.Equal(PstEditFailure.InvalidFolderOperation, Assert.Throws<PstEditException>(() => w.MoveFolder(folder, top.ParentFolder!.Nid)).Reason);
+                Assert.Equal(PstEditFailure.InvalidFolderOperation, Assert.Throws<PstEditException>(() => w.DeleteFolder(top.Nid)).Reason);
 
                 string before = w.View.TryOpenMessage(item, out PstMessage? m) ? m!.GetString(0x0037)! : "";
                 // A value that does not fit its type is not an error: the property is left out and reported.

@@ -242,7 +242,7 @@ internal static class OutlookChecks
         inner.Properties.Add(Str(MapiPid.Subject, "inner"));
         e.SetEmbeddedMessage(inner);
         m.AddAttachment(e);
-        byte[] file = MsgWriter.ToArray(m, new MsgWriterOptions { Strings = MsgStringMode.AsGiven });
+        byte[] file = MsgWriter.ToArray(m, new MsgWriterOptions { Strings = MsgStringMode.AsGiven, AddRequiredProperties = false });
         if (!MsgFile.TryOpen(file, out MsgFile? f, out _))
         {
             return false;

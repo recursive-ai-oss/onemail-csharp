@@ -258,7 +258,7 @@ public sealed class MapiProperty
 
     /// <summary>
     /// The value as text: PtypString is read as UTF-16LE, PtypString8 with <paramref name="string8Encoding"/> (windows-1252 when null).
-    /// Trailing NUL characters are removed. An odd trailing byte of a PtypString is dropped and invalid bytes become U+FFFD; both
+    /// PtypString8 ends at its first NUL byte and PtypString at its trailing NUL characters. An odd trailing byte of a PtypString is dropped and invalid bytes become U+FFFD; both
     /// are reported through <paramref name="issues"/> when it is given.
     /// </summary>
     /// <param name="string8Encoding">The code page for PtypString8, normally the owning item's <see cref="MapiObject.String8Encoding"/>.</param>
@@ -296,9 +296,12 @@ public sealed class MapiProperty
             return Encoding.Unicode.GetString(s);
         }
 
-        while (s.Length > 0 && s[^1] == 0)
+        // PtypString8 is a C string (MS-OXCDATA 2.11.1.2): the text ends at the first NUL. Outlook's ANSI stores keep stale bytes after it
+        // (a subject stored in 20 bytes whatever its length), so everything from the first NUL on is dropped, not only trailing NULs.
+        int nul = s.IndexOf((byte)0);
+        if (nul >= 0)
         {
-            s = s[..^1];
+            s = s[..nul];
         }
 
         return (string8Encoding ?? MailEncoding.Windows1252).GetString(s, issues);

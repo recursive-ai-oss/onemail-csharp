@@ -108,6 +108,16 @@ public sealed class HeapNodeBuilder
         }
     }
 
+    /// <summary>The bytes <see cref="Finish"/> will return in all: every block but the last is a full block, the last ends at its page map. Not for a heap made with a data tree.</summary>
+    internal long FinishedLength
+    {
+        get
+        {
+            Block last = _blocks[_blockCount - 1]!;
+            return ((long)(_blockCount - 1) * BlockCapacity) + PageMapAt(last) + PageMapSize(last.Starts.Count);
+        }
+    }
+
     // The first block begins with an HNHDR, blocks 8, 136, 264... with an HNBITMAPHDR, all others with an HNPAGEHDR (MS-PST 2.3.1.2 to 2.3.1.4).
     private static int HeaderSize(int block) => block == 0 ? HnhdrSize : block >= 8 && (block - 8) % 128 == 0 ? BitmapHeaderSize : PageHeaderSize;
 
@@ -288,7 +298,9 @@ public sealed class HeapNodeBuilder
         }
 
         BinaryPrimitives.WriteUInt16LittleEndian(map[(4 + (2 * n))..], (ushort)b.Used);
-        return b.Data.AsMemory(0, mapAt + PageMapSize(n));
+        // Every block but the last is a full 8,176 bytes, the page map followed by zero slack: Outlook's own heaps are laid out so, and it does not
+        // read cells in the later blocks of a heap whose earlier blocks end at their page map.
+        return i < _blockCount - 1 ? b.Data.AsMemory(0, BlockCapacity) : b.Data.AsMemory(0, mapAt + PageMapSize(n));
     }
 
     private static void SetLevel(Span<byte> levels, int index, int level)
