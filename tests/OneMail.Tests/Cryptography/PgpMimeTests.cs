@@ -107,7 +107,8 @@ public class PgpMimeTests
     {
         MimeEntity message = PgpFixtures.Message(Sign(PgpFixtures.Text("Pay 100 dollars.\r\n"), Alice));
         byte[] bytes = message.ToArray();
-        int at = Encoding.UTF8.GetString(bytes).IndexOf("100", StringComparison.Ordinal);
+        // Find the amount in the body itself: a bare "100" can also occur in the random boundary or the armored signature.
+        int at = Encoding.UTF8.GetString(bytes).IndexOf("Pay 100", StringComparison.Ordinal) + "Pay ".Length;
         bytes[at] = (byte)'9';
 
         PgpResult result = PgpMimeProcessor.Open(MimeEntity.Parse(bytes), PgpFixtures.Open(verify: Alice));
