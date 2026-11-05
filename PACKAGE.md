@@ -2,7 +2,9 @@
 
 An email library for .NET with no dependency beyond the .NET base class library and its sibling libraries: MIME/EML, MBOX, TNEF, MSG, PST/OST and more, lossless and lenient, NativeAOT and trimming clean.
 
-**Early preview.** Working today: MIME/EML reading and writing (byte-identical round-trips), MHTML and delivery/disposition/feedback reports, mbox variants, Maildir and EMLX, ICS/vCard trees, Outlook items on read (MSG/OFT, PST/OST, TNEF, compressed RTF) with MAPI↔MIME conversion and loss reports, calendar recurrence and time zones, and `Mail.Parse`/`Mail.Open` for the one-line path. Outlook writing, protocols and cryptography come in later previews. The API is not stable yet. What is checked, and the known gaps: <https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/compatibility.md>.
+**1.0.** Reading: MIME/EML, MHTML and reports, mbox variants, Maildir, EMLX, ICS/vCard, MSG/OFT, PST/OST, TNEF, compressed RTF, OLM and DBX. Writing: MIME, the mailbox stores, ICS/vCard, MSG/OFT and Unicode PST, new or in place. Recovery of damaged PST/OST, DBX and OLM, MAPI↔MIME and store-to-store conversion with loss reports, display HTML, and `Mail.Parse`/`Mail.Open` for the one-line path. SMTP, IMAP and POP3 are in `RecursiveAI.OneMail.Client`, PDF and PNG in `RecursiveAI.OneMail.Render`. S/MIME, OpenPGP, DKIM and ARC (`RecursiveAI.OneMail.Cryptography`) follow at the first 1.x after OneCrypto 1.0, with previews on the way.
+
+Known gaps (all in <https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/compatibility.md>): Outlook.com provider rows not yet run; Outlook's signature-validity verdict can't be read unattended; Outlook's repair tool miscounts tables over 65,535 rows; protocol rows are x64 only; `LastVerbExecuted` after a real send is unchecked. What is checked: the same page.
 
 **Display HTML has had its independent review.** Script execution and network fetch under the Block policy were checked in Chrome and Firefox; the threat model and what the output assumes (one message per frame or document) are in [docs/display-html.md](https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/display-html.md#review).
 

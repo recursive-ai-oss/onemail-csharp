@@ -2,7 +2,7 @@
 
 Turns an email message into a tagged PDF or PNG pages in one call, on [OneRender](https://github.com/recursive-ai-oss/onerender-csharp). It is the optional rendering package of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp): the message's display HTML (sanitised body, header block, attachment list, inline images from the message itself) is laid out and drawn without a browser.
 
-**Early preview.** Native platforms only; not browser WebAssembly. The API is not stable yet.
+Native platforms only; not browser WebAssembly.
 
 ```csharp
 using RecursiveAI.OneMail;

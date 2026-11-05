@@ -2,7 +2,7 @@
 
 The raw protocol layer under the IMAP, SMTP and POP3 clients of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp): connections with implicit TLS, STARTTLS and `COMPRESS=DEFLATE`, command writers, response readers that turn every line into a typed tree, SASL, and a protocol trace with credentials redacted. It is for tools that need to drive a server by hand, including extensions no typed client knows.
 
-**Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet. The typed `ImapClient`, `Pop3Client` and `SmtpClient`, `Mail.SendAsync` and the SASL mechanisms (SCRAM, OAuth, NTLM, GSSAPI and more) are on top of it.
+Native platforms only (not browser WebAssembly). Checked against Dovecot, Postfix, Stalwart and Cyrus, and against Gmail over SMTP, IMAP and POP3; Outlook.com and arm64 protocol rows have not been run yet (<https://github.com/recursive-ai-oss/onemail-csharp/blob/main/docs/compatibility.md>). The typed `ImapClient`, `Pop3Client` and `SmtpClient`, `Mail.SendAsync` and the SASL mechanisms (SCRAM, OAuth, NTLM, GSSAPI and more) are on top of it.
 
 ```csharp
 using RecursiveAI.OneMail.Client.Imap.Protocol;
