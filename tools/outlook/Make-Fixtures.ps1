@@ -1,14 +1,18 @@
 # Makes a PST with Outlook itself, through the object model: the fixtures the oracle compares our writers with.
 #
-#   Make-Fixtures.ps1 -Kind big|mixed -Out <file.pst> [-Items 600]
+#   Make-Fixtures.ps1 -Kind big|mixed|purge -Out <file.pst> [-Items 600] [-StoreType 2|3]
 #
 #   big    one folder of -Items text messages, one of -Items/4 with recipients and attachments, and a deleted folder
+#   purge  a folder of messages of which some are deleted (kept in Deleted Items, with known subjects "soft N"), some deleted and then
+#          deleted again from Deleted Items ("purged N", gone for good), and a folder deleted whole; "kept N" stay. For the forensic checks
 #   mixed  folders with every common item kind (mail, appointment, contact, task, note, journal), attachments, an embedded message, categories,
 #          flags, a draft, a read/unread mix, and a few items deleted
 param(
-    [Parameter(Mandatory)][ValidateSet("big", "mixed")][string]$Kind,
+    [Parameter(Mandatory)][ValidateSet("big", "mixed", "purge")][string]$Kind,
     [Parameter(Mandatory)][string]$Out,
     [int]$Items = 600,
+    [int]$StoreType = 2,   # olStoreUnicode = 2; 3 asks for an ANSI (Outlook 97-2002) store
+
     [string]$Profile = "OneMailOracle",
     [string]$Dir = "$env:USERPROFILE\onemail"
 )
@@ -21,7 +25,7 @@ Remove-Item $Out -ErrorAction SilentlyContinue
 $watcher = Start-DialogWatcher -Log $dialogLog
 $app = Start-OutlookSession -Profile $Profile -Dir $Dir
 $ns = $app.Session
-$ns.AddStoreEx($Out, 2)
+$ns.AddStoreEx($Out, $StoreType)
 $store = $ns.Stores | Where-Object { $_.FilePath -eq $Out } | Select-Object -First 1
 $root = $store.GetRootFolder()
 $tmp = "$Dir\work\fixture-files"; New-Item -ItemType Directory -Force $tmp | Out-Null
@@ -53,6 +57,24 @@ if ($Kind -eq "big") {
     $c = $root.Folders.Add("To delete")
     for ($i = 1; $i -le 20; $i++) { $null = Add-Mail $c "doomed $i" "bye" }
     $c.Delete()
+}
+elseif ($Kind -eq "purge") {
+    $a = $root.Folders.Add("Work")
+    for ($i = 1; $i -le 12; $i++) { $null = Add-Mail $a "kept $i" ("body of kept message $i " + ("k" * 40)) @("k$i@example.com") }
+    for ($i = 1; $i -le 6; $i++) { $null = Add-Mail $a "soft $i" ("soft deleted body $i " + ("s" * 60)) @("s$i@example.com") }
+    for ($i = 1; $i -le 6; $i++) { $null = Add-Mail $a "purged $i" ("purged body $i " + ("p" * 60)) @("p$i@example.com") }
+    # Items are found by subject at delete time: the objects Add-Mail returned are not reliable handles after the move.
+    for ($j = $a.Items.Count; $j -ge 1; $j--) { $it = $a.Items.Item($j); if ($it.Subject -like "soft *" -or $it.Subject -like "purged *") { $it.Delete() } }
+    "work now: " + $a.Items.Count
+    $b = $root.Folders.Add("Doomed folder")
+    for ($i = 1; $i -le 5; $i++) { $null = Add-Mail $b "doomed $i" ("doomed body $i " + ("d" * 50)) }
+    $b.Delete()
+    Start-Sleep 2
+    # Delete the "purged" messages a second time, from Deleted Items, which removes them for good.
+    $di = $store.GetDefaultFolder(3)
+    "deleted items before: " + $di.Items.Count
+    for ($j = $di.Items.Count; $j -ge 1; $j--) { $it = $di.Items.Item($j); if ($it.Subject -like "purged *") { $it.Delete() } }
+    "deleted items now: " + $di.Items.Count
 }
 else {
     $inbox = $root.Folders.Add("Mail")

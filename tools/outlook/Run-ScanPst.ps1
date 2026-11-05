@@ -101,7 +101,7 @@ function Invoke-ScanOne([string]$File) {
             } else { [W32]::Command($outcome, 1049); Start-Sleep -Milliseconds 500 }
         }
         $logf = Get-ChildItem "$Out\work" -Filter "$stem*.log" | Select-Object -First 1
-        if ($logf) { $result.log = Get-Content $logf.FullName -Raw; Move-Item $logf.FullName "$Out\$name.scanpst.log" -Force }
+        if ($logf) { $result.log = Get-Content $logf.FullName -Raw; Copy-Item $logf.FullName "$Out\$name.scanpst.log" -Force }
     } finally {
         if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
         if ($Repair) { Copy-Item $copy "$Out\$name.repaired" -Force }

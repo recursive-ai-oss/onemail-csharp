@@ -16,8 +16,14 @@ def load(p):
         return json.load(f)
 
 
+def is_mail(it):
+    # Outlook's object model gives sender and sent time only for mail-like items (appointments, contacts, tasks and notes have none there).
+    c = it.get("class", "")
+    return c.startswith(("IPM.Note", "REPORT.", "IPM.Schedule", "IPM.Post")) or c == ""
+
+
 def key(it):
-    return (it.get("subject", ""), it.get("class", ""), it.get("sentUtc", ""))
+    return (it.get("subject", ""), it.get("class", ""), it.get("sentUtc", "") if is_mail(it) else "")
 
 
 def compare(o, u):
@@ -61,7 +67,7 @@ def compare(o, u):
             # prefer a candidate that agrees on everything, else report the closest
             best = None
             for c in cands:
-                bad = [f for f in ("recipients", "attachments", "unread", "sender") if it.get(f) != c.get(f)]
+                bad = [f for f in ("recipients", "attachments", "unread", "sender") if it.get(f) != c.get(f) and (f != "sender" or is_mail(it))]
                 if best is None or len(bad) < len(best[1]):
                     best = (c, bad)
                 if not bad:
