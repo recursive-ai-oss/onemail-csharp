@@ -65,64 +65,215 @@ public sealed class Base64Decoder
     /// <returns>Bytes written to <paramref name="output"/>.</returns>
     public int Decode(ReadOnlySpan<byte> input, Span<byte> output)
     {
-        sbyte[] table = Table;
         int o = 0;
-        int acc = _acc;
-        int count = _count;
-        foreach (byte c in input)
+        while (!input.IsEmpty)
         {
-            int v = table[c];
-            if (v >= 0)
+            // Mail wraps base64 at one width. When a piece starts on a group boundary at the start of a line, the lines are cut out
+            // at that stride and decoded in bulk; anything that does not fit (a different width, a damaged line) is read one line
+            // at a time by the general decoder below, which also handles every repair.
+            if (_count == 0 && !_secondPadPending && input.Length >= StrideMinimum)
             {
-                acc = (acc << 6) | v;
-                if (++count == 4)
+                int consumed = DecodeStrided(input, output, ref o);
+                if (consumed > 0)
                 {
-                    output[o++] = (byte)(acc >> 16);
-                    output[o++] = (byte)(acc >> 8);
-                    output[o++] = (byte)acc;
-                    count = 0;
-                    acc = 0;
+                    input = input.Slice(consumed);
+                    continue;
                 }
+            }
 
-                _secondPadPending = false;
-            }
-            else if (c == (byte)'=')
-            {
-                // RFC 2045 §6.8: "==" after two characters, "=" after three.
-                if (count == 2)
-                {
-                    output[o++] = (byte)(acc >> 4);
-                    count = 0;
-                    acc = 0;
-                    _secondPadPending = true;
-                }
-                else if (count == 3)
-                {
-                    output[o++] = (byte)(acc >> 10);
-                    output[o++] = (byte)(acc >> 2);
-                    count = 0;
-                    acc = 0;
-                }
-                else if (_secondPadPending)
-                {
-                    _secondPadPending = false;
-                }
-                else
-                {
-                    Issues |= TransferIssues.MisplacedBase64Padding;
-                    count = 0;
-                    acc = 0;
-                }
-            }
-            else if (c is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
-            {
-                Issues |= TransferIssues.InvalidBase64Character;
-            }
+            int lf = input.IndexOf((byte)'\n');
+            int take = lf < 0 ? input.Length : lf + 1;
+            DecodeGeneral(input.Slice(0, take), output, ref o);
+            input = input.Slice(take);
         }
 
-        _acc = acc;
-        _count = count;
         return o;
+    }
+
+    private const int StrideMinimum = 256;
+
+    // Decodes the whole lines at the start of 'input' that have the width and line end of its first line. Returns the bytes used
+    // (0 when the first line does not set a usable layout, or no complete line follows it).
+    private int DecodeStrided(ReadOnlySpan<byte> input, Span<byte> output, ref int o)
+    {
+        int lf = input.IndexOf((byte)'\n');
+        if (lf < 0)
+        {
+            return 0;
+        }
+
+        int eol = lf > 0 && input[lf - 1] == (byte)'\r' ? 2 : 1;
+        int width = lf + 1 - eol;
+        if (width < 16 || width > 1024 || (width & 3) != 0)
+        {
+            return 0;
+        }
+
+        int stride = width + eol;
+        _scratch ??= new byte[ScratchSize];
+        int pos = 0;
+        while (true)
+        {
+            int start = pos;
+            int t = 0;
+            while (pos + stride <= input.Length && t + width <= _scratch.Length
+                && input[pos + width + eol - 1] == (byte)'\n' && (eol == 1 || input[pos + width] == (byte)'\r'))
+            {
+                input.Slice(pos, width).CopyTo(_scratch.AsSpan(t));
+                t += width;
+                pos += stride;
+            }
+
+            if (t == 0)
+            {
+                return pos;
+            }
+
+            // The BCL decoder skips white space and stops at anything else in or out of the alphabet. A clean run of whole groups
+            // completes; otherwise this stretch goes back to the general decoder, which makes the repairs and records the issues.
+            var status = System.Buffers.Text.Base64.DecodeFromUtf8(_scratch.AsSpan(0, t), output.Slice(o), out _, out int written, isFinalBlock: false);
+            if (status == System.Buffers.OperationStatus.Done)
+            {
+                o += written;
+            }
+            else
+            {
+                DecodeGeneral(input.Slice(start, pos - start), output, ref o);
+                if (_count != 0 || _secondPadPending)
+                {
+                    return pos; // the repair left a group open; the next lines are not on a group boundary
+                }
+            }
+        }
+    }
+
+    private void DecodeGeneral(ReadOnlySpan<byte> input, Span<byte> output, ref int o)
+    {
+        // Short pieces are not worth the vector path's setup.
+        while (!input.IsEmpty)
+        {
+            if (_count == 0 && !_secondPadPending && input.Length >= FastMinimum)
+            {
+                // On a group boundary: gather alphabet characters with the line breaks and blanks between them taken out,
+                // then let the BCL decode whole groups in one vectorised call. Anything else (padding, a stray character)
+                // is left for the byte-at-a-time path below, so repairs and issues come out exactly as before.
+                _scratch ??= new byte[ScratchSize];
+                int t = 0;
+                while (!input.IsEmpty && t < _scratch.Length)
+                {
+                    int run = input.IndexOfAnyExcept(Alphabet);
+                    if (run < 0)
+                    {
+                        run = input.Length;
+                    }
+
+                    run = Math.Min(run, _scratch.Length - t);
+                    input.Slice(0, run).CopyTo(_scratch.AsSpan(t));
+                    t += run;
+                    input = input.Slice(run);
+                    if (input.IsEmpty || Alphabet.Contains(input[0]))
+                    {
+                        continue; // the scratch is full
+                    }
+
+                    int blanks = input.IndexOfAnyExcept(Blanks);
+                    if (blanks < 0)
+                    {
+                        input = default;
+                    }
+                    else if (blanks == 0)
+                    {
+                        break; // padding or a character outside the alphabet
+                    }
+                    else
+                    {
+                        input = input.Slice(blanks);
+                    }
+                }
+
+                int whole = t & ~3;
+                if (whole > 0)
+                {
+                    // Every byte here is in the alphabet and the length is a multiple of four, so this always completes.
+                    _ = System.Buffers.Text.Base64.DecodeFromUtf8(_scratch.AsSpan(0, whole), output.Slice(o), out _, out int written, isFinalBlock: false);
+                    o += written;
+                }
+
+                for (int i = whole; i < t; i++)
+                {
+                    _acc = (_acc << 6) | (Table[_scratch[i]] & 63);
+                    _count++;
+                }
+
+                if (!input.IsEmpty && _count == 0 && !Alphabet.Contains(input[0]) && !Blanks.Contains(input[0]))
+                {
+                    Step(input[0], output, ref o);
+                    input = input.Slice(1);
+                }
+
+                continue;
+            }
+
+            Step(input[0], output, ref o);
+            input = input.Slice(1);
+        }
+    }
+
+    private const int FastMinimum = 128;
+    private const int ScratchSize = 16384;
+    private static readonly System.Buffers.SearchValues<byte> Alphabet = System.Buffers.SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"u8);
+    private static readonly System.Buffers.SearchValues<byte> Blanks = System.Buffers.SearchValues.Create(" \t\r\n"u8);
+    private byte[]? _scratch;
+
+    private void Step(byte c, Span<byte> output, ref int o)
+    {
+        int v = Table[c];
+        if (v >= 0)
+        {
+            _acc = (_acc << 6) | (v & 63);
+            if (++_count == 4)
+            {
+                output[o++] = (byte)(_acc >> 16);
+                output[o++] = (byte)(_acc >> 8);
+                output[o++] = (byte)_acc;
+                _count = 0;
+                _acc = 0;
+            }
+
+            _secondPadPending = false;
+        }
+        else if (c == (byte)'=')
+        {
+            // RFC 2045 §6.8: "==" after two characters, "=" after three.
+            if (_count == 2)
+            {
+                output[o++] = (byte)(_acc >> 4);
+                _count = 0;
+                _acc = 0;
+                _secondPadPending = true;
+            }
+            else if (_count == 3)
+            {
+                output[o++] = (byte)(_acc >> 10);
+                output[o++] = (byte)(_acc >> 2);
+                _count = 0;
+                _acc = 0;
+            }
+            else if (_secondPadPending)
+            {
+                _secondPadPending = false;
+            }
+            else
+            {
+                Issues |= TransferIssues.MisplacedBase64Padding;
+                _count = 0;
+                _acc = 0;
+            }
+        }
+        else if (c is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+        {
+            Issues |= TransferIssues.InvalidBase64Character;
+        }
     }
 
     /// <summary>Ends the input, writing the bytes of a final partial group.</summary>
@@ -595,7 +746,9 @@ public static class TransferEncoder
 /// </summary>
 public sealed class TransferDecodingStream : Stream
 {
-    private const int ChunkSize = 8192;
+    private const int DefaultChunkSize = 8192;
+    // 60 KiB in and a little more out stay inside the 64 KiB pool bucket.
+    private const int LargeChunkSize = 61440;
 
     private readonly Stream _inner;
     private readonly bool _leaveOpen;
@@ -603,8 +756,10 @@ public sealed class TransferDecodingStream : Stream
     private readonly Base64Decoder? _b64;
     private readonly QuotedPrintableDecoder? _qp;
     private readonly UuDecoder? _uu;
-    private readonly byte[]? _in;
-    private readonly byte[]? _out;
+    private byte[]? _in;
+    private byte[]? _out;
+    private readonly int _chunk;
+    private bool _disposed;
     private int _outPos;
     private int _outLen;
     private bool _finished;
@@ -635,8 +790,16 @@ public sealed class TransferDecodingStream : Stream
 
         if (_b64 is not null || _qp is not null || _uu is not null)
         {
-            _in = new byte[ChunkSize];
-            _out = new byte[ChunkSize + 128];
+            // A body of known length gets chunks as big as the body, up to 64 KiB; small parts stay cheap.
+            int chunk = DefaultChunkSize;
+            if (inner.CanSeek)
+            {
+                chunk = (int)Math.Clamp(inner.Length - inner.Position, 512, LargeChunkSize);
+            }
+
+            _chunk = chunk;
+            _in = ArrayPool<byte>.Shared.Rent(chunk);
+            _out = ArrayPool<byte>.Shared.Rent(chunk + 128);
         }
     }
 
@@ -668,6 +831,7 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override int Read(Span<byte> buffer)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_in is null)
         {
             return _inner.Read(buffer);
@@ -680,7 +844,19 @@ public sealed class TransferDecodingStream : Stream
                 return 0;
             }
 
-            int n = _inner.Read(_in, 0, _in.Length);
+            int n = _inner.Read(_in, 0, _chunk);
+            if (n > 0 && buffer.Length >= MaxOutputLength(n))
+            {
+                // Room for the worst case: decode straight into the caller's buffer, with no copy through _out.
+                int w = _b64 is not null ? _b64.Decode(_in.AsSpan(0, n), buffer) : _qp is not null ? _qp.Decode(_in.AsSpan(0, n), buffer) : _uu!.Decode(_in.AsSpan(0, n), buffer);
+                if (w > 0)
+                {
+                    return w;
+                }
+
+                continue;
+            }
+
             Decode(n);
         }
 
@@ -690,6 +866,7 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_in is null)
         {
             return await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
@@ -702,7 +879,7 @@ public sealed class TransferDecodingStream : Stream
                 return 0;
             }
 
-            int n = await _inner.ReadAsync(_in.AsMemory(), cancellationToken).ConfigureAwait(false);
+            int n = await _inner.ReadAsync(_in.AsMemory(0, _chunk), cancellationToken).ConfigureAwait(false);
             Decode(n);
         }
 
@@ -712,6 +889,9 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+    private int MaxOutputLength(int n) =>
+        _b64 is not null ? Base64Decoder.MaxOutputLength(n) : _qp is not null ? QuotedPrintableDecoder.MaxOutputLength(n) : UuDecoder.MaxOutputLength(n);
 
     private void Decode(int n)
     {
@@ -751,9 +931,27 @@ public sealed class TransferDecodingStream : Stream
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing && !_leaveOpen)
+        if (disposing)
         {
-            _inner.Dispose();
+            _disposed = true;
+            if (!_leaveOpen)
+            {
+                _inner.Dispose();
+            }
+
+            byte[]? rentedIn = _in;
+            byte[]? rentedOut = _out;
+            _in = null;
+            _out = null;
+            if (rentedIn is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedIn);
+            }
+
+            if (rentedOut is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedOut);
+            }
         }
 
         base.Dispose(disposing);

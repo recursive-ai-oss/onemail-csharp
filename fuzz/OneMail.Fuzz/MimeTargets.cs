@@ -73,6 +73,41 @@ internal static class MimeTargets
         }
     }
 
+    // The bulk base64 paths must give what feeding the decoder one byte at a time gives.
+    private static void CheckBase64AgainstByteAtATime(MimePart p, byte[] decoded)
+    {
+        using var raw = new MemoryStream();
+        using (Stream r = p.OpenRawContent())
+        {
+            r.CopyTo(raw);
+        }
+
+        var d = new RecursiveAI.OneMail.Mime.Transfer.Base64Decoder();
+        var expected = new List<byte>();
+        byte[] one = new byte[1];
+        byte[] room = new byte[16];
+        foreach (byte b in raw.ToArray())
+        {
+            one[0] = b;
+            int n = d.Decode(one, room);
+            for (int i = 0; i < n; i++)
+            {
+                expected.Add(room[i]);
+            }
+        }
+
+        int f = d.Finish(room);
+        for (int i = 0; i < f; i++)
+        {
+            expected.Add(room[i]);
+        }
+
+        if (!expected.ToArray().AsSpan().SequenceEqual(decoded))
+        {
+            throw new InvalidOperationException("bulk base64 decode differs from the byte-at-a-time decode");
+        }
+    }
+
     private static void Walk(MimeEntity e)
     {
         _ = e.MediaType;
@@ -120,7 +155,12 @@ internal static class MimeTargets
         switch (e)
         {
             case MimePart p:
-                _ = p.GetDecodedContent();
+                byte[] decoded = p.GetDecodedContent();
+                if (p.TransferEncoding == RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.Base64)
+                {
+                    CheckBase64AgainstByteAtATime(p, decoded);
+                }
+
                 break;
             case MimeMultipart m:
                 foreach (MimeEntity c in m.Children)

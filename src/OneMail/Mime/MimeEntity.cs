@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Mime.Transfer;
@@ -31,6 +32,11 @@ internal sealed class RawContent
 
     public static RawContent FromRange(IRandomAccessSource source, long offset, long length) => new(source, offset, Math.Max(0, length), null);
 
+    public static RawContent FromSource(IRandomAccessSource source) => new(source, 0, source.Length, null);
+
+    /// <summary>Takes the array without copying; the caller must not use it afterwards.</summary>
+    public static RawContent FromOwnedBytes(byte[] bytes) => new(null, 0, bytes.Length, bytes);
+
     public static RawContent FromBytes(ReadOnlyMemory<byte> bytes) => new(null, 0, bytes.Length, bytes.ToArray());
 
     public Stream Open() => _bytes is not null ? new MemoryStream(_bytes, writable: false) : _source!.OpenRead(_offset, Length);
@@ -53,6 +59,92 @@ internal sealed class RawContent
     }
 
     public WriteSegment Segment() => new(_bytes, _source, _offset, Length);
+
+    /// <summary>
+    /// A guess at what this body decodes to as base64: the first line's length and line end give the layout, the last bytes the
+    /// padding. It is exact for bodies wrapped at one width, which nearly all are; anything else returns -1 or a close number and
+    /// the caller copes with either.
+    /// </summary>
+    public long EstimateBase64Decoded()
+    {
+        const int Head = 256;
+        if (Length < 2 * Head)
+        {
+            return -1;
+        }
+
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(Head);
+        try
+        {
+            Span<byte> head = buffer.AsSpan(0, Head);
+            if (Peek(0, head) != Head)
+            {
+                return -1;
+            }
+
+            int lf = head.IndexOf((byte)'\n');
+            if (lf < 0)
+            {
+                return -1;
+            }
+
+            int eol = lf > 0 && head[lf - 1] == (byte)'\r' ? 2 : 1;
+            long line = lf + 1 - eol;
+            if (line < 4 || line % 4 != 0)
+            {
+                return -1;
+            }
+
+            // The body usually ends with the line end of its last line, which is not data.
+            Span<byte> tail = buffer.AsSpan(0, 8);
+            int end = Peek(Length - tail.Length, tail);
+            long dataLength = Length;
+            while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n')
+            {
+                end--;
+                dataLength--;
+            }
+
+            long stride = line + eol;
+            long full = dataLength / stride;
+            long rest = dataLength - (full * stride);
+            if (rest > line)
+            {
+                return -1; // a partial line end: not the layout the first line promised
+            }
+
+            long chars = (full * line) + rest;
+            if (chars % 4 != 0)
+            {
+                return -1;
+            }
+
+            int pad = 0;
+            while (end > 0 && pad < 2 && tail[end - 1] == (byte)'=')
+            {
+                pad++;
+                end--;
+            }
+
+            return (chars / 4 * 3) - pad;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private int Peek(long offset, Span<byte> destination)
+    {
+        if (_bytes is not null)
+        {
+            int n = (int)Math.Min(destination.Length, Math.Max(0, _bytes.Length - offset));
+            _bytes.AsSpan((int)offset, n).CopyTo(destination);
+            return n;
+        }
+
+        return _source!.Read(_offset + offset, destination);
+    }
 }
 
 /// <summary>
@@ -509,10 +601,50 @@ public sealed class MimePart : MimeEntity
     /// <returns>The bytes.</returns>
     public byte[] GetDecodedContent()
     {
+        ContentTransferEncoding encoding = TransferEncoding;
+        if (encoding is not (ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable or ContentTransferEncoding.UUEncode))
+        {
+            return _body.ToArray(); // 7bit, 8bit, binary and unknown encodings are the bytes as they are
+        }
+
         using Stream s = OpenDecodedContent();
-        using var ms = new MemoryStream();
-        s.CopyTo(ms);
-        return ms.ToArray();
+        // Start from the size the decoded body will most likely have, so that the usual case fills one array without growing a
+        // buffer or trimming it. Base64 decodes to at most three bytes per four and the others to at most their own length.
+        long guess = encoding == ContentTransferEncoding.Base64 ? _body.EstimateBase64Decoded() : -1;
+        if (guess < 0)
+        {
+            guess = encoding == ContentTransferEncoding.Base64 ? _body.Length / 4 * 3 + 3 : _body.Length;
+        }
+
+        // Every byte up to the returned count is written before it is read, so the array need not be cleared.
+        byte[] buf = GC.AllocateUninitializedArray<byte>((int)Math.Clamp(guess, 16, Array.MaxLength - 64));
+        int n = 0;
+        while (true)
+        {
+            if (n == buf.Length)
+            {
+                // Full: one byte tells whether that was the end.
+                int next = s.ReadByte();
+                if (next < 0)
+                {
+                    break;
+                }
+
+                Array.Resize(ref buf, (int)Math.Min((long)buf.Length * 2, Array.MaxLength));
+                buf[n++] = (byte)next;
+                continue;
+            }
+
+            int r = s.Read(buf, n, buf.Length - n);
+            if (r == 0)
+            {
+                break;
+            }
+
+            n += r;
+        }
+
+        return n == buf.Length ? buf : buf.AsSpan(0, n).ToArray();
     }
 
     /// <summary>Replaces the body with bytes that are already encoded as the headers say.</summary>
@@ -528,13 +660,13 @@ public sealed class MimePart : MimeEntity
     /// <param name="encoding">Base64 (default), quoted-printable, or an identity encoding (7bit, 8bit, binary: bytes as given).</param>
     public void SetDecodedContent(ReadOnlySpan<byte> data, ContentTransferEncoding encoding = ContentTransferEncoding.Base64)
     {
-        byte[] encoded = encoding switch
+        // Base64 is encoded as the body is read or written, so a large attachment is held once, not twice.
+        _body = encoding switch
         {
-            ContentTransferEncoding.Base64 => TransferEncoder.Base64(data),
-            ContentTransferEncoding.QuotedPrintable => TransferEncoder.QuotedPrintable(data),
-            _ => data.ToArray(),
+            ContentTransferEncoding.Base64 => RawContent.FromSource(new Base64WrappedSource(CopyOf(data))),
+            ContentTransferEncoding.QuotedPrintable => RawContent.FromOwnedBytes(TransferEncoder.QuotedPrintable(data)),
+            _ => RawContent.FromOwnedBytes(data.ToArray()),
         };
-        _body = RawContent.FromBytes(encoded);
         if (encoding == ContentTransferEncoding.SevenBit)
         {
             Headers.RemoveAll("Content-Transfer-Encoding");
@@ -552,6 +684,13 @@ public sealed class MimePart : MimeEntity
         }
 
         MarkModified();
+    }
+
+    private static byte[] CopyOf(ReadOnlySpan<byte> data)
+    {
+        byte[] copy = GC.AllocateUninitializedArray<byte>(data.Length);
+        data.CopyTo(copy);
+        return copy;
     }
 
     internal override IEnumerable<MimeEntity> ChildEntities() => [];
@@ -902,10 +1041,7 @@ internal sealed class MimeTreeBuilder
             MimeEntityType.Message => new MimeMessagePart(parsed: true),
             _ => new MimePart(parsed: true),
         };
-        foreach (MimeHeader h in p.Headers)
-        {
-            e.Headers.AddParsed(h);
-        }
+        e.Headers.AdoptParsed(p.Headers);
 
         e.Separator = r.Raw.ToArray();
         e.EnvelopeLine = p.Envelope ?? default;

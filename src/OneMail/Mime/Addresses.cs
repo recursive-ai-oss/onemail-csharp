@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Text;
@@ -109,7 +110,7 @@ public static class AddressParser
     public static List<MimeAddress> Parse(ReadOnlySpan<byte> rawValue, List<MimeDefect>? defects = null, long baseOffset = 0, int depth = 0)
     {
         var p = new Parser(rawValue, defects, baseOffset, depth);
-        return p.ParseList(false);
+        return p.TryParseSimple() ?? p.ParseList(false);
     }
 
     /// <summary>All mailboxes of a list, with group members in place of their group.</summary>
@@ -154,7 +155,7 @@ public static class AddressParser
     private sealed class Parser
     {
         private readonly byte[] _b;
-        private readonly int[]? _map;
+        private readonly int[]? _cuts;
         private readonly List<MimeDefect>? _defects;
         private readonly long _base;
         private readonly int _depth;
@@ -166,33 +167,254 @@ public static class AddressParser
             _defects = defects;
             _base = baseOffset;
             _depth = depth;
-            if (raw.IndexOfAny((byte)'\r', (byte)'\n') < 0)
+            int firstBreak = raw.IndexOfAny((byte)'\r', (byte)'\n');
+            if (firstBreak < 0)
             {
                 _b = raw.ToArray();
             }
             else
             {
                 // RFC 5322 §2.2.3: unfolding removes the line breaks. A lone CR is data and is dropped with them.
-                var bytes = new List<byte>(raw.Length);
-                var map = new List<int>(raw.Length);
-                for (int i = 0; i < raw.Length; i++)
+                // _cuts[j] is the index in the unfolded text where the j-th dropped byte was, which is all a defect offset needs
+                // to be mapped back to the header as written.
+                int dropped = 0;
+                foreach (byte c in raw.Slice(firstBreak))
                 {
-                    if (raw[i] is not ((byte)'\r' or (byte)'\n'))
+                    if (c is (byte)'\r' or (byte)'\n')
                     {
-                        bytes.Add(raw[i]);
-                        map.Add(i);
+                        dropped++;
                     }
                 }
 
-                _b = [.. bytes];
-                _map = [.. map];
+                _b = new byte[raw.Length - dropped];
+                _cuts = new int[dropped];
+                raw.Slice(0, firstBreak).CopyTo(_b);
+                int o = firstBreak;
+                int k = 0;
+                for (int i = firstBreak; i < raw.Length; i++)
+                {
+                    if (raw[i] is (byte)'\r' or (byte)'\n')
+                    {
+                        _cuts[k++] = o;
+                    }
+                    else
+                    {
+                        _b[o++] = raw[i];
+                    }
+                }
             }
+        }
+
+        // The lists nearly all mail carries: mailboxes separated by commas, each either "local@domain" or "Name <local@domain>", with
+        // plain atoms only (letters, digits and the characters RFC 5322 allows in an atom, dots only between atoms in an address,
+        // single spaces between the words of a name). None of these raises a defect, so they are read straight from the bytes.
+        // Anything else (quotes, comments, groups, encoded words, non-ASCII, empty elements, odd spacing) returns null and the
+        // general parser reads the whole value.
+        public List<MimeAddress>? TryParseSimple()
+        {
+            ReadOnlySpan<byte> b = _b;
+            var result = new List<MimeAddress>();
+            int i = 0;
+            while (true)
+            {
+                // The element ends at the next comma outside a quoted string. A backslash inside quotes is left to the general parser.
+                int end = i;
+                bool quoted = false;
+                for (; end < b.Length; end++)
+                {
+                    byte c = b[end];
+                    if (c == (byte)'"')
+                    {
+                        quoted = !quoted;
+                    }
+                    else if (c == (byte)'\\' && quoted)
+                    {
+                        return null;
+                    }
+                    else if (c == (byte)',' && !quoted)
+                    {
+                        break;
+                    }
+                }
+
+                if (quoted || !TryElement(b.Slice(i, end - i), out MimeMailbox? mailbox))
+                {
+                    return null;
+                }
+
+                result.Add(mailbox!);
+                if (end >= b.Length)
+                {
+                    return result;
+                }
+
+                i = end + 1;
+            }
+        }
+
+        private static bool TryElement(ReadOnlySpan<byte> e, out MimeMailbox? mailbox)
+        {
+            mailbox = null;
+            e = e.Trim(" \t"u8);
+            if (e.IsEmpty)
+            {
+                return false;
+            }
+
+            int lt = e.LastIndexOf((byte)'<');
+            if (lt < 0)
+            {
+                if (!IsSimpleAddress(e))
+                {
+                    return false;
+                }
+
+                mailbox = new MimeMailbox(null, Encoding.ASCII.GetString(e));
+                return true;
+            }
+
+            if (e[^1] != (byte)'>' || !IsSimpleAddress(e.Slice(lt + 1, e.Length - lt - 2)))
+            {
+                return false;
+            }
+
+            ReadOnlySpan<byte> name = e.Slice(0, lt).TrimEnd(" \t"u8);
+            string? text = null;
+            if (!name.IsEmpty && name[0] == (byte)'"')
+            {
+                // One quoted string of plain printable ASCII with no escapes, angle brackets or encoded words.
+                if (name.Length < 2 || name[^1] != (byte)'"')
+                {
+                    return false;
+                }
+
+                ReadOnlySpan<byte> inner = name.Slice(1, name.Length - 2);
+                foreach (byte c in inner)
+                {
+                    if (c is < 0x20 or > 0x7E or (byte)'"' or (byte)'\\' or (byte)'<' or (byte)'>')
+                    {
+                        return false;
+                    }
+                }
+
+                if (inner.IndexOf("=?"u8) >= 0)
+                {
+                    return false;
+                }
+
+                string quotedText = Encoding.ASCII.GetString(inner).Trim(' ');
+                text = quotedText.Length == 0 ? null : quotedText;
+            }
+            else if (!name.IsEmpty)
+            {
+                // Words of atom characters with one space between them.
+                bool wordStart = true;
+                foreach (byte c in name)
+                {
+                    if (c == (byte)' ')
+                    {
+                        if (wordStart)
+                        {
+                            return false;
+                        }
+
+                        wordStart = true;
+                    }
+                    else if (IsNameChar(c))
+                    {
+                        wordStart = false;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                text = Encoding.ASCII.GetString(name);
+            }
+
+            mailbox = new MimeMailbox(text, Encoding.ASCII.GetString(e.Slice(lt + 1, e.Length - lt - 2)));
+            return true;
+        }
+
+        private static bool IsNameChar(byte c) => (c is >= (byte)'a' and <= (byte)'z') || (c is >= (byte)'A' and <= (byte)'Z') || (c is >= (byte)'0' and <= (byte)'9') || c is (byte)'_' or (byte)'-' or (byte)'\'' or (byte)'&';
+
+        private static bool IsAtomChar(byte c) => IsNameChar(c) || c is (byte)'+' or (byte)'%' or (byte)'=' or (byte)'/' or (byte)'#' or (byte)'$' or (byte)'!' or (byte)'*' or (byte)'?' or (byte)'^' or (byte)'`' or (byte)'{' or (byte)'|' or (byte)'}' or (byte)'~';
+
+        // local@domain: dot-separated atoms on both sides of exactly one '@'.
+        private static bool IsSimpleAddress(ReadOnlySpan<byte> a)
+        {
+            int at = a.IndexOf((byte)'@');
+            return at > 0 && at < a.Length - 1 && DotAtoms(a.Slice(0, at)) && DotAtoms(a.Slice(at + 1));
+        }
+
+        private static bool DotAtoms(ReadOnlySpan<byte> part)
+        {
+            bool atomStart = true;
+            foreach (byte c in part)
+            {
+                if (c == (byte)'.')
+                {
+                    if (atomStart)
+                    {
+                        return false;
+                    }
+
+                    atomStart = true;
+                }
+                else if (IsAtomChar(c))
+                {
+                    atomStart = false;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            return !atomStart;
         }
 
         private void Defect(MimeDefectKind kind, int index, int length = 0)
         {
-            int raw = _map is null ? index : (index < _map.Length ? _map[index] : (_map.Length == 0 ? 0 : _map[^1] + 1));
-            _defects?.Add(new MimeDefect(kind, _base + raw, length, _depth));
+            if (_defects is null)
+            {
+                return;
+            }
+
+            _defects.Add(new MimeDefect(kind, _base + RawIndex(index), length, _depth));
+        }
+
+        // The offset in the header as written of the byte at 'index' of the unfolded text; past the end it is one after the last byte kept.
+        private int RawIndex(int index)
+        {
+            if (_cuts is null)
+            {
+                return index;
+            }
+
+            if (index >= _b.Length)
+            {
+                return _b.Length == 0 ? 0 : RawIndex(_b.Length - 1) + 1;
+            }
+
+            // The number of dropped bytes at or before this index: binary search, since _cuts is sorted.
+            int lo = 0;
+            int hi = _cuts.Length;
+            while (lo < hi)
+            {
+                int mid = (lo + hi) >>> 1;
+                if (_cuts[mid] <= index)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+
+            return index + lo;
         }
 
         private static bool IsWsp(byte c) => c is (byte)' ' or (byte)'\t';
@@ -496,7 +718,7 @@ public static class AddressParser
 
         private void ParseGroup(List<Tok> nameWords, List<MimeAddress> result)
         {
-            string? name = PhraseText(nameWords);
+            string? name = PhraseText(nameWords, 0, nameWords.Count);
             var members = new List<MimeMailbox>();
             List<MimeAddress> inner = ParseList(true, members);
             foreach (MimeAddress a in inner)
@@ -525,7 +747,7 @@ public static class AddressParser
 
         private void ParseAngle(List<Tok> nameWords, List<Tok> comments, Tok lt, List<MimeAddress> result, List<MimeMailbox>? groupMembers)
         {
-            string? name = PhraseText(nameWords) ?? CommentName(comments);
+            string? name = PhraseText(nameWords, 0, nameWords.Count) ?? CommentName(comments);
             Tok open = lt;
             while (true)
             {
@@ -592,7 +814,7 @@ public static class AddressParser
                     Defect(MimeDefectKind.UnclosedAngle, open.Start);
                 }
 
-                AddMailbox(name, AddressText(parts), open.Start, result, groupMembers);
+                AddMailbox(name, AddressText(parts, 0, parts.Count), open.Start, result, groupMembers);
 
                 // "<a@x><b@y>": a second angle address directly after the first is a second mailbox (ambiguity A13).
                 int save3 = _p;
@@ -635,7 +857,7 @@ public static class AddressParser
             if (!sawAt)
             {
                 // No '@' and no angle brackets: a bare local part (ambiguity A8), e.g. "mary".
-                AddMailbox(CommentName(comments), AddressText(words), words[0].Start, result, groupMembers);
+                AddMailbox(CommentName(comments), AddressText(words, 0, words.Count), words[0].Start, result, groupMembers);
                 return;
             }
 
@@ -654,15 +876,14 @@ public static class AddressParser
                 localStart--;
             }
 
-            var nameWords = words.GetRange(0, localStart);
-            string? name = PhraseText(nameWords);
-            if (nameWords.Count > 0)
+            string? name = PhraseText(words, 0, localStart);
+            if (localStart > 0)
             {
                 Defect(MimeDefectKind.MissingAngleBrackets, words[0].Start);
             }
 
             name ??= CommentName(comments);
-            AddMailbox(name, AddressText(words.GetRange(localStart, words.Count - localStart)), words[localStart].Start, result, groupMembers);
+            AddMailbox(name, AddressText(words, localStart, words.Count - localStart), words[localStart].Start, result, groupMembers);
         }
 
         private void AddMailbox(string? name, string address, int at, List<MimeAddress> result, List<MimeMailbox>? groupMembers)
@@ -725,85 +946,116 @@ public static class AddressParser
         }
 
         // The address text: tokens joined without white space or comments; quoted strings keep their quotes.
-        private string AddressText(List<Tok> toks)
+        private string AddressText(List<Tok> toks, int start, int count)
         {
-            var sb = new List<byte>();
-            foreach (Tok t in toks)
+            int size = 1;
+            for (int i = start; i < start + count; i++)
             {
-                if (t.Kind == K.Comment)
-                {
-                    continue;
-                }
-
-                int end = t.End;
-                if (t.Kind == K.Quoted && t.Unterminated)
-                {
-                    sb.AddRange(_b.AsSpan(t.Start, end - t.Start).ToArray());
-                    sb.Add((byte)'"');
-                    continue;
-                }
-
-                sb.AddRange(_b.AsSpan(t.Start, end - t.Start).ToArray());
+                size += toks[i].End - toks[i].Start + 1;
             }
 
-            return DecodeBytes([.. sb]);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                int n = 0;
+                for (int i = start; i < start + count; i++)
+                {
+                    Tok t = toks[i];
+                    if (t.Kind == K.Comment)
+                    {
+                        continue;
+                    }
+
+                    _b.AsSpan(t.Start, t.End - t.Start).CopyTo(rented.AsSpan(n));
+                    n += t.End - t.Start;
+                    if (t.Kind == K.Quoted && t.Unterminated)
+                    {
+                        rented[n++] = (byte)'"';
+                    }
+                }
+
+                return DecodeBytes(rented.AsSpan(0, n));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
 
-        private static string DecodeBytes(byte[] bytes)
+        private static string DecodeBytes(ReadOnlySpan<byte> bytes)
         {
             return System.Text.Unicode.Utf8.IsValid(bytes) ? Encoding.UTF8.GetString(bytes) : MailEncoding.Windows1252.GetString(bytes);
         }
 
         // The display name: words joined as written (one space where white space was), quoted strings unquoted, then
         // RFC 2047 words decoded. Returns null when there is no name.
-        private string? PhraseText(List<Tok> words)
+        private string? PhraseText(List<Tok> words, int start, int count)
         {
-            if (words.Count == 0)
+            if (count == 0)
             {
                 return null;
             }
 
-            var bytes = new List<byte>();
-            bool quoted = false;
-            Tok? prev = null;
-            foreach (Tok t in words)
+            int size = 0;
+            for (int i = start; i < start + count; i++)
             {
-                if (prev is not null && (t.SpaceBefore || prev.Value.Kind == K.Quoted && t.Kind == K.Quoted) && bytes.Count > 0 && t.Kind != K.Dot)
-                {
-                    bytes.Add((byte)' ');
-                }
-
-                if (t.Kind == K.Quoted)
-                {
-                    quoted = true;
-                    int s = t.Start + 1;
-                    int e = t.Unterminated ? t.End : t.End - 1;
-                    var tmp = new byte[Math.Max(0, e - s)];
-                    int n = StructuredHeader.Unquote(_b.AsSpan(s, tmp.Length), tmp);
-                    bytes.AddRange(tmp.AsSpan(0, n).ToArray());
-                }
-                else
-                {
-                    bytes.AddRange(_b.AsSpan(t.Start, t.End - t.Start).ToArray());
-                }
-
-                prev = t;
+                size += words[i].End - words[i].Start + 1;
             }
 
-            if (bytes.Count == 0)
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try
             {
-                return null;
-            }
+                int n = 0;
+                bool quoted = false;
+                Tok? prev = null;
+                for (int i = start; i < start + count; i++)
+                {
+                    Tok t = words[i];
+                    if (prev is not null && (t.SpaceBefore || prev.Value.Kind == K.Quoted && t.Kind == K.Quoted) && n > 0 && t.Kind != K.Dot)
+                    {
+                        rented[n++] = (byte)' ';
+                    }
 
-            var issues = new List<TextIssue>();
-            string text = Rfc2047.DecodeText([.. bytes], issues, quoted ? EncodedWordContext.QuotedString : EncodedWordContext.Unstructured);
-            foreach (TextIssue i in issues)
+                    if (t.Kind == K.Quoted)
+                    {
+                        quoted = true;
+                        int s = t.Start + 1;
+                        int e = t.Unterminated ? t.End : t.End - 1;
+                        n += StructuredHeader.Unquote(_b.AsSpan(s, Math.Max(0, e - s)), rented.AsSpan(n));
+                    }
+                    else
+                    {
+                        _b.AsSpan(t.Start, t.End - t.Start).CopyTo(rented.AsSpan(n));
+                        n += t.End - t.Start;
+                    }
+
+                    prev = t;
+                }
+
+                if (n == 0)
+                {
+                    return null;
+                }
+
+                ReadOnlySpan<byte> bytes = rented.AsSpan(0, n);
+                // Only encoded words and non-ASCII bytes can produce text issues; plain ASCII skips the list.
+                List<TextIssue>? issues = Ascii.IsValid(bytes) && bytes.IndexOf("=?"u8) < 0 ? null : new List<TextIssue>();
+                string text = Rfc2047.DecodeText(bytes, issues, quoted ? EncodedWordContext.QuotedString : EncodedWordContext.Unstructured);
+                if (issues is not null)
+                {
+                    foreach (TextIssue i in issues)
+                    {
+                        Defect(HeaderDecoding.Map(i.Kind), words[start].Start, 0);
+                    }
+                }
+
+                text = text.Trim(' ', '\t');
+                return text.Length == 0 ? null : text;
+            }
+            finally
             {
-                Defect(HeaderDecoding.Map(i.Kind), words[0].Start, 0);
+                ArrayPool<byte>.Shared.Return(rented);
             }
-
-            text = text.Trim(' ', '\t');
-            return text.Length == 0 ? null : text;
         }
 
         // RFC 5322 §3.2.2 comments are not part of the address; when a mailbox has no phrase, the first comment names it (A4).
@@ -816,34 +1068,35 @@ public static class AddressParser
 
             Tok c = comments[0];
             int e = c.Unterminated ? c.End : c.End - 1;
-            var sb = new List<byte>();
-            int depth = 0;
-            for (int i = c.Start + 1; i < e; i++)
+            int from = c.Start + 1;
+            if (e <= from)
             {
-                byte x = _b[i];
-                if (x == (byte)'\\' && i + 1 < e)
-                {
-                    sb.Add(_b[++i]);
-                }
-                else if (x == (byte)'(')
-                {
-                    depth++;
-                    sb.Add(x);
-                }
-                else if (x == (byte)')')
-                {
-                    depth--;
-                    sb.Add(x);
-                }
-                else
-                {
-                    sb.Add(x);
-                }
+                return null;
             }
 
-            _ = depth;
-            string text = Rfc2047.DecodeText([.. sb], null, EncodedWordContext.Unstructured).Trim(' ', '\t');
-            return text.Length == 0 ? null : text;
+            // Backslash escapes are removed; every other byte, parentheses included, is kept.
+            byte[] rented = ArrayPool<byte>.Shared.Rent(e - from);
+            try
+            {
+                int n = 0;
+                for (int i = from; i < e; i++)
+                {
+                    byte x = _b[i];
+                    if (x == (byte)'\\' && i + 1 < e)
+                    {
+                        x = _b[++i];
+                    }
+
+                    rented[n++] = x;
+                }
+
+                string text = Rfc2047.DecodeText(rented.AsSpan(0, n), null, EncodedWordContext.Unstructured).Trim(' ', '\t');
+                return text.Length == 0 ? null : text;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
     }
 }
