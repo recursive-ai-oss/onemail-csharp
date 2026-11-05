@@ -58,6 +58,25 @@ internal sealed class RawContent
         return n == r.Length ? r : r.AsSpan(0, n).ToArray();
     }
 
+    /// <summary>The bytes as a view of memory they already live in (the in-memory source the tree was parsed from, or bytes set by the caller), or false when they sit in a file, a stream or a generated source.</summary>
+    public bool TryGetMemory(out ReadOnlyMemory<byte> memory)
+    {
+        if (_bytes is not null)
+        {
+            memory = _bytes;
+            return true;
+        }
+
+        if (_source is MemorySource m && _offset >= 0 && _offset <= m.Memory.Length && Length <= m.Memory.Length - _offset)
+        {
+            memory = m.Memory.Slice((int)_offset, (int)Length);
+            return true;
+        }
+
+        memory = default;
+        return false;
+    }
+
     public WriteSegment Segment() => new(_bytes, _source, _offset, Length);
 
     /// <summary>
@@ -647,6 +666,163 @@ public sealed class MimePart : MimeEntity
         return n == buf.Length ? buf : buf.AsSpan(0, n).ToArray();
     }
 
+    /// <summary>
+    /// Gives the body as transported (still encoded) as a view of memory, without copying, when the part lives in memory: a
+    /// tree parsed from a <see cref="ReadOnlyMemory{T}"/> or <see cref="Sources.MemorySource"/>, or a body the caller set.
+    /// </summary>
+    /// <param name="content">The bytes. Valid while the source the tree was parsed from is alive and unchanged.</param>
+    /// <returns>False when the body sits in a file, a stream, a ranged source or is generated while read; use <see cref="OpenRawContent"/> then.</returns>
+    public bool TryGetRawContentMemory(out ReadOnlyMemory<byte> content) => _body.TryGetMemory(out content);
+
+    /// <summary>
+    /// Gives the decoded body as a view of the source, without copying, when no decoding is needed: the transfer encoding is
+    /// 7bit, 8bit, binary or unknown (the bytes are the content) and the part lives in memory.
+    /// </summary>
+    /// <param name="content">The bytes. Valid while the source the tree was parsed from is alive and unchanged.</param>
+    /// <returns>False for base64, quoted-printable and uuencode bodies, and for parts that are not in memory; use <see cref="GetDecodedContent"/> or <see cref="CopyDecodedContentTo(Span{byte})"/> then.</returns>
+    public bool TryGetDecodedContentMemory(out ReadOnlyMemory<byte> content)
+    {
+        if (IsDecodedAsIs(TransferEncoding))
+        {
+            return _body.TryGetMemory(out content);
+        }
+
+        content = default;
+        return false;
+    }
+
+    private static bool IsDecodedAsIs(ContentTransferEncoding encoding) =>
+        encoding is not (ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable or ContentTransferEncoding.UUEncode);
+
+    /// <summary>
+    /// The room <see cref="CopyDecodedContentTo(Span{byte})"/> needs: an upper bound on the decoded size, exact for 7bit, 8bit and
+    /// binary bodies and a little over the true size (up to about a third more for base64) for decoded ones.
+    /// </summary>
+    /// <returns>Bytes. Saturates at <see cref="int.MaxValue"/>; larger bodies cannot be copied to one span, use <see cref="OpenDecodedContent"/> or <see cref="CopyDecodedContentTo(System.Buffers.IBufferWriter{byte})"/>.</returns>
+    public int GetMaxDecodedContentLength()
+    {
+        // The decoders' own bounds, so the span is always enough for Decode plus Finish.
+        long raw = _body.Length;
+        if (raw > int.MaxValue / 2)
+        {
+            return int.MaxValue;
+        }
+
+        int length = (int)raw;
+        long max = TransferEncoding switch
+        {
+            ContentTransferEncoding.Base64 => Base64Decoder.MaxOutputLength(length) + 4,
+            ContentTransferEncoding.QuotedPrintable => QuotedPrintableDecoder.MaxOutputLength(length) + 4,
+            ContentTransferEncoding.UUEncode => UuDecoder.MaxOutputLength(length) + 4,
+            _ => raw,
+        };
+        return (int)Math.Min(max, int.MaxValue);
+    }
+
+    /// <summary>Decodes the body into <paramref name="destination"/> without allocating a result array.</summary>
+    /// <param name="destination">At least <see cref="GetMaxDecodedContentLength"/> bytes.</param>
+    /// <returns>The decoded bytes written: the same bytes <see cref="GetDecodedContent"/> returns.</returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is shorter than <see cref="GetMaxDecodedContentLength"/>.</exception>
+    public int CopyDecodedContentTo(Span<byte> destination)
+    {
+        if (destination.Length < GetMaxDecodedContentLength())
+        {
+            throw new ArgumentException("The destination is shorter than GetMaxDecodedContentLength().", nameof(destination));
+        }
+
+        ContentTransferEncoding encoding = TransferEncoding;
+        if (_body.TryGetMemory(out ReadOnlyMemory<byte> raw))
+        {
+            if (IsDecodedAsIs(encoding))
+            {
+                raw.Span.CopyTo(destination);
+                return raw.Length;
+            }
+
+            // One Decode call over the whole body decodes the same bytes as the stream does piece by piece.
+            return DecodeWhole(encoding, raw.Span, destination);
+        }
+
+        using Stream s = OpenDecodedContent();
+        int n = 0;
+        while (n < destination.Length)
+        {
+            int r = s.Read(destination.Slice(n));
+            if (r == 0)
+            {
+                break;
+            }
+
+            n += r;
+        }
+
+        return n;
+    }
+
+    /// <summary>Decodes the body into <paramref name="writer"/>, in chunks for bodies outside memory.</summary>
+    /// <param name="writer">Receives the bytes <see cref="GetDecodedContent"/> returns.</param>
+    /// <returns>The number of bytes written.</returns>
+    public long CopyDecodedContentTo(System.Buffers.IBufferWriter<byte> writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ContentTransferEncoding encoding = TransferEncoding;
+        if (_body.TryGetMemory(out ReadOnlyMemory<byte> raw))
+        {
+            if (IsDecodedAsIs(encoding))
+            {
+                writer.Write(raw.Span);
+                return raw.Length;
+            }
+
+            Span<byte> room = writer.GetSpan(GetMaxDecodedContentLength());
+            int w = DecodeWhole(encoding, raw.Span, room);
+            writer.Advance(w);
+            return w;
+        }
+
+        long total = 0;
+        using Stream s = OpenDecodedContent();
+        while (true)
+        {
+            Span<byte> room = writer.GetSpan(8192);
+            int r = s.Read(room);
+            if (r == 0)
+            {
+                return total;
+            }
+
+            writer.Advance(r);
+            total += r;
+        }
+    }
+
+    private static int DecodeWhole(ContentTransferEncoding encoding, ReadOnlySpan<byte> input, Span<byte> output)
+    {
+        switch (encoding)
+        {
+            case ContentTransferEncoding.Base64:
+                {
+                    var d = new Base64Decoder();
+                    int w = d.Decode(input, output);
+                    return w + d.Finish(output.Slice(w));
+                }
+
+            case ContentTransferEncoding.QuotedPrintable:
+                {
+                    var d = new QuotedPrintableDecoder();
+                    int w = d.Decode(input, output);
+                    return w + d.Finish(output.Slice(w));
+                }
+
+            default:
+                {
+                    var d = new UuDecoder();
+                    int w = d.Decode(input, output);
+                    return w + d.Finish(output.Slice(w));
+                }
+        }
+    }
+
     /// <summary>Replaces the body with bytes that are already encoded as the headers say.</summary>
     /// <param name="encodedBytes">The body as it goes on the wire.</param>
     public void SetRawContent(ReadOnlyMemory<byte> encodedBytes)
@@ -656,7 +832,7 @@ public sealed class MimePart : MimeEntity
     }
 
     /// <summary>Replaces the body with <paramref name="data"/>, encoding it and setting <c>Content-Transfer-Encoding</c> to match.</summary>
-    /// <param name="data">The decoded content.</param>
+    /// <param name="data">The decoded content. It is copied.</param>
     /// <param name="encoding">Base64 (default), quoted-printable, or an identity encoding (7bit, 8bit, binary: bytes as given).</param>
     public void SetDecodedContent(ReadOnlySpan<byte> data, ContentTransferEncoding encoding = ContentTransferEncoding.Base64)
     {
@@ -667,6 +843,31 @@ public sealed class MimePart : MimeEntity
             ContentTransferEncoding.QuotedPrintable => RawContent.FromOwnedBytes(TransferEncoder.QuotedPrintable(data)),
             _ => RawContent.FromOwnedBytes(data.ToArray()),
         };
+        SetTransferEncodingHeader(encoding);
+    }
+
+    /// <summary>
+    /// Like <see cref="SetDecodedContent"/>, but keeps <paramref name="data"/> itself instead of a copy: base64 and the identity
+    /// encodings (7bit, 8bit, binary) read it in place whenever the body is written or read, so a large attachment is never
+    /// duplicated.
+    /// </summary>
+    /// <param name="data">The decoded content. <b>Do not change it, and keep it alive, until the part has been written (or the
+    /// part is discarded or its body replaced).</b> Changing it earlier changes what is written. Quoted-printable encodes
+    /// eagerly, so that form holds a new array and does not borrow.</param>
+    /// <param name="encoding">Base64 (default), quoted-printable, or an identity encoding (7bit, 8bit, binary: bytes as given).</param>
+    public void SetDecodedContentBorrowed(ReadOnlyMemory<byte> data, ContentTransferEncoding encoding = ContentTransferEncoding.Base64)
+    {
+        _body = encoding switch
+        {
+            ContentTransferEncoding.Base64 => RawContent.FromSource(new Base64WrappedSource(data)),
+            ContentTransferEncoding.QuotedPrintable => RawContent.FromOwnedBytes(TransferEncoder.QuotedPrintable(data.Span)),
+            _ => RawContent.FromSource(new MemorySource(data)),
+        };
+        SetTransferEncodingHeader(encoding);
+    }
+
+    private void SetTransferEncodingHeader(ContentTransferEncoding encoding)
+    {
         if (encoding == ContentTransferEncoding.SevenBit)
         {
             Headers.RemoveAll("Content-Transfer-Encoding");
@@ -950,6 +1151,8 @@ internal sealed class MimeTreeBuilder
     private readonly IRandomAccessSource _source;
     private readonly Stack<Pending> _stack = new();
     private MimeEntity? _root;
+    private byte[] _scratch = new byte[1024];
+    private int _scratchLength;
 
     public MimeTreeBuilder(IRandomAccessSource source) => _source = source;
 
@@ -958,14 +1161,24 @@ internal sealed class MimeTreeBuilder
         switch (r.Kind)
         {
             case MimeEventKind.EntityStart:
+                _scratchLength = 0;
                 _stack.Push(new Pending { Start = r.Offset });
                 break;
 
             case MimeEventKind.Header:
             {
+                // The fields of one entity are collected into one block, which becomes their shared array at HeadersEnd. Only one
+                // entity is ever between its first field and its end of headers, so one scratch buffer serves the whole tree.
                 ReadOnlySpan<byte> raw = r.Raw;
                 int valueOffset = raw.IndexOf((byte)':') + 1;
-                _stack.Peek().Headers.Add(new MimeHeader(raw.ToArray(), r.HeaderName.Length, valueOffset, r.HeaderValue.Length) { SourceOffset = r.Offset });
+                if (_scratch.Length - _scratchLength < raw.Length)
+                {
+                    Array.Resize(ref _scratch, Math.Max(_scratch.Length * 2, _scratchLength + raw.Length));
+                }
+
+                raw.CopyTo(_scratch.AsSpan(_scratchLength));
+                _stack.Peek().Headers.Add(new MimeHeader(_scratchLength, raw.Length, r.HeaderName.Length, valueOffset, r.HeaderValue.Length) { SourceOffset = r.Offset });
+                _scratchLength += raw.Length;
                 break;
             }
 
@@ -974,6 +1187,17 @@ internal sealed class MimeTreeBuilder
                 break;
 
             case MimeEventKind.HeadersEnd:
+                if (_scratchLength > 0)
+                {
+                    byte[] block = _scratch.AsSpan(0, _scratchLength).ToArray();
+                    foreach (MimeHeader h in _stack.Peek().Headers)
+                    {
+                        h.Attach(block);
+                    }
+
+                    _scratchLength = 0;
+                }
+
                 StartEntity(r);
                 break;
 

@@ -73,6 +73,28 @@ internal static class MimeTargets
         }
     }
 
+    // The copy-into and borrowing readers must give what GetDecodedContent gives.
+    private static void CheckCopyingApis(MimePart p, byte[] decoded)
+    {
+        byte[] room = new byte[p.GetMaxDecodedContentLength()];
+        int n = p.CopyDecodedContentTo(room);
+        if (!room.AsSpan(0, n).SequenceEqual(decoded))
+        {
+            throw new InvalidOperationException("CopyDecodedContentTo differs from GetDecodedContent");
+        }
+
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+        if (p.CopyDecodedContentTo(writer) != decoded.Length || !writer.WrittenSpan.SequenceEqual(decoded))
+        {
+            throw new InvalidOperationException("CopyDecodedContentTo(IBufferWriter) differs from GetDecodedContent");
+        }
+
+        if (p.TryGetDecodedContentMemory(out ReadOnlyMemory<byte> view) && !view.Span.SequenceEqual(decoded))
+        {
+            throw new InvalidOperationException("TryGetDecodedContentMemory differs from GetDecodedContent");
+        }
+    }
+
     // The bulk base64 paths must give what feeding the decoder one byte at a time gives.
     private static void CheckBase64AgainstByteAtATime(MimePart p, byte[] decoded)
     {
@@ -156,6 +178,7 @@ internal static class MimeTargets
         {
             case MimePart p:
                 byte[] decoded = p.GetDecodedContent();
+                CheckCopyingApis(p, decoded);
                 if (p.TransferEncoding == RecursiveAI.OneMail.Mime.Transfer.ContentTransferEncoding.Base64)
                 {
                     CheckBase64AgainstByteAtATime(p, decoded);

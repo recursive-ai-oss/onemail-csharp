@@ -29,7 +29,11 @@ internal static class HeaderText
 /// <summary>One header field of an entity, kept as the bytes it was read from until it is changed.</summary>
 public sealed class MimeHeader
 {
+    // The field's bytes are the slice [_rawStart, _rawStart + _rawLength) of _raw. A parsed entity's fields share one array (its
+    // whole header block); a field that was created or edited has an array of its own. The offsets below are relative to the slice.
     private byte[] _raw;
+    private int _rawStart;
+    private int _rawLength;
     private int _nameLength;
     private int _valueOffset;
     private int _valueLength;
@@ -48,16 +52,34 @@ public sealed class MimeHeader
     {
         // utf8Text keeps non-ASCII free text as raw UTF-8 (RFC 6532) instead of encoded-words.
         _raw = Writing.MimeWriterSupport.FormatHeader(name, value, newline, 78, encodeFreeText: !utf8Text);
+        _rawLength = _raw.Length;
         Reparse(name.Length);
     }
 
     internal MimeHeader(byte[] raw, int nameLength, int valueOffset, int valueLength)
     {
         _raw = raw;
+        _rawLength = raw.Length;
         _nameLength = nameLength;
         _valueOffset = valueOffset;
         _valueLength = valueLength;
     }
+
+    /// <summary>A field read from input: its bytes are placed later, once the entity's whole header block is known (see <see cref="Attach"/>).</summary>
+    internal MimeHeader(int rawStart, int rawLength, int nameLength, int valueOffset, int valueLength)
+    {
+        _raw = [];
+        _rawStart = rawStart;
+        _rawLength = rawLength;
+        _nameLength = nameLength;
+        _valueOffset = valueOffset;
+        _valueLength = valueLength;
+    }
+
+    /// <summary>Points a field made with the block constructor at the block that holds its bytes.</summary>
+    internal void Attach(byte[] block) => _raw = block;
+
+    private ReadOnlySpan<byte> RawSpan => _raw.AsSpan(_rawStart, _rawLength);
 
     internal MimeHeaderList? Owner { get; set; }
 
@@ -73,18 +95,18 @@ public sealed class MimeHeader
     // A UTF-8 byte-order mark in front of the first field name is not part of the name (the raw bytes keep it).
     private ReadOnlySpan<byte> NameBytes()
     {
-        ReadOnlySpan<byte> n = _raw.AsSpan(0, _nameLength);
+        ReadOnlySpan<byte> n = _raw.AsSpan(_rawStart, _nameLength);
         return n.Length > 3 && n.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }) ? n[3..] : n;
     }
 
     /// <summary>The whole field exactly as read or generated: name, colon, value with folds, and line end.</summary>
-    public ReadOnlyMemory<byte> Raw => _raw;
+    public ReadOnlyMemory<byte> Raw => _raw.AsMemory(_rawStart, _rawLength);
 
     /// <summary>The raw value after the colon, up to but not including the line end, with folds as written.</summary>
-    public ReadOnlyMemory<byte> RawValue => _raw.AsMemory(_valueOffset, _valueLength);
+    public ReadOnlyMemory<byte> RawValue => _raw.AsMemory(_rawStart + _valueOffset, _valueLength);
 
     /// <summary>The value unfolded and trimmed, as text. Encoded words (RFC 2047) are not decoded at this layer.</summary>
-    public string Value => HeaderText.Decode(_raw.AsSpan(_valueOffset, _valueLength));
+    public string Value => HeaderText.Decode(_raw.AsSpan(_rawStart + _valueOffset, _valueLength));
 
     /// <summary>Like <see cref="Value"/>, and reports what decoding repaired or guessed.</summary>
     /// <param name="defects">Receives one defect per repair, with offsets in the parsed input (0-based from the value for fields that were created).</param>
@@ -94,7 +116,7 @@ public sealed class MimeHeader
     {
         ArgumentNullException.ThrowIfNull(defects);
         var issues = new List<TextIssue>();
-        string s = HeaderText.Decode(_raw.AsSpan(_valueOffset, _valueLength), issues);
+        string s = HeaderText.Decode(_raw.AsSpan(_rawStart + _valueOffset, _valueLength), issues);
         HeaderDecoding.Report(issues, defects, Math.Max(0, ValueSourceOffset), depth);
         return s;
     }
@@ -124,20 +146,24 @@ public sealed class MimeHeader
     /// <exception cref="ArgumentException">The value contains a line break.</exception>
     public void SetValue(string value)
     {
-        ReadOnlySpan<byte> nl = _raw.AsSpan().EndsWith("\r\n"u8) || !_raw.AsSpan().EndsWith("\n"u8) ? "\r\n"u8 : "\n"u8;
+        ReadOnlySpan<byte> nl = RawSpan.EndsWith("\r\n"u8) || !RawSpan.EndsWith("\n"u8) ? "\r\n"u8 : "\n"u8;
         _raw = Writing.MimeWriterSupport.FormatHeader(Name, value, nl, 78);
+        _rawStart = 0;
+        _rawLength = _raw.Length;
         Reparse(_nameLength);
         Owner?.Changed();
     }
 
     internal void EnsureLineEnd(ReadOnlySpan<byte> newline)
     {
-        if (_raw.Length == 0 || _raw[^1] != (byte)'\n')
+        if (_rawLength == 0 || RawSpan[^1] != (byte)'\n')
         {
-            byte[] r = new byte[_raw.Length + newline.Length];
-            _raw.CopyTo(r, 0);
-            newline.CopyTo(r.AsSpan(_raw.Length));
+            byte[] r = new byte[_rawLength + newline.Length];
+            RawSpan.CopyTo(r);
+            newline.CopyTo(r.AsSpan(_rawLength));
             _raw = r;
+            _rawStart = 0;
+            _rawLength = r.Length;
         }
     }
 
@@ -145,11 +171,12 @@ public sealed class MimeHeader
     {
         _nameLength = nameLength;
         _valueOffset = nameLength + 1;
-        int end = _raw.Length;
-        if (end > 0 && _raw[end - 1] == (byte)'\n')
+        ReadOnlySpan<byte> raw = RawSpan;
+        int end = raw.Length;
+        if (end > 0 && raw[end - 1] == (byte)'\n')
         {
             end--;
-            if (end > 0 && _raw[end - 1] == (byte)'\r')
+            if (end > 0 && raw[end - 1] == (byte)'\r')
             {
                 end--;
             }
