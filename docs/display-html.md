@@ -5,7 +5,7 @@ that rewrites HTML; `item.ToDisplayHtml(options)` (in the root namespace, over a
 Both return a structured result and never throw for the content they are given.
 
 This document says what the code does and what it was checked against. It is a description with a stated threat model (below), not a blanket
-promise: anything that matters should still be shown in a frame with its own restrictions (see *What the output assumes*). The independent review
+promise: anything that matters should still be shown in a frame with its own restrictions (see *What the output assumes*). The review by an engineer who did not write the code
 of the sanitiser is recorded at the end (*Review*).
 
 ## How it works

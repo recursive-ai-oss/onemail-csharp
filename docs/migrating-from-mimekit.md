@@ -2,7 +2,7 @@
 
 This page maps the calls most programs use to their OneMail equivalents. It is a map, not a shim: OneMail's types are not MimeKit's, there is no compatibility layer, and a mapping row names the nearest idea, not an identical signature. It is written from MimeKit's and MailKit's published API documentation and from what each library does when it is run. Each snippet is one or two lines; the runnable versions are in [`samples/`](../samples).
 
-Packages: `RecursiveAI.OneMail` (formats, models, `Mail.*`), `RecursiveAI.OneMail.Client` (SMTP, IMAP, POP3, SASL), `RecursiveAI.OneMail.Cryptography` (DKIM, ARC, S/MIME, OpenPGP), `RecursiveAI.OneMail.Render` (PDF/PNG).
+Packages: `RecursiveAI.OneMail` (formats, models, `Mail.*`), `RecursiveAI.OneMail.Client` (SMTP, IMAP, POP3, SASL), `RecursiveAI.OneMail.Cryptography` (DKIM, ARC, S/MIME, OpenPGP; **not part of 1.0**: it ships stable at the first 1.x release after OneCrypto 1.0, with prerelease versions on the way), `RecursiveAI.OneMail.Render` (PDF/PNG).
 
 ## What is different, before the tables
 
@@ -95,6 +95,8 @@ Packages: `RecursiveAI.OneMail` (formats, models, `Mail.*`), `RecursiveAI.OneMai
 | (no equivalent) | `Mail.ConvertAsync(source, ConvertFormat.Mbox, dest)` | PST to mbox, MSG to EML, any store to PST, with a loss report |
 
 ## Signing and encryption
+
+`RecursiveAI.OneMail.Cryptography` is not part of 1.0. It ships stable at the first 1.x release after OneCrypto 1.0, with prerelease versions on the way; the rows below describe the code in this repository.
 
 | MimeKit | OneMail (`RecursiveAI.OneMail.Cryptography`) | Notes |
 |---|---|---|

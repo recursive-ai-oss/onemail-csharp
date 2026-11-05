@@ -4,6 +4,21 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-05
+
+Documentation only; the code is the same as 1.0.0.
+
+### Changed
+
+- Docs: rulings the specifications leave open are called provisional defaults.
+- The README and the package readme now say that writing to an existing PST in place is preview quality and to keep a copy of the file first; a new PST from the builder is not covered by that caveat (`docs/pst-writing.md`, *In place*). The same caveat is on the `AddToExistingPst` row of `docs/fidelity.md`.
+- `docs/compatibility.md`: MSG and PST are conversion destinations (they were listed as not yet); Outlook 16.0.20527 opened 58 of 58 written MSG and OFT files (the MSG row said not yet verified); the DBX row says deleted and orphaned messages are read on request; the contacts, conversions and composition notes no longer say that no Outlook has been run; the speed section shows the 1.0 rows; the `.Cryptography` sections say the package is not part of 1.0.
+- `docs/fidelity.md`: the store-to-store destination table lists `Msg` and `Pst`, with their flags and dates behaviour and what is skipped.
+- `docs/olm.md`: damaged-zip recovery (`OlmReaderOptions.Recovery`) is no longer listed under *Not done*.
+- `docs/migrating-from-mimekit.md`: says `RecursiveAI.OneMail.Cryptography` is not part of 1.0.
+- Reviews are described as done by an engineer who did not write the code, not as independent (README, package readme, `docs/`).
+- The README links its display HTML review relatively instead of to `main`; package readmes already point at the tag of their own version.
+
 ## [1.0.0] - 2026-11-05
 
 The first stable release: `RecursiveAI.OneMail`, `.Calendar`, `.Client`, `.Render` and the `onemail` tool (`RecursiveAI.OneMail.Cli`). Everything below accumulated through the previews and is part of it.
@@ -263,7 +278,8 @@ First preview: the MIME core, mailbox stores and the one-line reading path. What
 - The ambiguity table (`docs/ambiguities.md`), the differential and round-trip tools, fuzz targets and the MIME benchmark rows.
 - Package skeleton: the `RecursiveAI.OneMail`, `.Calendar`, `.Client`, `.Cryptography` and `.Render` packages and the `onemail` tool as buildable placeholders, with tests, a benchmark shell, a fuzz shell and NativeAOT and browser WebAssembly smoke apps.
 
-[Unreleased]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v0.3.0-preview.2...v1.0.0
 [0.3.0-preview.2]: https://github.com/recursive-ai-oss/onemail-csharp/compare/v0.2.0-preview.2...v0.3.0-preview.2
 [0.2.0-preview.2]: https://github.com/recursive-ai-oss/onemail-csharp/releases/tag/v0.2.0-preview.2

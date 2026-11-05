@@ -51,7 +51,7 @@ A signature (`PgpSignerResult`) carries OneCrypto's `PgpSignatureResult`, the si
 
 ## Rules and ambiguities
 
-Resolutions for behaviour the RFCs leave open. No mail client has been observed yet beyond GnuPG's and Sequoia's own tools, so every non-unanimous entry is an agent default.
+Resolutions for behaviour the RFCs leave open. No mail client has been observed yet beyond GnuPG's and Sequoia's own tools, so every non-unanimous entry is a provisional default.
 
 | ID | Case | Resolution | Issue |
 |---|---|---|---|

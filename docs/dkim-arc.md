@@ -1,6 +1,6 @@
 # DKIM and ARC (`RecursiveAI.OneMail.Cryptography`)
 
-Normative notes for signing and verifying DKIM signatures (RFC 6376, with RFC 8301's algorithm rules and RFC 8463's Ed25519) and ARC chains (RFC 8617), and for the DNS TXT client that fetches key records. RSA runs on the .NET base class library; Ed25519 comes from `RecursiveAI.OneCrypto`. Native platforms only (not browser WebAssembly). An independent review of this package is recorded in the Review section below.
+Normative notes for signing and verifying DKIM signatures (RFC 6376, with RFC 8301's algorithm rules and RFC 8463's Ed25519) and ARC chains (RFC 8617), and for the DNS TXT client that fetches key records. RSA runs on the .NET base class library; Ed25519 comes from `RecursiveAI.OneCrypto`. Native platforms only (not browser WebAssembly). A review of this package by an engineer who did not write it is recorded in the Review section below.
 
 ## What it does
 
@@ -81,7 +81,7 @@ Method: `tools/dkim/` (`setup.sh` installs the oracles, `run.sh` runs the DKIM i
 
 ## Review
 
-An independent review of DKIM, ARC and the DNS client: the code read against RFC 6376, 8301, 8463 and 8617, hostile-input tests, the ARC test suite, dkimpy and mailauth as oracles, and fuzzing. Verdicts by question; what changed is in the changelog.
+A review, by an engineer who did not write the code, of DKIM, ARC and the DNS client: the code read against RFC 6376, 8301, 8463 and 8617, hostile-input tests, the ARC test suite, dkimpy and mailauth as oracles, and fuzzing. Verdicts by question; what changed is in the changelog.
 
 1. **Covered bytes.** Two cases made a pass mean less than the reader sees, and are fixed (see *What a pass covers*): `l=` with content after the signed part, and a `From` field the signature does not cover. Other unsigned duplicates are reported, not failed (`UnsignedHeaderInstances`); that is a choice, since a duplicate `Subject` is not an identity. Not covered by any DKIM verifier: which header field a mail reader shows (it may differ from the one nearest the body), and how a reader splits headers from body when a line has no colon or holds only whitespace. This verifier reads such a line as part of the header block, a reader may start the body there; the exposure is hiding signed fields, not forging ones, and it is not an ambiguity-table entry because no client has been observed. Verification works on the bytes passed in, never a re-serialised tree.
 2. **Results.** Always a `DkimSignatureResult` (status, reason, signer domain and identity, key size, covered ranges, warnings), never a bool; `IsPass` is a convenience over `Status`. Binding the signer to the sender is the caller's: compare `Domain` (or `Identity`) with the domain of the `From` they show; the result guarantees only that, by default, that `From` is the one that was signed. `DkimSignatureResult.CheckAlignment(fromAddress)` reports how `d=` relates to the From domain (`Exact`, `ParentOrChild`, `None`): no policy, no status check, and no public suffix list, so two sibling subdomains report `None` where DMARC's relaxed mode would accept them. Weak but readable signatures pass with warnings (`WeakAlgorithm`, `WeakKey`, `TestingKey`); to gate on them set `AllowRsaSha1 = false` and raise `MinimumRsaBits`. A DNS failure is `TempError`, a missing key `PermError`, never a pass.

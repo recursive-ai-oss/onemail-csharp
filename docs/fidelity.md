@@ -28,7 +28,11 @@ is what the source holds that the target has no field for (MAPI properties witho
 | `Mbox` | one `<folder>.mbox` per folder (root items in `_root.mbox`); a destination with an extension is one file | `Status`/`X-Status`/`X-Keywords` fields, added only to a message that has none | envelope date = arrival date, else sent date, else the Unix epoch (`EnvelopeDateUnknown`) |
 | `Maildir` | Maildir++ (`.Parent.Child`); a dot inside a folder name becomes `_` | standard flags and up to 26 keywords per folder | file time = arrival date |
 | `AppleMail` | `<folder>.mbox/Messages/<n>.emlx` | the `.emlx` flags word; keywords not kept | `date-received` and `date-sent` |
+| `Msg` | one `.msg` file per message under the folder tree (the destination must be empty) | kept in the properties of an Outlook item; a MIME or OLM source's flags and keywords are reported (`FlagsNotCarried`, `KeywordsNotCarried`) | the item's own properties |
+| `Pst` | a new Unicode PST, each item in the folder it came from under "Top of Personal Folders" (`StoreConversionOptions.AddToExistingPst` adds to an existing PST in place instead, which is preview quality: keep a copy) | kept in the properties of an Outlook item; a MIME or OLM source's are reported | the item's own properties |
 | `Ics`, `JCal`, `XCal`, `VCard`, `JCard`, `XCard`, `Tnef` | one file per item under the folder tree | none | file time |
+
+An MSG or PST destination holds only items that have a property bag: Outlook items as they are, MIME messages and OLM mail after the MS-OXCMAIL conversion. An OLM calendar or contact record, a calendar or card file and an OLM category or settings record are skipped and counted (`NotMapiConvertible`, `NotMail`). What the writers adjust is listed in the loss report as `Msg*` and `Pst*` codes (`docs/conversion.md`); the per-family cells are the tables below.
 
 Calendar and contact items that reach a mail store are written as `.ics` and `.vcf` files in an `_items` directory beside it
 (`OtherItemsMode.Route`, the default) or skipped (`OtherItemsMode.Skip`). An item the target cannot hold (a contact for an

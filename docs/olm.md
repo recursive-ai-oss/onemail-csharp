@@ -178,7 +178,6 @@ suite (2,130 tests) passes.
 
 ## Not done
 
-Recovery of a damaged zip (it uses OneArchive's recovery mode, which is not in the pinned release), Outlook 2011 layouts (no sample
-archive), archives with a raw MIME source, attendees or recurrence exceptions (none seen), and a typed view of the many flag
+Outlook 2011 layouts (no sample archive), archives with a raw MIME source, attendees or recurrence exceptions (none seen), and a typed view of the many flag
 elements. No Outlook for Mac has been run, so the date zone, the e-mail slot numbering and the relative-recurrence numbering are
-agent defaults.
+provisional defaults.

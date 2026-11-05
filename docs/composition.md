@@ -15,7 +15,7 @@ a colon (ASCII or full-width). A word that is not in the list (`Status: x`) is p
 becomes empty. Control characters and line separators in the original's subject become spaces, and trailing white space is dropped, so a
 decoded subject can never start a new header.
 
-The labels are the ones language packs of common clients write; they are an agent default and not a specification: Re, Fw, Fwd (English); AW, WG
+The labels are the ones language packs of common clients write; they are a provisional default and not a specification: Re, Fw, Fwd (English); AW, WG
 (German); SV, Svar, VS, VB, ATB (Scandinavian); Antw, Doorst (Dutch); TR, Ré, Réf, Rép (French); RV, PD, Reenv (Spanish); ENC, RES, Resp
 (Portuguese); R, RIF, Inoltro (Italian); Odp (Polish); VL (Finnish); YNT, ILT (Turkish). Labels in non-Latin scripts are not recognised.
 
@@ -25,7 +25,7 @@ MAPI: the MS-OXCMAIL import splits the subject (MS-OXCMAIL 2.2.3.2.6.1), so `Pid
 ## Threading headers (RFC 5322 §3.6.4)
 
 Replies, and forwards of Outlook originals. A forward of a message from another client starts no reply thread: it has no `In-Reply-To` or `References`
-(agent default; clients differ), but keeps the conversation topic and gets an index level. A forward of an Outlook item (or of a message with a conversation index) has them as a reply does,
+(provisional default; clients differ), but keeps the conversation topic and gets an index level. A forward of an Outlook item (or of a message with a conversation index) has them as a reply does,
 because Outlook 16 writes them (see *Conversation topic and index*).
 
 - `In-Reply-To`: the original's `Message-ID`.

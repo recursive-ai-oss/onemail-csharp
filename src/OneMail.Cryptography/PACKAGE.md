@@ -2,7 +2,7 @@
 
 S/MIME, OpenPGP mail, DKIM and ARC for .NET. S/MIME (RFC 8551) signs, verifies, encrypts and decrypts messages on the Cryptographic Message Syntax of [OneCrypto](https://github.com/recursive-ai-oss/onecrypto-csharp); DKIM and ARC sign and verify mail authentication signatures with RSA (the .NET base class library) and Ed25519 (OneCrypto), with a small DNS TXT client for key records. It is part of [OneMail](https://github.com/recursive-ai-oss/onemail-csharp).
 
-**Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet, and the package has not had an independent security review.
+**Early preview.** Native platforms only (not browser WebAssembly). The API is not stable yet, and the package has not had a security review beyond one by an engineer who did not write it, and no external one.
 
 ## OpenPGP mail
 

@@ -82,7 +82,7 @@ Tests: `SmimeDisplayTests` (trusted, wrapper with an injected part, untrusted, s
 
 ## Ambiguities
 
-Eight ambiguities (SM1 to SM8) are in the S/MIME section of [`ambiguities.md`](ambiguities.md), each with its resolution and the defect or issue it raises. They are agent defaults: no mail client has been observed for them yet (OpenSSL and MimeKit were observed for the interop and do not settle these cases).
+Eight ambiguities (SM1 to SM8) are in the S/MIME section of [`ambiguities.md`](ambiguities.md), each with its resolution and the defect or issue it raises. They are provisional defaults: no mail client has been observed for them yet (OpenSSL and MimeKit were observed for the interop and do not settle these cases).
 
 ## Interop and tests
 
@@ -99,7 +99,7 @@ Eight ambiguities (SM1 to SM8) are in the S/MIME section of [`ambiguities.md`](a
 
 ## Review
 
-An independent review of S/MIME signing, opening and the Outlook items: the code read against RFC 8551, 8550, 1847 and MS-OXOSMIME, hostile-input tests, OpenSSL, MimeKit and the RFC 9216 examples as oracles, and fuzzing. CMS parsing and the primitives belong to OneCrypto and were reviewed only for how they are called. Verdicts by question; what changed is in the changelog.
+A review, by an engineer who did not write the code, of S/MIME signing, opening and the Outlook items: the code read against RFC 8551, 8550, 1847 and MS-OXOSMIME, hostile-input tests, OpenSSL, MimeKit and the RFC 9216 examples as oracles, and fuzzing. CMS parsing and the primitives belong to OneCrypto and were reviewed only for how they are called. Verdicts by question; what changed is in the changelog.
 
 1. **Covered bytes.** For `multipart/signed` the digest is taken over the first part exactly as stored (or its CRLF form, flagged), and the layer is refused unless there are exactly two parts, the second is a leaf and the signature holds no content of its own. Headers outside the signed entity are never presented as signed (`Outside.UnsignedHeaders`); a signed part inside an unsigned wrapper no longer makes the whole message `Succeeded` (`Outside.UnsignedParts`, ambiguity SM6). Nested signed/encrypted layers are each judged; `Succeeded` needs all of them. An Outlook item is rebuilt from its attachment, so the result's `InnerItem` is the signed MIME: **display that, not the item's own body properties**, which the signature does not cover and which may differ. Encrypted-only content is `UnauthenticatedEncryption` when CBC (malleable; flagged).
 2. **Results.** Structured at every level (`SmimeResult`, layers, signers with per-rule checks). A signer is `Valid` when its signature is sound for the certificate that came with it; with no `Chain` option nothing is trusted, `Chain` is `NotChecked`, and anyone can sign with a certificate naming any address. Opening with no anchor therefore does not succeed by default (`UntrustedChain`); `AllowUntrustedSigner` opts out, and `IsTrusted` (signer, layer, result) stays false then. Revocation and time are those of OneCrypto's `ValidationOptions`; the library never reads a clock. The sender check compares the signed entity's own `From` when it has one, and needs the certificate to cover every mailbox (SM9, SM10); with an unsigned envelope `From` it is a match against text the signature does not cover, so use it only for a trusted signer.

@@ -1,7 +1,6 @@
 # Fidelity and compatibility
 
-What OneMail reads and writes today, how each format is checked, and the gaps we know about. This table is updated with every
-preview; a gap is listed here, never hidden.
+What OneMail reads and writes today, how each format is checked, and the gaps we know about. The tables are updated with every release; a gap is listed here, never hidden.
 
 **Oracles** (run as released programs, black-box): MimeKit 4.18.2 (NuGet), Python 3.13.17 `email` and `mailbox`, Go 1.26.8
 `net/mail` and `mime/multipart`, Python `icalendar` 7.3.0 and `vobject` 0.9.9, libpff tools 20180714. Differences between
@@ -124,7 +123,7 @@ limit with a typed defect, 13 outside the naive case window, 0 unexplained; agai
 from the oracle (explained in `recurrence.md`), 0 unexplained. XSS: the 233 sanitiser vectors in every text field (summary, location, description,
 URL, conference, attachment and its name, organizer and attendee names and addresses, role, status), rendered in headless Chromium without a sanitiser:
 0 scripts run, 0 requests (the raw vectors as control: 42 scripts, 58 requests). The Outlook meeting items in the corpora are few (two appointments in
-MSG); the Outlook-item path is checked on generated items only, and Outlook-produced meeting items wait for Outlook.
+MSG); the Outlook-item path is checked on generated items only, and Outlook-produced meeting items have not been compared.
 
 ## Outlook and its repair tool, 2026-11-04
 
@@ -149,11 +148,11 @@ Outlook 16.0.20527 (Microsoft 365, Windows 11) and its repair tool `scanpst.exe`
 ## 0.4.0-preview.1
 
 Bodies, display and conversion are complete for this stage; the sections below hold each format's numbers. The display sanitiser
-passed its independent review (see [`display-html.md`](display-html.md), *Review*). Fuzzing, 600 s per target with 0 findings:
+passed its review by an engineer who did not write it (see [`display-html.md`](display-html.md), *Review*). Fuzzing, 600 s per target with 0 findings:
 `sanitizer` 3.9M executions, `sanitizer-reparse` 2.5M, `sanitizer-display` 3.4M, `htmltext` 10.0M, `composition` 2.7M, `calcard` 5.4M,
 `render` 0.05M, `render-datauri` 32.5M, `msg-write` 1.5M, `msg` (recovery on) 8.0M, `dkim-key` 30.9M, `dns-reply` 34.0M, `dkim-tags` clean.
 Also in this preview: MSG and OFT writing and the PST write primitives (Outlook opening the written files is not yet verified),
-opt-in MSG recovery, and DKIM and ARC (the cryptography code has not had its independent review). Known gaps: no Outlook-produced
+opt-in MSG recovery, and DKIM and ARC (the cryptography code had not yet been reviewed by an engineer who did not write it). Known gaps: no Outlook-produced
 calendar, contact or distribution-list fixtures yet, and no Outlook check of written files (both need Outlook).
 
 ## 0.3.0-preview.1
@@ -170,11 +169,11 @@ Added since 0.1; the 0.1 section further down lists what that first release read
 `compressed-rtf` 1.0.7, `RTFDE` 0.1.2.2 and `tnefparse` 1.4.0; `tnef` 1.4.18 and `ytnef` 2.1.2 (distribution packages); `recurring-ical-events`
 3.8.2 and `python-dateutil` 2.9.0; Ical.Net 5.2.3 (NuGet, public API). Further corpora, fetched and never committed: the NIST CFReDS Data
 Leakage case OST, and MSG, PST and TNEF test files from Apache Tika and Apache POI ([`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)).
-No Outlook has been run yet.
+Outlook 16.0.20527 has since opened written MSG, OFT and PST files: see *Outlook and its repair tool* above.
 
 | Format | Read | Write | Differential (unexplained / compared) | Round-trip | Fuzzed | Known gaps |
 |---|---|---|---|---|---|---|
-| MSG / OFT (MS-OXMSG) | yes | yes | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by default (typed defect) and open with `MsgReaderOptions.Recovery`, which turns the compound file reader's damage list into defects ([`msg.md`](msg.md)); writing: property-exact read-back (see below); **Outlook open: not yet verified** |
+| MSG / OFT (MS-OXMSG) | yes | yes | 0 against extract-msg on 58 files, 15,609 properties; view fields 0 on 53 files, 690 fields | property streams re-encode identical 60 / 60 | yes | two fuzz-minimised files from the corpus are refused by default (typed defect) and open with `MsgReaderOptions.Recovery`, which turns the compound file reader's damage list into defects ([`msg.md`](msg.md)); writing: property-exact read-back (see below); **Outlook open: 58 / 58 written MSG and OFT files open and save a copy in Outlook 16.0.20527** (*Outlook and its repair tool*, above) |
 | PST Unicode, OST (MS-PST: NDB, LTP, messaging) | yes | no | libpff `pffexport` agrees on folders, items, recipients and attachments: 0 differences on the CFReDS OST, Tika `testPST` and `testPST_variousBodyTypes`, and generated ANSI and Unicode stores (128 items); property contexts and tables read with 0 defects (3,771 + 998 + 733 properties) | n/a | node database, tables, messaging | Apache Tika's `testPST.pst` and `testPST_variousBodyTypes.pst` are real Unicode PSTs with 512-byte pages (wVer 23, checked on the header); no 4 KiB multi-map store from Outlook is public, so those are checked only on files we generate; the one ANSI store is one Outlook made for us. libpff cannot read 4 KiB tables whose rows sit in a data tree, so those have no differential yet. Associated (hidden) items are read but libpff does not export them |
 | PST Unicode write: new files (`PstBuilder`, `onemail convert --to pst`) | no | yes (Outlook opens the stores: see the Outlook section above) | every source message against every message written, property by property (`pstcheck`): 0 unmatched in 8,432 messages from the Tika PSTs, CFReDS OST, 53 MSG, TNEF, mime4j, Enron sample and dovecot mbox (the OLM store's 490 items are checked by round-trip and libpff only); the properties MS-PST requires of an item are added when missing and reported; `pffinfo` opens all 10 files, `pffexport` finds all 8,922 items and agrees with our reader on folders, recipients and attachment bytes except for the libpff behaviours in the last column; node database 0 defects, AMaps and density list clean | property bags equal the raw tables: 0 differences in 8,922 messages; kill test (50 runs): 8 whole files, 42 refused, 0 in between | n/a (writer) | libpff behaviour, not file defects: it decodes narrow strings with its own `-c` code page and ignores `PidTagMessageCodepage` (Chinese and Cyrillic MSG subjects and HTML), it drops the first letter of two OLM subjects (both end in byte 0xD1), it names an unnamed attachment `Attachment.txt`, and `pffexport` leaves `IPM.Post` items out. Outlook opens the written files and `scanpst.exe` reports only minor findings on all but two cases (stores over 65,535 rows in a folder, and MSG-built stores with 8-bit strings), see `pst-writing.md` |
 | PST ANSI | yes | no | one store Outlook wrote (`testdata/pst/outlook-ansi.pst`, 36 messages): 0 differences against `pffexport` 20180714, property bags equal the raw tables (1,826 properties); a larger Outlook-made ANSI store opens in Outlook (folders with 20, 40 and 10 items); generated stores | n/a | yes | one small real sample: ANSI allocation page CRC variants and big ANSI stores are seen on generated files only; ANSI is never written |
@@ -208,7 +207,7 @@ Windows file names cannot hold, while both are read everywhere ([`mailboxes.md`]
 | `Authentication-Results` (RFC 8601), `Received-SPF` (RFC 7208) | yes | no | 0 against MimeKit (34 fields); Python has no parser | n/a | yes | `Received-SPF` has no oracle |
 | mbox: mboxo, mboxrd, mboxcl, mboxcl2, Gmail Takeout labels (RFC 4155) | yes | yes | message boundaries: 0 against Python and MimeKit on 17 files, 3,798 messages | record copy 16 / 16 | yes | MMDF not supported |
 | Maildir (Courier and Dovecot flags and keywords) | yes | yes | 0 against Python `mailbox` | 48 / 48 | via store tests | Courier keyword file line format unverified against a real store; one directory listing held in memory |
-| Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21: 2,053 real records (34 with text) in 13 folders, 3,512 generated messages in 12 folders | n/a | dbx | one real store (a Windows XP laptop image, 28 files); OE4 files and deleted messages are not read |
+| Outlook Express DBX (5/6) | yes | no | 0 against undbx 0.21: 2,053 real records (34 with text) in 13 folders, 3,512 generated messages in 12 folders | n/a | dbx | one real store (a Windows XP laptop image, 28 files); OE4 files are not read; deleted and orphaned messages are read only on request (next row) |
 | Outlook Express DBX deleted and orphaned messages (opt-in) | yes (`DbxReader.RecoverDeleted`) | no | generated stores with deleted and unlinked messages (Inbox, Sent Items, Drafts, Projects 200, Everything, Untouched): 162 of 162 found, tags FreeSpace 131 and Orphaned 31, 0 Live, 0 live duplicates; counts equal `undbx -r` (live + recovered) on all six; the one freed message in the CFReDS Hacking Case (`Inbox.dbx`, 20 freed segments) equals undbx's output but for the four bytes per segment undbx fills with `-` and we leave out | n/a | dbx | the free-list link overwrites four bytes of every freed segment and the last segment's length; see [`recovery.md`](recovery.md) |
 | PST/OST damaged stores and deleted items (opt-in forensic) | yes (`PstRecovery`) | yes: a new Unicode PST of what was found, with provenance properties and a JSON report | see [`recovery.md`](recovery.md): generated 3,000-message store, Tika `testPST` files and the CFReDS OST, each damaged 11 ways: 0 exceptions, every repaired store opens with no defect; header or root pages destroyed: 100 % property-exact; allocation maps or density list destroyed: nothing lost | n/a | pst | one Outlook-made ANSI store (11 damages, repaired stores scan clean); a deleted node whose page survives is not told from a live one once the node tree is lost; recipients and attachments of a message found by block only are lost |
 | OLM damaged archives (opt-in) | yes (`OlmReaderOptions.Recovery`) | no | bill_rapp (484 items) and outlook_example (28): 9 damaged variants each (truncated at 25/50/90%, garbage between entries, no or wrong central directory, corrupt entries, corrupt late in a calendar, zero block): 0 exceptions, 100% for directory damage and garbage, every other loss has a damage record | n/a | olm | whole-record granularity: the record being read when data ends is dropped; see [`recovery.md`](recovery.md) |
@@ -220,7 +219,7 @@ Windows file names cannot hold, while both are read everywhere ([`mailboxes.md`]
 
 ## Contacts (vCard typed view, Outlook contacts, MS-OXVCARD)
 
-Method and rules: [`contacts.md`](contacts.md). No Outlook has been run. The corpus has two contact items (Tika and POI MSG, the same contact) and no
+Method and rules: [`contacts.md`](contacts.md). Outlook 16 has opened written files (*Outlook and its repair tool*, above) but no contact has been compared with Outlook's own. The corpus has two contact items (Tika and POI MSG, the same contact) and no
 Outlook contact PST, so the MS-OXOCNTC properties are covered by 56 generated contacts and 8 lists (`ContactTool gen`, seed 20261031). Oracles run black-box:
 vobject 0.9.9, FolkerKinzel.VCards 8.2.0 (public API), extract-msg 0.55.0.
 
@@ -235,13 +234,13 @@ vobject 0.9.9, FolkerKinzel.VCards 8.2.0 (public API), extract-msg 0.55.0.
 | Byte-identical round trip of untouched vCards | the content-line tree | 28 + 86 corpus and generated files and 132 produced cards: all byte-identical |
 | Fuzz `vcard-view` | 600 s, `Checked` build | 5,049,889 executions, 0 findings |
 
-Gaps: no Outlook-produced contact PST or MSG with the full property set, and no Outlook import/export of vCards to compare against (the Outlook oracle, before 0.5).
+Gaps: no Outlook-produced contact PST or MSG with the full property set, and no Outlook import/export of vCards to compare against (Outlook 16 has opened the written files only).
 The slot order of telephone numbers and email addresses is approximated by a vCard and reported (`PhoneSlotChanged`, `EmailSlotChanged`).
 
 ## MS-OXCMAIL conversions (MAPI to MIME and back)
 
 Checked on the 45 Tika and POI MSG files and the 25 Tika and CFReDS PST/OST items that are mail, and on message files for the other
-direction. Method and rules: [`conversion.md`](conversion.md). No Outlook has been run; the oracles are MimeKit 4.18.2 and Python 3.13.17
+direction. Method and rules: [`conversion.md`](conversion.md). Outlook 16 has not been used to compare conversions (it opened written files only); the oracles are MimeKit 4.18.2 and Python 3.13.17
 `email`, black-box.
 
 | Direction | Checked against | Result | Known gaps |
@@ -283,8 +282,7 @@ command line. Checked on the worker with `tools/convert/run.sh`:
 | Store to store (OST, Tika PSTs, OLM, DBX, dovecot mbox, Maildir, Enron sample) | read = written + skipped everywhere; folder trees equal; Python `mailbox`/`email` agree on folders and counts in 18 of 18 runs |
 | Memory | CMU Enron (517,401 messages, 3,311 folders) to Maildir: 119 MB peak; to mbox: 129 MB peak |
 
-Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; MSG and PST
-are not destinations until 0.5 (the `IStoreSink` extension point is public).
+MSG and PST are destinations (`ConvertFormat.Msg`, `ConvertFormat.Pst`, `onemail convert --to msg|pst`); their cells are in [`fidelity.md`](fidelity.md). Gaps: flags and keywords from Outlook items (`PidTagFlagStatus`, last verb) are mapped by rule and not yet observed in Outlook; `LastVerbExecuted` after a real send is unchecked.
 
 ## Replies and forwards ([`composition.md`](composition.md))
 
@@ -305,13 +303,12 @@ Python 3.13.17 `email` and Go 1.26.8 `net/mail`; subject, From, To, Cc, In-Reply
 
 Known gaps: addresses with a doubled or edge dot in the local part (`k..allen@x`) are written as they were; the three oracles drop or cut them (ambiguity A15, A16),
 so they are left out of that comparison. Display text that the user would see in other languages (attribution, forward banner) is English unless replaced. The
-subject prefix list is an agent default. No mail client has been compared yet (no Thunderbird run); the Outlook oracle will settle the forward-threading and
-conversation-index choices. Real Outlook conversation indexes carry the FILETIME from their first byte, which differs from the layout MS-OXOMSG draws (see `composition.md`).
+subject prefix list is a provisional default. No Thunderbird run was possible. The forward-threading and conversation-index choices were checked against Outlook 16.0.20527 (ten replies and forwards; see `composition.md`). Real Outlook conversation indexes carry the FILETIME from their first byte, which differs from the layout MS-OXOMSG draws (see `composition.md`).
 
 ## Display HTML (sanitiser, remote-content policy)
 
 Added after 0.2.0-preview.2. Vectors are our own, written from the categories of public evasion lists (no text copied). DOMPurify 3.4.17 (npm) is run as a released program
-only. What the code does is in [`display-html.md`](display-html.md); the sanitiser's independent review passed (see its *Review* section).
+only. What the code does is in [`display-html.md`](display-html.md); the sanitiser's review by an engineer who did not write it passed (see its *Review* section).
 
 | Area | Checked against | Result | Known gaps |
 |---|---|---|---|
@@ -321,6 +318,8 @@ only. What the code does is in [`display-html.md`](display-html.md); the sanitis
 | Fuzzing | `sanitizer` (checks the output for banned elements, attributes and URL schemes) and `sanitizer-reparse` (output is a fixed point of parse and sanitise), 600 s each | `sanitizer` 6,533,781 executions, `sanitizer-reparse` 6,917,798, 0 findings (libFuzzer, Checked build). Earlier runs found a `pre` newline that did not survive a re-parse, a deeply nested misnested anchor that never settled (now unwrapped), and two checker false positives | |
 
 ## DKIM and ARC (`RecursiveAI.OneMail.Cryptography`)
+
+Not part of 1.0: this package publishes stable at the first 1.x release after OneCrypto 1.0, with prerelease versions on the way (the rows below describe the code in this repository).
 
 OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Node 22.22.1) as black-box oracles, run only. Rules, choices and method: [`dkim-arc.md`](dkim-arc.md); the checks are `tools/dkim/`.
 
@@ -335,6 +334,8 @@ OneCrypto 0.1.0-preview.1 for Ed25519; dkimpy 1.1.8 and mailauth 8.0.4 (with Nod
 | AOT, trim | `smoke/Aot` NativeAOT publish with warnings as errors | `cryptography: ok` | not in the browser smoke (native only) |
 
 ## OpenPGP mail (`RecursiveAI.OneMail.Cryptography.OpenPgp`)
+
+See the note under DKIM and ARC: `.Cryptography` is not part of 1.0.
 
 PGP/MIME (RFC 3156), inline OpenPGP and Autocrypt headers on OneCrypto 0.4.0-preview.2. Oracles, run as released programs: GnuPG 2.4.4 (Ubuntu package), GnuPG 2.5.24 (a release build pinned by OneCrypto; informational only, see the known issue in `openpgp.md`), Sequoia `sqop` 0.38.0. Rules and method: [`openpgp.md`](openpgp.md), ambiguities PG1-PG13; the checks are `tools/openpgp/` and the committed vectors in `testdata/openpgp/vectors`. The package has not had an independent security review.
 
@@ -351,6 +352,8 @@ PGP/MIME (RFC 3156), inline OpenPGP and Autocrypt headers on OneCrypto 0.4.0-pre
 | Outlook 16.0.20527 and Windows' CMS API (`EnvelopedCms`, `CryptMsgOpenToEncode`) on the Windows 11 laptop, throw-away P-256 / P-384 keys as PKCS #12, `tools/outlook` (`Probe-Smime.ps1`, `Make-EcdhWindows.ps1`, `Probe-SigUi.ps1`) | **ECDH recipients:** our messages, OpenSSL 3.6.2's (every KDF hash and wrap size it offers), messages built by hand with the originator-key and key-wrap identifiers varied, and Windows' own encoder's, each decrypted by `EnvelopedCms` and opened in Outlook; the RSA messages as a control | The cause of "Your Digital ID name cannot be found" is the key-wrap `AlgorithmIdentifier`: Windows decrypts an EC key-agreement message only when `id-aes*-wrap` carries NULL parameters (RFC 3565 §2.3.2 leaves them out, as we and OpenSSL do): 6 of 6 hand-built messages with the NULL decrypt, 0 of 6 without, whatever the originator key's parameters, the KDF hash, the key usage bits or the key import. With the NULL (and the same encoding in the KDF's SharedInfo) Outlook opens ECDH items (3 of 3: P-256 key agreement only, P-384, P-256 signature + key agreement). Reading: Windows writes NULL parameters on the originator key too, which OneCrypto 0.4.0-preview.1 rejected (0 of 4 Windows-written messages decrypted). Both fixes are OneCrypto's (`docs/smime.md`) and are in OneCrypto 0.4.0-preview.2: ECDH messages now cross between this library and Outlook in both directions | Re-run on the published OneCrypto 0.4.0-preview.2: Outlook 16.0.20527 opens our ECDH items 3 of 3 (P-256 key agreement only, P-384 key agreement only, P-256 signature + key agreement; body shown), the 4 Windows-written messages decrypt here 4 of 4 (`WindowsEcdhTests`), OpenSSL 3.6.2 both directions 16/16 including the ECDH P-256 cells, MimeKit 4.18.2 8/8 + 11/11. Outlook signature validity could not be read (`smime.md`).
 
 ## S/MIME (`RecursiveAI.OneMail.Cryptography.Smime`)
+
+See the note under DKIM and ARC: `.Cryptography` is not part of 1.0.
 
 RFC 8551 on OneCrypto 0.1.0-preview.1's CMS. Oracles, run as released programs: OpenSSL `cms` 3.0.13 (worker) and 3.6.2 (a second build), MimeKit 4.18.2 (public S/MIME API, in `tools/smime`). Rules and method: [`smime.md`](smime.md), ambiguities SM1-SM8; the checks are `tools/smime/`. Reviewed as a crypto path (see the *Review* section of `smime.md`); the counts below are from the runs after the review fixes.
 
@@ -449,8 +452,27 @@ Gmail, run 2026-11-04 over XOAUTH2 and OAUTHBEARER against the live service; all
 
 ## Speed
 
-MIME rows against MimeKit 4.18.2: see [`benchmarks.md`](benchmarks.md) (geometric mean of the OneMail/MimeKit time ratio
-0.091 on x64 and 0.093 on arm64; worst row 0.584).
+The 1.0 rows (OneMail time divided by the comparator's; lower is faster). Method, machines and every row: [`benchmarks.md`](benchmarks.md).
+
+| Area | Comparator | x64 geomean / worst | arm64 geomean / worst | Date, commit | Status |
+|---|---|---|---|---|---|
+| MIME parse, headers, bodies (12 rows) | MimeKit 4.18.2 | 0.067 / 0.148 | 0.085 / 0.117 | 2026-11-05, be1a504 | pass |
+| MIME write, build, mbox (6 rows) | MimeKit 4.18.2 | 0.044 / 0.149 | 0.046 / 0.183 | 2026-11-05, be1a504 | pass |
+| MIME, all 18 rows | MimeKit 4.18.2 | 0.058 / 0.149 | 0.069 / 0.183 | 2026-11-05, be1a504 | pass |
+| PST / OST enumerate + extract | XstReader.Api 1.0.6 | 0.198 / 0.453 (6 rows) | 0.320 / 0.475 (5 rows) | 2026-11-05, be1a504 | pass |
+| MSG read | MsgReader 6.2.0 | 0.098 / 0.465 | 0.103 / 0.581 | 2026-11-05, be1a504 | pass |
+| TNEF read | MimeKit 4.18.2 | 0.353 / 0.553 | 0.284 / 0.372 | 2026-11-05, be1a504 | pass |
+| vCard parse | FolkerKinzel.VCards 8.2.0 | 0.707 / 0.732 | 0.846 / 0.864 | **reused** 2026-11-04, 3b51281 | pass |
+| vCard build-write | FolkerKinzel.VCards 8.2.0 | 0.486 / 0.598 | 0.530 / 0.608 | **reused** 2026-11-04, 3b51281 | pass |
+| vCard edit-write | FolkerKinzel.VCards 8.2.0 | 0.104 / 0.143 | 0.111 / 0.146 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS parse | Ical.Net 5.2.3 | 0.087 / 0.101 | 0.104 / 0.151 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS build-write | Ical.Net 5.2.3 | 0.123 / 0.163 | 0.153 / 0.248 | **reused** 2026-11-01, 9ec14a0 | pass |
+| ICS edit-write | Ical.Net 5.2.3 | 0.040 / 0.058 | 0.040 / 0.074 | **reused** 2026-11-01, 9ec14a0 | pass |
+| Recurrence expansion | Ical.Net 5.2.3 | 0.274 / 0.470 | 0.334 / 0.589 | **reused** 2026-11-01, 9ec14a0 | pass |
+| IMAP fetch, SMTP send | MailKit 4.18.2 | 0.92 / 1.03 (smtp-small) | not gated (servers run on the worker only) | **reused** 2026-11-04, 3b51281; `git log 6ebb90f..be1a504 -- src/OneMail.Client` is empty | pass |
+| PST builder, in-place writing | none | reported only | reported only | 2026-11-05, be1a504 | n/a |
+
+No re-run row is over 1.25 and no geomean is over 1.0. Two non-gating notes: the PST row `PstRow cfreds-ost` has no arm64 value (the Mac has no copy of that
 
 ## Bodies
 

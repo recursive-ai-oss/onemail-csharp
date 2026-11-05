@@ -228,7 +228,7 @@ Observed black-box on Python `icalendar` 7.3.0 (**Py-ical**) and `vobject` 0.9.9
 | CV3 | `ADR` types and slots | n/a | n/a | Outlook 16's rule: an address whose TYPE names a slot takes it if free (`work` Business, `home` Home, `postal` Other; with several of them, work then home then postal); every other address (no type, `dom`, `intl`, `parcel`, or a taken slot) takes the first free of Business, Home, Other; a fourth is dropped. One address fills one slot (the spec example that puts WORK,POSTAL,PARCEL in both Business and Other is not what Outlook does). The mailing address is Business, else Home, else Other, unless `pref` or `X-MS-OL-DEFAULT-POSTAL-ADDRESS` names one. | `AdditionalValueNotMapped` | **observed: Outlook 16.0.20527** (13 cards) |
 | CV4 | A second or later `TEL`/`EMAIL` of a kind with one slot | n/a | n/a | The second work (home) number goes to Business2 (Home2); later ones are reported, not stored. The first three emails fill the slots in card order. | `AdditionalValueNotMapped`, and on export `PhoneSlotChanged`, `EmailSlotChanged` | spec; prov. |
 | CV5 | `BDAY` as a partial date or with a time | n/a | n/a | `PidTagBirthday` is the date at 11:59 UTC, `PidLidBirthdayLocal` the date at 0:00 (Outlook's own pair); the time of day is dropped; a date without a year is not stored. Outlook 16 agrees on partial dates (dropped). **Kept differences:** with a time (`19900517T123000Z`) Outlook drops the birthday altogether where we keep the date and report `TimeOfDayDropped`; Outlook imports the vCard date as local midnight in UTC (05:00 here), our 11:59 UTC does not depend on a time zone; Outlook ignores `X-ANNIVERSARY`. | `TimeOfDayDropped`, `PartialDate` | spec 2.1.3.2.5; **partly observed** (Outlook 16.0.20527) |
-| CV6 | An empty text property in a contact (`PidTagDepartmentName` = "") | n/a | n/a | Treated as absent: no vCard property is written and the report says so. | `EmptyValueNotWritten` | agent default |
+| CV6 | An empty text property in a contact (`PidTagDepartmentName` = "") | n/a | n/a | Treated as absent: no vCard property is written and the report says so. | `EmptyValueNotWritten` | provisional default |
 | CV7 | CR CR LF in a vCard | vobject, ez-vcard join the fold; Ical.Net and biweekly do for iCalendar; ical.js keeps a CR in the value; FolkerKinzel cuts the value | n/a | One line end (K1): a folded value that contains it is joined. | `AmbiguousDoubleCarriageReturn` | 6 of 7 (probe below) |
 
 **CR CR LF probe (K1, CV7).** `tools/calendar/crcrlf/run.sh` writes one iCalendar and one vCard four ways (all CRLF; every line end CR CR LF; only the end before a fold; only some other line ends) and reads them with every pinned oracle. Before the change we cut the folded value; the readers split as follows (each reads one or both of the formats):
@@ -301,7 +301,7 @@ Limits of one oracle (not ambiguities; no entry in the resolution column):
 | L-ical-weekno-interval | ical | `YEARLY` with `BYWEEKNO` and `INTERVAL` above 1 lands off the interval grid (2026, 2029, 2031 for `INTERVAL=2`) | n/a / n/a / 8 |
 | L-outvoted-by-the-other-two | any | the oracle differs and at least one other oracle gives our list | 1 / 0 / 77 |
 
-The `AmbiguousUntilType` and `AmbiguousExdateType` resolutions are the ones most likely to change when Outlook is observed (the Outlook oracle, before Outlook writing). Counts come from one run of the 2,384 components; `tools/calendar/run_expand_diff.sh` repeats it. Zone behaviour is checked in the DST subset instead: 108 `dst.ics` components in America/New_York, Europe/Berlin, Australia/Sydney and Pacific/Auckland (both transitions each) and 9 with Windows names give our list on 108/108 and 9/9 for rec and du.
+The `AmbiguousUntilType` and `AmbiguousExdateType` resolutions are the ones most likely to change when Outlook is observed (Outlook 16 has not yet been asked about them). Counts come from one run of the 2,384 components; `tools/calendar/run_expand_diff.sh` repeats it. Zone behaviour is checked in the DST subset instead: 108 `dst.ics` components in America/New_York, Europe/Berlin, Australia/Sydney and Pacific/Auckland (both transitions each) and 9 with Windows names give our list on 108/108 and 9/9 for rec and du.
 
 ## Mailbox files (mbox, Maildir, EMLX)
 
@@ -423,7 +423,7 @@ we write, `docs/pst-writing.md`, but none of these rows was decided by it). LT-e
 ## PST/OST recovery
 
 Resolutions of `docs/recovery.md`. Observed on the Tika `testPST` files, the CFReDS OST and generated stores, with `pffexport` 20180714 as a black-box
-comparison. No Outlook has been observed, so each is provisional (an agent default).
+comparison. No Outlook has been observed, so each is a provisional default.
 
 | ID | Case | Other reader | Resolution | Defect | Basis |
 |---|---|---|---|---|---|
@@ -528,7 +528,7 @@ resolution is provisional until Outlook can be run.
 
 ## Outlook calendar items and MS-OXCICAL
 
-No Outlook has been observed yet: every row is an agent default settled by the spec text and, for the expansion, by the oracles named in [`calendar-items.md`](calendar-items.md).
+No Outlook has been observed yet: every row is a provisional default settled by the spec text and, for the expansion, by the oracles named in [`calendar-items.md`](calendar-items.md).
 
 | ID | Case | What the spec says | Resolution | Defect or report entry | Basis |
 |---|---|---|---|---|---|
@@ -538,7 +538,7 @@ No Outlook has been observed yet: every row is an agent default settled by the s
 | OC4 | `WKST` when an RRULE has none | MS-OXCICAL: a missing WKST means Sunday; RFC 5545 3.3.10: Monday | `WKST` is always written from the pattern's first day of week when exporting; a missing WKST is read as RFC 5545 says (Monday) by the shared engine | none | dateutil and recurring-ical-events agree on all 54 generated series (the two-week patterns with Sunday and Monday differ without it); test `RRuleExpansionEqualsTheSpecDayWalk` weekly-2w cases; prov. |
 | OC5 | The UID of an appointment | 2.1.3.1.1.20.26: a global object ID whose data (from byte 40) starts with `vCal-Uid` and 0x01000000 carries the UID text from byte 52; otherwise the UID is the hex of the ID with the instance date zeroed | Exactly that; an item with no usable ID gets a UID made from a hash of subject and times | `UidSynthesized` (Approximated) | spec text; tests; prov. |
 | OC6 | The zone of a VEVENT with a `VTIMEZONE` | 2.1.3.1.1.20.2: the zone becomes a TZDEFINITION | The rule in force at the series' start is read off the zone by sampling (two changes a year are a DST rule, none a fixed offset, anything else the fixed offset at DTSTART) and is the struct and the effective rule. A series that runs past a change of the zone's rules (the United States in 2007, Australia in 2008) gets a definition with one rule per change, each with the year it takes effect (2.2.1.41.1 `wYear`), over its last day (at most 100 years), or 60 years for a series with no end. An item read back uses the definition when it agrees with the struct | `UnknownTimeZone` when the TZID is neither defined nor known | spec text; test `ASeriesAcrossAChangeOfTheZonesRulesKeepsItsInstants`; before this a weekly New York series from 2005 was an hour out in the weeks after 2007; prov. |
-| OC7 | `FREQ=YEARLY` with `BYMONTHDAY` and no `BYMONTH`, or with `BYDAY` and no `BYMONTH` | MS-OXCICAL 2.1.3.2.1.7: a missing BYMONTH is the month of DTSTART; RFC 5545 3.3.10: the day applies in every month, a weekday count is over the whole year | RFC 5545. One `BYMONTHDAY`, `INTERVAL=1` is the monthly template; every other case is `RecurrenceNotMapped` with its reason | `RecurrenceNotMapped` | agent default: the expansion engine and dateutil, recurring-ical-events and Ical.Net follow the RFC, so the occurrences stay the same; what Outlook does with such a file is for the Outlook VM; prov. |
+| OC7 | `FREQ=YEARLY` with `BYMONTHDAY` and no `BYMONTH`, or with `BYDAY` and no `BYMONTH` | MS-OXCICAL 2.1.3.2.1.7: a missing BYMONTH is the month of DTSTART; RFC 5545 3.3.10: the day applies in every month, a weekday count is over the whole year | RFC 5545. One `BYMONTHDAY`, `INTERVAL=1` is the monthly template; every other case is `RecurrenceNotMapped` with its reason | `RecurrenceNotMapped` | provisional default: the expansion engine and dateutil, recurring-ical-events and Ical.Net follow the RFC, so the occurrences stay the same; what Outlook does with such a file is for the Outlook VM; prov. |
 | OC8 | `BYHOUR` or `BYMINUTE` that is not the time of `DTSTART` | 2.1.3.2.1.3, .4: they are the time of day of every instance (`StartTimeOffset`); RFC 5545: DTSTART is still the first instance | The rule's time is the series' time; DTSTART moves to it and the move is reported | `AmbiguousFirstInstance` | spec text; test `ByHourAndByMinuteGiveTheSeriesTimeOfDay`; prov. |
 | OC9 | `UNTIL` against the time of day of the last instance, and a DATE `UNTIL` on a timed series | 2.1.3.2.2.1: EndDate is the start date of the last instance; RFC 5545 3.3.10: UNTIL bounds the instance's start; a DATE UNTIL on a timed series is invalid | A last day whose start is after UNTIL is not the last day; a DATE `UNTIL` includes its whole day | none | test `UntilBoundsTheStartOfTheLastInstanceNotItsDay` (a Berlin series ending at 14:58 UTC counted its 7th day); prov. |
 | OC10 | An RDATE | 2.1.3.1.1.20.18: it must pair with an EXDATE to be a moved instance, staying between its neighbours, not overlapping them, not sharing a day with another instance | Each RDATE (in time order) takes the nearest unpaired EXDATE for which the move is allowed; an RDATE equal to an instance is nothing; an RDATE with no partner is not carried. The paired EXDATE stays a deleted instance | `RdateWithoutException`, `RdatePeriodNotCarried` | spec text; test `ARdatePairedWithAnExdateIsAMovedInstance`; "nearest" is ours (the spec says only "pairable"); prov. |
@@ -600,7 +600,7 @@ mail client has been observed, so each resolution is provisional. Details: [`bod
 
 ## S/MIME
 
-Resolutions for `RecursiveAI.OneMail.Cryptography.Smime` ([`smime.md`](smime.md)). No mail client has been observed for these yet, so every entry is an agent default; they are tested in `SmimeTests`.
+Resolutions for `RecursiveAI.OneMail.Cryptography.Smime` ([`smime.md`](smime.md)). No mail client has been observed for these yet, so every entry is a provisional default; they are tested in `SmimeTests`.
 
 | ID | Situation | Resolution | Defect or issue | Basis |
 |---|---|---|---|---|

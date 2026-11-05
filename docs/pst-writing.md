@@ -181,7 +181,7 @@ attachments), and the way Outlook stores the object itself in a PST is not docum
 ## In place
 
 `PstStore.OpenForWriting` (`RecursiveAI.OneMail.Pst.Messaging.PstWritableStore`) and, underneath it, `NdbEditor` (`RecursiveAI.OneMail.Pst.Ndb`) change an existing
-Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. Its commit path has had an independent review (*Review*, below). Outlook opens the files it edits and `scanpst.exe` reports only minor findings on them (*Checked against Outlook*, above), but treat it as preview quality and keep a copy of files you cannot lose.
+Unicode PST: add, replace, move and delete folders and items, in place and crash-consistently. Its commit path was reviewed by an engineer who did not write it (*Review*, below). Outlook opens the files it edits and `scanpst.exe` reports only minor findings on them (*Checked against Outlook*, above), but treat it as preview quality and keep a copy of files you cannot lose.
 
 ### Opening
 
