@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using RecursiveAI.OneMail.Mime.Reading;
 using RecursiveAI.OneMail.Mime.Transfer;
@@ -72,55 +73,62 @@ internal sealed class RawContent
             return -1;
         }
 
-        Span<byte> head = stackalloc byte[Head];
-        if (Peek(0, head) != Head)
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(Head);
+        try
         {
-            return -1;
-        }
+            Span<byte> head = buffer.AsSpan(0, Head);
+            if (Peek(0, head) != Head)
+            {
+                return -1;
+            }
 
-        int lf = head.IndexOf((byte)'\n');
-        if (lf < 0)
+            int lf = head.IndexOf((byte)'\n');
+            if (lf < 0)
+            {
+                return -1;
+            }
+
+            int eol = lf > 0 && head[lf - 1] == (byte)'\r' ? 2 : 1;
+            long line = lf + 1 - eol;
+            if (line < 4 || line % 4 != 0)
+            {
+                return -1;
+            }
+
+            long stride = line + eol;
+            long full = Length / stride;
+            long rest = Length - (full * stride);
+            if (rest > line)
+            {
+                return -1; // a partial line end: not the layout the first line promised
+            }
+
+            long chars = (full * line) + rest;
+            if (chars % 4 != 0)
+            {
+                return -1;
+            }
+
+            Span<byte> tail = buffer.AsSpan(0, 8);
+            int end = Peek(Length - tail.Length, tail);
+            while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
+            {
+                end--;
+            }
+
+            int pad = 0;
+            while (end > 0 && pad < 2 && tail[end - 1] == (byte)'=')
+            {
+                pad++;
+                end--;
+            }
+
+            return (chars / 4 * 3) - pad;
+        }
+        finally
         {
-            return -1;
+            ArrayPool<byte>.Shared.Return(buffer);
         }
-
-        int eol = lf > 0 && head[lf - 1] == (byte)'\r' ? 2 : 1;
-        long line = lf + 1 - eol;
-        if (line < 4 || line % 4 != 0)
-        {
-            return -1;
-        }
-
-        long stride = line + eol;
-        long full = Length / stride;
-        long rest = Length - (full * stride);
-        if (rest > line)
-        {
-            return -1; // a partial line end: not the layout the first line promised
-        }
-
-        long chars = (full * line) + rest;
-        Span<byte> tail = stackalloc byte[8];
-        int got = Peek(Length - tail.Length, tail);
-        int end = got;
-        while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
-        {
-            end--;
-        }
-
-        int pad = 0;
-        while (end > 0 && pad < 2 && tail[end - 1] == (byte)'=')
-        {
-            pad++;
-            end--;
-        }
-
-        if (chars % 4 != 0)
-        {
-            return -1;
-        }
-
-        return (chars / 4 * 3) - pad;
     }
 
     private int Peek(long offset, Span<byte> destination)

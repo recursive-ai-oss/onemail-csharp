@@ -365,17 +365,26 @@ public static class DateParser
         var local = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified);
         int offset = sign == (byte)'-' ? -zoneMinutes : zoneMinutes;
         // The source text is the tokens joined by single spaces: the comma and any comment are gone.
-        Span<byte> text = stackalloc byte[48];
-        int n = 0;
-        if (hasWeekday)
+        byte[] text = System.Buffers.ArrayPool<byte>.Shared.Rent(48);
+        string source;
+        try
         {
-            v.Slice(0, 3).CopyTo(text);
-            n = 3;
-            text[n++] = (byte)' ';
+            int n = 0;
+            if (hasWeekday)
+            {
+                v.Slice(0, 3).CopyTo(text);
+                n = 3;
+                text[n++] = (byte)' ';
+            }
+
+            v.Slice(dateStart, end - dateStart).CopyTo(text.AsSpan(n));
+            source = Encoding.ASCII.GetString(text, 0, n + end - dateStart);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(text);
         }
 
-        v.Slice(dateStart, end - dateStart).CopyTo(text.Slice(n));
-        string source = Encoding.ASCII.GetString(text.Slice(0, n + end - dateStart));
         weekdayMismatch = weekday >= 0 && (int)local.DayOfWeek != weekday;
         date = new MimeDate(new DateTimeOffset(local, TimeSpan.FromMinutes(offset)), true, source);
         return true;
