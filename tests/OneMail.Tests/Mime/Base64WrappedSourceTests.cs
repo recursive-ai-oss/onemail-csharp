@@ -58,4 +58,41 @@ public class Base64WrappedSourceTests
         MimeEntity back = MimeEntity.Parse(wire);
         Assert.Equal(data, ((MimePart)back).GetDecodedContent());
     }
+
+    [Theory]
+    [InlineData(0, 76, "\r\n", false)]
+    [InlineData(1, 76, "\r\n", false)]
+    [InlineData(1000, 76, "\r\n", false)]
+    [InlineData(1000, 76, "\n", false)]
+    [InlineData(100_000, 76, "\r\n", true)]
+    [InlineData(100_001, 64, "\n", false)]
+    [InlineData(100_002, 72, "\r\n", false)]
+    [InlineData(5_000, 1000, "\r\n", false)]
+    [InlineData(5_000, 0, "", false)]
+    public void DecodedContentIsExactWhateverTheWrapping(int length, int width, string eol, bool trailingBreak)
+    {
+        byte[] data = new byte[length];
+        new Random(length).NextBytes(data);
+        string b64 = Convert.ToBase64String(data);
+        var sb = new System.Text.StringBuilder();
+        if (width == 0)
+        {
+            sb.Append(b64);
+        }
+        else
+        {
+            for (int i = 0; i < b64.Length; i += width)
+            {
+                sb.Append(b64, i, Math.Min(width, b64.Length - i));
+                if (i + width < b64.Length || trailingBreak)
+                {
+                    sb.Append(eol);
+                }
+            }
+        }
+
+        string mime = "Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n" + sb;
+        var part = (MimePart)MimeEntity.Parse(System.Text.Encoding.ASCII.GetBytes(mime));
+        Assert.Equal(data, part.GetDecodedContent());
+    }
 }

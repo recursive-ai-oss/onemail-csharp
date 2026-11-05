@@ -58,6 +58,82 @@ internal sealed class RawContent
     }
 
     public WriteSegment Segment() => new(_bytes, _source, _offset, Length);
+
+    /// <summary>
+    /// A guess at what this body decodes to as base64: the first line's length and line end give the layout, the last bytes the
+    /// padding. It is exact for bodies wrapped at one width, which nearly all are; anything else returns -1 or a close number and
+    /// the caller copes with either.
+    /// </summary>
+    public long EstimateBase64Decoded()
+    {
+        const int Head = 256;
+        if (Length < 2 * Head)
+        {
+            return -1;
+        }
+
+        Span<byte> head = stackalloc byte[Head];
+        if (Peek(0, head) != Head)
+        {
+            return -1;
+        }
+
+        int lf = head.IndexOf((byte)'\n');
+        if (lf < 0)
+        {
+            return -1;
+        }
+
+        int eol = lf > 0 && head[lf - 1] == (byte)'\r' ? 2 : 1;
+        long line = lf + 1 - eol;
+        if (line < 4 || line % 4 != 0)
+        {
+            return -1;
+        }
+
+        long stride = line + eol;
+        long full = Length / stride;
+        long rest = Length - (full * stride);
+        if (rest > line)
+        {
+            return -1; // a partial line end: not the layout the first line promised
+        }
+
+        long chars = (full * line) + rest;
+        Span<byte> tail = stackalloc byte[8];
+        int got = Peek(Length - tail.Length, tail);
+        int end = got;
+        while (end > 0 && tail[end - 1] is (byte)'\r' or (byte)'\n' or (byte)' ' or (byte)'\t')
+        {
+            end--;
+        }
+
+        int pad = 0;
+        while (end > 0 && pad < 2 && tail[end - 1] == (byte)'=')
+        {
+            pad++;
+            end--;
+        }
+
+        if (chars % 4 != 0)
+        {
+            return -1;
+        }
+
+        return (chars / 4 * 3) - pad;
+    }
+
+    private int Peek(long offset, Span<byte> destination)
+    {
+        if (_bytes is not null)
+        {
+            int n = (int)Math.Min(destination.Length, Math.Max(0, _bytes.Length - offset));
+            _bytes.AsSpan((int)offset, n).CopyTo(destination);
+            return n;
+        }
+
+        return _source!.Read(_offset + offset, destination);
+    }
 }
 
 /// <summary>
@@ -514,11 +590,23 @@ public sealed class MimePart : MimeEntity
     /// <returns>The bytes.</returns>
     public byte[] GetDecodedContent()
     {
+        ContentTransferEncoding encoding = TransferEncoding;
+        if (encoding is not (ContentTransferEncoding.Base64 or ContentTransferEncoding.QuotedPrintable or ContentTransferEncoding.UUEncode))
+        {
+            return _body.ToArray(); // 7bit, 8bit, binary and unknown encodings are the bytes as they are
+        }
+
         using Stream s = OpenDecodedContent();
-        // Base64 decodes to at most three bytes per four; other encodings to at most their own length. Starting there means the
-        // common case fills one array without growing a buffer and copying it.
-        long guess = TransferEncoding == ContentTransferEncoding.Base64 ? _body.Length / 4 * 3 + 3 : _body.Length;
-        byte[] buf = new byte[Math.Clamp(guess, 16, Array.MaxLength - 64)];
+        // Start from the size the decoded body will most likely have, so that the usual case fills one array without growing a
+        // buffer or trimming it. Base64 decodes to at most three bytes per four and the others to at most their own length.
+        long guess = encoding == ContentTransferEncoding.Base64 ? _body.EstimateBase64Decoded() : -1;
+        if (guess < 0)
+        {
+            guess = encoding == ContentTransferEncoding.Base64 ? _body.Length / 4 * 3 + 3 : _body.Length;
+        }
+
+        // Every byte up to the returned count is written before it is read, so the array need not be cleared.
+        byte[] buf = GC.AllocateUninitializedArray<byte>((int)Math.Clamp(guess, 16, Array.MaxLength - 64));
         int n = 0;
         while (true)
         {

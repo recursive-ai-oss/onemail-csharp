@@ -54,12 +54,22 @@ public class Base64DecoderEquivalenceTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
     public void VectorPathMatchesTheByteAtATimeDecoder(int seed)
     {
         var rnd = new Random(seed);
         for (int round = 0; round < 300; round++)
         {
             int len = rnd.Next(0, 3000);
+            if (round % 5 == 0)
+            {
+                len = rnd.Next(3000, 40000);
+            }
+
             if (round % 50 == 0)
             {
                 len = rnd.Next(50000, 120000);
@@ -67,13 +77,18 @@ public class Base64DecoderEquivalenceTests
 
             // A mix that favours clean wrapped lines but sprinkles padding, blanks and junk anywhere.
             var sb = new List<byte>();
-            int lineWidth = rnd.Next(1, 100);
+            int lineWidth = rnd.Next(2) == 0 ? 4 * rnd.Next(4, 30) : rnd.Next(1, 100);
+            bool crlf = rnd.Next(3) != 0;
             int junk = rnd.Next(0, 4) == 0 ? rnd.Next(1, 30) : 0;
             for (int i = 0; i < len; i++)
             {
                 if (i % lineWidth == lineWidth - 1)
                 {
-                    sb.Add((byte)'\r');
+                    if (crlf)
+                    {
+                        sb.Add((byte)'\r');
+                    }
+
                     sb.Add((byte)'\n');
                 }
 

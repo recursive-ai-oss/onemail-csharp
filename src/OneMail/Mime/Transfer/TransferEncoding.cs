@@ -66,6 +66,89 @@ public sealed class Base64Decoder
     public int Decode(ReadOnlySpan<byte> input, Span<byte> output)
     {
         int o = 0;
+        while (!input.IsEmpty)
+        {
+            // Mail wraps base64 at one width. When a piece starts on a group boundary at the start of a line, the lines are cut out
+            // at that stride and decoded in bulk; anything that does not fit (a different width, a damaged line) is read one line
+            // at a time by the general decoder below, which also handles every repair.
+            if (_count == 0 && !_secondPadPending && input.Length >= StrideMinimum)
+            {
+                int consumed = DecodeStrided(input, output, ref o);
+                if (consumed > 0)
+                {
+                    input = input.Slice(consumed);
+                    continue;
+                }
+            }
+
+            int lf = input.IndexOf((byte)'\n');
+            int take = lf < 0 ? input.Length : lf + 1;
+            DecodeGeneral(input.Slice(0, take), output, ref o);
+            input = input.Slice(take);
+        }
+
+        return o;
+    }
+
+    private const int StrideMinimum = 256;
+
+    // Decodes the whole lines at the start of 'input' that have the width and line end of its first line. Returns the bytes used
+    // (0 when the first line does not set a usable layout, or no complete line follows it).
+    private int DecodeStrided(ReadOnlySpan<byte> input, Span<byte> output, ref int o)
+    {
+        int lf = input.IndexOf((byte)'\n');
+        if (lf < 0)
+        {
+            return 0;
+        }
+
+        int eol = lf > 0 && input[lf - 1] == (byte)'\r' ? 2 : 1;
+        int width = lf + 1 - eol;
+        if (width < 16 || width > 1024 || (width & 3) != 0)
+        {
+            return 0;
+        }
+
+        int stride = width + eol;
+        _scratch ??= new byte[ScratchSize];
+        int pos = 0;
+        while (true)
+        {
+            int start = pos;
+            int t = 0;
+            while (pos + stride <= input.Length && t + width <= _scratch.Length
+                && input[pos + width + eol - 1] == (byte)'\n' && (eol == 1 || input[pos + width] == (byte)'\r'))
+            {
+                input.Slice(pos, width).CopyTo(_scratch.AsSpan(t));
+                t += width;
+                pos += stride;
+            }
+
+            if (t == 0)
+            {
+                return pos;
+            }
+
+            // The BCL decoder skips white space and stops at anything else in or out of the alphabet. A clean run of whole groups
+            // completes; otherwise this stretch goes back to the general decoder, which makes the repairs and records the issues.
+            var status = System.Buffers.Text.Base64.DecodeFromUtf8(_scratch.AsSpan(0, t), output.Slice(o), out _, out int written, isFinalBlock: false);
+            if (status == System.Buffers.OperationStatus.Done)
+            {
+                o += written;
+            }
+            else
+            {
+                DecodeGeneral(input.Slice(start, pos - start), output, ref o);
+                if (_count != 0 || _secondPadPending)
+                {
+                    return pos; // the repair left a group open; the next lines are not on a group boundary
+                }
+            }
+        }
+    }
+
+    private void DecodeGeneral(ReadOnlySpan<byte> input, Span<byte> output, ref int o)
+    {
         // Short pieces are not worth the vector path's setup.
         while (!input.IsEmpty)
         {
@@ -134,8 +217,6 @@ public sealed class Base64Decoder
             Step(input[0], output, ref o);
             input = input.Slice(1);
         }
-
-        return o;
     }
 
     private const int FastMinimum = 128;
